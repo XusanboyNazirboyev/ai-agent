@@ -1,0 +1,40 @@
+{
+  "name": "@agentcore/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Universal AI sales and support agent platform",
+  "scripts": {
+    "build": "nest build",
+    "dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.ts\"",
+    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=10"
+  },
+  "dependencies": {
+    "@agentcore/shared": "workspace:*",
+    "@nestjs/common": "^12.2.0",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^12.2.0",
+    "@nestjs/platform-express": "^12.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.10",
+    "@nestjs/schematics": "^12.0.10",
+    "@agentcore/config": "workspace:*",
+    "@types/express": "^5.0.5",
+    "ts-node": "^10.9.2",
+    "@types/node": "^26.6.5"
+  }
+}

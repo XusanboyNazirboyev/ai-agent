@@ -13,7 +13,6 @@ export default tseslint.config(
     files: ['**/*.ts'],
     languageOptions: {
       globals: { ...globals.node },
-      parserOptions: { project: './tsconfig.json' },
     },
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'error',

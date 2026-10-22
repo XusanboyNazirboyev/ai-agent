@@ -1,0 +1,19 @@
+{
+  "name": "@agentcore/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint --config ../../apps/api/eslint.config.mjs \"src/**/*.ts\"",
+    "format": "prettier --config ../config/prettier.json --write \"src/**/*.ts\"",
+    "format:check": "prettier --config ../config/prettier.json --check \"src/**/*.ts\""
+  }
+}
