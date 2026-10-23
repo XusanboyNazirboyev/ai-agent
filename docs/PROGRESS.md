@@ -37,7 +37,7 @@ Evidence reviewed in the checkout: workspace manifests and lockfile; API source/
 
 **Phase 0 — Foundation: complete.** Acceptance evidence is retained from the Phase 0 implementation turn.
 
-**Phase 4 — Agent core, packs, locales: implemented and verified with deterministic tests (2026-10-23); live model quality unverified (no API key).** **Phase 2 — Telegram channel and queue: complete.** **Phase 3 — Connector framework: complete as of 2026-10-23** (acceptance evidence under "Phase 3 completion"); a real CRM connector remains blocked on Q1.
+**Phase 4B — Agent connected to Telegram (claim → compute → commit), agent mode OFF/SHADOW/LIVE, turn records, failure policy, pricing config, live-eval runner: implemented and verified with deterministic and PostgreSQL tests (2026-10-24); LIVE blocked outside development until Phase 5; live model quality still unverified (no API key).** **Phase 4 — Agent core, packs, locales: implemented and verified with deterministic tests (2026-10-23).** **Phase 2 — Telegram channel and queue: complete.** **Phase 3 — Connector framework: complete as of 2026-10-23** (acceptance evidence under "Phase 3 completion"); a real CRM connector remains blocked on Q1.
 
 **Phase 1 — Domain & persistence: implemented; verification recorded below.** The schema and docs deliberately preserve all open project decisions. No Telegram webhook, queue worker, AI engine, real connector, RAG, media handling, or UI work was added.
 
@@ -241,8 +241,51 @@ No commits were made and nothing was staged. Phase 4 was not started.
 
 ### Known limitations and open items
 
-- The agent is not connected to Telegram yet. The processor builds replies inside a transaction holding a per-conversation advisory lock and must first be split into claim / generate / persist phases with turn-level idempotency.
+- ~~The agent is not connected to Telegram yet.~~ Done in Phase 4B (ADR 009).
 - The input-size reservation is a byte-based estimate; any underestimate is recorded as overshoot.
 - Monetary budgets are provisional and need owner approval (Q2). The tenant monthly cap has no default. Anthropic's retention terms are inconsistent between its pages (Q9).
 - Locale wording has not been reviewed by native speakers. No locale may become `stable` before review and a live eval threshold (D18).
 - No lead capture, handover state machine or operator notification (Phase 5). No RAG or voice. A real CRM is still blocked on Q1.
+
+## Phase 4B status — 2026-10-24: agent integrated with Telegram (shadow-first)
+
+### State found
+- The repository was on `main` at `c6edb74`, with a clean tree.
+- The Phase 2 processor built the echo reply inside one transaction holding the conversation advisory lock.
+- The Phase 4 agent (`AgentConversationService.handleCustomerMessage`) persisted slots itself and was not wired to any channel.
+
+### What changed
+- **Pipeline.** `TelegramAgentPipeline` runs claim → compute → commit, with no transaction or connection held while the model runs. Agent turns are idempotent on `agent-reply:<conversation>:<answered sequence>`. A newer message supersedes and re-runs the reply, an operator takeover discards it, a crashed attempt is abandoned on retry, and an expired lease can be taken over. A busy conversation is re-checked later through a BullMQ delay that consumes no retry attempt. The Phase 2 batch selection moved unchanged into `inbound-batch.ts`.
+- **Agent mode.** `ChannelAccount.agentMode` takes OFF (default; Phase 2 echo), SHADOW (draft only) or LIVE. LIVE requires an operator notifier, so it is refused outside development: the startup check, the `agent:mode` script and processing (which degrades it to SHADOW) all enforce this.
+- **Records.** New table `agent_turns`: tokens, estimated and actual cost, latency, models, redacted tool calls with typed outcomes, guardrail results, facts with provenance, draft, correlationId. `handovers` gains `idempotency_key` and `notification_status` (always PENDING until Phase 5).
+- **Migrations.** `20261024090000_phase4b_agent_turns` and `20261024091000_phase4b_agent_turn_seen_sequence`, both additive, with partial unique indexes and CHECK constraints.
+- **Failure policy.** Distinct reasons: LLM_UNAVAILABLE (including the whole-turn deadline `AGENT_TURN_TIMEOUT_MS`), BUDGET_EXCEEDED, TOOL_LOOP_LIMIT, CONNECTOR_UNAVAILABLE, NO_DATA and GUARDRAIL (a refusal or two rejected drafts). Handover templates in all four locales now only say the message was recorded.
+- **Pricing.** Versioned decimal config with `asOf`, source URL and long-prompt tier, converted exactly to nano-USD. Prompts over the tier threshold are refused, `LLM_MAX_INPUT_BYTES` is validated against it, and a startup warning fires after 30 days.
+- **P0 fixes.** CRM text is escaped in prompts. New AI-disclosure intent. Mixed-script messages no longer flip the conversation script. The transliterator now gives the hard sign after consonants (`san'at` → `санъат`).
+- **Eval.** 50 cases each for uz-Latn and uz-Cyrl (19 each for ru and en), generated by `eval/generate_education_cases.py`.
+- **Live-eval runner.** Model comparison, a run budget checked before every call, a per-model report naming provider and model, and the key read from `.env.local` only.
+- **Docs.** [ADR 009](adr/009-agent-turn-pipeline-and-agent-mode.md) and [PHASE4_COMPLIANCE.md](PHASE4_COMPLIANCE.md).
+
+### Verification record (Node v26.7.0 locally; CI uses Node 24)
+
+| Check | Result |
+|---|---|
+| `pnpm install --frozen-lockfile` | pass |
+| `db:generate`, `db:test:prepare` | pass |
+| `db:test:seed`, run twice | pass |
+| `db:test:drift` | No difference detected |
+| Migration from an empty database (`agentcore_scratch_phase4b`, created for this check) | all 8 migrations applied, drift: No difference detected |
+| lint, typecheck, format:check, build | pass |
+| test:unit | 641 passed, 7 skipped |
+| test:integration (files now serial: shared database and Redis queue) | 61 passed, two consecutive runs |
+| test:coverage (unit only) | all files 78.9%, core/agent 93.1%, core/llm 91.7% |
+| Local end-to-end run (real AppModule, PostgreSQL, Redis/BullMQ, mock model, recording fake Telegram transport) | update → webhook 200 → COMMITTED SHADOW turn with draft; 0 outbound messages, 0 `telegram.send` rows, 0 transport calls |
+
+The pipeline and service code (`agent/`, `channels/telegram/`) is exercised by the integration suite, which unit coverage does not count.
+
+### Known limitations and open items
+- **No live model run.** No API key was available, so model quality, tool-call validity and latency on Claude are unmeasured.
+- **LIVE blocked.** It is blocked outside development until the Phase 5 operator notifier exists; handovers stay `notification_status = PENDING`.
+- **Re-billing on retry.** A crash between compute and commit re-bills the next attempt. This is bounded by the budgets and recorded per attempt.
+- **Open compliance items.** Listed prices are not yet forced through a live quote, and `Quote` rows are not written (Phase 5). `LOW_LANG_CONFIDENCE` has no trigger (Phase 7). Regulated knowledge is missing (Phase 6). See [PHASE4_COMPLIANCE.md](PHASE4_COMPLIANCE.md).
+- **Mock mode is limited.** The offline mock model extracts nothing, so free-text slots such as `subject` are only asked for, never filled.

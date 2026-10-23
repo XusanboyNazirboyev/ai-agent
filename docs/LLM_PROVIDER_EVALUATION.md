@@ -14,6 +14,20 @@
 
 All three list **Uzbekistan** (and Kazakhstan, Kyrgyzstan, Tajikistan) as supported, so availability does not decide anything.
 
+### Re-verification, 2026-10-23 (Phase 4B)
+
+These Anthropic facts were re-read on the official pages before the prices moved into versioned config (`apps/api/src/llm/pricing-catalog.ts`).
+
+From the [pricing page](https://platform.claude.com/docs/en/about-claude/pricing):
+- **Claude Haiku 5.5:** $0.10 input, $0.125 5-minute cache write, $0.20 1-hour cache write, $0.01 cache hits, $0.50 output, all per MTok, "for prompts up to 100,000 tokens". For prompts over 100,000 tokens: $0.50, $0.625, $1, $0.05 and $2.50. Prompt length "counts all of its input tokens, including cache reads and cache writes".
+- **Claude Sonnet 5.5:** $2, $2.50, $4, $0.10 (0.05x) and $10.
+- **Claude Opus 5.5:** $4, $5, $8, $0.20 (0.05x) and $20.
+- **Tool-use system prompt:** 286 tokens on all three models with tool_choice auto or none. On Haiku 5.5, `any`/`tool` add 406 tokens; AgentCore uses `auto`.
+
+From the [models overview](https://platform.claude.com/docs/en/models/overview):
+- Model IDs `claude-haiku-5-5`, `claude-sonnet-5-5` and `claude-opus-5-5`, each its own alias.
+- 1M-token context window and 128K max output, with adaptive thinking.
+
 ## 2. Models and prices (USD per million tokens, standard tier)
 
 | Model | Input | Cached input | Output | Notes |
