@@ -24,10 +24,9 @@ afterAll(async () => {
 });
 
 const digest = (): DigestService =>
-  new DigestService(prisma, { get: () => 9 } as unknown as ConfigService<
-    AppEnvironment,
-    true
-  >);
+  new DigestService(prisma, {
+    get: (key: string) => (key === 'DIGEST_ENABLED' ? true : 9),
+  } as unknown as ConfigService<AppEnvironment, true>);
 
 async function tenant(
   withChat = true,
@@ -95,6 +94,15 @@ describe('morning digest', () => {
       orderBy: { createdAt: 'asc' },
     });
     expect(event.idempotencyKey).toBe(`digest:${t.tenantId}:2026-10-26`);
+  });
+
+  it('does nothing unless enabled', async () => {
+    const t = await tenant();
+    const off = new DigestService(prisma, {
+      get: (key: string) => (key === 'DIGEST_ENABLED' ? false : 9),
+    } as unknown as ConfigService<AppEnvironment, true>);
+    expect(await off.scanDue(new Date('2026-10-26T05:00:00Z'))).toBe(0);
+    expect(await queued(t.tenantId)).toBe(0);
   });
 
   it('skips tenants without an operator group', async () => {

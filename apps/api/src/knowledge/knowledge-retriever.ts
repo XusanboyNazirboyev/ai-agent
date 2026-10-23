@@ -34,6 +34,17 @@ export class KnowledgeRetriever implements KnowledgeSearch {
         limit: this.limit,
         ...(options.topic ? { topic: options.topic } : {}),
       });
+      if (passages.length === 0) {
+        // Empty is only "no knowledge" if the documents were embedded with
+        // this model; otherwise they need re-ingesting and must not read as
+        // an answer.
+        const coverage = await this.store.modelCoverage(
+          this.tenantId,
+          this.embedder.model,
+        );
+        if (coverage.activeDocuments > 0 && coverage.withModel === 0)
+          return { ok: false, code: 'EMBEDDING_MODEL_MISMATCH' };
+      }
       return { ok: true, passages };
     } catch (error: unknown) {
       if (error instanceof BudgetExhaustedError) throw error;

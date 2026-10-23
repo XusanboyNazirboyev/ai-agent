@@ -30,6 +30,7 @@ export class DigestService implements ScheduledScan {
   ) {}
 
   async scanDue(now: Date): Promise<number> {
+    if (this.config.get('DIGEST_ENABLED', { infer: true }) !== true) return 0;
     const hour: number = this.config.get('DIGEST_HOUR', { infer: true }) ?? 9;
     const accounts = await this.prisma.channelAccount.findMany({
       where: {

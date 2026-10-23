@@ -23,6 +23,12 @@ export interface IngestInput {
   readonly language?: string;
   readonly topic?: string;
   readonly regulated?: boolean;
+  /**
+   * The model that will embed the text. Needed for the "unchanged" shortcut:
+   * without it the text is always re-embedded, because unchanged text that
+   * was embedded by ANOTHER model must be embedded again.
+   */
+  readonly embeddingModel?: string;
 }
 
 export type IngestResult =
@@ -85,7 +91,16 @@ export class KnowledgeService {
       const count = await this.prisma.knowledgeChunk.count({
         where: { tenantId: input.tenantId, documentId: existing.id },
       });
-      if (count === chunks.length)
+      const matching = input.embeddingModel
+        ? await this.prisma.knowledgeChunk.count({
+            where: {
+              tenantId: input.tenantId,
+              documentId: existing.id,
+              embeddingModel: input.embeddingModel,
+            },
+          })
+        : -1;
+      if (count === chunks.length && matching === count)
         return { status: 'UNCHANGED', documentId: existing.id, chunks: count };
     }
     const { vectors, model } = await embed(chunks); // before any transaction
@@ -134,6 +149,31 @@ export class KnowledgeService {
         chunks: chunks.length,
       } as const;
     });
+  }
+
+  /**
+   * Active documents of the tenant, and how many have chunks embedded with
+   * `model`. When the embedding model is changed, old documents stop matching
+   * (vectors of different models are never compared); this tells "no
+   * knowledge" apart from "knowledge that must be re-embedded".
+   */
+  async modelCoverage(
+    tenantId: string,
+    model: string,
+  ): Promise<{ activeDocuments: number; withModel: number }> {
+    const [activeDocuments, withModel] = await Promise.all([
+      this.prisma.knowledgeDocument.count({
+        where: { tenantId, status: 'ACTIVE' },
+      }),
+      this.prisma.knowledgeDocument.count({
+        where: {
+          tenantId,
+          status: 'ACTIVE',
+          chunks: { some: { embeddingModel: model } },
+        },
+      }),
+    ]);
+    return { activeDocuments, withModel };
   }
 
   /** Withdraws a source from retrieval; chunks stay for audit and re-ingest. */

@@ -45,6 +45,7 @@ export class FollowUpService implements ScheduledScan {
       maxPerConversation: get('FOLLOWUP_MAX_PER_CONVERSATION') ?? 1,
       quietStartHour: get('FOLLOWUP_QUIET_START_HOUR') ?? 21,
       quietEndHour: get('FOLLOWUP_QUIET_END_HOUR') ?? 9,
+      maxPerTenantPerDay: get('FOLLOWUP_MAX_PER_TENANT_PER_DAY') ?? 200,
     };
   }
 
@@ -94,10 +95,30 @@ export class FollowUpService implements ScheduledScan {
       LIMIT ${limit}
     `);
     let sent = 0;
+    const sentToday = new Map<string, number>();
     for (const candidate of candidates) {
+      // Blast guard: a tenant never exceeds its rolling 24-hour allowance.
+      let today = sentToday.get(candidate.tenantId);
+      if (today === undefined) {
+        today = await this.prisma.followUp.count({
+          where: {
+            tenantId: candidate.tenantId,
+            createdAt: { gte: new Date(now.getTime() - 86_400_000) },
+          },
+        });
+      }
+      if (today >= policy.maxPerTenantPerDay) {
+        sentToday.set(candidate.tenantId, today);
+        continue;
+      }
       try {
-        if (await this.consider(candidate.tenantId, candidate.id, now, policy))
+        if (
+          await this.consider(candidate.tenantId, candidate.id, now, policy)
+        ) {
           sent += 1;
+          today += 1;
+        }
+        sentToday.set(candidate.tenantId, today);
       } catch (error) {
         this.logger.warn(
           JSON.stringify({
@@ -191,6 +212,7 @@ export class FollowUpService implements ScheduledScan {
             conversationId,
             ordinal: count + 1,
             messageId: message.id,
+            createdAt: now, // the scan's clock: the daily allowance counts on it
           },
         });
         await tx.outboxEvent.create({

@@ -227,6 +227,17 @@ const environmentSchema = postgresEnvironmentSchema
       .min(1)
       .max(3)
       .default(1),
+    FOLLOWUP_MAX_PER_TENANT_PER_DAY: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .default(200),
+    /** The daily operator digest is off until the owner enables it. */
+    DIGEST_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     FOLLOWUP_QUIET_START_HOUR: z.coerce
       .number()
       .int()

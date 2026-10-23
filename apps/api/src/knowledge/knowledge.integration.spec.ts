@@ -6,6 +6,8 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { MeteredLlm } from '../core/llm/metered-llm.js';
+import { KnowledgeRetriever } from './knowledge-retriever.js';
 import { KnowledgeService } from './knowledge.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
@@ -49,6 +51,110 @@ const REFUND =
   'Refund policy. A student may cancel within the first week of lessons and ask for the remaining lessons to be refunded.\n\nAfter the first week refunds are decided case by case by the administrator.';
 const HOURS =
   'Opening hours. The office is open from Monday to Saturday. Visitors are welcome without an appointment on weekdays.';
+
+describe('embedding model changes', () => {
+  const otherModel = Object.assign(new HashingEmbeddingProvider(64), {
+    model: 'hashing-test-embedder-v2',
+  });
+  const stubLlm = (e: HashingEmbeddingProvider): MeteredLlm =>
+    ({
+      embed: async (_: unknown, texts: readonly string[]) =>
+        (await e.embed(texts)).vectors.map((v) => [...v]),
+    }) as unknown as MeteredLlm;
+
+  it('reports re-embedding as unavailable knowledge, not as "no knowledge"', async () => {
+    const tenantId = await tenant();
+    await service.ingest(
+      {
+        tenantId,
+        title: 'T',
+        source: 'S',
+        sourceUpdatedAt: UPDATED,
+        text: REFUND,
+      },
+      embed,
+    );
+    expect(await service.modelCoverage(tenantId, embedder.model)).toEqual({
+      activeDocuments: 1,
+      withModel: 1,
+    });
+    expect(await service.modelCoverage(tenantId, otherModel.model)).toEqual({
+      activeDocuments: 1,
+      withModel: 0,
+    });
+    const current = new KnowledgeRetriever(
+      service,
+      embedder,
+      stubLlm(embedder),
+      tenantId,
+    );
+    expect(await current.search('refund lessons cancel')).toMatchObject({
+      ok: true,
+    });
+    const changed = new KnowledgeRetriever(
+      service,
+      otherModel,
+      stubLlm(otherModel),
+      tenantId,
+    );
+    expect(await changed.search('refund lessons cancel')).toEqual({
+      ok: false,
+      code: 'EMBEDDING_MODEL_MISMATCH',
+    });
+    // A tenant with no knowledge at all is genuinely empty.
+    const empty = new KnowledgeRetriever(
+      service,
+      otherModel,
+      stubLlm(otherModel),
+      await tenant(),
+    );
+    expect(await empty.search('anything')).toEqual({ ok: true, passages: [] });
+  });
+
+  it('works again once the source is re-ingested with the new model', async () => {
+    const tenantId = await tenant();
+    await service.ingest(
+      {
+        tenantId,
+        title: 'T',
+        source: 'S',
+        sourceUpdatedAt: UPDATED,
+        text: REFUND,
+      },
+      embed,
+    );
+    await service.ingest(
+      {
+        tenantId,
+        title: 'T',
+        source: 'S',
+        sourceUpdatedAt: UPDATED,
+        text: REFUND,
+      },
+      async (texts) => ({
+        vectors: (await otherModel.embed(texts)).vectors,
+        model: otherModel.model,
+      }),
+    );
+    const retriever = new KnowledgeRetriever(
+      service,
+      otherModel,
+      stubLlm(otherModel),
+      tenantId,
+    );
+    const result = await retriever.search('refund lessons cancel');
+    expect(result.ok && result.passages.length).toBeGreaterThan(0);
+  });
+});
+
+describe('pgvector prerequisites', () => {
+  it('has the extension installed in the test database', async () => {
+    const rows = await db.$queryRaw<
+      Array<{ extname: string }>
+    >`SELECT extname FROM pg_extension WHERE extname = 'vector'`;
+    expect(rows).toHaveLength(1);
+  });
+});
 
 describe('knowledge store (PostgreSQL + pgvector)', () => {
   it('ingests, retrieves the closest passage with its source and date, and ignores unrelated text', async () => {
@@ -111,6 +217,7 @@ describe('knowledge store (PostgreSQL + pgvector)', () => {
       source: 'Refund policy',
       sourceUpdatedAt: UPDATED,
       text: REFUND,
+      embeddingModel: embedder.model,
     };
     const a = await service.ingest(input, embed);
     const again = await service.ingest(input, embed);

@@ -13,6 +13,7 @@ import type {
   LocalePack,
   LocaleRegistry,
 } from '../locales/locale-pack.js';
+import { isOptOutMessage } from '../followup/optout.js';
 import { decimalAtLeast } from './money.js';
 import {
   DEFAULT_STUCK_POLICY,
@@ -358,17 +359,7 @@ export async function runAgentTurn(
   };
   // Tier-0: a whole-message opt-out ("/stop") is honoured before any model
   // call, in any supported language, and answered with a fixed template.
-  const compact = (value: string): string =>
-    normalizeForMatching(value).replace(/^[\s!.?,;:]+|[\s!.?,;:]+$/gu, '');
-  const spoken1 = compact(input.customerText);
-  if (
-    spoken1.length > 0 &&
-    locales
-      .all()
-      .some((pack) =>
-        pack.optOutPhrases.some((phrase) => compact(phrase) === spoken1),
-      )
-  ) {
+  if (isOptOutMessage(input.customerText, locales.all())) {
     return build(locale().templates.optOutConfirmation, 'ANSWERED', {
       optOut: true,
     });

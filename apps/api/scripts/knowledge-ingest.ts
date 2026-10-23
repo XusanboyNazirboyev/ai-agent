@@ -86,6 +86,7 @@ async function main(): Promise<void> {
           ? { language: String(a.get('language')) }
           : {}),
         regulated: a.get('regulated') === true,
+        embeddingModel: embedder.model,
       },
       async (texts) => {
         const embedded = await embedder.embed(texts);

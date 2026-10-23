@@ -21,7 +21,10 @@ export type KnowledgeSearchResult =
   | { readonly ok: true; readonly passages: readonly KnowledgePassage[] }
   | {
       readonly ok: false;
-      readonly code: 'EMBEDDING_UNAVAILABLE' | 'KNOWLEDGE_DISABLED';
+      readonly code:
+        | 'EMBEDDING_UNAVAILABLE'
+        | 'KNOWLEDGE_DISABLED'
+        | 'EMBEDDING_MODEL_MISMATCH';
     };
 
 /** Per-turn retrieval port the agent tools use; metering lives behind it. */

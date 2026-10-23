@@ -688,22 +688,23 @@ export class TelegramAgentPipeline {
           select: { contactId: true },
         });
         if (row) {
-          await tx.contact.updateMany({
-            where: { tenantId, id: row.contactId },
+          const changed = await tx.contact.updateMany({
+            where: { tenantId, id: row.contactId, marketingOptOut: false },
             data: { marketingOptOut: true },
           });
-          await tx.auditEvent.create({
-            data: {
-              tenantId,
-              actorType: 'CUSTOMER',
-              actorId: row.contactId,
-              action: 'contact.opt_out',
-              entityType: 'contact',
-              entityId: row.contactId,
-              safeInputSummary: { via: 'message' },
-              idempotencyKey: `opt-out:${claim.idempotencyKey}`,
-            },
-          });
+          if (changed.count === 1)
+            await tx.auditEvent.create({
+              data: {
+                tenantId,
+                actorType: 'CUSTOMER',
+                actorId: row.contactId,
+                action: 'contact.opt_out',
+                entityType: 'contact',
+                entityId: row.contactId,
+                safeInputSummary: { via: 'message' },
+                idempotencyKey: `opt-out:${claim.idempotencyKey}`,
+              },
+            });
         }
       }
 

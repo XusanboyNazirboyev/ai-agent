@@ -236,6 +236,79 @@ describe('follow-up scheduler', () => {
   });
 });
 
+describe('per-tenant allowance', () => {
+  it('never sends more than the tenant’s rolling 24-hour cap', async () => {
+    const first = await silentConversation();
+    // Two more silent conversations of the SAME tenant.
+    const account = await db.channelAccount.findFirstOrThrow({
+      where: { tenantId: first.tenantId },
+    });
+    const extra = async (n: number): Promise<string> => {
+      const contact = await db.contact.create({
+        data: {
+          tenantId: first.tenantId,
+          channelAccountId: account.id,
+          providerUserId: `x-${n}-${randomUUID()}`,
+        },
+      });
+      const conversation = await db.conversation.create({
+        data: {
+          tenantId: first.tenantId,
+          channelAccountId: account.id,
+          contactId: contact.id,
+          providerChatId: `x-${n}-${randomUUID()}`,
+          language: 'uz',
+          script: 'Latn',
+        },
+      });
+      const bot = await db.message.create({
+        data: {
+          tenantId: first.tenantId,
+          conversationId: conversation.id,
+          channelAccountId: account.id,
+          authorType: 'BOT',
+          direction: 'OUTBOUND',
+          text: 'Variantlar',
+          sequence: 1,
+          providerChatId: conversation.providerChatId,
+          deliveryState: 'SENT',
+          createdAt: HOURS(30),
+        },
+      });
+      await db.shownOffer.create({
+        data: {
+          tenantId: first.tenantId,
+          conversationId: conversation.id,
+          messageId: bot.id,
+          offerRef: 'item:y',
+          facts: [],
+        },
+      });
+      return conversation.id;
+    };
+    await extra(1);
+    await extra(2);
+    const capped = { ...DEFAULT_FOLLOW_UP_POLICY, maxPerTenantPerDay: 2 };
+    await service().scan(NOW, capped, { tenantId: first.tenantId });
+    expect(
+      await db.followUp.count({ where: { tenantId: first.tenantId } }),
+    ).toBe(2);
+    await service().scan(NOW, capped, { tenantId: first.tenantId });
+    expect(
+      await db.followUp.count({ where: { tenantId: first.tenantId } }),
+    ).toBe(2);
+    // Another day, the allowance is available again.
+    await service().scan(
+      new Date(NOW.getTime() + 25 * 3_600_000),
+      { ...capped, maxPerConversation: 1 },
+      { tenantId: first.tenantId },
+    );
+    expect(
+      await db.followUp.count({ where: { tenantId: first.tenantId } }),
+    ).toBe(3);
+  });
+});
+
 describe('a blocked bot ends reminders', () => {
   it('marks the contact when Telegram answers 403', async () => {
     const c = await silentConversation();

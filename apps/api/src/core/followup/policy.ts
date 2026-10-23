@@ -11,6 +11,8 @@ export interface FollowUpPolicy {
   /** Local quiet hours [start, end): no follow-up is sent inside them. */
   readonly quietStartHour: number;
   readonly quietEndHour: number;
+  /** Follow-ups one tenant may send in any rolling 24 hours (blast guard). */
+  readonly maxPerTenantPerDay: number;
 }
 
 export const DEFAULT_FOLLOW_UP_POLICY: FollowUpPolicy = {
@@ -18,6 +20,7 @@ export const DEFAULT_FOLLOW_UP_POLICY: FollowUpPolicy = {
   maxPerConversation: 1,
   quietStartHour: 21,
   quietEndHour: 9,
+  maxPerTenantPerDay: 200,
 };
 
 export interface FollowUpCandidate {
