@@ -196,6 +196,8 @@ model Tenant {
   catalogSyncRuns CatalogSyncRun[]
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
+  internalNotes         InternalNote[]
+  shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
   contacts        Contact[]
@@ -352,6 +354,12 @@ model AgentTurn {
   toolCalls           Json            @default("[]") @map("tool_calls") @db.JsonB
   guardrail           Json            @default("{}") @db.JsonB
   facts               Json            @default("[]") @db.JsonB
+  /// Fact ids (F1..) that appear in the final reply, for offers-shown tracking.
+  shownFactIds        Json            @default("[]") @map("shown_fact_ids") @db.JsonB
+  /// Progress signals for the STUCK trigger (no raw customer text).
+  askedSlot           String?         @map("asked_slot") @db.VarChar(100)
+  slotsFilled         Int?            @map("slots_filled")
+  textFingerprint     String?         @map("text_fingerprint") @db.VarChar(64)
   draftText           String?         @map("draft_text") @db.Text
   replyMessageId      String?         @map("reply_message_id") @db.Uuid
   handoverId          String?         @map("handover_id") @db.Uuid
@@ -386,6 +394,8 @@ model ChannelAccount {
   /// LLM providers may run in SHADOW only on such accounts unless
   /// LLM_ALLOW_REAL_CUSTOMER_DATA=true.
   isTestAccount     Boolean             @default(false) @map("is_test_account")
+  /// Telegram chat (operator group) where handovers for this bot are posted.
+  operatorChatId    String?             @map("operator_chat_id") @db.VarChar(200)
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -471,6 +481,8 @@ model Conversation {
   assignedOperator    Operator?        @relation("AssignedOperator", fields: [tenantId, assignedOperatorId], references: [tenantId, id], onDelete: Restrict)
 
   messages Message[]
+  notes    InternalNote[]
+  shownOffers ShownOffer[]
   slots    ConversationSlots[]
   quotes   Quote[]
   leads    Lead[]
@@ -640,6 +652,7 @@ model Quote {
   shownInMessage    Message?     @relation("QuoteShownInMessage", fields: [tenantId, shownInMessageId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, id])
+  @@unique([tenantId, shownInMessageId, offerId])
   @@index([tenantId, conversationId, createdAt])
   @@index([tenantId, validUntil])
   @@index([tenantId, offerId])
@@ -655,6 +668,9 @@ model Lead {
   reasonCodes     String[]     @default([]) @map("reason_codes")
   summary         String       @db.Text
   status          LeadStatus   @default(NEW)
+  /// Collected requirements (slot key -> value) at the last update.
+  requirements    Json         @default("{}") @db.JsonB
+  nextAttemptAt   DateTime?    @map("next_attempt_at") @db.Timestamptz(6)
   crmSyncStatus   CrmSyncStatus @default(PENDING) @map("crm_sync_status")
   crmLeadId       String?      @map("crm_lead_id") @db.VarChar(200)
   attempts        Int          @default(0)
@@ -687,6 +703,14 @@ model Handover {
   summary            Json           @db.JsonB
   assignedOperatorId String?        @map("assigned_operator_id") @db.Uuid
   version            Int            @default(1)
+  /// Where the operator card was posted; replies to it are routed back here.
+  operatorChatId     String?        @map("operator_chat_id") @db.VarChar(200)
+  operatorMessageId  String?        @map("operator_message_id") @db.VarChar(100)
+  notifiedAt         DateTime?      @map("notified_at") @db.Timestamptz(6)
+  notificationErrorCode String?     @map("notification_error_code") @db.VarChar(100)
+  slaDueAt           DateTime?      @map("sla_due_at") @db.Timestamptz(6)
+  slaAlertedAt       DateTime?      @map("sla_alerted_at") @db.Timestamptz(6)
+  customerNoticeAt   DateTime?      @map("customer_notice_at") @db.Timestamptz(6)
   openedAt           DateTime       @default(now()) @map("opened_at") @db.Timestamptz(6)
   takenAt            DateTime?      @map("taken_at") @db.Timestamptz(6)
   resolvedAt         DateTime?      @map("resolved_at") @db.Timestamptz(6)
@@ -696,8 +720,10 @@ model Handover {
 
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, operatorChatId, operatorMessageId])
   @@index([tenantId, status, openedAt])
   @@index([tenantId, notificationStatus])
+  @@index([status, slaDueAt])
   @@map("handovers")
 }
 
@@ -818,4 +844,48 @@ model LlmBudgetReservation {
   @@index([tenantId, conversationId, state])
   @@index([tenantId, baseInvocationId])
   @@map("llm_budget_reservations")
+}
+
+/// Internal operator note on a conversation (never sent to the customer).
+model InternalNote {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  operatorId     String       @map("operator_id") @db.Uuid
+  text           String       @db.Text
+  idempotencyKey String       @map("idempotency_key") @db.VarChar(200)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, conversationId, createdAt])
+  @@map("internal_notes")
+}
+
+/// What a customer was actually shown: written only after the outgoing
+/// message was delivered (never for a draft or a failed send). The snapshot
+/// keeps the exact verified facts with provenance. A `Quote` row is written
+/// only when the offer exists in the synced catalog (its FK); otherwise
+/// `quoteRecorded` is false with the reason.
+model ShownOffer {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  messageId      String       @map("message_id") @db.Uuid
+  /// Connector offer id (or item id when no offer was involved).
+  offerRef       String       @map("offer_ref") @db.VarChar(300)
+  offerId        String?      @map("offer_id") @db.Uuid
+  facts          Json         @db.JsonB
+  quoteRecorded  Boolean      @default(false) @map("quote_recorded")
+  quoteSkipReason String?     @map("quote_skip_reason") @db.VarChar(100)
+  shownAt        DateTime     @default(now()) @map("shown_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, messageId, offerRef])
+  @@index([tenantId, conversationId, shownAt])
+  @@map("shown_offers")
 }
