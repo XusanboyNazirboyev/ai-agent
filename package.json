@@ -20,9 +20,9 @@
     "test:coverage": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:coverage",
     "db:generate": "pnpm --filter @agentcore/api db:generate",
     "db:migrate": "pnpm --filter @agentcore/api db:migrate",
-    "db:seed": "pnpm --filter @agentcore/api db:seed",
+    "db:seed": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api db:seed",
     "db:test:prepare": "pnpm --filter @agentcore/api db:test:prepare",
-    "db:test:seed": "pnpm --filter @agentcore/api db:test:seed",
+    "db:test:seed": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api db:test:seed",
     "db:test:drift": "pnpm --filter @agentcore/api db:test:drift"
   },
   "devDependencies": {
