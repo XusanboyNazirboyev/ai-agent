@@ -439,10 +439,11 @@ describe('operator updates from the Telegram group', () => {
 
   it('take-over by button: one winner, the loser is told, a redelivery changes nothing', async () => {
     const { w, handler, notifier, channel } = await setup();
-    const id = randomUUID();
+    const idA = randomUUID();
+    const idB = randomUUID();
     await Promise.all([
-      handler.handle(channel, press(w, w.tg1, `t:${w.handoverId}`, id)),
-      handler.handle(channel, press(w, w.tg2, `t:${w.handoverId}`)),
+      handler.handle(channel, press(w, w.tg1, `t:${w.handoverId}`, idA)),
+      handler.handle(channel, press(w, w.tg2, `t:${w.handoverId}`, idB)),
     ]);
     const conversation = await db.conversation.findFirstOrThrow({
       where: { id: w.conversationId },
@@ -455,10 +456,18 @@ describe('operator updates from the Telegram group', () => {
       `r:${w.handoverId}`,
       `c:${w.handoverId}`,
     ]);
-    // Telegram redelivers the winning callback: no second change.
-    const winnerTg = conversation.assignedOperatorId === w.op1 ? w.tg1 : w.tg2;
+    // Telegram redelivers the winner's callback (whoever won): no second change.
+    const winnerIsOne = conversation.assignedOperatorId === w.op1;
     const before = conversation.version;
-    await handler.handle(channel, press(w, winnerTg, `t:${w.handoverId}`, id));
+    await handler.handle(
+      channel,
+      press(
+        w,
+        winnerIsOne ? w.tg1 : w.tg2,
+        `t:${w.handoverId}`,
+        winnerIsOne ? idA : idB,
+      ),
+    );
     expect(
       (
         await db.conversation.findFirstOrThrow({
