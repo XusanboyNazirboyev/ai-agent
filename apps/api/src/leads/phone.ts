@@ -7,9 +7,11 @@
 export function extractPhone(text: string): string | undefined {
   const digits = text.replace(/\D/gu, '');
   if (digits.length < 9 || digits.length > 15) return undefined;
-  // Letters beyond a short label mean this is a sentence, not a number.
+  // A short label ("my phone:") is fine; a sentence with a long number in it
+  // is not. Letters must stay few and clearly outnumbered by digits.
   const letters = text.replace(/[^\p{L}]/gu, '');
-  if (letters.length > 12) return undefined;
-  const plus = /^\s*(?:[^\d+]{0,12})\+/u.test(text) ? '+' : '';
+  if (letters.length > 24 || digits.length * 2 < letters.length)
+    return undefined;
+  const plus = /\+\s*\(?\d/u.test(text) ? '+' : '';
   return `${plus}${digits}`;
 }

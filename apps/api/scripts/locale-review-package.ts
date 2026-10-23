@@ -31,6 +31,10 @@ const CONTEXT: Record<string, string> = {
     'Shown when the language/script could not be identified; names all three supported languages on purpose.',
   aiDisclosure:
     'Truthful answer when the customer asks whether they talk to a bot.',
+  operatorDelayNotice:
+    'Sent once when no operator picked up the handover in time; must not promise a time or a reply.',
+  phoneRequest:
+    'One polite request for a phone number after value was delivered; sent at most once per conversation.',
 };
 const HANDOVER_CONTEXT: Record<string, string> = {
   CUSTOMER_REQUEST: 'Customer asked for a person.',
@@ -47,6 +51,7 @@ const HANDOVER_CONTEXT: Record<string, string> = {
   TOOL_LOOP_LIMIT: 'The check could not be completed.',
   LOW_LANG_CONFIDENCE:
     'The bot is not sure it understood the customer (language/script).',
+  STUCK: 'The same question or message repeated without progress.',
 };
 
 const md: string[] = [];

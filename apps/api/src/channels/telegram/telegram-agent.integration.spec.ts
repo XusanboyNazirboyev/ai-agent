@@ -558,8 +558,38 @@ describe('agent mode LIVE (local development policy)', () => {
       await f.processor.process(await receive(f, 'hello?'));
       expect(await outbound(f)).toBe(1);
       expect(await turns(f)).toHaveLength(1);
+
+      // The handover was queued for the operator group (not yet delivered),
+      // with an SLA deadline, and the customer's follow-up is forwarded.
+      expect(handover.slaDueAt).not.toBeNull();
+      const queued = await prisma.outboxEvent.findMany({
+        where: { tenantId: f.tenantId, type: 'handover.notify' },
+      });
+      expect(queued).toHaveLength(1);
+      expect(
+        await prisma.outboxEvent.count({
+          where: { tenantId: f.tenantId, type: 'handover.forward' },
+        }),
+      ).toBe(1);
     },
   );
+
+  it('stays silent while an operator owns the conversation and forwards the customer', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    const event = await receive(f, 'Salom, hali kutyapman');
+    await prisma.conversation.updateMany({
+      where: { tenantId: f.tenantId },
+      data: { state: 'OPERATOR_ACTIVE', version: { increment: 1 } },
+    });
+    await f.processor.process(event);
+    expect(await outbound(f)).toBe(0);
+    expect(await turns(f)).toHaveLength(0);
+    expect(
+      await prisma.outboxEvent.count({
+        where: { tenantId: f.tenantId, type: 'handover.forward' },
+      }),
+    ).toBe(1);
+  });
 
   it('hands over BUDGET_EXCEEDED from the stored ledger without a model call', async () => {
     const f = await fixture({ mode: 'LIVE' });

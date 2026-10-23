@@ -25,6 +25,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Kechirasiz, javobingizni to'liq tushunmadim.
 - **languageClarification** — Shown when the language/script could not be identified; names all three supported languages on purpose.
   > Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.
+- **operatorDelayNotice** — Sent once when no operator picked up the handover in time; must not promise a time or a reply.
+  > Xabaringiz jamoamizga yuborilgan, javob biroz kechikmoqda. Kutganingiz uchun uzr so'raymiz.
+- **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
+  > Xohlasangiz, jamoamiz siz bilan bog'lanishi uchun telefon raqamingizni yozib qoldiring.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.
 
@@ -54,6 +58,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Tekshiruvni yakunlay olmadim. Xabaringiz jamoamiz uchun saqlandi.
 - **LOW_LANG_CONFIDENCE** — The bot is not sure it understood the customer (language/script).
   > Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.
+- **STUCK** — The same question or message repeated without progress.
+  > Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.
 
 ### Labels and availability words
 
@@ -124,6 +130,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Кечирасиз, жавобингизни тўлиқ тушунмадим.
 - **languageClarification** — Shown when the language/script could not be identified; names all three supported languages on purpose.
   > Илтимос, ўзбек, рус ёки инглиз тилида ёзинг. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.
+- **operatorDelayNotice** — Sent once when no operator picked up the handover in time; must not promise a time or a reply.
+  > Хабарингиз жамоамизга юборилган, жавоб бироз кечикмоқда. Кутганингиз учун узр сўраймиз.
+- **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
+  > Хоҳласангиз, жамоамиз сиз билан боғланиши учун телефон рақамингизни ёзиб қолдиринг.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.
 
@@ -153,6 +163,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Текширувни якунлай олмадим. Хабарингиз жамоамиз учун сақланди.
 - **LOW_LANG_CONFIDENCE** — The bot is not sure it understood the customer (language/script).
   > Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.
+- **STUCK** — The same question or message repeated without progress.
+  > Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.
 
 ### Labels and availability words
 
@@ -224,6 +236,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Извините, я не совсем понял ваш ответ.
 - **languageClarification** — Shown when the language/script could not be identified; names all three supported languages on purpose.
   > Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.
+- **operatorDelayNotice** — Sent once when no operator picked up the handover in time; must not promise a time or a reply.
+  > Ваше сообщение передано команде, ответ немного задерживается. Спасибо, что ждёте.
+- **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
+  > Если хотите, оставьте номер телефона, чтобы команда могла с вами связаться.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.
 
@@ -253,6 +269,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Не удалось завершить проверку. Ваше сообщение сохранено для нашей команды.
 - **LOW_LANG_CONFIDENCE** — The bot is not sure it understood the customer (language/script).
   > Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.
+- **STUCK** — The same question or message repeated without progress.
+  > Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.
 
 ### Labels and availability words
 
@@ -330,6 +348,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Sorry, I didn't quite understand your answer.
 - **languageClarification** — Shown when the language/script could not be identified; names all three supported languages on purpose.
   > Please write in Uzbek, Russian or English. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском.
+- **operatorDelayNotice** — Sent once when no operator picked up the handover in time; must not promise a time or a reply.
+  > Your message has been passed to our team and the reply is taking longer than usual. Thank you for waiting.
+- **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
+  > If you like, leave a phone number so our team can contact you.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.
 
@@ -359,6 +381,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > I couldn't finish checking that. Your message has been recorded for our team.
 - **LOW_LANG_CONFIDENCE** — The bot is not sure it understood the customer (language/script).
   > Sorry, I'm not sure I understood you. Your message has been recorded for our team.
+- **STUCK** — The same question or message repeated without progress.
+  > We seem to be going in circles. Your message has been saved for our team.
 
 ### Labels and availability words
 

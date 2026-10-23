@@ -7,6 +7,19 @@ import { scoreLead, type LeadLevel } from '../core/leads/scoring.js';
 
 type Tx = Prisma.TransactionClient;
 
+/** Key-order independent JSON (PostgreSQL JSONB does not keep key order). */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) =>
+            a.localeCompare(b),
+          ),
+        )
+      : v,
+  );
+}
+
 export interface LeadUpdate {
   readonly leadId: string;
   readonly level: LeadLevel;
@@ -229,7 +242,7 @@ export class LeadService {
     const changed =
       existing.score !== result.level ||
       existing.reasonCodes.join(',') !== result.reasonCodes.join(',') ||
-      JSON.stringify(existing.requirements) !== JSON.stringify(slotValues);
+      canonical(existing.requirements) !== canonical(slotValues);
     if (changed) {
       await tx.lead.update({
         where: { id: existing.id },
