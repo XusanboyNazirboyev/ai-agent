@@ -20,6 +20,7 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "telegram:live": "tsx scripts/telegram-live.ts",
     "db:test:prepare": "tsx scripts/test-database.ts prepare",
     "db:test:seed": "tsx scripts/test-database.ts seed",
     "db:test:drift": "tsx scripts/test-database.ts drift",

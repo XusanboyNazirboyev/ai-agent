@@ -16,3 +16,11 @@
 ## Not done
 - **Speech-to-text** is blocked by Open Question 8 (provider and verified Uzbek quality are an owner decision); no voice plumbing was added, so voice messages are still ignored. **Image understanding** (optional) not started.
 - Cross-lingual quality is checked only by a small opt-in live smoke test ([KNOWLEDGE_EVAL.md](../KNOWLEDGE_EVAL.md)); CI cannot test it. No admin UI or upload API for knowledge (script only).
+
+## Pre-merge audit (defects fixed)
+- `/stop` is now recorded at intake, before the conversation state is touched, so an opt-out sent while an operator owns the conversation is not lost; audit row only when the flag actually changes.
+- Per-tenant rolling-24h follow-up cap (`FOLLOWUP_MAX_PER_TENANT_PER_DAY`, default 200).
+- Digest is behind `DIGEST_ENABLED` (default false).
+- Changing the embedding model: ingest re-embeds (no UNCHANGED shortcut across models) and search returns `EMBEDDING_MODEL_MISMATCH` instead of an empty answer when only other-model vectors exist.
+- Voice: port and policy only (`docs/VOICE_READINESS.md`); no provider chosen.
+- Prerequisite for local/integration tests: PostgreSQL with the pgvector extension available (`pgvector/pgvector:pg16` image, or the extension installed and the role allowed to `CREATE EXTENSION vector`).
