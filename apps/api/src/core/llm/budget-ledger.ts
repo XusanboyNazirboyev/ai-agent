@@ -19,11 +19,24 @@ export interface LedgerReserveRequest {
   readonly worstCaseTokens: number;
   /** Tenant monthly cap in nano-USD; unset = track but do not enforce. */
   readonly monthlyCapNano?: number;
+  /**
+   * Conversation lifetime caps, enforced in the same transaction. They make
+   * the conversation budget safe even when two turns of one conversation
+   * overlap (e.g. a lease taken over from a slow worker).
+   */
+  readonly conversationCapNano?: number;
+  readonly conversationCapTokens?: number;
 }
 
 export type LedgerReserveResult =
   | { readonly granted: true; readonly reservationId: string }
-  | { readonly granted: false; readonly reason: 'TENANT_MONTHLY_LIMIT' };
+  | {
+      readonly granted: false;
+      readonly reason:
+        | 'TENANT_MONTHLY_LIMIT'
+        | 'CONVERSATION_COST_LIMIT'
+        | 'CONVERSATION_TOKEN_LIMIT';
+    };
 
 export interface BudgetLedger {
   /**

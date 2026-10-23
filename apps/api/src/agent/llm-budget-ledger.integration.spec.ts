@@ -324,6 +324,93 @@ describe('tenant-month reservations (PostgreSQL)', () => {
   });
 });
 
+describe('conversation caps (PostgreSQL)', () => {
+  function reserveIn(
+    ledger: LlmBudgetLedger,
+    tenantId: string,
+    conversationId: string,
+    base: string,
+    caps: { nano?: number; tokens?: number },
+  ): ReturnType<LlmBudgetLedger['reserve']> {
+    return ledger.reserve({
+      tenantId,
+      conversationId,
+      baseInvocationId: base,
+      worstCaseNano: UNIT,
+      worstCaseTokens: 100,
+      conversationCapNano: caps.nano,
+      conversationCapTokens: caps.tokens,
+    });
+  }
+
+  it('lets exactly the permitted number of concurrent turns of ONE conversation reserve, across workers', async () => {
+    const tenantId = await tenant();
+    const conversationId = randomUUID();
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        reserveIn(
+          i % 2 === 0 ? workerA : workerB,
+          tenantId,
+          conversationId,
+          `turn-${i}:0`,
+          { nano: CAP },
+        ),
+      ),
+    );
+    expect(results.filter(granted)).toHaveLength(3);
+    expect(results.find((r) => !r.granted)).toEqual({
+      granted: false,
+      reason: 'CONVERSATION_COST_LIMIT',
+    });
+  });
+
+  it('counts confirmed spend of the conversation and leaves other conversations independent', async () => {
+    const tenantId = await tenant();
+    const busy = randomUUID();
+    const other = randomUUID();
+    const first = await reserveIn(workerA, tenantId, busy, 'a:0', {
+      nano: CAP,
+    });
+    if (!first.granted) throw new Error('unreachable');
+    await workerA.settle(
+      tenantId,
+      first.reservationId,
+      entry(tenantId, { conversationId: busy, costNano: 2_000 }),
+    );
+    // 2000 spent: one more reservation fits (3000), a second (4000) does not.
+    expect(
+      (await reserveIn(workerB, tenantId, busy, 'b:0', { nano: CAP })).granted,
+    ).toBe(true);
+    expect(
+      (await reserveIn(workerB, tenantId, busy, 'c:0', { nano: CAP })).granted,
+    ).toBe(false);
+    expect(
+      (await reserveIn(workerB, tenantId, other, 'd:0', { nano: CAP })).granted,
+    ).toBe(true);
+  });
+
+  it('enforces the conversation token cap with unknown exposure included', async () => {
+    const tenantId = await tenant();
+    const conversationId = randomUUID();
+    const results = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        reserveIn(
+          i % 2 === 0 ? workerA : workerB,
+          tenantId,
+          conversationId,
+          `t-${i}:0`,
+          { tokens: 250 },
+        ),
+      ),
+    );
+    expect(results.filter(granted)).toHaveLength(2);
+    expect(results.find((r) => !r.granted)).toEqual({
+      granted: false,
+      reason: 'CONVERSATION_TOKEN_LIMIT',
+    });
+  });
+});
+
 describe('MeteredLlm with the PostgreSQL ledger', () => {
   const snapshot = parsePricingConfig({
     version: 'ledger-fixture-1',
@@ -408,9 +495,11 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
       conversationSpentNano: 0,
       tenantMonthSpentNano: 0,
     },
+    turnLimits: BudgetLimits = limits,
+    conversationId: string = randomUUID(),
   ): { llm: MeteredLlm; budget: TurnBudget } {
     const budget = new TurnBudget(
-      { ...limits, tenantMonthlyBudgetNano: cap },
+      { ...turnLimits, tenantMonthlyBudgetNano: cap },
       prior,
     );
     const llm = new MeteredLlm(
@@ -423,7 +512,7 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
       snapshot,
       budget,
       { record: async (): Promise<void> => undefined },
-      { tenantId, conversationId: randomUUID(), turnKey },
+      { tenantId, conversationId, turnKey },
       undefined,
       ledger,
     );
@@ -510,6 +599,72 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
       expect((o as PromiseRejectedResult).reason).toMatchObject({
         reason: 'TENANT_MONTHLY_LIMIT',
       });
+  });
+
+  it('refuses overlapping turns of the same conversation beyond its cap, even from different workers', async () => {
+    const n = await unit();
+    const tenantId = await tenant();
+    const conversationId = randomUUID();
+    const turn = (ledger: LlmBudgetLedger, i: number): Promise<unknown> => {
+      const { llm } = metered(
+        tenantId,
+        [candidate('a', 'pa', [ok], 300)],
+        undefined,
+        `same-${i}`,
+        ledger,
+        { conversationSpentNano: 0, tenantMonthSpentNano: 0 },
+        { ...limits, maxConversationCostNano: Math.floor(n * 2.5) },
+        conversationId,
+      );
+      return llm.withTools(request);
+    };
+    // Both turns loaded "0 spent" before either reserved: only the ledger
+    // can stop the overshoot.
+    const outcomes = await Promise.allSettled(
+      [workerA, workerB, workerA, workerB].map(turn),
+    );
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(2);
+    for (const o of outcomes.filter((x) => x.status === 'rejected'))
+      expect((o as PromiseRejectedResult).reason).toMatchObject({
+        reason: 'CONVERSATION_COST_LIMIT',
+      });
+  });
+
+  it('keeps a timed-out attempt counted when the ledger cannot record it', async () => {
+    const tenantId = await tenant();
+    const failing = Object.create(workerA) as LlmBudgetLedger;
+    failing.markUnknown = (): Promise<void> => {
+      throw new Error('db down');
+    };
+    const errors: unknown[] = [];
+    const budget = new TurnBudget(limits, {
+      conversationSpentNano: 0,
+      tenantMonthSpentNano: 0,
+    });
+    const llm = new MeteredLlm(
+      new RoutingLlmProvider(
+        {
+          FAST: [candidate('a', 'pa', [timeout])],
+          STRONG: [candidate('a', 'pa', [timeout])],
+        },
+        BREAKER,
+        snapshot,
+        () => 0,
+      ),
+      snapshot,
+      budget,
+      { record: async (): Promise<void> => undefined },
+      { tenantId, conversationId: randomUUID(), turnKey: 'dbfail' },
+      (e) => errors.push(e),
+      failing,
+    );
+    await expect(llm.withTools(request)).rejects.toMatchObject({
+      code: 'LLM_TIMEOUT',
+    });
+    expect(errors).toHaveLength(1);
+    // The row stays RESERVED in the database, so it still counts.
+    expect(await workerA.tenantMonthExposureNano(tenantId)).toBeGreaterThan(0);
+    expect(budget.snapshot.unknownExposureNano).toBeGreaterThan(0);
   });
 
   it('counts persisted unknown token exposure against the conversation token budget', async () => {

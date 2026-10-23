@@ -274,6 +274,8 @@ export class MeteredLlm {
         worstCaseNano,
         worstCaseTokens,
         monthlyCapNano: this.budget.limits.tenantMonthlyBudgetNano,
+        conversationCapNano: this.budget.limits.maxConversationCostNano,
+        conversationCapTokens: this.budget.limits.maxConversationTokens,
       });
       if (!grant.granted) {
         this.budget.release(state.reservation);
@@ -325,6 +327,8 @@ export class MeteredLlm {
         worstCaseNano,
         worstCaseTokens,
         monthlyCapNano: this.budget.limits.tenantMonthlyBudgetNano,
+        conversationCapNano: this.budget.limits.maxConversationCostNano,
+        conversationCapTokens: this.budget.limits.maxConversationTokens,
       });
       if (!grant.granted) {
         this.budget.release(first);

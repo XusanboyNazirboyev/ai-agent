@@ -19,7 +19,8 @@
 - **Preload for the in-memory check.** The service loads conversation and tenant-month exposure from the ledger (`RESERVED+UNKNOWN`) and passes it as `*Exposure*` next to `*Spent*`. The ledger remains the authority for the tenant-month cap.
 
 ## Limits (accepted)
-- Per-conversation caps are checked in memory from values loaded at turn start; they rely on one turn at a time per conversation (D7 ordering). Only the tenant month is atomic across conversations.
+- The in-memory turn check still uses totals loaded at turn start; the ledger is the authority for conversation and tenant-month caps. Turn caps are per process by design.
+- Per-conversation caps are also enforced in the ledger transaction (cost and tokens, lifetime of the conversation: confirmed usage + RESERVED/UNKNOWN + new reservation). The pipeline already serializes turns (one `COMPUTING` turn per conversation by partial unique index plus an advisory lock at claim, lease > turn timeout + 10 s), but a lease can be taken over from a hung worker and the service can be called outside the pipeline, so the ledger does not rely on that ordering. The tenant-wide lock is held only for the short reservation transaction. `src/llm/smoke.ts` (operator-run, fake data) calls a provider directly and is outside this accounting.
 - Exposure of an `UNKNOWN` row stays counted for the month until a late settlement; there is no operator tool to write it off yet (add with Phase 9 ops work).
 - No tenant-month **token** cap exists, so tokens are enforced per turn and per conversation only.
 - Reservation lifetime is 10 minutes (`LlmBudgetLedger.configure`); a call slower than that is recovered as `UNKNOWN` and corrected on settlement.

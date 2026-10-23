@@ -79,6 +79,58 @@ export class LlmBudgetLedger implements BudgetLedger {
         if (committed > BigInt(request.monthlyCapNano))
           return { granted: false, reason: 'TENANT_MONTHLY_LIMIT' } as const;
       }
+      const { conversationId } = request;
+      if (
+        conversationId !== undefined &&
+        (request.conversationCapNano !== undefined ||
+          request.conversationCapTokens !== undefined)
+      ) {
+        const [spent, outstanding] = await Promise.all([
+          tx.llmUsageRecord.aggregate({
+            where: { tenantId, conversationId },
+            _sum: {
+              costNano: true,
+              inputTokens: true,
+              outputTokens: true,
+              cacheReadTokens: true,
+              cacheWrite5mTokens: true,
+              cacheWrite1hTokens: true,
+            },
+          }),
+          tx.llmBudgetReservation.aggregate({
+            where: { tenantId, conversationId, state: { in: [...COUNTED] } },
+            _sum: { reservedNano: true, reservedTokens: true },
+          }),
+        ]);
+        const cost =
+          (spent._sum.costNano ?? 0n) +
+          (outstanding._sum.reservedNano ?? 0n) +
+          BigInt(request.worstCaseNano);
+        if (
+          request.conversationCapNano !== undefined &&
+          cost > BigInt(request.conversationCapNano)
+        )
+          return { granted: false, reason: 'CONVERSATION_COST_LIMIT' } as const;
+        const sum = spent._sum;
+        const tokens =
+          BigInt(
+            (sum.inputTokens ?? 0) +
+              (sum.outputTokens ?? 0) +
+              (sum.cacheReadTokens ?? 0) +
+              (sum.cacheWrite5mTokens ?? 0) +
+              (sum.cacheWrite1hTokens ?? 0),
+          ) +
+          (outstanding._sum.reservedTokens ?? 0n) +
+          BigInt(request.worstCaseTokens);
+        if (
+          request.conversationCapTokens !== undefined &&
+          tokens > BigInt(request.conversationCapTokens)
+        )
+          return {
+            granted: false,
+            reason: 'CONVERSATION_TOKEN_LIMIT',
+          } as const;
+      }
       const attempt = await tx.llmBudgetReservation.count({
         where: { tenantId, baseInvocationId },
       });
