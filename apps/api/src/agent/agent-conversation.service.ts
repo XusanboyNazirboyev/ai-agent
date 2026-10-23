@@ -30,6 +30,8 @@ import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { budgetLimits, llmEnvironment } from './llm.factory.js';
+import type { BudgetLedger } from '../core/llm/budget-ledger.js';
+import { LlmBudgetLedger } from './llm-budget-ledger.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
@@ -93,6 +95,7 @@ export class AgentConversationService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly loader: TenantConnectorLoader,
     private readonly usage: LlmUsageStore,
+    private readonly ledger: LlmBudgetLedger,
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     private readonly config: ConfigService<AppEnvironment, true>,
   ) {
@@ -186,8 +189,8 @@ export class AgentConversationService implements OnModuleInit {
       this.usage.conversationSpendNano(tenantId, conversationId),
       this.usage.tenantMonthSpendNano(tenantId),
       this.usage.conversationTokens(tenantId, conversationId),
-      this.usage.conversationExposureNano(tenantId, conversationId),
-      this.usage.tenantMonthExposureNano(tenantId),
+      this.ledger.conversationExposure(tenantId, conversationId),
+      this.ledger.tenantMonthExposureNano(tenantId),
     ]);
     const slots = slotState(slotRow?.slots);
     const history: HistoryEntry[] = recent.reverse().map((message) => ({
@@ -200,11 +203,25 @@ export class AgentConversationService implements OnModuleInit {
       conversationSpentNano: conversationSpent,
       tenantMonthSpentNano: monthSpent,
       conversationTokensUsed: conversationTokens,
-      conversationExposureNano: conversationExposure,
+      conversationExposureNano: conversationExposure.nano,
+      conversationExposureTokens: conversationExposure.tokens,
       tenantMonthExposureNano: monthExposure,
     });
     const deadline = new AbortController();
     const entries: LlmUsageEntry[] = [];
+    // The turn keeps every usage entry, persisted or not.
+    const ledger: BudgetLedger = {
+      reserve: (request) => this.ledger.reserve(request),
+      settle: (tenant, id, entry) => {
+        entries.push(entry);
+        return this.ledger.settle(tenant, id, entry);
+      },
+      markUnknown: (tenant, id, entry) => {
+        entries.push(entry);
+        return this.ledger.markUnknown(tenant, id, entry);
+      },
+      release: (tenant, id) => this.ledger.release(tenant, id),
+    };
     const llm = new MeteredLlm(
       this.provider,
       this.pricing,
@@ -229,6 +246,7 @@ export class AgentConversationService implements OnModuleInit {
             name: (error as Error).name,
           }),
         ),
+      ledger,
     );
 
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;

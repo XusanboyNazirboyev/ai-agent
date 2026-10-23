@@ -1,6 +1,6 @@
 import {
   LlmError,
-  type AmbiguousAttempt,
+  type AmbiguityHooks,
   type LlmMessage,
   type LlmProvider,
   type LlmTier,
@@ -29,8 +29,8 @@ import type { RoutingPolicy } from './routing-policy.js';
  *   rate limit, quota exhausted, unavailable/timeout, unsupported feature,
  *   authentication. A timeout is the exception to "no billable response":
  *   its billing is unknowable, so it is reported as an ambiguous attempt and
- *   the router fails over only when MeteredLlm says the budget can absorb a
- *   second call (`allowAmbiguousFailover`). Never on invalid requests or cancellation, and never on
+ *   the router reports it and starts another attempt only after MeteredLlm
+ *   has atomically reserved budget for it (`AmbiguityHooks`). Never on invalid requests or cancellation, and never on
  *   a returned (billed) result, even a malformed one.
  * - `modelFor(tier)` returns a fixed reservation model, the candidate with
  *   the highest worst-case price; settlement prices the model that actually
@@ -257,14 +257,14 @@ export class RoutingLlmProvider implements LlmProvider {
     tier: LlmTier,
     needs: 'tools' | 'structured' | 'text',
     signal: AbortSignal | undefined,
-    allowAmbiguousFailover: boolean | undefined,
+    ambiguity: AmbiguityHooks | undefined,
     run: (candidate: RoutedCandidate) => Promise<R>,
   ): Promise<{ result: R; candidate: RoutedCandidate }> {
     let attempts = 0;
     let last: LlmError | undefined;
-    // Attempts that timed out may still have been billed: reported to the
-    // metering layer, which owns the budget (the router only obeys the flag).
-    const ambiguous: AmbiguousAttempt[] = [];
+    // After a timeout the next attempt needs a fresh reservation from the
+    // metering layer, which owns the budget; the router only obeys it.
+    let needsReservation = false;
     for (const candidate of this.tiers[tier]) {
       if (signal?.aborted)
         throw new LlmError('LLM_CANCELLED', 'Request cancelled', false);
@@ -272,16 +272,18 @@ export class RoutingLlmProvider implements LlmProvider {
       if (needs === 'tools' && candidate.capability.tools === 'no') continue;
       if (needs === 'structured' && candidate.capability.structured === 'none')
         continue;
+      if (needsReservation) {
+        if (!(await ambiguity?.reserveNextAttempt())) {
+          throw last ?? new LlmError('LLM_TIMEOUT', 'timeout', false);
+        }
+        needsReservation = false;
+      }
       try {
         const result = await run(candidate);
         this.record(candidate, false);
         this.transientCount.delete(this.pairKey(candidate));
         return {
-          result: {
-            ...result,
-            attempts: result.attempts + attempts,
-            ...(ambiguous.length > 0 ? { ambiguousAttempts: ambiguous } : {}),
-          },
+          result: { ...result, attempts: result.attempts + attempts },
           candidate,
         };
       } catch (error: unknown) {
@@ -290,19 +292,15 @@ export class RoutingLlmProvider implements LlmProvider {
         this.record(candidate, true);
         this.trip(candidate, error);
         attempts += 1;
-        if (error.code === 'LLM_TIMEOUT') {
-          ambiguous.push({
+        last = error;
+        if (error.code === 'LLM_TIMEOUT' && ambiguity) {
+          await ambiguity.onTimeout({
             providerId: candidate.providerId,
             model: candidate.model,
             code: error.code,
           });
-          if (allowAmbiguousFailover === false) {
-            // No budget for a second billable attempt: stop, do not fail over.
-            error.ambiguousAttempts = ambiguous;
-            throw error;
-          }
+          needsReservation = true;
         }
-        last = error;
         this.failovers += 1;
         const entry = this.calls.get(candidate.providerId);
         if (entry) entry.failoversFrom += 1;
@@ -314,15 +312,14 @@ export class RoutingLlmProvider implements LlmProvider {
       }
     }
     this.exhausted += 1;
-    const final =
+    throw (
       last ??
       new LlmError(
         'LLM_UNAVAILABLE',
         'No routable provider (all candidates unhealthy or incapable)',
         false,
-      );
-    if (ambiguous.length > 0) final.ambiguousAttempts = ambiguous;
-    throw final;
+      )
+    );
   }
 
   async generateStructured<T>(
@@ -332,7 +329,7 @@ export class RoutingLlmProvider implements LlmProvider {
       request.tier,
       'structured',
       request.signal,
-      request.allowAmbiguousFailover,
+      request.ambiguity,
       (candidate) =>
         candidate.provider.generateStructured({
           ...request,
@@ -350,7 +347,7 @@ export class RoutingLlmProvider implements LlmProvider {
       request.tier,
       needs,
       request.signal,
-      request.allowAmbiguousFailover,
+      request.ambiguity,
       (c) =>
         c.provider.generateWithTools({
           ...request,

@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { TurnBudget, type BudgetLimits } from '../../core/llm/budget.js';
+import type { BudgetLedger } from '../../core/llm/budget-ledger.js';
 import {
   LlmError,
   type LlmProvider,
@@ -190,10 +191,10 @@ describe('ambiguous (timeout) usage accounting', () => {
       ['mb', 'reported'],
     ]);
     expect(new Set(entries.map((e) => e.responseId)).size).toBe(2);
-    expect(entries[0].responseId).toBe('unknown:turn-1:0');
+    expect(entries[0].responseId).toBe('unknown:turn-1:0:1');
   });
 
-  it('gives a retried turn the same unknown-usage id, so persistence can deduplicate', async () => {
+  it('gives a retried turn the same audit id, so persistence deduplicates it', async () => {
     const ids: string[] = [];
     for (let attempt = 0; attempt < 2; attempt++) {
       const { llm, entries } = metered(
@@ -357,7 +358,9 @@ describe('persisted exposure of unknown usage', () => {
     );
   }
   let N = 0;
+  let T = 0;
   beforeAll(async () => {
+    T = await reservationTokens();
     N = await reservationNano();
     expect(N).toBeGreaterThan(0);
   });
@@ -437,19 +440,100 @@ describe('persisted exposure of unknown usage', () => {
     });
   });
 
-  it('does not count a retried invocation twice (duplicate row = already persisted)', async () => {
-    const fresh = async (inserted: boolean): Promise<number> => {
-      const budget = new TurnBudget(limits, {
+  it('counts unknown token exposure separately from confirmed usage, and reserves it again for the next call', async () => {
+    const budget = new TurnBudget(
+      { ...limits, maxTurnTokens: Math.floor(T * 1.5) },
+      { conversationSpentNano: 0, tenantMonthSpentNano: 0 },
+    );
+    const llm = paid([timeout, ok], budget);
+    await expect(llm.withTools(request)).rejects.toMatchObject({
+      code: 'LLM_TIMEOUT',
+    });
+    expect(budget.snapshot.unknownExposureTokens).toBe(T);
+    expect(budget.snapshot.tokensUsed).toBe(0);
+    await expect(llm.withTools(request)).rejects.toMatchObject({
+      reason: 'TURN_TOKEN_LIMIT',
+    });
+  });
+
+  it('counts persisted unknown tokens against the conversation token budget', () => {
+    const budget = new TurnBudget(
+      { ...limits, maxConversationTokens: 1_000 },
+      {
         conversationSpentNano: 0,
         tenantMonthSpentNano: 0,
-      });
-      await paid([timeout], budget, async () => inserted)
-        .withTools(request)
-        .catch(() => undefined);
-      return budget.snapshot.unknownExposureNano;
+        conversationExposureTokens: 900,
+      },
+    );
+    expect(() => budget.reserve(0, 10, 200)).toThrow(/CONVERSATION_TOKEN/u);
+    expect(budget.canReserve(0, 50)).toBe(true);
+    expect(budget.canReserve(0, 200)).toBe(false);
+    expect(budget.snapshot.tokensUsed).toBe(0);
+  });
+
+  it('denies the call when the durable ledger refuses, and releases the in-memory reservation', async () => {
+    const budget = new TurnBudget(limits, {
+      conversationSpentNano: 0,
+      tenantMonthSpentNano: 0,
+    });
+    const c = candidate('a', 'pa', [ok]);
+    const refusing: BudgetLedger = {
+      reserve: async () => ({
+        granted: false,
+        reason: 'TENANT_MONTHLY_LIMIT',
+      }),
+      settle: async () => undefined,
+      markUnknown: async () => undefined,
+      release: async () => undefined,
     };
-    expect(await fresh(true)).toBe(N);
-    expect(await fresh(false)).toBe(0);
+    const llm = new MeteredLlm(
+      new RoutingLlmProvider(
+        { FAST: [c], STRONG: [c] },
+        BREAKER,
+        snapshot,
+        () => 0,
+      ),
+      snapshot,
+      budget,
+      { record: async (): Promise<void> => undefined },
+      { tenantId: 't', turnKey: 'k' },
+      undefined,
+      refusing,
+    );
+    await expect(llm.withTools(request)).rejects.toMatchObject({
+      reason: 'TENANT_MONTHLY_LIMIT',
+    });
+    expect(c.scripted.calls).toHaveLength(0);
+    expect(budget.snapshot.reservedNano).toBe(0);
+    expect(budget.snapshot.stopReason).toBe('TENANT_MONTHLY_LIMIT');
+  });
+
+  it('fails closed when the ledger cannot persist a reservation', async () => {
+    const c = candidate('a', 'pa', [ok]);
+    const broken: BudgetLedger = {
+      reserve: async () => {
+        throw new Error('db down');
+      },
+      settle: async () => undefined,
+      markUnknown: async () => undefined,
+      release: async () => undefined,
+    };
+    const budget = new TurnBudget(limits, {
+      conversationSpentNano: 0,
+      tenantMonthSpentNano: 0,
+    });
+    const llm = new MeteredLlm(
+      c.scripted,
+      snapshot,
+      budget,
+      { record: async (): Promise<void> => undefined },
+      { tenantId: 't', turnKey: 'k' },
+      undefined,
+      broken,
+    );
+    await expect(llm.withTools(request)).rejects.toThrow('db down');
+    expect(c.scripted.calls).toHaveLength(0);
+    expect(budget.snapshot.reservedNano).toBe(0);
   });
 
   it('still counts exposure when persisting the row fails', async () => {

@@ -195,6 +195,7 @@ model Tenant {
   connectors      TenantConnector[]
   catalogSyncRuns CatalogSyncRun[]
   llmUsage        LlmUsageRecord[]
+  llmBudgetReservations LlmBudgetReservation[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
   contacts        Contact[]
@@ -785,4 +786,36 @@ model AuditEvent {
   @@index([tenantId, createdAt])
   @@index([tenantId, entityType, entityId])
   @@map("audit_events")
+}
+
+/// Worst-case budget reservation for one potentially billable provider
+/// invocation (ADR 014). Created under a per-tenant advisory lock so the
+/// tenant-month cap is enforced atomically across processes. States:
+/// RESERVED (in flight), UNKNOWN (billing cannot be determined; stays
+/// counted), SETTLED (actual usage recorded in llm_usage_records; no longer
+/// counted), RELEASED (certainly unbilled; no longer counted). Kept apart
+/// from llm_usage_records so reserved exposure is never mistaken for spend.
+model LlmBudgetReservation {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  conversationId   String?  @map("conversation_id") @db.Uuid
+  /// `<turnKey>:<callIndex>`: stable across job retries.
+  baseInvocationId String   @map("base_invocation_id") @db.VarChar(200)
+  /// `<base>#<n>`: one row per real provider invocation, unique per tenant.
+  invocationId     String   @map("invocation_id") @db.VarChar(210)
+  /// UTC start of the month the reservation counts against.
+  periodStart      DateTime @map("period_start") @db.Timestamptz(6)
+  reservedNano     BigInt   @map("reserved_nano_usd")
+  reservedTokens   BigInt   @map("reserved_tokens")
+  state            String   @db.VarChar(16)
+  expiresAt        DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, invocationId])
+  @@index([tenantId, periodStart, state])
+  @@index([tenantId, conversationId, state])
+  @@index([tenantId, baseInvocationId])
+  @@map("llm_budget_reservations")
 }

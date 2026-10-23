@@ -1,8 +1,37 @@
 import { Injectable } from '@nestjs/common';
 import type { LlmUsageEntry, LlmUsageSink } from '../core/llm/metered-llm.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 
-const UNKNOWN_USAGE_PREFIX = 'unknown_usage:';
+/** Ledger row for one usage entry (shared with the budget ledger). */
+export function usageRow(
+  entry: LlmUsageEntry,
+): Prisma.LlmUsageRecordCreateManyInput {
+  return {
+    tenantId: entry.tenantId,
+    conversationId: entry.conversationId ?? null,
+    turnKey: entry.turnKey.slice(0, 200),
+    callIndex: entry.callIndex,
+    purpose: entry.purpose,
+    tier: entry.tier,
+    provider: entry.providerId,
+    model: entry.model,
+    responseId: entry.responseId.slice(0, 200),
+    inputTokens: entry.usage.inputTokens,
+    outputTokens: entry.usage.outputTokens,
+    cacheReadTokens: entry.usage.cacheReadTokens,
+    cacheWrite5mTokens: entry.usage.cacheWrite5mTokens,
+    cacheWrite1hTokens: entry.usage.cacheWrite1hTokens,
+    reasoningTokens: entry.usage.reasoningTokens ?? null,
+    usageEstimated: entry.usage.estimated === true,
+    costNano: BigInt(entry.costNano),
+    reservedNano: BigInt(entry.reservedNano),
+    pricingVersion: entry.pricingVersion,
+    durationMs: entry.durationMs,
+    attempts: entry.attempts,
+    outcome: entry.outcome.slice(0, 40),
+  };
+}
 
 /**
  * Tenant-scoped LLM usage ledger. Recording is idempotent on the provider
@@ -15,72 +44,10 @@ export class LlmUsageStore implements LlmUsageSink {
 
   async record(entry: LlmUsageEntry): Promise<boolean> {
     const result = await this.prisma.llmUsageRecord.createMany({
-      data: [
-        {
-          tenantId: entry.tenantId,
-          conversationId: entry.conversationId ?? null,
-          turnKey: entry.turnKey.slice(0, 200),
-          callIndex: entry.callIndex,
-          purpose: entry.purpose,
-          tier: entry.tier,
-          provider: entry.providerId,
-          model: entry.model,
-          responseId: entry.responseId.slice(0, 200),
-          inputTokens: entry.usage.inputTokens,
-          outputTokens: entry.usage.outputTokens,
-          cacheReadTokens: entry.usage.cacheReadTokens,
-          cacheWrite5mTokens: entry.usage.cacheWrite5mTokens,
-          cacheWrite1hTokens: entry.usage.cacheWrite1hTokens,
-          reasoningTokens: entry.usage.reasoningTokens ?? null,
-          usageEstimated: entry.usage.estimated === true,
-          costNano: BigInt(entry.costNano),
-          reservedNano: BigInt(entry.reservedNano),
-          pricingVersion: entry.pricingVersion,
-          durationMs: entry.durationMs,
-          attempts: entry.attempts,
-          outcome: entry.outcome.slice(0, 40),
-        },
-      ],
+      data: [usageRow(entry)],
       skipDuplicates: true,
     });
     return result.count > 0;
-  }
-
-  /**
-   * Worst-case exposure of attempts with unknown usage (timeouts), summed
-   * from `reservedNano` of `unknown_usage:*` rows. Kept apart from spend.
-   */
-  async conversationExposureNano(
-    tenantId: string,
-    conversationId: string,
-  ): Promise<number> {
-    const result = await this.prisma.llmUsageRecord.aggregate({
-      where: {
-        tenantId,
-        conversationId,
-        outcome: { startsWith: UNKNOWN_USAGE_PREFIX },
-      },
-      _sum: { reservedNano: true },
-    });
-    return Number(result._sum.reservedNano ?? 0n);
-  }
-
-  async tenantMonthExposureNano(
-    tenantId: string,
-    now: Date = new Date(),
-  ): Promise<number> {
-    const monthStart = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-    );
-    const result = await this.prisma.llmUsageRecord.aggregate({
-      where: {
-        tenantId,
-        createdAt: { gte: monthStart },
-        outcome: { startsWith: UNKNOWN_USAGE_PREFIX },
-      },
-      _sum: { reservedNano: true },
-    });
-    return Number(result._sum.reservedNano ?? 0n);
   }
 
   async conversationSpendNano(

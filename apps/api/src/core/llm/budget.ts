@@ -60,6 +60,8 @@ export interface BudgetSnapshot {
   readonly overshootNano: number;
   /** Upper bound for attempts that may have been billed with unknown usage. */
   readonly unknownExposureNano: number;
+  /** Reserved tokens of attempts with unknown usage (not confirmed usage). */
+  readonly unknownExposureTokens: number;
   readonly tokensUsed: number;
   readonly stopReason: BudgetStopReason | undefined;
 }
@@ -96,6 +98,8 @@ export class TurnBudget {
        */
       readonly conversationExposureNano?: number;
       readonly tenantMonthExposureNano?: number;
+      /** Reserved tokens of earlier attempts with unknown usage. */
+      readonly conversationExposureTokens?: number;
     },
   ) {}
 
@@ -113,6 +117,19 @@ export class TurnBudget {
       (this.prior.tenantMonthExposureNano ?? 0) +
       turnCommitted
     );
+  }
+
+  private conversationTokens(turnTokens: number): number {
+    return (
+      (this.prior.conversationTokensUsed ?? 0) +
+      (this.prior.conversationExposureTokens ?? 0) +
+      turnTokens
+    );
+  }
+
+  /** Stops the turn because a limit outside this object (e.g. the tenant-month ledger) denied a call. */
+  refuse(reason: BudgetStopReason): never {
+    this.fail(reason);
   }
 
   private fail(reason: BudgetStopReason): never {
@@ -157,8 +174,7 @@ export class TurnBudget {
     }
     if (
       this.limits.maxConversationTokens !== undefined &&
-      (this.prior.conversationTokensUsed ?? 0) + tokens >
-        this.limits.maxConversationTokens
+      this.conversationTokens(tokens) > this.limits.maxConversationTokens
     ) {
       this.fail('CONVERSATION_TOKEN_LIMIT');
     }
@@ -188,8 +204,7 @@ export class TurnBudget {
       (this.limits.maxTurnTokens === undefined ||
         tokens <= this.limits.maxTurnTokens) &&
       (this.limits.maxConversationTokens === undefined ||
-        (this.prior.conversationTokensUsed ?? 0) + tokens <=
-          this.limits.maxConversationTokens)
+        this.conversationTokens(tokens) <= this.limits.maxConversationTokens)
     );
   }
 
@@ -265,6 +280,7 @@ export class TurnBudget {
       ),
       overshootNano: this.overshoot,
       unknownExposureNano: this.unknown,
+      unknownExposureTokens: this.unknownTokens,
       tokensUsed: this.tokens,
       stopReason: this.stop,
     };

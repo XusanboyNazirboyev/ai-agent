@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AgentConversationService } from '../../agent/agent-conversation.service.js';
 import type { AgentModePolicy } from '../../agent/agent-mode.js';
+import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { LlmUsageStore } from '../../agent/llm-usage.store.js';
 import { extraction } from '../../agent/testing/agent-harness.js';
 import type { AppEnvironment } from '../../config/environment.js';
@@ -225,6 +226,7 @@ async function fixture(options: {
       }),
     ),
     new LlmUsageStore(database),
+    new LlmBudgetLedger(database),
     provider,
     cfg,
   );
