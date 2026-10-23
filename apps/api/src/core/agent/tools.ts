@@ -317,7 +317,12 @@ export class AgentTools {
           ...(offer.price
             ? {
                 priceFact: facts.add(
-                  { kind: 'price', money: offer.price, confirmedQuote: false },
+                  {
+                    kind: 'price',
+                    money: offer.price,
+                    confirmedQuote: false,
+                    pricingBasis: offer.pricingBasis,
+                  },
                   p,
                 ),
                 price: `${offer.price.amount} ${offer.price.currency}`,
@@ -393,7 +398,12 @@ export class AgentTools {
       offerId: quote.offerId,
       live: true,
       confirmedPriceFact: this.context.facts.add(
-        { kind: 'price', money: quote.amount, confirmedQuote: true },
+        {
+          kind: 'price',
+          money: quote.amount,
+          confirmedQuote: true,
+          pricingBasis: quote.pricingBasis,
+        },
         p,
       ),
       price: `${quote.amount.amount} ${quote.amount.currency}`,

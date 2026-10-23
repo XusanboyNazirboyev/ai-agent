@@ -22,6 +22,8 @@ export type FactValue =
       readonly kind: 'price';
       readonly money: Money;
       readonly confirmedQuote: boolean;
+      /** Pricing semantics of the source (canonical PricingBasis). */
+      readonly pricingBasis?: string;
     }
   | { readonly kind: 'seats'; readonly count: number }
   | { readonly kind: 'availability'; readonly status: AvailabilityStatus }

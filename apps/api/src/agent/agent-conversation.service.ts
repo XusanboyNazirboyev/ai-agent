@@ -249,8 +249,51 @@ export class AgentConversationService implements OnModuleInit {
       ledger,
     );
 
+    // Progress and contact signals for the STUCK trigger and the one-time
+    // phone request: stored per-turn signals, never raw customer text.
+    const stuckLimit =
+      this.config.get('STUCK_REPEAT_LIMIT', { infer: true }) ?? 2;
+    const [priorTurns, contactRow, phoneAsked] = await Promise.all([
+      this.prisma.agentTurn.findMany({
+        where: { tenantId, conversationId, status: 'COMMITTED' },
+        orderBy: { completedAt: 'desc' },
+        take: stuckLimit,
+        select: {
+          outcome: true,
+          askedSlot: true,
+          slotsFilled: true,
+          textFingerprint: true,
+        },
+      }),
+      this.prisma.contact.findFirst({
+        where: { tenantId, id: conversation.contactId },
+        select: { phone: true },
+      }),
+      this.prisma.message.findFirst({
+        where: {
+          tenantId,
+          conversationId,
+          direction: 'OUTBOUND',
+          OR: INITIAL_LOCALE_PACKS.map((pack) => ({
+            text: { contains: pack.templates.phoneRequest },
+          })),
+        },
+        select: { id: true },
+      }),
+    ]);
+
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
+      progress: {
+        priorTurns: priorTurns
+          .reverse()
+          .map((turn) => ({ ...turn, outcome: turn.outcome ?? 'UNKNOWN' })),
+        stuck: { repeatLimit: stuckLimit },
+      },
+      contact: {
+        hasPhone: Boolean(contactRow?.phone),
+        phoneRequested: Boolean(phoneAsked),
+      },
       turnKey: request.turnKey,
       customerText: request.text,
       history,

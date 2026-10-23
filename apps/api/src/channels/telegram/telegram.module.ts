@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentModule } from '../../agent/agent.module.js';
+import { HandoverModule } from '../../handover/handover.module.js';
+import { LeadsModule } from '../../leads/leads.module.js';
 import { PersistenceModule } from '../../persistence/persistence.module.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import { TelegramProcessor } from './telegram-processor.js';
@@ -9,7 +11,7 @@ import { TelegramWebhookController } from './telegram-webhook.controller.js';
 import { TelegramWebhookService } from './telegram-webhook.service.js';
 
 @Module({
-  imports: [PersistenceModule, AgentModule],
+  imports: [PersistenceModule, AgentModule, HandoverModule, LeadsModule],
   controllers: [TelegramWebhookController],
   providers: [
     TelegramWebhookService,

@@ -40,6 +40,35 @@ export class TelegramWebhookService {
     }
   }
 
+  /** The configured channel and its operator group, if the route matches. */
+  async operatorChannel(
+    routeAccountId: string,
+  ): Promise<{ tenantId: string; operatorChatId: string | null }> {
+    const configured = this.config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', {
+      infer: true,
+    });
+    if (!configured || routeAccountId !== configured) {
+      throw new ServiceUnavailableException(
+        'Telegram channel is not configured',
+      );
+    }
+    const channel = await this.prisma.channelAccount.findFirst({
+      where: {
+        id: configured,
+        channelType: 'telegram',
+        status: 'ACTIVE',
+        tenant: { status: 'ACTIVE' },
+      },
+      select: { tenantId: true, operatorChatId: true },
+    });
+    if (!channel) {
+      throw new ServiceUnavailableException(
+        'Configured Telegram channel is unavailable',
+      );
+    }
+    return channel;
+  }
+
   async accept(
     routeAccountId: string,
     update: NormalizedTelegramText,
@@ -149,6 +178,21 @@ export class TelegramWebhookService {
             lastInboundAt: update.receivedAt,
           },
           select: { id: true },
+        });
+
+        // A customer writing to a closed conversation reopens it for the bot
+        // (state machine: CLOSED + REOPEN -> BOT_ACTIVE).
+        await tx.conversation.updateMany({
+          where: {
+            tenantId: channel.tenantId,
+            id: conversation.id,
+            state: 'CLOSED',
+          },
+          data: {
+            state: 'BOT_ACTIVE',
+            assignedOperatorId: null,
+            version: { increment: 1 },
+          },
         });
 
         // Serialize sequence allocation across webhook requests for this chat.

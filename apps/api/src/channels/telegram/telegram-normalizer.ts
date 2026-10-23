@@ -22,6 +22,28 @@ const updateSchema = z
           .passthrough()
           .optional(),
         text: z.string().min(1).max(4_096).optional(),
+        reply_to_message: z
+          .object({
+            message_id: z.number().int().positive().safe(),
+            text: z.string().max(4_096).optional(),
+          })
+          .passthrough()
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
+    callback_query: z
+      .object({
+        id: z.string().min(1).max(200),
+        from: z.object({ id: telegramId }).passthrough(),
+        message: z
+          .object({
+            message_id: z.number().int().positive().safe(),
+            chat: z.object({ id: telegramId }).passthrough(),
+          })
+          .passthrough()
+          .optional(),
+        data: z.string().max(200).optional(),
       })
       .passthrough()
       .optional(),
@@ -37,10 +59,24 @@ export type NormalizedTelegramText = {
   displayName: string | null;
   text: string;
   receivedAt: Date;
+  /** The message this one replies to (operator-group routing). */
+  replyToText?: string;
+};
+
+export type NormalizedTelegramCallback = {
+  kind: 'callback';
+  updateId: string;
+  callbackId: string;
+  userId: string;
+  chatId: string;
+  messageId: string;
+  data: string;
 };
 
 export type NormalizedTelegramUpdate =
-  NormalizedTelegramText | { kind: 'unsupported'; updateId: string };
+  | NormalizedTelegramText
+  | NormalizedTelegramCallback
+  | { kind: 'unsupported'; updateId: string };
 
 export class InvalidTelegramUpdateError extends Error {
   constructor() {
@@ -55,7 +91,22 @@ export function normalizeTelegramUpdate(
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) throw new InvalidTelegramUpdateError();
 
-  const { update_id: updateId, message } = parsed.data;
+  const {
+    update_id: updateId,
+    message,
+    callback_query: callback,
+  } = parsed.data;
+  if (callback?.message && callback.data) {
+    return {
+      kind: 'callback',
+      updateId: String(updateId),
+      callbackId: callback.id,
+      userId: callback.from.id,
+      chatId: callback.message.chat.id,
+      messageId: String(callback.message.message_id),
+      data: callback.data,
+    };
+  }
   if (!message?.text || !message.from) {
     return { kind: 'unsupported', updateId: String(updateId) };
   }
@@ -74,5 +125,8 @@ export function normalizeTelegramUpdate(
     displayName: displayName || null,
     text: message.text,
     receivedAt: new Date(message.date * 1_000),
+    ...(message.reply_to_message?.text !== undefined
+      ? { replyToText: message.reply_to_message.text }
+      : {}),
   };
 }

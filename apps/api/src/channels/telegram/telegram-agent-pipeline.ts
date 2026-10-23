@@ -18,6 +18,9 @@ import type { AppEnvironment } from '../../config/environment.js';
 import { redactPii } from '../../core/agent/redaction.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { HandoverService } from '../../handover/handover.service.js';
+import { LeadService } from '../../leads/lead.service.js';
+import { extractPhone } from '../../leads/phone.js';
 import { selectInboundBatch } from './inbound-batch.js';
 import type {
   ProcessResult,
@@ -96,13 +99,19 @@ async function lockConversation(
 export class TelegramAgentPipeline {
   private readonly logger = new Logger(TelegramAgentPipeline.name);
   private readonly policy: AgentModePolicy;
+  private readonly handoverService: HandoverService;
+  private readonly leadService: LeadService;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly agent: AgentConversationService,
     private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() @Inject(AGENT_MODE_POLICY) policy?: AgentModePolicy,
+    @Optional() handovers?: HandoverService,
+    @Optional() leads?: LeadService,
   ) {
+    this.handoverService = handovers ?? new HandoverService(prisma);
+    this.leadService = leads ?? new LeadService(prisma);
     this.policy =
       policy ??
       agentModePolicy({
@@ -370,7 +379,26 @@ export class TelegramAgentPipeline {
         },
       });
       if (!conversation || conversation.state !== 'BOT_ACTIVE') {
-        // The operator owns the conversation: close the batch, no reply.
+        // The operator owns the conversation: close the batch, no reply, and
+        // pass the customer's messages on to the operators.
+        if (
+          conversation?.state === 'WAITING_OPERATOR' ||
+          conversation?.state === 'OPERATOR_ACTIVE'
+        ) {
+          await tx.outboxEvent.createMany({
+            data: batch.messages.map((message) => ({
+              tenantId,
+              type: 'handover.forward',
+              aggregateType: 'message',
+              aggregateId: message.id,
+              idempotencyKey: `handover.forward:${message.id}`,
+              payload: {
+                messageId: message.id,
+              } satisfies Prisma.InputJsonObject,
+            })),
+            skipDuplicates: true,
+          });
+        }
         await tx.inboundEvent.updateMany({
           where: {
             tenantId,
@@ -626,40 +654,55 @@ export class TelegramAgentPipeline {
           },
         });
         if (result.outcome === 'HANDOVER' && result.handover) {
-          const handover = await tx.handover.create({
-            data: {
-              tenantId,
-              conversationId,
-              reasonCode: result.handover,
-              idempotencyKey: `handover:${claim.idempotencyKey}`,
-              summary: handoverSummary(computed),
-            },
-            select: { id: true },
+          handoverId = await this.handoverService.openHandover(tx, {
+            tenantId,
+            conversationId,
+            reason: result.handover,
+            summary: handoverSummary(computed),
+            idempotencyKey: `handover:${claim.idempotencyKey}`,
+            conversationVersion: claim.conversationVersion,
+            slaMinutes:
+              this.config.get('HANDOVER_SLA_MINUTES', { infer: true }) ?? 10,
+            now,
           });
-          handoverId = handover.id;
-          // D12: the bot stays silent until an operator hands back.
-          await tx.conversation.updateMany({
-            where: {
-              tenantId,
-              id: conversationId,
-              version: claim.conversationVersion,
-            },
-            data: {
-              state: 'WAITING_OPERATOR',
-              version: { increment: 1 },
-            },
-          });
-          this.logger.warn(
-            JSON.stringify({
-              event: 'handover.notification_pending',
-              tenant: tenantId,
-              conversation: conversationId,
-              handover: handover.id,
-              reason: result.handover,
-              note: 'operator notification is not implemented until Phase 5',
-            }),
-          );
+          if (handoverId) {
+            this.logger.warn(
+              JSON.stringify({
+                event: 'handover.opened',
+                tenant: tenantId,
+                conversation: conversationId,
+                handover: handoverId,
+                reason: result.handover,
+                // Recorded and queued for the operator group; whether anyone
+                // was reached is the handover's notificationStatus.
+                note: 'operator notification is queued, not yet delivered',
+              }),
+            );
+          }
         }
+      }
+
+      if (claim.mode === 'LIVE') {
+        // A phone number the customer wrote is kept on the contact, never
+        // guessed; then the lead is re-scored from this turn's evidence.
+        const phone = extractPhone(claim.text);
+        const conversationRow = await tx.conversation.findFirst({
+          where: { tenantId, id: conversationId },
+          select: { contactId: true },
+        });
+        if (phone && conversationRow)
+          await this.leadService.capturePhone(
+            tx,
+            tenantId,
+            conversationRow.contactId,
+            phone,
+          );
+        await this.leadService.rescoreFromTurn(tx, {
+          tenantId,
+          conversationId,
+          slots: result.slots,
+          ...(result.intent ? { intent: result.intent } : {}),
+        });
       }
 
       await tx.agentTurn.update({
@@ -721,6 +764,10 @@ export function turnMetrics(
       ...(result.budgetStop ? { budgetStop: result.budgetStop } : {}),
       timedOut: computed.timedOut,
     },
+    shownFactIds: [...result.shownFactIds],
+    askedSlot: result.askedSlot ?? null,
+    slotsFilled: Object.keys(result.slots).length,
+    textFingerprint: result.textFingerprint,
     facts: result.facts.map((fact) => ({
       id: fact.id,
       value: fact.value,

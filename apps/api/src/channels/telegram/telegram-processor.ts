@@ -2,6 +2,13 @@ import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { jsonString, selectInboundBatch } from './inbound-batch.js';
+import {
+  HandoverNotificationService,
+  isHandoverEvent,
+} from '../../handover/handover-notification.service.js';
+import { LeadService } from '../../leads/lead.service.js';
+import { LeadSyncService } from '../../leads/lead-sync.service.js';
+import { ShownOffersService } from '../../leads/shown-offers.service.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import {
   TelegramAmbiguousSendError,
@@ -25,6 +32,10 @@ export class TelegramProcessor {
     private readonly prisma: PrismaService,
     private readonly sender: TelegramSender,
     @Optional() private readonly agent?: TelegramAgentPipeline,
+    @Optional() private readonly handovers?: HandoverNotificationService,
+    @Optional() private readonly shownOffers?: ShownOffersService,
+    @Optional() private readonly leads?: LeadService,
+    @Optional() private readonly leadSync?: LeadSyncService,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
@@ -35,11 +46,23 @@ export class TelegramProcessor {
       await this.processSend(event);
       return;
     }
+    if (event.type === 'crm.lead.sync') {
+      const leadId = jsonString(event.payload, 'leadId');
+      if (leadId && this.leadSync)
+        await this.leadSync.sync(event.tenantId, leadId);
+      return;
+    }
+    if (isHandoverEvent(event.type) && this.handovers) {
+      await this.handovers.process(event);
+      return;
+    }
     throw new Error('Unsupported Telegram queue event');
   }
 
   async markExhausted(event: TelegramQueueEvent): Promise<void> {
-    if (event.type === 'telegram.inbound') {
+    if (isHandoverEvent(event.type)) {
+      await this.handovers?.markExhausted(event);
+    } else if (event.type === 'telegram.inbound') {
       const inboundEventId = jsonString(event.payload, 'inboundEventId');
       // An agent turn owned by this job can no longer finish.
       await this.agent?.failOwnedTurns(event);
@@ -177,6 +200,36 @@ export class TelegramProcessor {
     });
   }
 
+  /**
+   * Offers-shown and lead updates run only after Telegram accepted the
+   * message. A failure here must not re-send the message, so it is logged and
+   * left to the next delivery-independent rescore.
+   */
+  private async afterDelivery(
+    tenantId: string,
+    messageId: string,
+  ): Promise<void> {
+    try {
+      const recorded = await this.shownOffers?.recordDelivered(
+        tenantId,
+        messageId,
+      );
+      if (recorded) {
+        const message = await this.prisma.message.findFirst({
+          where: { id: messageId, tenantId },
+          select: { conversationId: true },
+        });
+        if (message)
+          await this.leads?.rescoreConversation(
+            tenantId,
+            message.conversationId,
+          );
+      }
+    } catch (error) {
+      void error; // never fail a delivered message
+    }
+  }
+
   private async processSend(event: TelegramQueueEvent): Promise<void> {
     const messageId = jsonString(event.payload, 'messageId');
     if (!messageId)
@@ -226,6 +279,7 @@ export class TelegramProcessor {
           deliveryErrorCode: null,
         },
       });
+      await this.afterDelivery(event.tenantId, message.id);
     } catch (error) {
       if (error instanceof TelegramAmbiguousSendError) {
         await this.prisma.message.updateMany({

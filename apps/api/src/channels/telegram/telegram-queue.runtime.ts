@@ -124,7 +124,16 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
       });
       const events = await this.prisma.outboxEvent.findMany({
         where: {
-          type: { in: ['telegram.inbound', 'telegram.send'] },
+          type: {
+            in: [
+              'telegram.inbound',
+              'telegram.send',
+              'handover.notify',
+              'handover.forward',
+              'handover.sla',
+              'crm.lead.sync',
+            ],
+          },
           status: 'PENDING',
           availableAt: { lte: new Date() },
         },
