@@ -203,6 +203,25 @@ const environmentSchema = postgresEnvironmentSchema
       .min(5)
       .max(3_600)
       .default(30),
+    /** Follow-ups to silent customers are off until the owner enables them. */
+    FOLLOWUP_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    FOLLOWUP_AFTER_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+    FOLLOWUP_MAX_PER_CONVERSATION: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3)
+      .default(1),
+    FOLLOWUP_QUIET_START_HOUR: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(23)
+      .default(21),
+    FOLLOWUP_QUIET_END_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Earlier no-progress turns before the STUCK handover (spec §7.4). */
     STUCK_REPEAT_LIMIT: z.coerce.number().int().min(1).max(5).default(2),
   })

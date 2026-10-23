@@ -197,6 +197,7 @@ model Tenant {
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
   internalNotes         InternalNote[]
+  followUps             FollowUp[]
   operatorApiTokens     OperatorApiToken[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
@@ -484,6 +485,7 @@ model Conversation {
 
   messages Message[]
   notes    InternalNote[]
+  followUps FollowUp[]
   shownOffers ShownOffer[]
   slots    ConversationSlots[]
   quotes   Quote[]
@@ -909,4 +911,22 @@ model OperatorApiToken {
   @@unique([tenantId, id])
   @@index([tenantId, operatorId])
   @@map("operator_api_tokens")
+}
+
+/// One follow-up sent to a silent customer (Phase 6). The unique ordinal makes
+/// the scheduler idempotent: a scan can never send the same follow-up twice.
+model FollowUp {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  ordinal        Int
+  messageId      String?      @map("message_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, conversationId, ordinal])
+  @@index([tenantId, createdAt])
+  @@map("follow_ups")
 }

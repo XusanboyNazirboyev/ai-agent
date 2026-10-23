@@ -682,6 +682,31 @@ export class TelegramAgentPipeline {
         }
       }
 
+      if (claim.mode === 'LIVE' && result.optOut) {
+        const row = await tx.conversation.findFirst({
+          where: { tenantId, id: conversationId },
+          select: { contactId: true },
+        });
+        if (row) {
+          await tx.contact.updateMany({
+            where: { tenantId, id: row.contactId },
+            data: { marketingOptOut: true },
+          });
+          await tx.auditEvent.create({
+            data: {
+              tenantId,
+              actorType: 'CUSTOMER',
+              actorId: row.contactId,
+              action: 'contact.opt_out',
+              entityType: 'contact',
+              entityId: row.contactId,
+              safeInputSummary: { via: 'message' },
+              idempotencyKey: `opt-out:${claim.idempotencyKey}`,
+            },
+          });
+        }
+      }
+
       if (claim.mode === 'LIVE') {
         // A phone number the customer wrote is kept on the contact, never
         // guessed; then the lead is re-scored from this turn's evidence.

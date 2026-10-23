@@ -160,6 +160,8 @@ export interface AgentTurnResult {
   readonly shownFactIds: readonly string[];
   /** True when this reply asked the customer for a phone number. */
   readonly phoneRequested?: boolean;
+  /** The customer asked to stop reminders; the commit step records it. */
+  readonly optOut?: boolean;
   /** Typed outcome of a safety gate that blocked, clarified or escalated. */
   readonly safety?: SafetyOutcome;
   /** Provider error code when the turn ended because a model call failed. */
@@ -350,6 +352,23 @@ export async function runAgentTurn(
       },
     });
   };
+  // Tier-0: a whole-message opt-out ("/stop") is honoured before any model
+  // call, in any supported language, and answered with a fixed template.
+  const compact = (value: string): string =>
+    normalizeForMatching(value).replace(/^[\s!.?,;:]+|[\s!.?,;:]+$/gu, '');
+  const spoken1 = compact(input.customerText);
+  if (
+    spoken1.length > 0 &&
+    locales
+      .all()
+      .some((pack) =>
+        pack.optOutPhrases.some((phrase) => compact(phrase) === spoken1),
+      )
+  ) {
+    return build(locale().templates.optOutConfirmation, 'ANSWERED', {
+      optOut: true,
+    });
+  }
   const early = languageStop(
     decideBeforeModel(languageAssessment, spoken, languagePolicy),
   );

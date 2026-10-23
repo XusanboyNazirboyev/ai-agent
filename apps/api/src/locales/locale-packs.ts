@@ -56,6 +56,9 @@ export const UZ_LATN: LocalePack = {
       "Xabaringiz jamoamizga yuborilgan, javob biroz kechikmoqda. Kutganingiz uchun uzr so'raymiz.",
     phoneRequest:
       "Xohlasangiz, jamoamiz siz bilan bog'lanishi uchun telefon raqamingizni yozib qoldiring.",
+    followUp:
+      "Assalomu alaykum! Savolingiz bo'yicha yordam kerak bo'lsa, yozing. Eslatmalarni to'xtatish uchun /stop deb yozing.",
+    optOutConfirmation: "Xo'p, endi eslatma yubormaymiz.",
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -99,6 +102,13 @@ export const UZ_LATN: LocalePack = {
       UNKNOWN: 'aniqlanmagan',
     },
   },
+  optOutPhrases: [
+    '/stop',
+    'stop',
+    "to'xtat",
+    "to'xtating",
+    'eslatma kerak emas',
+  ],
   languageRequestPhrases: [
     "o'zbekcha yozing",
     "o'zbek tilida yozing",
@@ -134,6 +144,9 @@ export const UZ_CYRL: LocalePack = {
       'Хабарингиз жамоамизга юборилган, жавоб бироз кечикмоқда. Кутганингиз учун узр сўраймиз.',
     phoneRequest:
       'Хоҳласангиз, жамоамиз сиз билан боғланиши учун телефон рақамингизни ёзиб қолдиринг.',
+    followUp:
+      'Ассалому алайкум! Саволингиз бўйича ёрдам керак бўлса, ёзинг. Эслатмаларни тўхтатиш учун /stop деб ёзинг.',
+    optOutConfirmation: 'Хўп, энди эслатма юбормаймиз.',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -177,6 +190,7 @@ export const UZ_CYRL: LocalePack = {
       UNKNOWN: 'аниқланмаган',
     },
   },
+  optOutPhrases: ['/stop', 'стоп', 'тўхтат', 'тўхтатинг', 'эслатма керак эмас'],
   languageRequestPhrases: [
     'ўзбекча ёзинг',
     'ўзбек тилида ёзинг',
@@ -214,6 +228,9 @@ export const RU: LocalePack = {
       'Ваше сообщение передано команде, ответ немного задерживается. Спасибо, что ждёте.',
     phoneRequest:
       'Если хотите, оставьте номер телефона, чтобы команда могла с вами связаться.',
+    followUp:
+      'Здравствуйте! Если нужна помощь с вашим вопросом, напишите. Чтобы остановить напоминания, отправьте /stop.',
+    optOutConfirmation: 'Хорошо, больше не будем напоминать.',
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -256,6 +273,7 @@ export const RU: LocalePack = {
       UNKNOWN: 'не определено',
     },
   },
+  optOutPhrases: ['/stop', 'стоп', 'не пишите', 'отписаться', 'остановить'],
   languageRequestPhrases: [
     'по-русски',
     'напишите на русском',
@@ -297,6 +315,9 @@ export const EN: LocalePack = {
       'Your message has been passed to our team and the reply is taking longer than usual. Thank you for waiting.',
     phoneRequest:
       'If you like, leave a phone number so our team can contact you.',
+    followUp:
+      'Hello! If you still need help with your question, just write. To stop reminders, send /stop.',
+    optOutConfirmation: 'Okay, we will not send reminders any more.',
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {
@@ -340,6 +361,13 @@ export const EN: LocalePack = {
       UNKNOWN: 'unknown',
     },
   },
+  optOutPhrases: [
+    '/stop',
+    'stop',
+    'unsubscribe',
+    'do not message me',
+    'stop messaging',
+  ],
   languageRequestPhrases: [
     'write in english',
     'reply in english',
