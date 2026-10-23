@@ -3,6 +3,7 @@ import {
   type Reservation,
   type TurnBudget,
 } from './budget.js';
+import type { EmbeddingProvider } from '../knowledge/embedding.js';
 import { SinkBudgetLedger, type BudgetLedger } from './budget-ledger.js';
 import {
   isLlmError,
@@ -432,6 +433,50 @@ export class MeteredLlm {
         ? this.sink.record(entry).then(() => undefined)
         : this.ledger.settle(this.context.tenantId, ledgerId, entry),
     );
+  }
+
+  /**
+   * Embeds texts through the same budget, ledger and unknown-usage rules as a
+   * model call. Billing is per input token (the embedding model must be
+   * priced); the reservation is the worst case of one token per input byte.
+   */
+  async embed(
+    embedder: EmbeddingProvider,
+    texts: readonly string[],
+  ): Promise<number[][]> {
+    const pricing = pricingFor(this.pricing, embedder.model);
+    const bytes = texts.reduce((sum, t) => sum + Buffer.byteLength(t), 0);
+    const reservation = this.budget.reserve(
+      worstCaseCost(pricing, bytes, 0),
+      bytes,
+      bytes,
+    );
+    const started = Date.now();
+    const done = await this.execute(
+      { tier: 'FAST', purpose: 'embed' },
+      { model: embedder.model, reservation, maxOutputTokens: 0 },
+      async (extras) => {
+        const result = await embedder.embed(texts, { signal: extras.signal });
+        return {
+          providerId: embedder.providerId,
+          model: embedder.model,
+          responseId: `emb:${this.context.turnKey}:${this.callIndex}:${started}`,
+          usage: {
+            inputTokens: result.inputTokens ?? bytes,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWrite5mTokens: 0,
+            cacheWrite1hTokens: 0,
+            ...(result.inputTokens === undefined ? { estimated: true } : {}),
+          },
+          durationMs: Date.now() - started,
+          attempts: 1,
+          vectors: result.vectors.map((vector) => [...vector]),
+        };
+      },
+      () => 'ok',
+    );
+    return done.vectors;
   }
 
   async structured<T>(
