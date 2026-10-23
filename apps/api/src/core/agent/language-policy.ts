@@ -3,7 +3,11 @@ import type {
   LocaleRegistry,
   LocaleStatus,
 } from '../locales/locale-pack.js';
-import { unifyApostrophes } from '@agentcore/shared';
+import {
+  unifyApostrophes,
+  updatedLatnToLegacy,
+  type UzbekOrthography,
+} from '@agentcore/shared';
 import { detectLanguage } from './language.js';
 import type { HistoryEntry } from './prompts.js';
 
@@ -56,6 +60,8 @@ export interface LanguageAssessment {
   readonly score: number;
   readonly confidenceClass: ConfidenceClass;
   readonly ambiguity: Ambiguity;
+  /** Writing style of the message; not evidence of language. */
+  readonly orthography: UzbekOrthography;
   readonly method: 'lexical-heuristic';
   readonly calibrated: false;
 }
@@ -69,9 +75,12 @@ export function assessLanguage(
   policy: LanguagePolicy = DEFAULT_LANGUAGE_POLICY,
 ): LanguageAssessment {
   const detection = detectLanguage(text);
-  const letters = text.match(ANY_LETTER)?.length ?? 0;
-  const known = text.match(LATIN_OR_CYRILLIC)?.length ?? 0;
+  const folded = updatedLatnToLegacy(unifyApostrophes(text));
+  const letters = folded.match(ANY_LETTER)?.length ?? 0;
+  const known = folded.match(LATIN_OR_CYRILLIC)?.length ?? 0;
+  const orthography = detection.orthography ?? 'none';
   const base = {
+    orthography,
     method: 'lexical-heuristic',
     calibrated: false,
     score: detection.confidence,
@@ -135,13 +144,15 @@ export function requestedLocale(
   registry: LocaleRegistry,
   supported: readonly LocaleId[],
 ): LocaleId | undefined {
-  const haystack = unifyApostrophes(text).toLowerCase();
+  const fold = (value: string): string =>
+    updatedLatnToLegacy(unifyApostrophes(value)).toLowerCase();
+  const haystack = fold(text);
   const matches = new Set<LocaleId>();
   for (const pack of registry.all()) {
     if (!supported.includes(pack.id)) continue;
     if (
       pack.languageRequestPhrases.some((phrase) =>
-        haystack.includes(unifyApostrophes(phrase).toLowerCase()),
+        haystack.includes(fold(phrase)),
       )
     )
       matches.add(pack.id);

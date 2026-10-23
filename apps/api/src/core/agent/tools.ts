@@ -1,4 +1,10 @@
-import type { AgentToolName, DomainPack } from '@agentcore/shared';
+import {
+  unifyApostrophes,
+  updatedLatnToLegacy,
+  uzCyrlToLatn,
+  type AgentToolName,
+  type DomainPack,
+} from '@agentcore/shared';
 import { z } from 'zod';
 import {
   AvailabilitySchema,
@@ -10,6 +16,7 @@ import {
   type Offer,
   type Quote,
 } from '../../connectors/contracts/canonical.js';
+import type { CanonicalQuery } from '../../connectors/contracts/canonical.js';
 import type { CrmConnector } from '../../connectors/interfaces/crm-connector.js';
 import {
   ConnectorErrorCategory,
@@ -432,7 +439,30 @@ export class AgentTools {
 
   /** Code-initiated catalog search from the slot state (value early). */
   searchBySlots(state: SlotState, requiredOnly = false): Promise<ToolOutcome> {
+    return this.runSearch(
+      searchQuery(this.context.pack, state, { requiredOnly }),
+    );
+  }
+
+  /**
+   * The same search with the title spelled in canonical legacy Uzbek Latin
+   * (updated letters and Cyrillic folded). Only a query is rewritten; stored
+   * connector data is never touched. Undefined when it would not differ.
+   */
+  searchByOrthographicVariant(
+    state: SlotState,
+    requiredOnly = false,
+  ): Promise<ToolOutcome> | undefined {
     const query = searchQuery(this.context.pack, state, { requiredOnly });
+    if (query.title === undefined) return undefined;
+    const variant = uzCyrlToLatn(
+      updatedLatnToLegacy(unifyApostrophes(query.title)),
+    );
+    if (variant === query.title) return undefined;
+    return this.runSearch({ ...query, title: variant });
+  }
+
+  private runSearch(query: CanonicalQuery): Promise<ToolOutcome> {
     return this.execute(
       'search_catalog',
       'code',

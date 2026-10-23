@@ -1,4 +1,9 @@
-import { unifyApostrophes } from '@agentcore/shared';
+import {
+  unifyApostrophes,
+  updatedLatnToLegacy,
+  uzbekOrthography,
+  type UzbekOrthography,
+} from '@agentcore/shared';
 import type {
   LanguageCode,
   LocaleId,
@@ -29,6 +34,11 @@ export interface LanguageDetection {
   readonly confidence: number;
   /** True when Latin and Cyrillic letters are mixed in one message. */
   readonly mixedScript?: boolean;
+  /**
+   * Writing style (legacy / updated Latin, Cyrillic). Descriptive only: it is
+   * neither language evidence nor the language the customer wants answers in.
+   */
+  readonly orthography?: UzbekOrthography;
 }
 
 const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
@@ -196,12 +206,26 @@ const LEXICAL_REQUIRED_CAP = 0.25;
 const CONTRADICTION_CAP = 0.4;
 
 export function detectLanguage(input: string): LanguageDetection {
-  const text = unifyApostrophes(input).toLowerCase();
-  const scriptText = unifyApostrophes(input).replace(ACRONYM, ' ');
+  // Updated-Latin letters (ğ ö ş ç) are folded to the legacy digraphs once,
+  // so word lists and script counts see one spelling. The input itself is
+  // never modified for anything that is stored or shown.
+  const folded = updatedLatnToLegacy(unifyApostrophes(input));
+  const orthography = uzbekOrthography(input);
+  const text = folded.toLowerCase();
+  // Acronyms say nothing about script, but a message typed entirely in
+  // capitals is text, not acronyms.
+  const scriptText = /\p{Ll}/u.test(folded)
+    ? folded.replace(ACRONYM, ' ')
+    : folded;
   const latin = scriptText.match(LATIN)?.length ?? 0;
   const cyrillic = scriptText.match(CYRILLIC)?.length ?? 0;
   if (latin + cyrillic === 0)
-    return { language: 'unknown', script: 'unknown', confidence: 0 };
+    return {
+      language: 'unknown',
+      script: 'unknown',
+      confidence: 0,
+      orthography,
+    };
   const script: ScriptCode = cyrillic >= latin ? 'Cyrl' : 'Latn';
   const scriptShare = Math.max(latin, cyrillic) / (latin + cyrillic);
 
@@ -241,6 +265,7 @@ export function detectLanguage(input: string): LanguageDetection {
       script,
       confidence: 0.2 * scriptShare,
       mixedScript: scriptShare < MIXED_SCRIPT_SHARE,
+      orthography,
     };
 
   const margin = (top.value - second.value) / (top.value + 2);
@@ -273,6 +298,7 @@ export function detectLanguage(input: string): LanguageDetection {
     script,
     confidence: Math.round(capped * 1000) / 1000,
     mixedScript: scriptShare < MIXED_SCRIPT_SHARE,
+    orthography,
   };
 }
 

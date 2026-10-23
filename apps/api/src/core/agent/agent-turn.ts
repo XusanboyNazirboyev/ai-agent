@@ -394,6 +394,14 @@ export async function runAgentTurn(
   try {
     search = await tools.searchBySlots(slots);
     if (search.ok && search.items.length === 0) {
+      // Same words, canonical Uzbek spelling: only the query is rewritten.
+      const variant = tools.searchByOrthographicVariant(slots);
+      if (variant) {
+        const alt = await variant;
+        if (alt.ok && alt.items.length > 0) search = alt;
+      }
+    }
+    if (search.ok && search.items.length === 0) {
       const relaxed = await tools.searchBySlots(slots, true);
       if (relaxed.ok) search = relaxed;
     }

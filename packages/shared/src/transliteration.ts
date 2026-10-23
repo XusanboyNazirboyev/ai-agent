@@ -7,7 +7,7 @@
  * rendered exactly as the source returned them.
  */
 
-const APOSTROPHES = /[’‘ʻʼ＇`´]/gu;
+const APOSTROPHES = /[’‘ʻʼ＇`´′ʹˈ]/gu;
 const VOWELS_CYRL = new Set('аеёиоуўэюя'.split(''));
 
 const CYRL_TO_LATN: Readonly<Record<string, string>> = {
@@ -52,6 +52,79 @@ const CYRL_TO_LATN: Readonly<Record<string, string>> = {
 /** Unifies the apostrophe variants customers type (o‘, oʻ, o’, o`). */
 export function unifyApostrophes(value: string): string {
   return value.normalize('NFKC').replace(APOSTROPHES, "'");
+}
+
+/**
+ * Updated Uzbek Latin letters (as supplied for this project: Ğ ğ, Ö ö, Ş ş,
+ * Ç ç) -> the legacy digraph spelling used internally (g', o', sh, ch).
+ * One-way and idempotent on purpose: the reverse (sh -> ş) is ambiguous for
+ * s+h sequences, so it is never applied. Input is matched in NFC; the
+ * customer's original text is not modified by callers.
+ */
+const UPDATED_TO_LEGACY: Readonly<Record<string, readonly [string, string]>> = {
+  ğ: ["g'", "G'"],
+  ö: ["o'", "O'"],
+  ş: ['sh', 'Sh'],
+  ç: ['ch', 'Ch'],
+};
+
+export function updatedLatnToLegacy(input: string): string {
+  const text = input.normalize('NFC');
+  let out = '';
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    const lower = char.toLowerCase();
+    const mapped = UPDATED_TO_LEGACY[lower];
+    if (mapped === undefined) {
+      out += char;
+      continue;
+    }
+    if (char === lower) {
+      out += mapped[0];
+      continue;
+    }
+    // Capital letter: "Ş" -> "Sh", but inside an all-caps word "ŞAHAR" -> "SHAHAR".
+    const next = text[index + 1];
+    const prev = text[index - 1];
+    const capsWord =
+      (next !== undefined &&
+        next === next.toUpperCase() &&
+        /\p{L}/u.test(next)) ||
+      (prev !== undefined &&
+        prev === prev.toUpperCase() &&
+        /\p{L}/u.test(prev));
+    out += capsWord ? mapped[0].toUpperCase() : mapped[1];
+  }
+  return out;
+}
+
+export type UzbekOrthography =
+  | 'cyrillic'
+  | 'latin-updated'
+  | 'latin-legacy'
+  | 'latin-mixed'
+  | 'latin-neutral'
+  | 'none';
+
+/**
+ * Writing style of a message, independent of language and of the language
+ * the customer wants answers in. `latin-neutral` means Latin text without any
+ * style-specific letter (plain "salom" is the same in both Latin styles).
+ */
+export function uzbekOrthography(input: string): UzbekOrthography {
+  const text = unifyApostrophes(input).normalize('NFC');
+  const cyrillic = text.match(/[\u0400-\u04ff]/gu)?.length ?? 0;
+  const latin =
+    text.match(/[A-Za-z\u00c7\u00e7\u011e\u011f\u00d6\u00f6\u015e\u015f]/gu)
+      ?.length ?? 0;
+  if (cyrillic + latin === 0) return 'none';
+  if (cyrillic >= latin) return 'cyrillic';
+  const updated = /[ğöşç]/iu.test(text);
+  const legacy = /[go]'/iu.test(text);
+  if (updated && legacy) return 'latin-mixed';
+  if (updated) return 'latin-updated';
+  if (legacy) return 'latin-legacy';
+  return 'latin-neutral';
 }
 
 function matchCase(source: string, target: string): string {
@@ -180,7 +253,7 @@ export function uzLatnToCyrl(input: string): string {
  * "ONLAYN" share one key.
  */
 export function normalizeForMatching(value: string): string {
-  return uzCyrlToLatn(unifyApostrophes(value))
+  return uzCyrlToLatn(updatedLatnToLegacy(unifyApostrophes(value)))
     .toLowerCase()
     .replace(/\s+/gu, ' ')
     .trim();
