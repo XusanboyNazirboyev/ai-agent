@@ -5,6 +5,7 @@ import {
   SCHEDULED_SCANS,
   type ScheduledScan,
 } from '../handover/handover-runtime.js';
+import { DigestService } from '../handover/digest.service.js';
 import { HandoverModule } from '../handover/handover.module.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadsModule } from '../leads/leads.module.js';
@@ -19,13 +20,15 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
   imports: [PersistenceModule, HandoverModule, LeadsModule],
   providers: [
     FollowUpService,
+    DigestService,
     {
       provide: SCHEDULED_SCANS,
-      inject: [LeadSyncService, FollowUpService],
+      inject: [LeadSyncService, FollowUpService, DigestService],
       useFactory: (
         lead: LeadSyncService,
         followUp: FollowUpService,
-      ): ScheduledScan[] => [lead, followUp],
+        digest: DigestService,
+      ): ScheduledScan[] => [lead, followUp, digest],
     },
     HandoverRuntime,
   ],

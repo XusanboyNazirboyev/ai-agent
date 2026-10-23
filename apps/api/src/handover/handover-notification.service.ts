@@ -37,6 +37,7 @@ const HANDOVER_EVENTS = new Set([
   'handover.notify',
   'handover.forward',
   'handover.sla',
+  'digest.morning',
 ]);
 
 export function isHandoverEvent(type: string): boolean {
@@ -89,6 +90,8 @@ export class HandoverNotificationService {
     } else if (event.type === 'handover.forward') {
       const id = field(event.payload, 'messageId');
       if (id) await this.forward(event.tenantId, id);
+    } else if (event.type === 'digest.morning') {
+      await this.digest(event.tenantId, field(event.payload, 'date') ?? '');
     } else if (event.type === 'handover.sla') {
       const id = field(event.payload, 'handoverId');
       if (id) await this.sla(event.tenantId, id);
@@ -263,6 +266,52 @@ export class HandoverNotificationService {
       refLine(handover.id),
     ];
     return lines.join('\n').slice(0, 4_000);
+  }
+
+  /** Morning digest of hot and warm leads and waiting handovers. */
+  private async digest(tenantId: string, date: string): Promise<void> {
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { tenantId, operatorChatId: { not: null }, status: 'ACTIVE' },
+      select: {
+        operatorChatId: true,
+        tenant: { select: { defaultLocale: true } },
+      },
+    });
+    if (!account?.operatorChatId) return;
+    const t = operatorStrings(account.tenant.defaultLocale);
+    const since = new Date(Date.now() - 24 * 3_600_000);
+    const [leads, waiting] = await Promise.all([
+      this.prisma.lead.findMany({
+        where: {
+          tenantId,
+          status: 'NEW',
+          score: { in: ['HOT', 'WARM'] },
+          updatedAt: { gte: since },
+        },
+        orderBy: [{ score: 'asc' }, { updatedAt: 'desc' }],
+        take: 15,
+        select: {
+          score: true,
+          reasonCodes: true,
+          contact: { select: { name: true } },
+        },
+      }),
+      this.prisma.handover.count({ where: { tenantId, status: 'OPEN' } }),
+    ]);
+    const lines = [
+      t.digestTitle(date),
+      t.digestWaiting(waiting),
+      ...(leads.length === 0
+        ? [t.digestEmpty]
+        : leads.map(
+            (lead) =>
+              `${lead.score} ${lead.contact.name ?? '-'}: ${lead.reasonCodes.join(', ')}`,
+          )),
+    ];
+    await this.notifier.postCard(
+      { operatorChatId: account.operatorChatId },
+      { text: lines.join('\n').slice(0, 4_000), buttons: [] },
+    );
   }
 
   private async forward(tenantId: string, messageId: string): Promise<void> {

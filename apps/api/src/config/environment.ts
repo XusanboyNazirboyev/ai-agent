@@ -203,6 +203,8 @@ const environmentSchema = postgresEnvironmentSchema
       .min(5)
       .max(3_600)
       .default(30),
+    /** Local hour from which the daily operator digest is posted. */
+    DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Follow-ups to silent customers are off until the owner enables them. */
     FOLLOWUP_ENABLED: z
       .enum(['true', 'false'])
