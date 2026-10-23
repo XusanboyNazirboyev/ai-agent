@@ -35,6 +35,7 @@ export const HANDOVER_REASONS = [
   'TOOL_LOOP_LIMIT',
   'LOW_LANG_CONFIDENCE',
   'STUCK',
+  'HIGH_VALUE',
 ] as const;
 export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 

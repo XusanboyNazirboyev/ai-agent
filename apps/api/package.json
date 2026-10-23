@@ -26,7 +26,8 @@
     "eval:live": "tsx scripts/live-eval.ts",
     "agent:mode": "tsx scripts/agent-mode.ts",
     "llm:smoke": "tsx scripts/llm-smoke.ts",
-    "locale:review": "tsx scripts/locale-review-package.ts"
+    "locale:review": "tsx scripts/locale-review-package.ts",
+    "operator:token": "tsx scripts/operator-token.ts"
   },
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || ^24.0.0",

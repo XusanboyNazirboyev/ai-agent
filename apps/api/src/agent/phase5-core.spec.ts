@@ -12,6 +12,7 @@ import {
   textFingerprint,
   type PriorTurnSignal,
 } from '../core/agent/stuck.js';
+import { decimalAtLeast } from '../core/agent/money.js';
 import { scoreLead } from '../core/leads/scoring.js';
 import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
@@ -256,5 +257,71 @@ describe('lead scoring', () => {
     expect(
       scoreLead(scoring, { ...base, slots: { subject: 'IELTS' } }).reasonCodes,
     ).not.toContain('PHONE_PROVIDED');
+  });
+});
+
+describe('HIGH_VALUE trigger', () => {
+  const IELTS = 'mock-education:edu-ielts-001';
+  const WEEKDAY = 'mock-education:offer:ielts-group-weekday';
+  const quoteTurn = (highValue?: {
+    currency: string;
+    minAmount: string;
+  }): ReturnType<typeof runTurn> =>
+    runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({ subject: 'IELTS' }, 'price'),
+        {
+          kind: 'tools',
+          toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+        },
+        {
+          kind: 'tools',
+          toolCalls: [{ name: 'get_quote', input: { offerId: WEEKDAY } }],
+        },
+        { kind: 'tools', text: '{{F1}} narxi: {{F10}}.' },
+      ]),
+      text: 'IELTS kursi narxi qancha?',
+      pack: DomainPackSchema.parse({
+        ...EDUCATION_PACK,
+        ...(highValue ? { highValue } : {}),
+      }),
+    });
+
+  it('keeps the quote from the customer when it reaches the pack threshold', async () => {
+    const { result } = await quoteTurn({ currency: 'USD', minAmount: '100' });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'HIGH_VALUE',
+      safety: { escalation: { reason: 'HIGH_VALUE', operatorNotified: false } },
+    });
+    expect(result.reply).not.toMatch(/150/u);
+    // The operator still gets the verified quote.
+    expect(
+      result.facts.some(
+        (f) => f.value.kind === 'price' && f.value.confirmedQuote,
+      ),
+    ).toBe(true);
+  });
+
+  it('answers when below the threshold, in another currency, or with no threshold', async () => {
+    for (const config of [
+      { currency: 'USD', minAmount: '150.01' },
+      { currency: 'UZS', minAmount: '1' },
+      undefined,
+    ]) {
+      const { result } = await quoteTurn(config);
+      expect(result.outcome).toBe('ANSWERED');
+      expect(result.reply).toMatch(/150/u);
+    }
+    expect(
+      (await quoteTurn({ currency: 'USD', minAmount: '150' })).result.handover,
+    ).toBe('HIGH_VALUE');
+  });
+
+  it('compares decimals exactly', () => {
+    expect(decimalAtLeast('150.00', '150')).toBe(true);
+    expect(decimalAtLeast('149.999999', '150')).toBe(false);
+    expect(decimalAtLeast('1000', '999.5')).toBe(true);
+    expect(decimalAtLeast('0.1', '0.10')).toBe(true);
   });
 });

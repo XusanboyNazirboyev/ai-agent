@@ -60,6 +60,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.
 - **STUCK** — The same question or message repeated without progress.
   > Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.
+- **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
+  > Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.
 
 ### Labels and availability words
 
@@ -165,6 +167,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.
 - **STUCK** — The same question or message repeated without progress.
   > Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.
+- **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
+  > Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.
 
 ### Labels and availability words
 
@@ -271,6 +275,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.
 - **STUCK** — The same question or message repeated without progress.
   > Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.
+- **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
+  > Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.
 
 ### Labels and availability words
 
@@ -383,6 +389,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Sorry, I'm not sure I understood you. Your message has been recorded for our team.
 - **STUCK** — The same question or message repeated without progress.
   > We seem to be going in circles. Your message has been saved for our team.
+- **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
+  > Our team confirms amounts like this personally. Your request has been saved for them.
 
 ### Labels and availability words
 

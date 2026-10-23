@@ -7,13 +7,17 @@ import {
 import { HandoverRuntime } from './handover-runtime.js';
 import { HandoverSlaService } from './handover-sla.service.js';
 import { HandoverService } from './handover.service.js';
+import { OperatorCommandsController } from './operator-commands.controller.js';
+import { OperatorTokenGuard } from './operator-auth.js';
 import { OperatorUpdateHandler } from './operator-update.handler.js';
 import { TelegramBotApi } from './telegram-bot-api.js';
 import { TelegramGroupNotifier } from './telegram-group-notifier.js';
 
 @Module({
   imports: [PersistenceModule],
+  controllers: [OperatorCommandsController],
   providers: [
+    OperatorTokenGuard,
     HandoverService,
     HandoverSlaService,
     HandoverNotificationService,

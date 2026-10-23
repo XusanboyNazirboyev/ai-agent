@@ -114,6 +114,17 @@ export const DomainPackSchema = z
     slots: z.array(SlotDefinitionSchema).min(1),
     tools: z.array(z.enum(AGENT_TOOL_NAMES)).min(1),
     maxOptionsShown: z.number().int().min(1).max(5).default(3),
+    /**
+     * Optional: a confirmed quote at or above this amount (same currency) is
+     * not sent to the customer; a person confirms it (HIGH_VALUE handover).
+     */
+    highValue: z
+      .object({
+        currency: z.string().regex(/^[A-Z]{3}$/u),
+        minAmount: z.string().regex(/^\d{1,15}(?:\.\d{1,6})?$/u),
+      })
+      .strict()
+      .optional(),
     /** Optional deterministic lead scoring; without it no lead is scored. */
     leadScoring: LeadScoringSchema.optional(),
     prompt: z

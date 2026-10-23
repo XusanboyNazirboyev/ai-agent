@@ -52,6 +52,8 @@ const HANDOVER_CONTEXT: Record<string, string> = {
   LOW_LANG_CONFIDENCE:
     'The bot is not sure it understood the customer (language/script).',
   STUCK: 'The same question or message repeated without progress.',
+  HIGH_VALUE:
+    'A confirmed amount above the pack threshold is confirmed by a person, not by the bot.',
 };
 
 const md: string[] = [];

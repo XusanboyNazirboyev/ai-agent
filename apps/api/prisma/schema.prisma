@@ -197,6 +197,7 @@ model Tenant {
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
   internalNotes         InternalNote[]
+  operatorApiTokens     OperatorApiToken[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
@@ -424,6 +425,7 @@ model Operator {
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  apiTokens             OperatorApiToken[]
   assignedConversations Conversation[] @relation("AssignedOperator")
   assignedHandovers     Handover[]     @relation("AssignedHandoverOperator")
 
@@ -888,4 +890,23 @@ model ShownOffer {
   @@unique([tenantId, messageId, offerRef])
   @@index([tenantId, conversationId, shownAt])
   @@map("shown_offers")
+}
+
+/// API credential of one operator for the operator command API. Only the
+/// SHA-256 of the token is stored; the token is shown once at creation.
+model OperatorApiToken {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  operatorId String    @map("operator_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  label      String    @db.VarChar(120)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operator   Operator  @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, operatorId])
+  @@map("operator_api_tokens")
 }

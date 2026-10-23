@@ -13,6 +13,7 @@ import type {
   LocalePack,
   LocaleRegistry,
 } from '../locales/locale-pack.js';
+import { decimalAtLeast } from './money.js';
 import {
   DEFAULT_STUCK_POLICY,
   detectStuck,
@@ -604,6 +605,32 @@ export async function runAgentTurn(
         gate: 'DISPLAY',
         reasonCodes: checked.violations,
         escalation: { reason: 'GUARDRAIL', operatorNotified: false },
+      },
+    });
+  }
+  // HIGH_VALUE: a confirmed quote at or above the pack's threshold is not
+  // sent by the bot; a person confirms it. The verified quote stays in the
+  // handover summary for the operator.
+  const highValue = pack.highValue;
+  if (
+    highValue &&
+    (checked.references ?? []).some((id) => {
+      const fact = facts.get(id);
+      return (
+        fact?.value.kind === 'price' &&
+        fact.value.confirmedQuote &&
+        fact.value.money.currency === highValue.currency &&
+        decimalAtLeast(fact.value.money.amount, highValue.minAmount)
+      );
+    })
+  ) {
+    return handover('HIGH_VALUE', {
+      regenerated,
+      safety: {
+        status: 'ESCALATION_REQUIRED',
+        gate: 'PROGRESS',
+        reasonCodes: ['HIGH_VALUE_QUOTE'],
+        escalation: { reason: 'HIGH_VALUE', operatorNotified: false },
       },
     });
   }

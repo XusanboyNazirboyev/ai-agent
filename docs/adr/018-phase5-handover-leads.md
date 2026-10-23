@@ -15,8 +15,12 @@ Phase 4 ended in a typed handover outcome plus a stored `Handover` row; nobody w
 - **Offers shown** (`shown_offers`) are written only after Telegram accepted the message (delivery state `SENT`), from the committed turn's verified facts restricted to the fact ids in the reply. A `Quote` row is written only for a live confirmed quote whose offer exists in the synced catalog (its foreign key); otherwise the reason is stored (`OFFER_NOT_SYNCED`, `NOT_A_CONFIRMED_QUOTE`). Idempotent per message and offer.
 - **STUCK** (`core/agent/stuck.ts`): needs `STUCK_REPEAT_LIMIT` (default 2) earlier no-progress turns; any new slot or answered turn resets it. Fires on the same question asked again, or the same normalized customer text repeated, with no new slot. Per-turn signals (`asked_slot`, `slots_filled`, `text_fingerprint`) are stored, not raw text. It runs in the agent core, never in the router.
 
+## Added before merge
+- **Operator command API** (`/api/v1/handovers/:id/{take-over,reply,return-to-bot,close,notes}`): per-operator bearer credentials (`operator_api_tokens`, only the SHA-256 stored; created once with `pnpm operator:token <operatorId> <label>`); tenant and operator come from the credential; `Idempotency-Key` header required; error shape `{ code, message, i18nKey, details? }`; a lost take-over race is HTTP 409. Interim machine auth only: sessions, CSRF, login limits and the full role matrix of §12A.3 are Phase 6A; there is no rate limit on this API yet.
+- **HIGH_VALUE**: optional pack setting `highValue {currency, minAmount}`; a confirmed quote at or above it is not sent by the bot, a person confirms it (exact decimal compare). Not configured in the education pack. `LEGAL_UNVERIFIED` waits for verified knowledge (Phase 6).
+
 ## Not done / limits
-- `HIGH_VALUE` and `LEGAL_UNVERIFIED` triggers (need pack thresholds and Phase 6 knowledge). Morning digest and follow-ups (Phase 6). HTTP command API with RBAC and the web inbox (Phase 6A); today operators act from the Telegram group only.
+- `LEGAL_UNVERIFIED` trigger (needs Phase 6 knowledge). Morning digest and follow-ups (Phase 6). Sessions/RBAC matrix and the web inbox (Phase 6A).
 - **No real Telegram call was made**: the notifier is tested with a mocked transport and a fake notifier. The webhook must be registered with `allowed_updates` including `callback_query`, and the bot must be in the operator group (privacy-mode behavior for group replies was not verified).
 - An ambiguous Telegram send of a card can produce a duplicate card on retry.
 - Quote rows depend on catalog sync having stored the offer.

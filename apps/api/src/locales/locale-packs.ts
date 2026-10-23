@@ -83,6 +83,8 @@ export const UZ_LATN: LocalePack = {
         "Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.",
       STUCK:
         "Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.",
+      HIGH_VALUE:
+        "Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.",
     },
     labels: {
       price: 'narxi',
@@ -159,6 +161,8 @@ export const UZ_CYRL: LocalePack = {
         'Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.',
       STUCK:
         'Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.',
+      HIGH_VALUE:
+        'Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.',
     },
     labels: {
       price: 'нархи',
@@ -236,6 +240,8 @@ export const RU: LocalePack = {
         'Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.',
       STUCK:
         'Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.',
+      HIGH_VALUE:
+        'Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.',
     },
     labels: {
       price: 'стоимость',
@@ -318,6 +324,8 @@ export const EN: LocalePack = {
         "Sorry, I'm not sure I understood you. Your message has been recorded for our team.",
       STUCK:
         'We seem to be going in circles. Your message has been saved for our team.',
+      HIGH_VALUE:
+        'Our team confirms amounts like this personally. Your request has been saved for them.',
     },
     labels: {
       price: 'price',
