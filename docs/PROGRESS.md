@@ -187,7 +187,8 @@ No commits were made and nothing was staged. Phase 4 was not started.
 - `pnpm test:integration` — pass on two consecutive runs: 4 files, 37 tests (16 existing Phase 1–2, 1 startup smoke, 20 catalog sync).
 - `pnpm db:test:prepare` applied the new migration; `pnpm db:test:seed` twice — pass; `pnpm db:test:drift` — `No difference detected.`; `pnpm db:generate` — pass.
 - `pnpm test:coverage` (unit suite only) — pass: all files 80.9% statements. The sync store, service and queue are covered by the integration suite, which this script does not instrument.
-- Not run: CI on Node 24 (not installed locally) and Docker Compose (daemon not running).
+- **GitHub Actions CI** (private repository `XusanboyNazirboyev/ai-agent`, Node v24.21.0, PostgreSQL 16 and Redis 7 service containers): the first run failed at `pnpm db:test:seed` with `ERR_MODULE_NOT_FOUND` for `@agentcore/shared/dist`. `prisma/seed.ts` imports the shared package, and nothing had built it in a fresh checkout; locally a stale `dist` hid this. The root `db:seed` and `db:test:seed` scripts now build shared first. The full CI sequence was replayed locally without the shared build output and passed. The CI run for commit `eaf36a8` then passed every step: unit 360 passed and 7 skipped, integration 37 passed, drift clean.
+- Not run: Docker Compose (daemon not running locally).
 
 ### Known limitations
 
