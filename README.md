@@ -1,6 +1,6 @@
 # AgentCore
 
-Universal AI sales and support agent platform. `AGENTS.md` is the current project specification.
+Universal AI sales and support agent platform. `AGENTS.md` is the lean project index; the full specification is in `docs/spec/` (start at `docs/spec/README.md`), and the current state is at the top of `docs/PROGRESS.md`.
 
 ## Requirements
 
