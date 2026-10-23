@@ -9,6 +9,11 @@ import {
   ScriptedLlmProvider,
 } from '../core/llm/scripted-llm-provider.js';
 import { AnthropicLlmProvider } from '../llm/anthropic/anthropic-llm-provider.js';
+import { OpenAiCompatibleLlmProvider } from '../llm/openai-compatible/openai-compatible-provider.js';
+import {
+  ClientRateLimiter,
+  RateLimitedLlmProvider,
+} from '../llm/rate-limited-provider.js';
 
 export type LlmEnvironment = Pick<
   AppEnvironment,
@@ -27,6 +32,20 @@ export type LlmEnvironment = Pick<
   | 'LLM_TURN_BUDGET_USD'
   | 'LLM_CONVERSATION_BUDGET_USD'
   | 'LLM_TENANT_MONTHLY_BUDGET_USD'
+  | 'LLM_BASE_URL'
+  | 'LLM_API_KEY'
+  | 'LLM_MODEL_FAST'
+  | 'LLM_MODEL_STRONG'
+  | 'LLM_STRUCTURED_OUTPUT'
+  | 'LLM_MAX_TOKENS_PARAM'
+  | 'LLM_RATE_LIMIT_RPM'
+  | 'LLM_RATE_LIMIT_TPM'
+  | 'LLM_RATE_LIMIT_RPD'
+  | 'LLM_RATE_LIMIT_MAX_WAIT_MS'
+  | 'LLM_TURN_TOKEN_BUDGET'
+  | 'LLM_CONVERSATION_TOKEN_BUDGET'
+  | 'LLM_TRUSTED_PROVIDERS'
+  | 'LLM_ALLOW_REAL_CUSTOMER_DATA'
 >;
 
 const LLM_KEYS = [
@@ -45,6 +64,20 @@ const LLM_KEYS = [
   'LLM_TURN_BUDGET_USD',
   'LLM_CONVERSATION_BUDGET_USD',
   'LLM_TENANT_MONTHLY_BUDGET_USD',
+  'LLM_BASE_URL',
+  'LLM_API_KEY',
+  'LLM_MODEL_FAST',
+  'LLM_MODEL_STRONG',
+  'LLM_STRUCTURED_OUTPUT',
+  'LLM_MAX_TOKENS_PARAM',
+  'LLM_RATE_LIMIT_RPM',
+  'LLM_RATE_LIMIT_TPM',
+  'LLM_RATE_LIMIT_RPD',
+  'LLM_RATE_LIMIT_MAX_WAIT_MS',
+  'LLM_TURN_TOKEN_BUDGET',
+  'LLM_CONVERSATION_TOKEN_BUDGET',
+  'LLM_TRUSTED_PROVIDERS',
+  'LLM_ALLOW_REAL_CUSTOMER_DATA',
 ] as const satisfies ReadonlyArray<keyof LlmEnvironment>;
 
 /** Reads the validated LLM settings from Nest configuration. */
@@ -61,9 +94,36 @@ export function llmEnvironment(
  * `anthropic` is a configured adapter only: a working key and a successful
  * live request are separate facts that this factory does not check.
  */
-export function createLlmProvider(environment: LlmEnvironment): LlmProvider {
+function baseProvider(
+  environment: LlmEnvironment,
+  transport?: typeof fetch,
+): LlmProvider {
   if (environment.LLM_PROVIDER === 'mock')
     return new ScriptedLlmProvider(neutralResponder);
+  if (environment.LLM_PROVIDER === 'openai-compatible') {
+    if (
+      !environment.LLM_BASE_URL ||
+      !environment.LLM_MODEL_FAST ||
+      !environment.LLM_MODEL_STRONG
+    ) {
+      throw new Error(
+        'LLM_BASE_URL, LLM_MODEL_FAST and LLM_MODEL_STRONG are required for openai-compatible',
+      );
+    }
+    return new OpenAiCompatibleLlmProvider({
+      baseUrl: environment.LLM_BASE_URL,
+      apiKey: environment.LLM_API_KEY,
+      models: {
+        FAST: environment.LLM_MODEL_FAST,
+        STRONG: environment.LLM_MODEL_STRONG,
+      },
+      structuredOutput: environment.LLM_STRUCTURED_OUTPUT,
+      maxTokensParam: environment.LLM_MAX_TOKENS_PARAM,
+      requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
+      maxRetries: environment.LLM_MAX_RETRIES,
+      ...(transport ? { fetch: transport } : {}),
+    });
+  }
   if (!environment.ANTHROPIC_API_KEY) {
     throw new Error(
       'ANTHROPIC_API_KEY is required when LLM_PROVIDER is anthropic',
@@ -84,6 +144,36 @@ export function createLlmProvider(environment: LlmEnvironment): LlmProvider {
   });
 }
 
+/**
+ * The single provider for the process, wrapped in the client-side limiter
+ * when any LLM_RATE_LIMIT_* is configured.
+ */
+export function createLlmProvider(
+  environment: LlmEnvironment,
+  transport?: typeof fetch,
+): LlmProvider {
+  const provider = baseProvider(environment, transport);
+  const limited =
+    environment.LLM_RATE_LIMIT_RPM !== undefined ||
+    environment.LLM_RATE_LIMIT_TPM !== undefined ||
+    environment.LLM_RATE_LIMIT_RPD !== undefined;
+  if (!limited) return provider;
+  return new RateLimitedLlmProvider(
+    provider,
+    new ClientRateLimiter({
+      requestsPerMinute: environment.LLM_RATE_LIMIT_RPM,
+      tokensPerMinute: environment.LLM_RATE_LIMIT_TPM,
+      requestsPerDay: environment.LLM_RATE_LIMIT_RPD,
+      maxWaitMs: environment.LLM_RATE_LIMIT_MAX_WAIT_MS,
+    }),
+  );
+}
+
+/** Whether the configured provider may receive real customer data. */
+export function providerTrusted(environment: LlmEnvironment): boolean {
+  return environment.LLM_TRUSTED_PROVIDERS.includes(environment.LLM_PROVIDER);
+}
+
 export function budgetLimits(environment: LlmEnvironment): BudgetLimits {
   return {
     maxTurnCostNano: usdToNano(environment.LLM_TURN_BUDGET_USD),
@@ -93,6 +183,8 @@ export function budgetLimits(environment: LlmEnvironment): BudgetLimits {
     maxToolCallsPerTurn: environment.LLM_MAX_TOOL_CALLS_PER_TURN,
     maxOutputTokensPerCall: environment.LLM_MAX_OUTPUT_TOKENS,
     maxInputBytesPerCall: environment.LLM_MAX_INPUT_BYTES,
+    maxTurnTokens: environment.LLM_TURN_TOKEN_BUDGET,
+    maxConversationTokens: environment.LLM_CONVERSATION_TOKEN_BUDGET,
     ...(environment.LLM_TENANT_MONTHLY_BUDGET_USD
       ? {
           tenantMonthlyBudgetNano: usdToNano(

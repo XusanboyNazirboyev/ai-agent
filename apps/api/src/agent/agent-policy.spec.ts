@@ -23,9 +23,11 @@ import {
 } from '../channels/telegram/telegram-agent-pipeline.js';
 import type { ComputedTurn } from './agent-conversation.service.js';
 import {
+  agentModePolicy,
   assertAgentModeAllowed,
   effectiveAgentMode,
   liveModeRefusal,
+  shadowModeRefusal,
   type AgentModePolicy,
 } from './agent-mode.js';
 import {
@@ -39,19 +41,25 @@ import { INJECTED_DESCRIPTION } from './testing/eval-runner.js';
 const production: AgentModePolicy = {
   nodeEnv: 'production',
   operatorNotifierConfigured: false,
+  providerTrusted: true,
+  allowRealCustomerData: false,
 };
+const real = { isTestAccount: false };
+const testBot = { isTestAccount: true };
 
 describe('agent mode policy', () => {
   it('refuses LIVE without an operator notifier outside local development', () => {
     expect(liveModeRefusal(production)).toMatch(/Phase 5/);
-    expect(() => assertAgentModeAllowed('LIVE', production)).toThrow(
+    expect(() => assertAgentModeAllowed('LIVE', production, real)).toThrow(
       /operator handover notifier/,
     );
     expect(() =>
-      assertAgentModeAllowed('LIVE', { ...production, nodeEnv: 'test' }),
+      assertAgentModeAllowed('LIVE', { ...production, nodeEnv: 'test' }, real),
     ).toThrow();
-    expect(() => assertAgentModeAllowed('SHADOW', production)).not.toThrow();
-    expect(() => assertAgentModeAllowed('OFF', production)).not.toThrow();
+    expect(() =>
+      assertAgentModeAllowed('SHADOW', production, real),
+    ).not.toThrow();
+    expect(() => assertAgentModeAllowed('OFF', production, real)).not.toThrow();
   });
 
   it('allows LIVE in local development or with a notifier', () => {
@@ -64,14 +72,78 @@ describe('agent mode policy', () => {
   });
 
   it('degrades a refused LIVE row to SHADOW at processing time', () => {
-    expect(effectiveAgentMode('LIVE', production)).toMatchObject({
+    expect(effectiveAgentMode('LIVE', production, real)).toMatchObject({
       mode: 'SHADOW',
       refusal: expect.any(String),
     });
-    expect(effectiveAgentMode('SHADOW', production)).toEqual({
+    expect(effectiveAgentMode('SHADOW', production, real)).toEqual({
       mode: 'SHADOW',
     });
-    expect(effectiveAgentMode('OFF', production)).toEqual({ mode: 'OFF' });
+    expect(effectiveAgentMode('OFF', production, real)).toEqual({
+      mode: 'OFF',
+    });
+  });
+});
+
+describe('data-protection guard (untrusted LLM provider)', () => {
+  const untrusted: AgentModePolicy = {
+    ...production,
+    nodeEnv: 'development',
+    providerTrusted: false,
+  };
+
+  it('never allows LIVE, even in local development or with the override', () => {
+    expect(liveModeRefusal(untrusted)).toMatch(/untrusted/);
+    expect(() =>
+      assertAgentModeAllowed(
+        'LIVE',
+        { ...untrusted, allowRealCustomerData: true },
+        testBot,
+      ),
+    ).toThrow(/untrusted/);
+  });
+
+  it('allows SHADOW on a real account only with the explicit override', () => {
+    expect(shadowModeRefusal(untrusted, real)).toMatch(
+      /LLM_ALLOW_REAL_CUSTOMER_DATA/,
+    );
+    expect(() => assertAgentModeAllowed('SHADOW', untrusted, real)).toThrow();
+    expect(() =>
+      assertAgentModeAllowed('SHADOW', untrusted, testBot),
+    ).not.toThrow();
+    expect(() =>
+      assertAgentModeAllowed(
+        'SHADOW',
+        { ...untrusted, allowRealCustomerData: true },
+        real,
+      ),
+    ).not.toThrow();
+  });
+
+  it('holds (no model call, no reply) instead of falling back to the echo', () => {
+    expect(effectiveAgentMode('SHADOW', untrusted, real)).toMatchObject({
+      mode: 'HOLD',
+    });
+    expect(effectiveAgentMode('LIVE', untrusted, real)).toMatchObject({
+      mode: 'HOLD',
+    });
+    expect(effectiveAgentMode('LIVE', untrusted, testBot)).toMatchObject({
+      mode: 'SHADOW',
+    });
+  });
+
+  it('builds the policy from configuration (only mock trusted by default)', () => {
+    const policy = agentModePolicy({
+      NODE_ENV: 'production',
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_TRUSTED_PROVIDERS: ['mock'],
+      LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+    });
+    expect(policy).toMatchObject({
+      providerTrusted: false,
+      allowRealCustomerData: false,
+      operatorNotifierConfigured: false,
+    });
   });
 });
 

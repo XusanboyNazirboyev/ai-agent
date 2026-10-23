@@ -22,6 +22,11 @@ export interface LlmUsage {
   readonly cacheWrite1hTokens: number;
   /** Reasoning tokens when reported (already included in outputTokens). */
   readonly reasoningTokens?: number;
+  /**
+   * True when the provider reported no usage and the adapter estimated the
+   * counts from request/response sizes; such records are flagged.
+   */
+  readonly estimated?: boolean;
 }
 
 export interface LlmToolDefinition {
@@ -129,7 +134,11 @@ export type LlmErrorCode =
   | 'LLM_AUTHENTICATION'
   | 'LLM_INVALID_REQUEST'
   | 'LLM_CANCELLED'
-  | 'LLM_NOT_CONFIGURED';
+  | 'LLM_NOT_CONFIGURED'
+  /** Billing or daily quota exhausted: retrying does not help. */
+  | 'LLM_QUOTA_EXHAUSTED'
+  /** The endpoint or model lacks a required feature (e.g. tool calling). */
+  | 'LLM_UNSUPPORTED_FEATURE';
 
 /** Provider failure with no billable response (nothing to account for). */
 export class LlmError extends Error {

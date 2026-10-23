@@ -73,7 +73,50 @@ const ANTHROPIC_2026_10_23: PricingConfig = {
   },
 };
 
-export const PRICING_CATALOG = new PricingCatalog([ANTHROPIC_2026_10_23]);
+/**
+ * Gemini API Free Tier through its OpenAI-compatible endpoint. Read from
+ * https://ai.google.dev/gemini-api/docs/pricing on 2026-10-23: each listed
+ * model shows Free Tier input and output "Free of charge", and the Free
+ * Tier row "Used to improve our products" is "Yes" (Paid Tier: "No"). Use
+ * fake or seed data only. Free-tier RPM/TPM/RPD limits are per account in
+ * AI Studio and are not published on the docs page, so they are configured
+ * (LLM_RATE_LIMIT_*), not encoded here. Cost is 0; token caps still apply.
+ */
+const GEMINI_FREE_2026_10_23: PricingConfig = {
+  version: 'gemini-free-2026-10-23',
+  provider: 'google',
+  asOf: '2026-10-23',
+  sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+  models: {
+    'gemini-3.8-flash': { free: true },
+    'gemini-3.6-flash': { free: true },
+    'gemini-3.5-flash-lite': { free: true },
+    'gemini-3.1-flash-lite': { free: true },
+    'gemini-3-flash-preview': { free: true },
+    'gemini-2.5-pro': { free: true },
+    'gemini-2.5-flash': { free: true },
+    'gemini-2.5-flash-lite': { free: true },
+  },
+};
+
+/**
+ * Local inference (e.g. Ollama, https://docs.ollama.com/api/openai-compatibility,
+ * checked 2026-10-23): no per-token price, any model name. Cost is 0; the
+ * token caps bound usage.
+ */
+const LOCAL_FREE_2026_10_23: PricingConfig = {
+  version: 'local-free-2026-10-23',
+  provider: 'local',
+  asOf: '2026-10-23',
+  sourceUrl: 'https://docs.ollama.com/api/openai-compatibility',
+  models: { '*': { free: true } },
+};
+
+export const PRICING_CATALOG = new PricingCatalog([
+  ANTHROPIC_2026_10_23,
+  GEMINI_FREE_2026_10_23,
+  LOCAL_FREE_2026_10_23,
+]);
 
 export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';
 

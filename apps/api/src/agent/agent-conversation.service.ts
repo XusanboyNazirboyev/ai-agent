@@ -156,28 +156,35 @@ export class AgentConversationService implements OnModuleInit {
           )?.id
         : undefined;
 
-    const [slotRow, recent, connector, conversationSpent, monthSpent] =
-      await Promise.all([
-        this.prisma.conversationSlots.findFirst({
-          where: { tenantId, conversationId },
-          orderBy: { version: 'desc' },
-        }),
-        this.prisma.message.findMany({
-          where: {
-            tenantId,
-            conversationId,
-            ...(request.beforeSequence !== undefined
-              ? { sequence: { lt: request.beforeSequence } }
-              : {}),
-          },
-          orderBy: { sequence: 'desc' },
-          take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
-          select: { direction: true, text: true },
-        }),
-        this.connectorFor(tenantId),
-        this.usage.conversationSpendNano(tenantId, conversationId),
-        this.usage.tenantMonthSpendNano(tenantId),
-      ]);
+    const [
+      slotRow,
+      recent,
+      connector,
+      conversationSpent,
+      monthSpent,
+      conversationTokens,
+    ] = await Promise.all([
+      this.prisma.conversationSlots.findFirst({
+        where: { tenantId, conversationId },
+        orderBy: { version: 'desc' },
+      }),
+      this.prisma.message.findMany({
+        where: {
+          tenantId,
+          conversationId,
+          ...(request.beforeSequence !== undefined
+            ? { sequence: { lt: request.beforeSequence } }
+            : {}),
+        },
+        orderBy: { sequence: 'desc' },
+        take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
+        select: { direction: true, text: true },
+      }),
+      this.connectorFor(tenantId),
+      this.usage.conversationSpendNano(tenantId, conversationId),
+      this.usage.tenantMonthSpendNano(tenantId),
+      this.usage.conversationTokens(tenantId, conversationId),
+    ]);
     const slots = slotState(slotRow?.slots);
     const history: HistoryEntry[] = recent.reverse().map((message) => ({
       role: message.direction === 'INBOUND' ? 'customer' : 'agent',
@@ -188,6 +195,7 @@ export class AgentConversationService implements OnModuleInit {
     const budget = new TurnBudget(budgetLimits(environment), {
       conversationSpentNano: conversationSpent,
       tenantMonthSpentNano: monthSpent,
+      conversationTokensUsed: conversationTokens,
     });
     const deadline = new AbortController();
     const entries: LlmUsageEntry[] = [];

@@ -9,7 +9,7 @@ import {
 } from '../../agent/agent-conversation.service.js';
 import {
   AGENT_MODE_POLICY,
-  DEFAULT_AGENT_MODE_POLICY,
+  agentModePolicy,
   effectiveAgentMode,
   type AgentModePolicy,
   type AgentModeValue,
@@ -105,7 +105,17 @@ export class TelegramAgentPipeline {
   ) {
     this.policy =
       policy ??
-      DEFAULT_AGENT_MODE_POLICY(this.config.get('NODE_ENV', { infer: true }));
+      agentModePolicy({
+        NODE_ENV: this.config.get('NODE_ENV', { infer: true }),
+        LLM_PROVIDER: this.config.get('LLM_PROVIDER', { infer: true }),
+        LLM_TRUSTED_PROVIDERS: this.config.get('LLM_TRUSTED_PROVIDERS', {
+          infer: true,
+        }),
+        LLM_ALLOW_REAL_CUSTOMER_DATA: this.config.get(
+          'LLM_ALLOW_REAL_CUSTOMER_DATA',
+          { infer: true },
+        ),
+      });
   }
 
   /** The channel account's configured agent mode for a conversation. */
@@ -113,11 +123,20 @@ export class TelegramAgentPipeline {
     tenantId: string,
     conversationId: string,
   ): Promise<AgentModeValue> {
+    return (await this.accountFor(tenantId, conversationId)).agentMode;
+  }
+
+  private async accountFor(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<{ agentMode: AgentModeValue; isTestAccount: boolean }> {
     const row = await this.prisma.conversation.findFirst({
       where: { tenantId, id: conversationId },
-      select: { channelAccount: { select: { agentMode: true } } },
+      select: {
+        channelAccount: { select: { agentMode: true, isTestAccount: true } },
+      },
     });
-    return row?.channelAccount.agentMode ?? 'OFF';
+    return row?.channelAccount ?? { agentMode: 'OFF', isTestAccount: false };
   }
 
   async run(
@@ -128,17 +147,28 @@ export class TelegramAgentPipeline {
       readonly requestedMode: AgentModeValue;
     },
   ): Promise<ProcessResult> {
-    const effective = effectiveAgentMode(input.requestedMode, this.policy);
+    const account = await this.accountFor(event.tenantId, input.conversationId);
+    const effective = effectiveAgentMode(
+      input.requestedMode,
+      this.policy,
+      account,
+    );
     if (effective.refusal) {
       this.logger.error(
         JSON.stringify({
-          event: 'agent.live_mode_refused',
+          event: 'agent.mode_refused',
           tenant: event.tenantId,
           conversation: input.conversationId,
+          requestedMode: input.requestedMode,
           appliedMode: effective.mode,
         }),
       );
     }
+    if (effective.mode === 'HOLD') {
+      await this.hold(event, input.inboundEventId, input.conversationId);
+      return;
+    }
+    if (effective.mode === 'OFF') return;
     for (let round = 1; round <= MAX_ROUNDS; round++) {
       const claimed = await this.claim(
         event,
@@ -191,6 +221,41 @@ export class TelegramAgentPipeline {
     // own job answers it once the customer pauses.
   }
 
+  /**
+   * HOLD: the configured mode may not run (e.g. an untrusted provider on a
+   * real account). Close the batch without calling the model or replying.
+   */
+  private async hold(
+    event: TelegramQueueEvent,
+    inboundEventId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const { tenantId } = event;
+    await this.prisma.$transaction(async (tx) => {
+      await lockConversation(tx, tenantId, conversationId);
+      const initial = await tx.inboundEvent.findFirst({
+        where: { id: inboundEventId, tenantId, status: 'RECEIVED' },
+        select: { channelAccountId: true },
+      });
+      if (!initial) return;
+      const batch = await selectInboundBatch(
+        tx,
+        tenantId,
+        initial.channelAccountId,
+        conversationId,
+      );
+      if (!batch) return;
+      await tx.inboundEvent.updateMany({
+        where: {
+          tenantId,
+          id: { in: [...batch.eventIds] },
+          status: 'RECEIVED',
+        },
+        data: { status: 'PROCESSED', processedAt: new Date() },
+      });
+    });
+  }
+
   /** Marks turns owned by an exhausted job FAILED and fails their batch. */
   async failOwnedTurns(event: TelegramQueueEvent): Promise<void> {
     const owned = await this.prisma.agentTurn.findMany({
@@ -227,7 +292,7 @@ export class TelegramAgentPipeline {
     event: TelegramQueueEvent,
     inboundEventId: string,
     conversationId: string,
-    mode: AgentModeValue,
+    mode: 'SHADOW' | 'LIVE',
   ): Promise<ClaimResult> {
     const { tenantId } = event;
     const leaseMs = this.config.get('AGENT_TURN_LEASE_MS', { infer: true });

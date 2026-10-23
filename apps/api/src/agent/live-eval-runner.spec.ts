@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { usdToNano } from '../core/llm/pricing.js';
+import { OpenAiCompatibleLlmProvider } from '../llm/openai-compatible/openai-compatible-provider.js';
 import { loadCases, scriptedProvider } from './testing/eval-runner.js';
 import {
   buildReport,
@@ -85,6 +86,93 @@ describe('evaluation runner (scripted model only)', () => {
   });
 });
 
+describe('evaluation through the OpenAI-compatible adapter (fixtures)', () => {
+  it('names provider, host and model in the report and caps tokens', async () => {
+    const subset = cases
+      .filter((c) => c.locale === 'en' && c.category === 'handover_request')
+      .slice(0, 1);
+    const fakeFetch = (async () =>
+      new Response(
+        JSON.stringify({
+          id: `chatcmpl-${Math.random()}`,
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                content: JSON.stringify({
+                  language: 'en',
+                  script: 'Latn',
+                  intent: 'human_request',
+                  slots: Object.fromEntries(
+                    [
+                      'subject',
+                      'format',
+                      'level',
+                      'preferredTime',
+                      'studentAge',
+                      'goal',
+                    ].map((key) => [key, null]),
+                  ),
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch;
+    const adapter = new OpenAiCompatibleLlmProvider({
+      baseUrl: 'http://localhost:11434/v1',
+      models: { FAST: 'qwen3:8b', STRONG: 'qwen3:8b' },
+      structuredOutput: 'json_schema',
+      maxTokensParam: 'max_tokens',
+      requestTimeoutMs: 1_000,
+      maxRetries: 0,
+      fetch: fakeFetch,
+    });
+    const { runs, spentNano, spentTokens } = await runEvaluation({
+      cases: subset,
+      models: [
+        {
+          provider: 'openai-compatible (localhost:11434)',
+          model: 'qwen3:8b',
+          pricingVersion: 'local-free-2026-10-23',
+          providerFor: (): OpenAiCompatibleLlmProvider => adapter,
+        },
+      ],
+      budgetNano: usdToNano('0.01'),
+      budgetTokens: 100_000,
+      mode: 'live',
+    });
+    expect(spentTokens).toBeGreaterThan(0);
+    const report = buildReport({
+      mode: 'live',
+      runs,
+      budgetNano: usdToNano('0.01'),
+      spentNano,
+    });
+    expect(report.models[0]).toMatchObject({
+      provider: 'openai-compatible (localhost:11434)',
+      model: 'qwen3:8b',
+      passRate: { passed: 1, total: 1 },
+    });
+    expect(renderMarkdown(report)).toContain(
+      '| openai-compatible (localhost:11434) | qwen3:8b |',
+    );
+  });
+
+  it('stops the run on the token cap', async () => {
+    const subset = cases.filter((c) => c.locale === 'en').slice(0, 5);
+    const { runs } = await runEvaluation({
+      cases: subset,
+      models: [scripted('tiny-tokens')],
+      budgetNano: usdToNano('1'),
+      budgetTokens: 1_500,
+      mode: 'scripted',
+    });
+    expect(runs[0].notRun).toBeGreaterThan(0);
+  });
+});
+
 describe('live eval CLI guards (no network)', () => {
   const run = (env: Record<string, string>): ReturnType<typeof spawnSync> =>
     spawnSync('pnpm', ['exec', 'tsx', 'scripts/live-eval.ts'], {
@@ -98,6 +186,19 @@ describe('live eval CLI guards (no network)', () => {
     const result = run({});
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('opt-in');
+  });
+
+  it('refuses openai-compatible without a base URL', () => {
+    const result = run({
+      LIVE_EVAL: '1',
+      LIVE_EVAL_PROVIDER: 'openai-compatible',
+      LLM_PRICING_VERSION: 'local-free-2026-10-23',
+      LLM_MODEL_FAST: 'qwen3:8b',
+      LLM_MODEL_STRONG: 'qwen3:8b',
+      LLM_BASE_URL: '',
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('LLM_BASE_URL is required');
   });
 
   it('refuses without a key and never echoes one', () => {

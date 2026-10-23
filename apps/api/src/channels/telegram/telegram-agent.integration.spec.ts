@@ -68,11 +68,11 @@ const limited = new PrismaClient({
 const DEV: AgentModePolicy = {
   nodeEnv: 'development',
   operatorNotifierConfigured: false,
+  providerTrusted: true,
+  allowRealCustomerData: false,
 };
-const PROD: AgentModePolicy = {
-  nodeEnv: 'production',
-  operatorNotifierConfigured: false,
-};
+const PROD: AgentModePolicy = { ...DEV, nodeEnv: 'production' };
+const UNTRUSTED: AgentModePolicy = { ...DEV, providerTrusted: false };
 
 const settings: Partial<AppEnvironment> = {
   NODE_ENV: 'test',
@@ -169,6 +169,7 @@ interface Fixture {
 
 async function fixture(options: {
   mode: 'OFF' | 'SHADOW' | 'LIVE';
+  isTestAccount?: boolean;
   responder?: (call: ScriptRequest) => ScriptStep;
   policy?: AgentModePolicy;
   connectorConfig?: Record<string, string>;
@@ -201,6 +202,7 @@ async function fixture(options: {
       externalAccountId: `agent-pipeline-${suffix}`,
       status: 'ACTIVE',
       agentMode: options.mode,
+      isTestAccount: options.isTestAccount ?? false,
     },
   });
   const values = { ...settings, ...options.overrides };
@@ -409,6 +411,43 @@ describe('agent mode SHADOW', () => {
     const [turn] = await turns(f);
     expect(turn).toMatchObject({ mode: 'SHADOW', status: 'COMMITTED' });
     expect(await outbound(f)).toBe(0);
+  });
+});
+
+describe('data-protection guard (untrusted provider)', () => {
+  it('holds a real account: no model call, no reply, batch closed', async () => {
+    const f = await fixture({ mode: 'SHADOW', policy: UNTRUSTED });
+    await f.processor.process(await receive(f, 'IELTS +998901234567'));
+    expect(f.provider.inner.calls).toHaveLength(0);
+    expect(await turns(f)).toHaveLength(0);
+    expect(await outbound(f)).toBe(0);
+    expect(
+      await prisma.inboundEvent.findMany({
+        where: { tenantId: f.tenantId },
+        select: { status: true },
+      }),
+    ).toEqual([{ status: 'PROCESSED' }]);
+  });
+
+  it('runs SHADOW on a test account and refuses LIVE there', async () => {
+    const f = await fixture({
+      mode: 'LIVE',
+      isTestAccount: true,
+      policy: UNTRUSTED,
+    });
+    await f.processor.process(await receive(f, 'IELTS'));
+    const [turn] = await turns(f);
+    expect(turn).toMatchObject({ mode: 'SHADOW', status: 'COMMITTED' });
+    expect(await outbound(f)).toBe(0);
+  });
+
+  it('runs SHADOW on a real account with the explicit override', async () => {
+    const f = await fixture({
+      mode: 'SHADOW',
+      policy: { ...UNTRUSTED, allowRealCustomerData: true },
+    });
+    await f.processor.process(await receive(f, 'IELTS'));
+    expect((await turns(f))[0]).toMatchObject({ mode: 'SHADOW' });
   });
 });
 

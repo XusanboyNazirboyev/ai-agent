@@ -156,6 +156,93 @@ describe('validateEnvironment', () => {
     ).toBe('anthropic');
   });
 
+  it('configures an OpenAI-compatible provider (Gemini free tier, local Ollama)', () => {
+    const gemini = validateEnvironment({
+      ...postgresEnvironment,
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      LLM_API_KEY: 'test-only',
+      LLM_MODEL_FAST: 'gemini-3.1-flash-lite',
+      LLM_MODEL_STRONG: 'gemini-3.8-flash',
+      LLM_PRICING_VERSION: 'gemini-free-2026-10-23',
+      LLM_RATE_LIMIT_RPM: '10',
+      LLM_RATE_LIMIT_RPD: '200',
+    });
+    expect(gemini).toMatchObject({
+      LLM_STRUCTURED_OUTPUT: 'json_schema',
+      LLM_MAX_TOKENS_PARAM: 'max_tokens',
+      LLM_RATE_LIMIT_RPM: 10,
+      LLM_TRUSTED_PROVIDERS: ['mock'],
+      LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+      LLM_TURN_TOKEN_BUDGET: 120_000,
+      LLM_CONVERSATION_TOKEN_BUDGET: 1_000_000,
+    });
+    const ollama = validateEnvironment({
+      ...postgresEnvironment,
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_BASE_URL: 'http://localhost:11434/v1',
+      LLM_MODEL_FAST: 'qwen3:8b',
+      LLM_MODEL_STRONG: 'qwen3:8b',
+      LLM_PRICING_VERSION: 'local-free-2026-10-23',
+    });
+    expect(ollama.LLM_API_KEY).toBeUndefined();
+  });
+
+  it('refuses unsafe or incomplete OpenAI-compatible settings', () => {
+    const base = {
+      ...postgresEnvironment,
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_BASE_URL: 'https://llm.example.test/v1',
+      LLM_MODEL_FAST: 'gemini-3.8-flash',
+      LLM_MODEL_STRONG: 'gemini-3.8-flash',
+      LLM_PRICING_VERSION: 'gemini-free-2026-10-23',
+    };
+    expect(() => validateEnvironment(base)).not.toThrow();
+    expect(() =>
+      validateEnvironment({ ...base, LLM_MODEL_STRONG: undefined }),
+    ).toThrow(/LLM_MODEL_STRONG is required/);
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        LLM_BASE_URL: 'http://llm.example.test/v1',
+      }),
+    ).toThrow(/must use https/);
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        NODE_ENV: 'production',
+        LLM_BASE_URL: 'http://localhost:11434/v1',
+        LLM_PRICING_VERSION: 'local-free-2026-10-23',
+      }),
+    ).toThrow(/must use https/);
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        LLM_BASE_URL: 'https://u:p@llm.example.test',
+      }),
+    ).toThrow(/credentials/);
+    expect(() =>
+      validateEnvironment({ ...base, LLM_MODEL_FAST: 'gemini-4-argon' }),
+    ).toThrow(/no price/);
+    expect(() =>
+      validateEnvironment({
+        ...base,
+        LLM_TURN_TOKEN_BUDGET: '2000000',
+        LLM_CONVERSATION_TOKEN_BUDGET: '1000000',
+      }),
+    ).toThrow(/LLM_TURN_TOKEN_BUDGET/);
+    expect(
+      validateEnvironment({
+        ...base,
+        LLM_TRUSTED_PROVIDERS: 'mock, openai-compatible',
+        LLM_ALLOW_REAL_CUSTOMER_DATA: 'true',
+      }),
+    ).toMatchObject({
+      LLM_TRUSTED_PROVIDERS: ['mock', 'openai-compatible'],
+      LLM_ALLOW_REAL_CUSTOMER_DATA: true,
+    });
+  });
+
   it('reports missing PostgreSQL settings without printing secrets', () => {
     expect(() => validateEnvironment({})).toThrow(/POSTGRES_HOST/);
     expect(() =>

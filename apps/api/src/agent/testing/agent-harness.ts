@@ -64,6 +64,10 @@ export async function runTurn(options: {
   conversationSpentNano?: number;
   /** Spend already counted against `limits.tenantMonthlyBudgetNano`. */
   tenantMonthSpentNano?: number;
+  /** Tokens already counted against `limits.maxConversationTokens`. */
+  conversationTokensUsed?: number;
+  /** Pricing snapshot for the provider's models (default: Anthropic). */
+  pricingVersion?: string;
   input?: Partial<AgentTurnInput>;
   now?: Date;
 }): Promise<TurnRun> {
@@ -73,11 +77,12 @@ export async function runTurn(options: {
     {
       conversationSpentNano: options.conversationSpentNano ?? 0,
       tenantMonthSpentNano: options.tenantMonthSpentNano ?? 0,
+      conversationTokensUsed: options.conversationTokensUsed ?? 0,
     },
   );
   const llm = new MeteredLlm(
     options.provider,
-    PRICING_CATALOG.snapshot(DEFAULT_PRICING_VERSION),
+    PRICING_CATALOG.snapshot(options.pricingVersion ?? DEFAULT_PRICING_VERSION),
     budget,
     { record: async (entry): Promise<void> => void usage.push(entry) },
     {

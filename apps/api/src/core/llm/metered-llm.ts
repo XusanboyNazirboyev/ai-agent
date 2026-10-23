@@ -138,6 +138,7 @@ export class MeteredLlm {
     const reservation = this.budget.reserve(
       worstCaseCost(pricing, estimate.tokens, capped),
       estimate.bytes,
+      estimate.tokens + capped,
     );
     return { model, reservation, maxOutputTokens: capped };
   }
@@ -160,7 +161,13 @@ export class MeteredLlm {
       pricingFor(this.pricing, result.model),
       result.usage,
     );
-    this.budget.settle(reservation, cost);
+    const tokens =
+      result.usage.inputTokens +
+      result.usage.outputTokens +
+      result.usage.cacheReadTokens +
+      result.usage.cacheWrite5mTokens +
+      result.usage.cacheWrite1hTokens;
+    this.budget.settle(reservation, cost, tokens);
     try {
       await this.sink.record({
         tenantId: this.context.tenantId,

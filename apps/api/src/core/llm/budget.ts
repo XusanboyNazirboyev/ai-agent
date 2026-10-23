@@ -17,6 +17,12 @@ export interface BudgetLimits {
   readonly maxOutputTokensPerCall: number;
   readonly maxInputBytesPerCall: number;
   readonly tenantMonthlyBudgetNano?: number;
+  /**
+   * Token caps (input + output, worst case reserved before each call). They
+   * bound zero-priced models too, so a free model cannot loop endlessly.
+   */
+  readonly maxTurnTokens?: number;
+  readonly maxConversationTokens?: number;
 }
 
 export type BudgetStopReason =
@@ -26,7 +32,9 @@ export type BudgetStopReason =
   | 'CALL_LIMIT'
   | 'TOOL_ROUND_LIMIT'
   | 'TOOL_CALL_LIMIT'
-  | 'INPUT_TOO_LARGE';
+  | 'INPUT_TOO_LARGE'
+  | 'TURN_TOKEN_LIMIT'
+  | 'CONVERSATION_TOKEN_LIMIT';
 
 export class BudgetExhaustedError extends Error {
   constructor(readonly reason: BudgetStopReason) {
@@ -38,6 +46,7 @@ export class BudgetExhaustedError extends Error {
 export interface Reservation {
   readonly id: number;
   readonly worstCaseNano: number;
+  readonly worstCaseTokens: number;
 }
 
 export interface BudgetSnapshot {
@@ -49,6 +58,7 @@ export interface BudgetSnapshot {
   readonly remainingTurnNano: number;
   readonly remainingConversationNano: number;
   readonly overshootNano: number;
+  readonly tokensUsed: number;
   readonly stopReason: BudgetStopReason | undefined;
 }
 
@@ -59,8 +69,13 @@ export class TurnBudget {
   private toolRounds = 0;
   private toolCalls = 0;
   private overshoot = 0;
+  private tokens = 0;
+  private reservedTokens = 0;
   private nextId = 1;
-  private readonly open = new Map<number, number>();
+  private readonly open = new Map<
+    number,
+    { readonly nano: number; readonly tokens: number }
+  >();
   private stop: BudgetStopReason | undefined;
 
   constructor(
@@ -68,6 +83,7 @@ export class TurnBudget {
     private readonly prior: {
       readonly conversationSpentNano: number;
       readonly tenantMonthSpentNano: number;
+      readonly conversationTokensUsed?: number;
     },
   ) {}
 
@@ -77,9 +93,16 @@ export class TurnBudget {
   }
 
   /** Reserves a call; throws BudgetExhaustedError instead of overspending. */
-  reserve(worstCaseNano: number, inputBytes: number): Reservation {
+  reserve(
+    worstCaseNano: number,
+    inputBytes: number,
+    worstCaseTokens = 0,
+  ): Reservation {
     if (!Number.isSafeInteger(worstCaseNano) || worstCaseNano < 0) {
       throw new RangeError('worst-case cost must be a non-negative integer');
+    }
+    if (!Number.isSafeInteger(worstCaseTokens) || worstCaseTokens < 0) {
+      throw new RangeError('worst-case tokens must be a non-negative integer');
     }
     if (this.calls >= this.limits.maxCallsPerTurn) this.fail('CALL_LIMIT');
     if (inputBytes > this.limits.maxInputBytesPerCall)
@@ -99,17 +122,33 @@ export class TurnBudget {
     ) {
       this.fail('TENANT_MONTHLY_LIMIT');
     }
+    const tokens = this.tokens + this.reservedTokens + worstCaseTokens;
+    if (
+      this.limits.maxTurnTokens !== undefined &&
+      tokens > this.limits.maxTurnTokens
+    ) {
+      this.fail('TURN_TOKEN_LIMIT');
+    }
+    if (
+      this.limits.maxConversationTokens !== undefined &&
+      (this.prior.conversationTokensUsed ?? 0) + tokens >
+        this.limits.maxConversationTokens
+    ) {
+      this.fail('CONVERSATION_TOKEN_LIMIT');
+    }
     this.calls += 1;
     this.reserved += worstCaseNano;
+    this.reservedTokens += worstCaseTokens;
     const id = this.nextId++;
-    this.open.set(id, worstCaseNano);
-    return { id, worstCaseNano };
+    this.open.set(id, { nano: worstCaseNano, tokens: worstCaseTokens });
+    return { id, worstCaseNano, worstCaseTokens };
   }
 
   /** Replaces a reservation with the provider-reported actual cost. */
-  settle(reservation: Reservation, actualNano: number): void {
+  settle(reservation: Reservation, actualNano: number, actualTokens = 0): void {
     const worst = this.take(reservation);
     this.spent += actualNano;
+    this.tokens += actualTokens;
     // Input size is estimated before the call; record any underestimate.
     if (actualNano > worst) this.overshoot += actualNano - worst;
   }
@@ -123,8 +162,9 @@ export class TurnBudget {
     const worst = this.open.get(reservation.id);
     if (worst === undefined) throw new Error('Unknown or settled reservation');
     this.open.delete(reservation.id);
-    this.reserved -= worst;
-    return worst;
+    this.reserved -= worst.nano;
+    this.reservedTokens -= worst.tokens;
+    return worst.nano;
   }
 
   /** Rejects a call whose prompt would exceed the allowed size. */
@@ -163,6 +203,7 @@ export class TurnBudget {
           this.reserved,
       ),
       overshootNano: this.overshoot,
+      tokensUsed: this.tokens,
       stopReason: this.stop,
     };
   }

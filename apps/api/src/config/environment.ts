@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { usdToNano } from '../core/llm/pricing.js';
+import { ANY_MODEL, usdToNano } from '../core/llm/pricing.js';
 import { MOCK_MODEL } from '../core/llm/scripted-llm-provider.js';
 import { PRICING_CATALOG } from '../llm/pricing-catalog.js';
 import { postgresEnvironmentSchema } from './postgres-config.js';
@@ -64,8 +64,62 @@ const environmentSchema = postgresEnvironmentSchema
      * `anthropic` calls the Claude API and requires ANTHROPIC_API_KEY. There
      * is no automatic fallback between providers.
      */
-    LLM_PROVIDER: z.enum(['mock', 'anthropic']).default('mock'),
+    LLM_PROVIDER: z
+      .enum(['mock', 'anthropic', 'openai-compatible'])
+      .default('mock'),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    /**
+     * openai-compatible: Chat Completions base URL (".../chat/completions"
+     * is appended), optional bearer key, and the model per tier.
+     */
+    LLM_BASE_URL: z.url().optional(),
+    LLM_API_KEY: z.string().min(1).optional(),
+    LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
+    LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
+    LLM_STRUCTURED_OUTPUT: z
+      .enum(['json_schema', 'json_object'])
+      .default('json_schema'),
+    LLM_MAX_TOKENS_PARAM: z
+      .enum(['max_tokens', 'max_completion_tokens'])
+      .default('max_tokens'),
+    /** Client-side limits to stay inside a provider quota (any provider). */
+    LLM_RATE_LIMIT_RPM: z.coerce.number().int().min(1).max(100_000).optional(),
+    LLM_RATE_LIMIT_TPM: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(100_000_000)
+      .optional(),
+    LLM_RATE_LIMIT_RPD: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000_000)
+      .optional(),
+    LLM_RATE_LIMIT_MAX_WAIT_MS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(60_000)
+      .default(5_000),
+    /**
+     * Data protection: providers allowed to receive real customer data
+     * without the override. Default only the offline mock. Free tiers may
+     * use prompts to improve their products.
+     */
+    LLM_TRUSTED_PROVIDERS: z
+      .string()
+      .default('mock')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+      ),
+    LLM_ALLOW_REAL_CUSTOMER_DATA: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     LLM_FAST_MODEL: z.string().min(1).default('claude-haiku-5-5'),
     LLM_STRONG_MODEL: z.string().min(1).default('claude-haiku-5-5'),
     LLM_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
@@ -101,6 +155,19 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_TURN_BUDGET_USD: usdAmount.default('0.02'),
     LLM_CONVERSATION_BUDGET_USD: usdAmount.default('0.25'),
     LLM_TENANT_MONTHLY_BUDGET_USD: usdAmount.optional(),
+    /** Token caps (input + output); they also bound zero-priced models. */
+    LLM_TURN_TOKEN_BUDGET: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(10_000_000)
+      .default(120_000),
+    LLM_CONVERSATION_TOKEN_BUDGET: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(100_000_000)
+      .default(1_000_000),
     AGENT_TOOL_TIMEOUT_MS: z.coerce
       .number()
       .int()
@@ -137,6 +204,60 @@ const environmentSchema = postgresEnvironmentSchema
         message: 'ANTHROPIC_API_KEY is required when LLM_PROVIDER is anthropic',
       });
     }
+    if (environment.LLM_PROVIDER === 'openai-compatible') {
+      for (const key of [
+        'LLM_BASE_URL',
+        'LLM_MODEL_FAST',
+        'LLM_MODEL_STRONG',
+      ] as const) {
+        if (!environment[key]) {
+          context.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} is required when LLM_PROVIDER is openai-compatible`,
+          });
+        }
+      }
+      if (environment.LLM_BASE_URL) {
+        const url = new URL(environment.LLM_BASE_URL);
+        const local = ['localhost', '127.0.0.1', '[::1]'].includes(
+          url.hostname,
+        );
+        // Plain http only for a local server (e.g. Ollama) outside production.
+        if (
+          url.protocol !== 'https:' &&
+          !(
+            url.protocol === 'http:' &&
+            local &&
+            environment.NODE_ENV !== 'production'
+          )
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['LLM_BASE_URL'],
+            message:
+              'must use https (plain http is allowed only for localhost outside production)',
+          });
+        }
+        if (url.username || url.password) {
+          context.addIssue({
+            code: 'custom',
+            path: ['LLM_BASE_URL'],
+            message: 'must not contain credentials; use LLM_API_KEY',
+          });
+        }
+      }
+    }
+    if (
+      environment.LLM_TURN_TOKEN_BUDGET >
+      environment.LLM_CONVERSATION_TOKEN_BUDGET
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['LLM_TURN_TOKEN_BUDGET'],
+        message: 'must not exceed LLM_CONVERSATION_TOKEN_BUDGET',
+      });
+    }
     if (!PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)) {
       context.addIssue({
         code: 'custom',
@@ -147,15 +268,21 @@ const environmentSchema = postgresEnvironmentSchema
       const snapshot = PRICING_CATALOG.snapshot(
         environment.LLM_PRICING_VERSION,
       );
-      const models: ReadonlyArray<readonly [string, string]> =
+      const models: ReadonlyArray<readonly [string, string | undefined]> =
         environment.LLM_PROVIDER === 'anthropic'
           ? [
               ['LLM_FAST_MODEL', environment.LLM_FAST_MODEL],
               ['LLM_STRONG_MODEL', environment.LLM_STRONG_MODEL],
             ]
-          : [['LLM_PROVIDER', MOCK_MODEL]];
+          : environment.LLM_PROVIDER === 'openai-compatible'
+            ? [
+                ['LLM_MODEL_FAST', environment.LLM_MODEL_FAST],
+                ['LLM_MODEL_STRONG', environment.LLM_MODEL_STRONG],
+              ]
+            : [['LLM_PROVIDER', MOCK_MODEL]];
       for (const [key, model] of models) {
-        const pricing = snapshot.models[model];
+        if (!model) continue;
+        const pricing = snapshot.models[model] ?? snapshot.models[ANY_MODEL];
         if (!pricing) {
           context.addIssue({
             code: 'custom',

@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import {
+  agentModePolicy,
   assertAgentModeAllowed,
-  DEFAULT_AGENT_MODE_POLICY,
   type AgentModeValue,
 } from '../src/agent/agent-mode.js';
 import { validateEnvironment } from '../src/config/environment.js';
@@ -13,7 +13,9 @@ import { createPostgresAdapter } from '../src/persistence/postgres-adapter.js';
  * Sets a channel account's agent mode:
  *   pnpm --filter @agentcore/api agent:mode <channel-account-uuid> <off|shadow|live>
  * LIVE is refused unless it is allowed (operator notifier, Phase 5; or
- * NODE_ENV=development for a local test bot).
+ * NODE_ENV=development for a local test bot) and never for an untrusted LLM
+ * provider; SHADOW with an untrusted provider needs a test account or
+ * LLM_ALLOW_REAL_CUSTOMER_DATA=true.
  */
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 
@@ -26,9 +28,14 @@ async function main(): Promise<void> {
     );
   }
   const environment = validateEnvironment(process.env);
-  assertAgentModeAllowed(mode, DEFAULT_AGENT_MODE_POLICY(environment.NODE_ENV));
   const prisma = new PrismaClient({ adapter: createPostgresAdapter() });
   try {
+    const account = await prisma.channelAccount.findFirst({
+      where: { id: accountId },
+      select: { isTestAccount: true },
+    });
+    if (!account) throw new Error('Unknown channel account');
+    assertAgentModeAllowed(mode, agentModePolicy(environment), account);
     const updated = await prisma.channelAccount.updateMany({
       where: { id: accountId },
       data: { agentMode: mode },

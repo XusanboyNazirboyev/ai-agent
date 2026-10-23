@@ -14,6 +14,8 @@ export interface EvaluatedModel {
   /** Provider id and model name, printed in the report for comparison. */
   readonly provider: string;
   readonly model: string;
+  /** Pricing snapshot covering this model (default: Anthropic snapshot). */
+  readonly pricingVersion?: string;
   /** Provider for a case: one shared live client, or a script per case. */
   readonly providerFor: (evalCase: EvalCase) => LlmProvider;
 }
@@ -64,10 +66,13 @@ export async function runEvaluation(options: {
   readonly cases: readonly EvalCase[];
   readonly models: readonly EvaluatedModel[];
   readonly budgetNano: number;
+  /** Optional whole-run token cap, checked before every call. */
+  readonly budgetTokens?: number;
   readonly mode: 'scripted' | 'live';
   readonly onCase?: (model: EvaluatedModel, outcome: EvalOutcome) => void;
-}): Promise<{ runs: ModelRun[]; spentNano: number }> {
+}): Promise<{ runs: ModelRun[]; spentNano: number; spentTokens: number }> {
   let spent = 0;
+  let tokens = 0;
   const runs: ModelRun[] = [];
   for (const model of options.models) {
     const outcomes: EvalOutcome[] = [];
@@ -78,9 +83,20 @@ export async function runEvaluation(options: {
         evalCase,
         model.providerFor(evalCase),
         options.mode,
-        { runBudget: { capNano: options.budgetNano, spentNano: spent } },
+        {
+          ...(model.pricingVersion
+            ? { pricingVersion: model.pricingVersion }
+            : {}),
+          runBudget: {
+            capNano: options.budgetNano,
+            spentNano: spent,
+            capTokens: options.budgetTokens,
+            spentTokens: tokens,
+          },
+        },
       );
       spent += outcome.costNano;
+      tokens += outcome.inputTokens + outcome.outputTokens;
       if (outcome.budgetStopped) {
         // The cap refused a call: this case is incomplete, stop the run.
         stopped = true;
@@ -96,7 +112,7 @@ export async function runEvaluation(options: {
       notRun: options.cases.length - outcomes.length,
     });
   }
-  return { runs, spentNano: spent };
+  return { runs, spentNano: spent, spentTokens: tokens };
 }
 
 function rate(values: readonly (boolean | undefined)[]): Rate {

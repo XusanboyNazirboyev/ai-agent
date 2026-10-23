@@ -291,6 +291,8 @@ model LlmUsageRecord {
   cacheWrite5mTokens Int      @map("cache_write_5m_tokens")
   cacheWrite1hTokens Int      @map("cache_write_1h_tokens")
   reasoningTokens    Int?     @map("reasoning_tokens")
+  /// True when the provider reported no usage and counts were estimated.
+  usageEstimated     Boolean  @default(false) @map("usage_estimated")
   costNano           BigInt   @map("cost_nano_usd")
   reservedNano       BigInt   @map("reserved_nano_usd")
   pricingVersion     String   @map("pricing_version") @db.VarChar(64)
@@ -379,6 +381,10 @@ model ChannelAccount {
   credentialRef     String?             @map("credential_ref") @db.VarChar(500)
   webhookSecretRef  String?             @map("webhook_secret_ref") @db.VarChar(500)
   agentMode         AgentMode           @default(OFF) @map("agent_mode")
+  /// A developer/test bot that only receives fake or seed data. Untrusted
+  /// LLM providers may run in SHADOW only on such accounts unless
+  /// LLM_ALLOW_REAL_CUSTOMER_DATA=true.
+  isTestAccount     Boolean             @default(false) @map("is_test_account")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)

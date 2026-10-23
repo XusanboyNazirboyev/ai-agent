@@ -2,11 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import {
-  AgentModeRefusedError,
-  DEFAULT_AGENT_MODE_POLICY,
-  liveModeRefusal,
-} from './agent-mode.js';
+import { agentModePolicy, assertAgentModeAllowed } from './agent-mode.js';
 
 /**
  * Refuses to start while the channel account this process serves
@@ -24,29 +20,55 @@ export class AgentModeStartupCheck implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const served = this.config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', {
-      infer: true,
+    const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
+      this.config.get(key, { infer: true });
+    const policy = agentModePolicy({
+      NODE_ENV: get('NODE_ENV'),
+      LLM_PROVIDER: get('LLM_PROVIDER'),
+      LLM_TRUSTED_PROVIDERS: get('LLM_TRUSTED_PROVIDERS'),
+      LLM_ALLOW_REAL_CUSTOMER_DATA: get('LLM_ALLOW_REAL_CUSTOMER_DATA'),
     });
-    if (!served) return;
-    const live = await this.prisma.channelAccount.findMany({
-      where: { id: served, agentMode: 'LIVE', status: 'ACTIVE' },
-      select: { id: true },
-    });
-    if (live.length === 0) return;
-    const refusal = liveModeRefusal(
-      DEFAULT_AGENT_MODE_POLICY(this.config.get('NODE_ENV', { infer: true })),
-    );
-    if (refusal) {
-      throw new AgentModeRefusedError(
-        `${refusal} Channel accounts in LIVE mode: ${live.map((row) => row.id).join(', ')}`,
+    if (!policy.providerTrusted) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'llm.untrusted_provider',
+          provider: get('LLM_PROVIDER'),
+          allowRealCustomerData: policy.allowRealCustomerData,
+          note: 'free tiers may use prompts to improve their products; use fake or seed data only',
+        }),
       );
     }
-    this.logger.warn(
-      JSON.stringify({
-        event: 'agent.live_mode_development_only',
-        channelAccounts: live.map((row) => row.id),
-        note: 'LIVE without operator notification; local development only',
-      }),
-    );
+    const served = get('TELEGRAM_CHANNEL_ACCOUNT_ID');
+    if (!served) return;
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { id: served, status: 'ACTIVE' },
+      select: { id: true, agentMode: true, isTestAccount: true },
+    });
+    if (!account || account.agentMode === 'OFF') return;
+    // Throws AgentModeRefusedError: the API does not start in a mode it
+    // would refuse to run.
+    assertAgentModeAllowed(account.agentMode, policy, account);
+    if (account.agentMode === 'LIVE') {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'agent.live_mode_development_only',
+          channelAccount: account.id,
+          note: 'LIVE without operator notification; local development only',
+        }),
+      );
+    }
+    if (
+      !policy.providerTrusted &&
+      !account.isTestAccount &&
+      policy.allowRealCustomerData
+    ) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'llm.real_customer_data_override',
+          channelAccount: account.id,
+          provider: get('LLM_PROVIDER'),
+        }),
+      );
+    }
   }
 }

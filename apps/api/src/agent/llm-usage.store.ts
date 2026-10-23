@@ -30,6 +30,7 @@ export class LlmUsageStore implements LlmUsageSink {
           cacheWrite5mTokens: entry.usage.cacheWrite5mTokens,
           cacheWrite1hTokens: entry.usage.cacheWrite1hTokens,
           reasoningTokens: entry.usage.reasoningTokens ?? null,
+          usageEstimated: entry.usage.estimated === true,
           costNano: BigInt(entry.costNano),
           reservedNano: BigInt(entry.reservedNano),
           pricingVersion: entry.pricingVersion,
@@ -51,6 +52,31 @@ export class LlmUsageStore implements LlmUsageSink {
       _sum: { costNano: true },
     });
     return Number(result._sum.costNano ?? 0n);
+  }
+
+  /** Input + output tokens recorded for a conversation (token budget). */
+  async conversationTokens(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<number> {
+    const result = await this.prisma.llmUsageRecord.aggregate({
+      where: { tenantId, conversationId },
+      _sum: {
+        inputTokens: true,
+        outputTokens: true,
+        cacheReadTokens: true,
+        cacheWrite5mTokens: true,
+        cacheWrite1hTokens: true,
+      },
+    });
+    const sum = result._sum;
+    return (
+      (sum.inputTokens ?? 0) +
+      (sum.outputTokens ?? 0) +
+      (sum.cacheReadTokens ?? 0) +
+      (sum.cacheWrite5mTokens ?? 0) +
+      (sum.cacheWrite1hTokens ?? 0)
+    );
   }
 
   /** Spend since the start of the current UTC month. */

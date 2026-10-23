@@ -39,6 +39,21 @@ const ModelPricingConfigSchema = RatesConfigSchema.extend({
     .optional(),
 }).strict();
 
+/**
+ * A zero-cost model (free tier, local inference). Cost is 0, but the token
+ * caps in the budget still bound every call. The entry keeps the same
+ * provenance (`asOf`, `sourceUrl`) as priced ones.
+ */
+const FreeModelConfigSchema = z
+  .object({
+    free: z.literal(true),
+    toolUseSystemPromptTokens: z.number().int().min(0).max(10_000).optional(),
+  })
+  .strict();
+
+/** Matches any model id; allowed only for a free entry. */
+export const ANY_MODEL = '*';
+
 export const PricingConfigSchema = z
   .object({
     version: z.string().regex(/^[a-z0-9][a-z0-9.-]{2,63}$/u),
@@ -46,9 +61,22 @@ export const PricingConfigSchema = z
     /** Date the prices were read from `sourceUrl` (YYYY-MM-DD). */
     asOf: z.iso.date(),
     sourceUrl: z.url(),
-    models: z.record(z.string().min(1).max(100), ModelPricingConfigSchema),
+    models: z.record(
+      z.string().min(1).max(100),
+      z.union([FreeModelConfigSchema, ModelPricingConfigSchema]),
+    ),
   })
-  .strict();
+  .strict()
+  .superRefine((config, context) => {
+    const wildcard = config.models[ANY_MODEL];
+    if (wildcard && !('free' in wildcard)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['models', ANY_MODEL],
+        message: 'a wildcard model entry must be free',
+      });
+    }
+  });
 
 export type PricingConfig = z.input<typeof PricingConfigSchema>;
 
@@ -61,6 +89,8 @@ export interface TokenRates {
 }
 
 export interface ModelPricing {
+  /** Zero-cost entry; budgets rely on the token caps. */
+  readonly free: boolean;
   readonly standard: TokenRates;
   readonly toolUseSystemPromptTokens?: number;
   /** Rates applied when a prompt exceeds `threshold` input tokens. */
@@ -109,11 +139,30 @@ function toRates(config: z.infer<typeof RatesConfigSchema>): TokenRates {
   };
 }
 
+const ZERO_RATES: TokenRates = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite5m: 0,
+  cacheWrite1h: 0,
+};
+
 export function parsePricingConfig(raw: unknown): PricingSnapshot {
   const config = PricingConfigSchema.parse(raw);
   const models: Record<string, ModelPricing> = {};
   for (const [model, entry] of Object.entries(config.models)) {
+    if ('free' in entry) {
+      models[model] = {
+        free: true,
+        standard: ZERO_RATES,
+        ...(entry.toolUseSystemPromptTokens !== undefined
+          ? { toolUseSystemPromptTokens: entry.toolUseSystemPromptTokens }
+          : {}),
+      };
+      continue;
+    }
     models[model] = {
+      free: false,
       standard: toRates(entry),
       ...(entry.toolUseSystemPromptTokens !== undefined
         ? { toolUseSystemPromptTokens: entry.toolUseSystemPromptTokens }
@@ -165,7 +214,7 @@ export function pricingFor(
   snapshot: PricingSnapshot,
   model: string,
 ): ModelPricing {
-  const pricing = snapshot.models[model];
+  const pricing = snapshot.models[model] ?? snapshot.models[ANY_MODEL];
   if (!pricing) {
     // An unpriced model must not run: its cost could not be bounded.
     throw new PricingError(

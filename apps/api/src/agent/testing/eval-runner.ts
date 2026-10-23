@@ -453,16 +453,26 @@ export function scoreCase(
     blockedFactViolations: result.violations.filter((v) =>
       FACT_VIOLATIONS.has(v),
     ).length,
-    budgetStopped: result.budgetStop === 'TENANT_MONTHLY_LIMIT',
+    budgetStopped:
+      result.budgetStop === 'TENANT_MONTHLY_LIMIT' ||
+      result.budgetStop === 'CONVERSATION_TOKEN_LIMIT',
   };
 }
 
 export interface RunCaseOptions {
+  /** Pricing snapshot covering the provider's models. */
+  readonly pricingVersion?: string;
   /**
    * Whole-run spending cap enforced before every model call (reuses the
    * tenant-monthly reservation check): `capNano` total, `spentNano` so far.
    */
-  readonly runBudget?: { readonly capNano: number; readonly spentNano: number };
+  readonly runBudget?: {
+    readonly capNano: number;
+    readonly spentNano: number;
+    /** Token cap for the whole run (bounds free models too). */
+    readonly capTokens?: number;
+    readonly spentTokens?: number;
+  };
 }
 
 export async function runCase(
@@ -488,7 +498,14 @@ export async function runCase(
       ...(options.runBudget
         ? { tenantMonthlyBudgetNano: options.runBudget.capNano }
         : {}),
+      ...(options.runBudget?.capTokens !== undefined
+        ? { maxConversationTokens: options.runBudget.capTokens }
+        : {}),
     },
+    conversationTokensUsed: options.runBudget?.spentTokens ?? 0,
+    ...(options.pricingVersion
+      ? { pricingVersion: options.pricingVersion }
+      : {}),
     tenantMonthSpentNano: options.runBudget?.spentNano ?? 0,
     input: { conversationLocale: evalCase.input.conversationLocale, slots },
   });
