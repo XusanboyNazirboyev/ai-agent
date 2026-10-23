@@ -51,6 +51,49 @@ The live eval calls the real API and is billable. It is opt-in:
 - `LIVE_EVAL_MODELS=claude-haiku-5-5,claude-sonnet-5-5` runs the same cases on each model.
 - The report names the provider and model, with pass rate per locale and category, tool-call and structured-output validity, shipped and blocked hard-fact violations, handover correctness, language/script match, latency p50/p95 and cost. It goes to `eval/reports/` (gitignored).
 
+## OpenAI-compatible providers (free or local testing)
+
+`LLM_PROVIDER=openai-compatible` talks to any endpoint that implements OpenAI Chat Completions (`POST {LLM_BASE_URL}/chat/completions`). Configure it with environment variables only: `LLM_BASE_URL`, `LLM_API_KEY` (optional for local servers), `LLM_MODEL_FAST`, `LLM_MODEL_STRONG` and `LLM_PRICING_VERSION`.
+
+The adapter:
+- never sends `tool_choice` (`auto` is the default when tools are present);
+- sends structured output as `response_format: json_schema` (`LLM_STRUCTURED_OUTPUT=json_object` for JSON-mode-only servers);
+- uses `max_tokens` for the output ceiling (`LLM_MAX_TOKENS_PARAM=max_completion_tokens` for servers that require it);
+- flags usage it had to estimate (`usage_estimated`).
+
+It retries only transient failures (429 rate limits, 408, 5xx, timeouts), with backoff, jitter and Retry-After. Quota exhaustion, invalid payloads, unauthorized requests and unsupported features are final and end in an `LLM_UNAVAILABLE` handover, never a guardrail failure. `LLM_RATE_LIMIT_RPM`, `LLM_RATE_LIMIT_TPM` and `LLM_RATE_LIMIT_RPD` add a per-process client-side limiter. Free models cost 0, so `LLM_TURN_TOKEN_BUDGET` and `LLM_CONVERSATION_TOKEN_BUDGET` bound them.
+
+These presets are documentation, not built-in behavior. The provider facts and their sources are in `docs/LLM_PROVIDER_EVALUATION.md`.
+
+```sh
+# Gemini API free tier via its OpenAI-compatible endpoint (beta per Google).
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_API_KEY=<Gemini API key, in .env.local only>
+LLM_MODEL_FAST=gemini-3.1-flash-lite
+LLM_MODEL_STRONG=gemini-3.8-flash
+LLM_PRICING_VERSION=gemini-free-2026-10-23
+# Copy your account's free-tier limits from AI Studio (they are not published in the docs):
+LLM_RATE_LIMIT_RPM=<rpm>
+LLM_RATE_LIMIT_RPD=<rpd>
+
+# Local Ollama (no key needed; plain http is allowed only for localhost outside production).
+LLM_PROVIDER=openai-compatible
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL_FAST=<pulled model, e.g. a local chat model with tool support>
+LLM_MODEL_STRONG=<same or larger model>
+LLM_PRICING_VERSION=local-free-2026-10-23
+```
+
+**Data protection.** Google's pricing page marks Gemini Free Tier content as "Used to improve our products: Yes". Use fake or seed data only with free tiers.
+
+Only providers listed in `LLM_TRUSTED_PROVIDERS` (default `mock`) may receive real customer data. With any other provider:
+- `LIVE` is always refused.
+- `SHADOW` runs only on channel accounts marked `is_test_account`, unless `LLM_ALLOW_REAL_CUSTOMER_DATA=true` is set explicitly. The API logs a startup warning for untrusted providers and for that override.
+- A refused account is held: its messages are closed without calling the model and nothing is sent.
+
+Live eval against this provider: `LIVE_EVAL=1 LIVE_EVAL_PROVIDER=openai-compatible pnpm --filter @agentcore/api eval:live`. It reads the same variables from `.env.local`. `LIVE_EVAL_TOKEN_BUDGET` (default 300000) caps tokens, and the report names the provider host and model.
+
 ## Agent mode on a Telegram channel
 
 Each channel account has an agent mode. The default is `OFF`, which keeps the Phase 2 echo. Change it with:

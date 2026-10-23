@@ -289,3 +289,21 @@ The pipeline and service code (`agent/`, `channels/telegram/`) is exercised by t
 - **Re-billing on retry.** A crash between compute and commit re-bills the next attempt. This is bounded by the budgets and recorded per attempt.
 - **Open compliance items.** Listed prices are not yet forced through a live quote, and `Quote` rows are not written (Phase 5). `LOW_LANG_CONFIDENCE` has no trigger (Phase 7). Regulated knowledge is missing (Phase 6). See [PHASE4_COMPLIANCE.md](PHASE4_COMPLIANCE.md).
 - **Mock mode is limited.** The offline mock model extracts nothing, so free-text slots such as `subject` are only asked for, never filled.
+
+## OpenAI-compatible provider — 2026-10-24
+
+**Added.**
+- A generic `openai-compatible` LlmProvider (Gemini free tier or local Ollama via env config).
+- Typed rate-limit, quota, transient, invalid, unauthorized and unsupported-feature errors, with bounded jittered retries honoring Retry-After.
+- A client-side RPM/TPM/RPD limiter.
+- Free and wildcard price entries, and token budgets per turn and per conversation.
+- A data-protection guard: only `LLM_TRUSTED_PROVIDERS` (default `mock`) may see real customer data. For any other provider, LIVE is refused and SHADOW is allowed only on test accounts or with `LLM_ALLOW_REAL_CUSTOMER_DATA=true`; otherwise the account is held.
+- Live eval through the new provider.
+
+**Migrations** (additive): `llm_usage_records.usage_estimated` and `channel_accounts.is_test_account`.
+
+See [ADR 010](adr/010-openai-compatible-provider-and-data-protection.md) and the verified facts in [LLM_PROVIDER_EVALUATION.md](LLM_PROVIDER_EVALUATION.md) §10.
+
+**Not verified.**
+- No live call to Gemini or Ollama: no key or local server was available.
+- Gemini support for `response_format: json_schema` and `max_tokens` is undocumented; both are configurable.

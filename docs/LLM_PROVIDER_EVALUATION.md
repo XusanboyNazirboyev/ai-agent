@@ -136,3 +136,28 @@ Rejected: Opus 5.5 (40x the cost for a short-reply workload, with no evidence it
 - Uzbek, Russian and English quality, mixed-language handling and tool-selection accuracy of any model.
 - Real token counts per turn (the estimates above come from byte sizes) and thinking-token volume at effort `low`.
 - Data retention terms of the actual Anthropic account.
+
+## 10. OpenAI-compatible endpoints (free and local testing), verified 2026-10-23
+
+These facts come from official documentation and back the generic `openai-compatible` adapter. They are not a provider decision: Anthropic remains the production choice (ADR 008).
+
+| Fact | Source | What the source says |
+|---|---|---|
+| Chat Completions endpoint, `tool_choice` default | [OpenAI create chat completion reference](https://developers.openai.com/api/reference/python/resources/chat/subresources/completions/methods/create) | Endpoint `POST /chat/completions`. "`auto` is the default if tools are present." `max_tokens` is "Deprecated… in favor of `max_completion_tokens`". `response_format` `json_schema` "enables Structured Outputs"; `json_object` is "the older JSON mode". The response example shows `usage.prompt_tokens`, `completion_tokens` and `prompt_tokens_details.cached_tokens`, and `tool_calls[].function.arguments` as a JSON string. |
+| Quota vs rate limit | [OpenAI error codes](https://developers.openai.com/api/docs/guides/error-codes) | 429 "Rate limit reached for requests": follow Retry-After. 429 "Credit balance exhausted", code `credit_balance_exhausted`, with `error.type` possibly `insufficient_quota`: retrying will not restore access. 503 `server_is_overloaded`: retry. |
+| Gemini OpenAI compatibility | [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai) | Base URL `https://generativelanguage.googleapis.com/v1beta/openai/` with `Authorization: Bearer`. Tools use the OpenAI `function` shape with `tool_choice: "auto"`. Support is "still in beta". The page does not mention `json_schema`, `max_tokens` or `parallel_tool_calls`. |
+| Gemini rate limits | [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) | Limits are RPM, TPM (input) and RPD; "RPD quotas reset at midnight Pacific time". The spend-limit error is `429 RESOURCE_EXHAUSTED`. Free-tier per-model numbers are not on the page; they are shown per account in AI Studio. |
+| Gemini free tier and data use | [Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing) | Free Tier input and output are "Free of charge" for, among others, `gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview`, `gemini-2.5-pro`, `gemini-2.5-flash` and `gemini-2.5-flash-lite`. "Used to improve our products": Free Tier "Yes", Paid Tier "No". `gemini-4-argon` and `gemini-3.1-pro-preview` have no Free Tier. |
+| Ollama OpenAI compatibility | [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility) | Base URL `http://localhost:11434/v1/`. An API key value is required by clients "but Ollama ignores it". `tool_choice` is listed as unsupported; tools, JSON mode, `response_format` and `max_tokens` are supported. The page does not state that `prompt_tokens` and `completion_tokens` are returned. |
+
+### How the facts shape the adapter
+- **`tool_choice`** is never sent: it defaults to `auto`, and Ollama rejects it.
+- **The output-ceiling parameter is configurable,** because the docs disagree: `max_tokens` is deprecated by OpenAI but is the one Ollama documents.
+- **Structured output** falls back from `json_schema` to `json_object` by configuration. Zod validation is authoritative either way.
+- **Gemini 429s are treated as rate limits** (retryable, honoring Retry-After), because `RESOURCE_EXHAUSTED` does not distinguish quota from rate. The configured RPD limiter guards the daily quota.
+- **Usage is estimated and flagged** when a server returns none.
+- **Free-tier limits** are configured, not built in.
+
+### Not verified
+- **No live request** was made to Gemini or Ollama, because no key or local server was available. Whether Gemini's compatibility layer accepts `response_format: json_schema` and `max_tokens` is not documented. If it does not, set `LLM_STRUCTURED_OUTPUT=json_object` or `LLM_MAX_TOKENS_PARAM`.
+- **The 400-message pattern** used to classify "unsupported feature" errors is a heuristic, not a documented error code.
