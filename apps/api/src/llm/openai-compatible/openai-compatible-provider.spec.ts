@@ -462,12 +462,12 @@ describe('OpenAI-compatible adapter: errors and retries', () => {
       [
         400,
         { error: { message: 'This model does not support tools' } },
-        'LLM_UNSUPPORTED_FEATURE',
+        'LLM_INVALID_REQUEST',
       ],
       [
         400,
         { error: { message: 'response_format json_schema is not supported' } },
-        'LLM_UNSUPPORTED_FEATURE',
+        'LLM_INVALID_REQUEST',
       ],
     ] as const) {
       const { llm, requests } = provider([{ status, body }]);
@@ -477,6 +477,43 @@ describe('OpenAI-compatible adapter: errors and retries', () => {
       });
       expect(requests).toHaveLength(1);
     }
+  });
+
+  it('derives unsupported features from the capability table, before any request', async () => {
+    const { llm, requests } = provider(
+      [{ body: completion({ content: '{}' }) }],
+      {
+        capabilityOf: (model) =>
+          model === 'strong-model'
+            ? { tools: 'no', structured: 'none' }
+            : { tools: 'yes', structured: 'json_object' },
+      },
+    );
+    await expect(llm.generateWithTools(toolRequest)).rejects.toMatchObject({
+      code: 'LLM_UNSUPPORTED_FEATURE',
+      retryable: false,
+    });
+    await expect(
+      llm.generateStructured({ ...structuredRequest, tier: 'STRONG' }),
+    ).rejects.toMatchObject({ code: 'LLM_UNSUPPORTED_FEATURE' });
+    expect(requests).toHaveLength(0);
+    // json_object from the table overrides the configured default mode.
+    await llm.generateStructured(structuredRequest);
+    expect(requests[0].body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it('maps an unknown model (404) to a non-retryable failover-eligible code', async () => {
+    const { llm, requests } = provider([
+      {
+        status: 404,
+        body: { error: { message: 'x', code: 'model_not_found' } },
+      },
+    ]);
+    await expect(llm.generateWithTools(toolRequest)).rejects.toMatchObject({
+      code: 'LLM_UNSUPPORTED_FEATURE',
+      retryable: false,
+    });
+    expect(requests).toHaveLength(1);
   });
 
   it('keeps error messages free of credentials', () => {

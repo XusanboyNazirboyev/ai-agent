@@ -6,7 +6,7 @@ History, audit and per-phase verification records: [progress-archive.md](progres
 - **Phases 0–3** complete (monorepo, persistence, Telegram + queue, connector framework; real CRM connector blocked on Q1).
 - **Phase 4 / 4B** complete: agent core, education pack, uz-Latn/uz-Cyrl/ru/en locale packs (all `beta`, not native-reviewed), claim→compute→commit pipeline, agent mode OFF/SHADOW/LIVE, turn records, failure policy, versioned pricing, OpenAI-compatible provider, token budgets, data-protection guard ([ADR 008–010](adr/)).
 - **Phase 5 not started** (operator notifier, handover state machine, leads). LIVE agent mode is refused outside development until it exists.
-- **In progress:** workspace/model-policy master task — stage A (spec layout, [ADR 011](adr/011-spec-layout-and-model-policy.md)), then B (provider presets + routing), C (pre-live safety gates), D (hygiene).
+- **Master task:** stage A done (spec layout, [ADR 011](adr/011-spec-layout-and-model-policy.md)). Stage B (provider presets, capability table, failover router, smoke test; [ADR 012](adr/012-provider-presets-and-failover-routing.md)) implemented; escalation, Tier-0 rules and the route record are deferred. C (pre-live safety gates) and D (hygiene) not started.
 - **Verification baseline (main `cee36b9`):** unit 672 passed/7 skipped, integration 64 passed, CI green on Node 24. No live model call has ever been made (no key was available in earlier sessions).
 
 ## Open decisions (owner)

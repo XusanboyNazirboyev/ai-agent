@@ -188,6 +188,21 @@ describe('validateEnvironment', () => {
     expect(ollama.LLM_API_KEY).toBeUndefined();
   });
 
+  it('accepts the routed provider only with a known pricing version', () => {
+    const base = { ...postgresEnvironment, LLM_PROVIDER: 'routed' };
+    expect(() => validateEnvironment(base)).not.toThrow();
+    expect(
+      validateEnvironment({
+        ...base,
+        LLM_PRICING_VERSION: 'routing-free-2026-10-23',
+        LLM_TRUSTED_PROVIDERS: 'mock',
+      }),
+    ).toMatchObject({ LLM_PROVIDER: 'routed' });
+    expect(() =>
+      validateEnvironment({ ...base, LLM_PRICING_VERSION: 'made-up' }),
+    ).toThrow(/pricing version/u);
+  });
+
   it('refuses unsafe or incomplete OpenAI-compatible settings', () => {
     const base = {
       ...postgresEnvironment,

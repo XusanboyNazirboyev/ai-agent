@@ -161,3 +161,26 @@ These facts come from official documentation and back the generic `openai-compat
 ### Not verified
 - **No live request** was made to Gemini or Ollama, because no key or local server was available. Whether Gemini's compatibility layer accepts `response_format: json_schema` and `max_tokens` is not documented. If it does not, set `LLM_STRUCTURED_OUTPUT=json_object` or `LLM_MAX_TOKENS_PARAM`.
 - **The 400-message pattern** used to classify "unsupported feature" errors is a heuristic, not a documented error code.
+
+## 11. Integration targets and Stage B provider facts (verified 2026-10-23)
+
+### Three separate targets
+1. **Claude Code (the coding assistant).** [Other LLM gateways](https://code.claude.com/docs/en/llm-gateway): "Anthropic ... doesn't support routing Claude Code to non-Claude models through any gateway", and a gateway must expose a supported Anthropic-format API. None of the providers below offers that, so **none is configured for Claude Code**; its model stays `sonnet` (`.claude/settings.json`) with the Opus 5.5 ceiling.
+2. **AgentCore `LlmProvider`** (production agent). Presets in `apps/api/src/llm/provider-presets.ts`, used directly (`openai-compatible`) or through the failover router (`LLM_PROVIDER=routed`, ADR 012).
+3. **A gateway/proxy:** not built.
+
+### Providers (AgentCore target only; all `trusted: false`)
+| Provider | Protocol / base URL / key var | Tools | Structured output | Limits and data use (source) |
+|---|---|---|---|---|
+| Groq | Chat Completions, `https://api.groq.com/openai/v1`, `GROQ_API_KEY` ([docs](https://console.groq.com/docs/openai)). Unsupported fields (400): `logprobs`, `logit_bias`, `top_logprobs`, `messages[].name`. | All listed models; parallel use not on gpt-oss ([tool use](https://console.groq.com/docs/tool-use)) | Strict `json_schema` only on gpt-oss-20b/120b, qwen3.8-27b, muse-spark-open; others JSON object ([structured outputs](https://console.groq.com/docs/structured-outputs)) | gpt-oss-120b: 30 RPM, 1K RPD, 8K TPM, 200K TPD, but the page labels the table "Developer plan" ([rate limits](https://console.groq.com/docs/rate-limits)); 429 carries `retry-after`. Data use not read. |
+| Gemini | OpenAI compatibility (beta), `https://generativelanguage.googleapis.com/v1beta/openai`, `GEMINI_API_KEY` ([docs](https://ai.google.dev/gemini-api/docs/openai)) | `tool_choice: auto` documented | `json_schema` only via a parse() example | Per-account limits in AI Studio; Free Tier "Used to improve our products: Yes" ([pricing](https://ai.google.dev/gemini-api/docs/pricing)) |
+| OpenRouter | Chat Completions, `https://openrouter.ai/api/v1`, key var `OPEN_ROUTER_API_KEY` ([docs](https://openrouter.ai/docs/api-reference/overview)) | per model | per model | `:free` variants: 20 RPM, 50 RPD (1000 RPD with 10+ credits) ([limits](https://openrouter.ai/docs/api-reference/limits)); 402 insufficient credits, 429 rate limit ([errors](https://openrouter.ai/docs/api-reference/errors)) |
+| Mistral | `https://api.mistral.ai/v1`, `MISTRAL_API_KEY` ([API](https://docs.mistral.ai/api/)) | `tool_choice` auto/none/any/required | `json_object` and `json_schema` | Free-tier page not found (404); model ids are examples only |
+| LLM7.io | `https://api.llm7.io/v1`, `LLM7_API_KEY` ([quickstart](https://docs.llm7.io/quickstart.md)) | "depends on the selected model" (Models API flag `tools_calling`) ([function calling](https://docs.llm7.io/guides/function-calling.md)); no free-tier restriction stated | JSON mode `json_object` only, per model flag `json_mode`; `json_schema` not documented ([JSON mode](https://docs.llm7.io/guides/json-mode.md)) | Free token: 1 req/s, 60/min, 250/h, 100,000 tokens per 24 h, "may be reduced without notice" ([limits](https://docs.llm7.io/limits.md)); no privacy page found |
+
+### Measured on this project's accounts
+See [LLM_PROVIDER_STATUS.md](LLM_PROVIDER_STATUS.md). Groq `openai/gpt-oss-20b` and Gemini `gemini-3.5-flash-lite` showed chat, tool calls and json_schema; Mistral was rate-limited; OpenRouter and LLM7 were not tested.
+
+### Not verified
+- Groq and Mistral data-use terms; OpenRouter and LLM7 model ids and prices; Mistral free-tier limits; whether the Groq table is the free plan.
+- LLM7 is an **optional candidate**: it is configured with no default model, no capability beyond `json_object`, and is not in the default routing policy.

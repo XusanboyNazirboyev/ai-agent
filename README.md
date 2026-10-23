@@ -85,6 +85,9 @@ LLM_MODEL_STRONG=<same or larger model>
 LLM_PRICING_VERSION=local-free-2026-10-23
 ```
 
+### Failover routing and provider presets
+`LLM_PROVIDER=routed` tries an ordered list of providers per tier (FAST for extraction, STRONG for replies) and fails over on rate limits, quota, outages and unsupported features, with per-provider circuit breakers. Presets for Groq, Gemini, OpenRouter, Mistral and LLM7 are in `apps/api/src/llm/provider-presets.ts`; the default policy is in `apps/api/src/llm/routing/routing-policy.ts` (replace with `LLM_ROUTING_POLICY_FILE`). Set `LLM_PRICING_VERSION=routing-free-2026-10-23`. A candidate whose key variable is unset, or whose model is unpriced, is skipped; a tier with none left stops startup. These providers serve AgentCore only, never Claude Code. `pnpm llm:smoke [provider ...]` runs three tiny capability checks and writes `docs/LLM_PROVIDER_STATUS.md`. See ADR 012.
+
 **Data protection.** Google's pricing page marks Gemini Free Tier content as "Used to improve our products: Yes". Use fake or seed data only with free tiers.
 
 Only providers listed in `LLM_TRUSTED_PROVIDERS` (default `mock`) may receive real customer data. With any other provider:

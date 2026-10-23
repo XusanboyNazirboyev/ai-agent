@@ -23,7 +23,8 @@
     "db:seed": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api db:seed",
     "db:test:prepare": "pnpm --filter @agentcore/api db:test:prepare",
     "db:test:seed": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api db:test:seed",
-    "db:test:drift": "pnpm --filter @agentcore/api db:test:drift"
+    "db:test:drift": "pnpm --filter @agentcore/api db:test:drift",
+    "llm:smoke": "pnpm --filter @agentcore/api llm:smoke"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

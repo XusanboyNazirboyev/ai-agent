@@ -45,6 +45,12 @@ import {
  */
 
 export type StructuredOutputMode = 'json_schema' | 'json_object';
+
+/** What a model can do, from the provider preset / smoke test. */
+export interface CapabilityView {
+  readonly tools: 'yes' | 'no' | 'unknown';
+  readonly structured: 'json_schema' | 'json_object' | 'none' | 'unknown';
+}
 export type MaxTokensParam = 'max_tokens' | 'max_completion_tokens';
 
 export interface OpenAiCompatibleOptions {
@@ -53,7 +59,13 @@ export interface OpenAiCompatibleOptions {
   /** Sent as `Authorization: Bearer`; optional for local servers. */
   readonly apiKey?: string;
   readonly models: Readonly<Record<LlmTier, string>>;
+  /** Mode used when the capability table says `unknown`. */
   readonly structuredOutput: StructuredOutputMode;
+  /**
+   * Per-model capability lookup. `no`/`none` fail fast with
+   * LLM_UNSUPPORTED_FEATURE before any request is sent; `unknown` tries.
+   */
+  readonly capabilityOf?: (model: string) => CapabilityView;
   readonly maxTokensParam: MaxTokensParam;
   readonly requestTimeoutMs: number;
   readonly maxRetries: number;
@@ -148,9 +160,6 @@ function describe(status: number, body: unknown): string {
     : `HTTP ${status}`;
 }
 
-const UNSUPPORTED_HINT =
-  /(tool|function|response_format|json_schema|structured)[^.]*\b(not supported|unsupported|does not support)|\b(not supported|unsupported|does not support)\b[^.]*(tool|function|response_format|json_schema|structured)/iu;
-
 /** Maps an HTTP error response to the provider-neutral error contract. */
 export function errorFromResponse(
   status: number,
@@ -188,6 +197,15 @@ export function errorFromResponse(
       wait,
     );
   }
+  if (status === 404) {
+    // Unknown model / no access (e.g. Groq `model_not_found`): not a payload
+    // defect, and no response was billed; the router may fail over.
+    return new LlmError(
+      'LLM_UNSUPPORTED_FEATURE',
+      `Model or endpoint not available to this account (${label})`,
+      false,
+    );
+  }
   if (status === 408 || status >= 500) {
     return new LlmError(
       'LLM_UNAVAILABLE',
@@ -196,13 +214,9 @@ export function errorFromResponse(
       wait,
     );
   }
-  if (UNSUPPORTED_HINT.test(error?.message ?? '')) {
-    return new LlmError(
-      'LLM_UNSUPPORTED_FEATURE',
-      `Provider does not support a requested feature (${label})`,
-      false,
-    );
-  }
+  // An unknown 400 is an invalid payload, never "unsupported feature":
+  // unsupported features come from the capability table (checked before
+  // sending), not from guessing at error message text.
   return new LlmError(
     'LLM_INVALID_REQUEST',
     `Provider rejected request (${label})`,
@@ -416,7 +430,20 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     request: StructuredGenerationRequest<T>,
   ): Promise<StructuredGenerationResult<T>> {
     const model = this.modelFor(request.tier);
-    const jsonObject = this.options.structuredOutput === 'json_object';
+    const capability = this.options.capabilityOf?.(model);
+    if (capability?.structured === 'none') {
+      throw new LlmError(
+        'LLM_UNSUPPORTED_FEATURE',
+        `Model ${model} does not support structured output`,
+        false,
+      );
+    }
+    const mode: StructuredOutputMode =
+      capability?.structured === 'json_schema' ||
+      capability?.structured === 'json_object'
+        ? capability.structured
+        : this.options.structuredOutput;
+    const jsonObject = mode === 'json_object';
     const system = jsonObject
       ? `${request.system}\n\nRespond with only a JSON object that matches this JSON Schema:\n${JSON.stringify(request.jsonSchema)}`
       : request.system;
@@ -471,6 +498,16 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     request: ToolGenerationRequest,
   ): Promise<ToolGenerationResult> {
     const model = this.modelFor(request.tier);
+    if (
+      request.tools.length > 0 &&
+      this.options.capabilityOf?.(model).tools === 'no'
+    ) {
+      throw new LlmError(
+        'LLM_UNSUPPORTED_FEATURE',
+        `Model ${model} does not support tool calling`,
+        false,
+      );
+    }
     const { data, durationMs, attempts } = await this.post(
       {
         model,

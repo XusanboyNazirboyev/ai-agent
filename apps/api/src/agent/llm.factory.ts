@@ -8,6 +8,11 @@ import {
   neutralResponder,
   ScriptedLlmProvider,
 } from '../core/llm/scripted-llm-provider.js';
+import { PRICING_CATALOG } from '../llm/pricing-catalog.js';
+import {
+  buildRoutedProvider,
+  loadRoutingPolicy,
+} from '../llm/routing/routing-factory.js';
 import { AnthropicLlmProvider } from '../llm/anthropic/anthropic-llm-provider.js';
 import { OpenAiCompatibleLlmProvider } from '../llm/openai-compatible/openai-compatible-provider.js';
 import {
@@ -33,6 +38,8 @@ export type LlmEnvironment = Pick<
   | 'LLM_CONVERSATION_BUDGET_USD'
   | 'LLM_TENANT_MONTHLY_BUDGET_USD'
   | 'LLM_BASE_URL'
+  | 'LLM_ROUTING_POLICY_FILE'
+  | 'LLM_PRICING_VERSION'
   | 'LLM_API_KEY'
   | 'LLM_MODEL_FAST'
   | 'LLM_MODEL_STRONG'
@@ -65,6 +72,8 @@ const LLM_KEYS = [
   'LLM_CONVERSATION_BUDGET_USD',
   'LLM_TENANT_MONTHLY_BUDGET_USD',
   'LLM_BASE_URL',
+  'LLM_ROUTING_POLICY_FILE',
+  'LLM_PRICING_VERSION',
   'LLM_API_KEY',
   'LLM_MODEL_FAST',
   'LLM_MODEL_STRONG',
@@ -97,7 +106,22 @@ export function llmEnvironment(
 function baseProvider(
   environment: LlmEnvironment,
   transport?: typeof fetch,
+  secrets: Readonly<Record<string, string | undefined>> = process.env,
 ): LlmProvider {
+  if (environment.LLM_PROVIDER === 'routed') {
+    const snapshot = PRICING_CATALOG.snapshot(environment.LLM_PRICING_VERSION);
+    const build = buildRoutedProvider({
+      policy: loadRoutingPolicy(environment.LLM_ROUTING_POLICY_FILE),
+      snapshot,
+      env: secrets,
+      trustedProviders: environment.LLM_TRUSTED_PROVIDERS,
+      requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
+      maxRetries: environment.LLM_MAX_RETRIES,
+      maxInputBytes: environment.LLM_MAX_INPUT_BYTES,
+      ...(transport ? { fetch: transport } : {}),
+    });
+    return build.provider;
+  }
   if (environment.LLM_PROVIDER === 'mock')
     return new ScriptedLlmProvider(neutralResponder);
   if (environment.LLM_PROVIDER === 'openai-compatible') {
@@ -151,8 +175,9 @@ function baseProvider(
 export function createLlmProvider(
   environment: LlmEnvironment,
   transport?: typeof fetch,
+  secrets: Readonly<Record<string, string | undefined>> = process.env,
 ): LlmProvider {
-  const provider = baseProvider(environment, transport);
+  const provider = baseProvider(environment, transport, secrets);
   const limited =
     environment.LLM_RATE_LIMIT_RPM !== undefined ||
     environment.LLM_RATE_LIMIT_TPM !== undefined ||

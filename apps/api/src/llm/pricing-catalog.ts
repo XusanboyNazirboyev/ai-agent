@@ -94,8 +94,6 @@ const GEMINI_FREE_2026_10_23: PricingConfig = {
     'gemini-3.1-flash-lite': { free: true },
     'gemini-3-flash-preview': { free: true },
     'gemini-2.5-pro': { free: true },
-    'gemini-2.5-flash': { free: true },
-    'gemini-2.5-flash-lite': { free: true },
   },
 };
 
@@ -112,10 +110,41 @@ const LOCAL_FREE_2026_10_23: PricingConfig = {
   models: { '*': { free: true } },
 };
 
+/**
+ * Free-tier models usable by the routed provider. Explicit ids only (no
+ * wildcard) so a paid or unknown model can never be priced as free.
+ * Groq: ids from console.groq.com/docs/tool-use and /structured-outputs;
+ * the page does not state per-token prices, so these are listed only as
+ * models run on the free/developer plan (cost 0 to the account). Gemini:
+ * Free Tier ids from ai.google.dev/gemini-api/docs/pricing. Add LLM7,
+ * OpenRouter (":free" ids) or Mistral models here once their ids/prices are
+ * verified; until then they cannot be routed (unpriced models cannot run).
+ */
+const ROUTING_FREE_2026_10_23: PricingConfig = {
+  version: 'routing-free-2026-10-23',
+  provider: 'multi',
+  asOf: '2026-10-23',
+  sourceUrl: 'https://console.groq.com/docs/tool-use',
+  models: {
+    'llama-3.1-8b-instant': { free: true },
+    'llama-3.3-70b-versatile': { free: true },
+    'openai/gpt-oss-20b': { free: true },
+    'openai/gpt-oss-120b': { free: true },
+    'qwen/qwen3.8-27b': { free: true },
+    'gemini-3.8-flash': { free: true },
+    'gemini-3.6-flash': { free: true },
+    'gemini-3.5-flash-lite': { free: true },
+    'gemini-3.1-flash-lite': { free: true },
+    'gemini-2.5-flash': { free: true },
+    'gemini-2.5-flash-lite': { free: true },
+  },
+};
+
 export const PRICING_CATALOG = new PricingCatalog([
   ANTHROPIC_2026_10_23,
   GEMINI_FREE_2026_10_23,
   LOCAL_FREE_2026_10_23,
+  ROUTING_FREE_2026_10_23,
 ]);
 
 export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';

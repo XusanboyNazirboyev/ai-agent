@@ -65,13 +65,15 @@ const environmentSchema = postgresEnvironmentSchema
      * is no automatic fallback between providers.
      */
     LLM_PROVIDER: z
-      .enum(['mock', 'anthropic', 'openai-compatible'])
+      .enum(['mock', 'anthropic', 'openai-compatible', 'routed'])
       .default('mock'),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     /**
      * openai-compatible: Chat Completions base URL (".../chat/completions"
      * is appended), optional bearer key, and the model per tier.
      */
+    /** routed: optional JSON routing policy replacing the built-in default. */
+    LLM_ROUTING_POLICY_FILE: z.string().min(1).optional(),
     LLM_BASE_URL: z.url().optional(),
     LLM_API_KEY: z.string().min(1).optional(),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
@@ -258,6 +260,17 @@ const environmentSchema = postgresEnvironmentSchema
         message: 'must not exceed LLM_CONVERSATION_TOKEN_BUDGET',
       });
     }
+    if (
+      environment.LLM_PROVIDER === 'routed' &&
+      !PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['LLM_PRICING_VERSION'],
+        message:
+          'routed requires a pricing version covering every routed model',
+      });
+    }
     if (!PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)) {
       context.addIssue({
         code: 'custom',
@@ -279,7 +292,9 @@ const environmentSchema = postgresEnvironmentSchema
                 ['LLM_MODEL_FAST', environment.LLM_MODEL_FAST],
                 ['LLM_MODEL_STRONG', environment.LLM_MODEL_STRONG],
               ]
-            : [['LLM_PROVIDER', MOCK_MODEL]];
+            : environment.LLM_PROVIDER === 'routed'
+              ? [] // every routed candidate is priced when the router is built
+              : [['LLM_PROVIDER', MOCK_MODEL]];
       for (const [key, model] of models) {
         if (!model) continue;
         const pricing = snapshot.models[model] ?? snapshot.models[ANY_MODEL];
