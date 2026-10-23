@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { CrmConnector } from '../../connectors/interfaces/crm-connector.js';
+import type { BudgetLimits } from '../../core/llm/budget.js';
 import type { LlmProvider } from '../../core/llm/llm-provider.js';
 import { LlmError } from '../../core/llm/llm-provider.js';
 import {
@@ -319,6 +320,8 @@ export interface EvalOutcome {
   readonly structuredOk: boolean;
   /** Unsourced digits in the final reply (must be 0). */
   readonly hardFactViolations: number;
+  /** Provider error code when the turn ended because a model call failed. */
+  readonly llmFailure: string | undefined;
   /** Expected slots of the case, and how many ended with the expected value. */
   readonly slotsExpected: number;
   readonly slotsMatched: number;
@@ -498,6 +501,7 @@ export function scoreCase(
       result.extractionFailure === undefined ||
       !['malformed', 'truncated', 'refusal'].includes(result.extractionFailure),
     hardFactViolations: invented.length,
+    llmFailure: result.llmFailure,
     slotsExpected: Object.keys(e.slots ?? {}).length,
     slotsMatched: Object.entries(e.slots ?? {}).filter(
       ([key, value]) => result.slots[key]?.value === value,
@@ -513,6 +517,8 @@ export function scoreCase(
 }
 
 export interface RunCaseOptions {
+  /** Per-turn limit overrides (e.g. a small output ceiling for live runs). */
+  readonly limits?: Partial<BudgetLimits>;
   /** Pricing snapshot covering the provider's models. */
   readonly pricingVersion?: string;
   /**
@@ -557,6 +563,7 @@ export async function runCase(
     text: evalCase.input.text,
     connector: connectorFor(evalCase.connector),
     limits: {
+      ...options.limits,
       ...(evalCase.turnBudgetUsd
         ? { maxTurnCostNano: usdToNano(evalCase.turnBudgetUsd) }
         : {}),

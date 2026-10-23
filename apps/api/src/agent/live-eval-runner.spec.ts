@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { LlmProvider } from '../core/llm/llm-provider.js';
 import { usdToNano } from '../core/llm/pricing.js';
 import { OpenAiCompatibleLlmProvider } from '../llm/openai-compatible/openai-compatible-provider.js';
 import { loadCases, scriptedProvider } from './testing/eval-runner.js';
@@ -44,6 +45,70 @@ describe('evaluation runner (scripted model only)', () => {
     );
     expect(m.avgToolRounds).toBeGreaterThan(0);
     expect(renderMarkdown(report)).toContain('Slot accuracy');
+  });
+
+  it('stops before a case that would exceed the call bound, and reports why', async () => {
+    const subset = cases.filter((c) => c.locale === 'en').slice(0, 12);
+    const result = await runEvaluation({
+      cases: subset,
+      models: [scripted('bounded')],
+      budgetNano: usdToNano('1'),
+      mode: 'scripted',
+      limits: { maxCallsPerTurn: 4, maxOutputTokensPerCall: 200 },
+      maxCalls: 9,
+    });
+    expect(result.stoppedBy).toBe('calls');
+    // A case starts only if a full turn (4 calls) still fits.
+    expect(result.calls).toBeLessThanOrEqual(9);
+    expect(result.runs[0].notRun).toBeGreaterThan(0);
+  });
+
+  it('stops on the runtime bound using the injected clock', async () => {
+    let now = 0;
+    const result = await runEvaluation({
+      cases: cases.filter((c) => c.locale === 'en').slice(0, 6),
+      models: [scripted('timed')],
+      budgetNano: usdToNano('1'),
+      mode: 'scripted',
+      maxRuntimeMs: 1_000,
+      clock: () => (now += 400),
+    });
+    expect(result.stoppedBy).toBe('runtime');
+    expect(result.runs[0].outcomes.length).toBeGreaterThan(0);
+    expect(result.runs[0].notRun).toBeGreaterThan(0);
+  });
+
+  it('applies the per-call output ceiling to every request', async () => {
+    const seen: number[] = [];
+    const base = scripted('ceiling');
+    const probe: EvaluatedModel = {
+      ...base,
+      providerFor: (evalCase) => {
+        const inner = base.providerFor(evalCase);
+        const spy: LlmProvider = {
+          providerId: inner.providerId,
+          modelFor: (tier) => inner.modelFor(tier),
+          generateStructured: ((r: { maxOutputTokens: number }) => {
+            seen.push(r.maxOutputTokens);
+            return inner.generateStructured(r as never);
+          }) as LlmProvider['generateStructured'],
+          generateWithTools: (r) => {
+            seen.push(r.maxOutputTokens);
+            return inner.generateWithTools(r);
+          },
+        };
+        return spy;
+      },
+    };
+    await runEvaluation({
+      cases: cases.filter((c) => c.id === 'edu-en-03'),
+      models: [probe],
+      budgetNano: usdToNano('1'),
+      mode: 'scripted',
+      limits: { maxOutputTokensPerCall: 200 },
+    });
+    expect(seen.length).toBeGreaterThan(0);
+    expect(Math.max(...seen)).toBeLessThanOrEqual(200);
   });
 
   it('compares models on the same cases and reports every metric', async () => {
@@ -236,10 +301,10 @@ describe('live eval CLI guards (no network)', () => {
     const capped = run({
       LIVE_EVAL: '1',
       ANTHROPIC_API_KEY: fake,
-      LIVE_EVAL_BUDGET_USD: '6',
+      LIVE_EVAL_BUDGET_USD: '1.5',
     });
     expect(capped.status).toBe(1);
-    expect(capped.stderr).toContain('at most 5');
+    expect(capped.stderr).toContain('at most 1');
     expect(`${capped.stdout}${capped.stderr}`).not.toContain(fake);
   });
 });

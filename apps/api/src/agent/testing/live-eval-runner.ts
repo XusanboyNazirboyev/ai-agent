@@ -1,3 +1,4 @@
+import type { BudgetLimits } from '../../core/llm/budget.js';
 import type { LlmProvider } from '../../core/llm/llm-provider.js';
 import { nanoToUsd } from '../../core/llm/pricing.js';
 import { runCase, type EvalCase, type EvalOutcome } from './eval-runner.js';
@@ -74,15 +75,50 @@ export async function runEvaluation(options: {
   readonly budgetTokens?: number;
   readonly mode: 'scripted' | 'live';
   readonly onCase?: (model: EvaluatedModel, outcome: EvalOutcome) => void;
-}): Promise<{ runs: ModelRun[]; spentNano: number; spentTokens: number }> {
+  /** Per-turn limit overrides, e.g. output ceiling and calls per turn. */
+  readonly limits?: Partial<BudgetLimits>;
+  /**
+   * Hard bounds checked BEFORE each case: a case is started only if a full
+   * turn (`limits.maxCallsPerTurn`) still fits in `maxCalls` and the runtime
+   * is under `maxRuntimeMs`.
+   */
+  readonly maxCalls?: number;
+  readonly maxRuntimeMs?: number;
+  readonly clock?: () => number;
+}): Promise<{
+  runs: ModelRun[];
+  spentNano: number;
+  spentTokens: number;
+  calls: number;
+  stoppedBy: 'calls' | 'runtime' | 'budget' | undefined;
+}> {
   let spent = 0;
   let tokens = 0;
+  let calls = 0;
+  let stoppedBy: 'calls' | 'runtime' | 'budget' | undefined;
+  const clock = options.clock ?? Date.now;
+  const started = clock();
+  const perTurn = options.limits?.maxCallsPerTurn ?? 6;
   const runs: ModelRun[] = [];
   for (const model of options.models) {
     const outcomes: EvalOutcome[] = [];
     let stopped = false;
     for (const evalCase of options.cases) {
       if (stopped) break;
+      if (
+        options.maxCalls !== undefined &&
+        calls + perTurn > options.maxCalls
+      ) {
+        stoppedBy = 'calls';
+        break;
+      }
+      if (
+        options.maxRuntimeMs !== undefined &&
+        clock() - started >= options.maxRuntimeMs
+      ) {
+        stoppedBy = 'runtime';
+        break;
+      }
       const outcome = await runCase(
         evalCase,
         model.providerFor(evalCase),
@@ -91,6 +127,7 @@ export async function runEvaluation(options: {
           ...(model.pricingVersion
             ? { pricingVersion: model.pricingVersion }
             : {}),
+          ...(options.limits ? { limits: options.limits } : {}),
           runBudget: {
             capNano: options.budgetNano,
             spentNano: spent,
@@ -101,9 +138,11 @@ export async function runEvaluation(options: {
       );
       spent += outcome.costNano;
       tokens += outcome.inputTokens + outcome.outputTokens;
+      calls += outcome.providerCalls;
       if (outcome.budgetStopped) {
         // The cap refused a call: this case is incomplete, stop the run.
         stopped = true;
+        stoppedBy = 'budget';
         continue;
       }
       outcomes.push(outcome);
@@ -116,7 +155,7 @@ export async function runEvaluation(options: {
       notRun: options.cases.length - outcomes.length,
     });
   }
-  return { runs, spentNano: spent, spentTokens: tokens };
+  return { runs, spentNano: spent, spentTokens: tokens, calls, stoppedBy };
 }
 
 function rate(values: readonly (boolean | undefined)[]): Rate {

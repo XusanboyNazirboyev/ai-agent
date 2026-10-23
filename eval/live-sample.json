@@ -1,0 +1,32 @@
+{
+  "description": "Fixed sample for the opt-in live evaluation. Fictional MockConnector cases only.",
+  "ids": [
+    "edu-en-g01",
+    "edu-ru-g01",
+    "edu-uz-cyrl-g01",
+    "edu-uz-latn-g01",
+    "edu-en-03",
+    "edu-ru-03",
+    "edu-uz-cyrl-03",
+    "edu-uz-latn-03",
+    "edu-en-g07",
+    "edu-ru-g07",
+    "edu-uz-cyrl-g07",
+    "edu-uz-latn-g07",
+    "edu-ru-04",
+    "edu-uz-latn-04",
+    "edu-uz-latn-g08",
+    "edu-uz-latn-g04",
+    "edu-uz-latn-g06",
+    "edu-uz-latn-06",
+    "edu-uz-latn-05",
+    "edu-uz-latn-07",
+    "edu-uz-latn-02",
+    "edu-uz-latn-01",
+    "edu-uz-latn-g02",
+    "edu-uz-latn-09",
+    "edu-uz-cyrl-24",
+    "edu-uz-latn-g09",
+    "edu-en-g09"
+  ]
+}

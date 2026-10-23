@@ -8,9 +8,15 @@ import type {
 
 /**
  * Deterministic language + script detection (D17). Script is measured from
- * letters; language is scored from marker letters and common words. Short or
- * mixed messages get low confidence so the caller can keep the conversation's
- * locale or use the model's detection instead of guessing.
+ * letters; language is scored from common words (lexical evidence) and marker
+ * letters (weak evidence). Short, mixed or word-less messages get low
+ * confidence so the caller can keep the conversation's locale, ask, or use the
+ * model's detection instead of guessing.
+ *
+ * Empirical status: the word lists and every threshold are HEURISTIC. They
+ * have been checked only against the fixtures in this repository (eval cases
+ * and unit tests), not against real customer text, and the score is not a
+ * calibrated probability.
  */
 
 export interface LanguageDetection {
@@ -29,6 +35,13 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
   uz: new Set([
     'salom',
     'assalomu',
+    'mening',
+    'sizning',
+    'bugun',
+    'ertaga',
+    'soat',
+    'manzil',
+    'qayerga',
     'alaykum',
     'kerak',
     'qancha',
@@ -64,6 +77,13 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
     'necha',
     'салом',
     'ассалому',
+    'менинг',
+    'сизнинг',
+    'бугун',
+    'эртага',
+    'соат',
+    'манзил',
+    'қаерга',
     'алайкум',
     'керак',
     'қанча',
@@ -170,6 +190,10 @@ const ACRONYM = /\b[A-Z][A-Z0-9]{1,9}\b/gu;
 /** Below this share of one script a message is mixed, not a script choice. */
 const MIXED_SCRIPT_SHARE = 0.75;
 const MIXED_SCRIPT_MAX_CONFIDENCE = 0.45;
+/** Highest confidence for a guess with no recognised word behind it. */
+const LEXICAL_REQUIRED_CAP = 0.25;
+/** Highest confidence when words of two languages are present. */
+const CONTRADICTION_CAP = 0.4;
 
 export function detectLanguage(input: string): LanguageDetection {
   const text = unifyApostrophes(input).toLowerCase();
@@ -181,19 +205,29 @@ export function detectLanguage(input: string): LanguageDetection {
   const script: ScriptCode = cyrillic >= latin ? 'Cyrl' : 'Latn';
   const scriptShare = Math.max(latin, cyrillic) / (latin + cyrillic);
 
+  // Two kinds of evidence, kept apart. A recognised word is lexical evidence.
+  // A marker letter is weak: single letters occur in noise, names and codes
+  // ("xqzv"), so markers can raise a score but never carry a classification
+  // on their own (see LEXICAL_REQUIRED_CAP below).
   const score: Record<LanguageCode, number> = { uz: 0, ru: 0, en: 0 };
+  const lexical: Record<LanguageCode, number> = { uz: 0, ru: 0, en: 0 };
   const words = text.split(/[^\p{L}']+/u).filter(Boolean);
   for (const word of words) {
+    // A single letter ("a", "i", "у") is not evidence of any language.
+    if (word.length < 2) continue;
     for (const language of ['uz', 'ru', 'en'] as const) {
-      if (WORDS[language].has(word)) score[language] += 2;
+      if (WORDS[language].has(word)) {
+        score[language] += 2;
+        lexical[language] += 1;
+      }
     }
   }
-  // Marker letters: Uzbek-only Cyrillic letters, oʻ/gʻ in Latin, and
-  // Russian-only letters.
-  score.uz += (text.match(/[ўқғҳ]/gu)?.length ?? 0) * 2;
-  score.uz += (text.match(/[og]'/gu)?.length ?? 0) * 2;
-  score.uz += Math.min(text.match(/q/gu)?.length ?? 0, 3);
-  score.ru += (text.match(/[ыщ]/gu)?.length ?? 0) * 2;
+  // Marker letters: Uzbek-only Cyrillic letters, oʻ/gʻ in Latin, "q", and
+  // Russian-only letters. One point each, with small caps.
+  score.uz += Math.min(text.match(/[ўқғҳ]/gu)?.length ?? 0, 3);
+  score.uz += Math.min(text.match(/[og]'/gu)?.length ?? 0, 2);
+  score.uz += Math.min(text.match(/q/gu)?.length ?? 0, 1);
+  score.ru += Math.min(text.match(/[ыщ]/gu)?.length ?? 0, 2);
   if (script === 'Latn') score.ru = Math.max(0, score.ru - 1);
   if (script === 'Cyrl') score.en = 0;
 
@@ -217,10 +251,23 @@ export function detectLanguage(input: string): LanguageDetection {
   );
   // A message mixing Latin and Cyrillic never switches the conversation's
   // script on its own (addendum §3.10: conservative on uncertain script).
-  const capped =
+  const mixedCapped =
     scriptShare < MIXED_SCRIPT_SHARE
       ? Math.min(raw, MIXED_SCRIPT_MAX_CONFIDENCE)
       : raw;
+  // Without a single recognised word of the top language the guess rests on
+  // marker letters only, which is too weak to classify text.
+  // Recognised words of a second language contradict the top guess: the
+  // message may be mixed-language, so it cannot reach the high-confidence
+  // range (the caller then keeps the conversation's language or asks).
+  const lexicalCapped =
+    lexical[top.language] === 0
+      ? Math.min(mixedCapped, LEXICAL_REQUIRED_CAP)
+      : mixedCapped;
+  const capped =
+    lexical[second.language] > 0
+      ? Math.min(lexicalCapped, CONTRADICTION_CAP)
+      : lexicalCapped;
   return {
     language: top.language,
     script,

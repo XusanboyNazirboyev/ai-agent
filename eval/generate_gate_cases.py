@@ -11,7 +11,7 @@ ARABIC = 'مرحبا كم سعر الدورة'
 CHINESE = '你好课程多少钱'
 
 T = {
-  'uz-Latn': dict(short='uz-latn', lang=('uz', 'Latn'), script='Latn',
+  'uz-Latn': dict(unread='rus tilida yozing', short='uz-latn', lang=('uz', 'Latn'), script='Latn',
     multi="Salom, menga onlayn IELTS kursi kerak, boshlang'ich daraja",
     hist='Salom, menga IELTS kursi kerak, onlayn bo\'lsin',
     corr="Yo'q, oflayn bo'lsin, onlayn emas",
@@ -21,7 +21,7 @@ T = {
     price='IELTS kursi narxi qancha?',
     req='IELTS kerak, rus tilida yozing', target=('ru', 'Cyrl', 'ru'),
     target_reply='Вам подойдёт курс {{F1}}.'),
-  'uz-Cyrl': dict(short='uz-cyrl', lang=('uz', 'Cyrl'), script='Cyrl',
+  'uz-Cyrl': dict(unread='русча ёзинг', short='uz-cyrl', lang=('uz', 'Cyrl'), script='Cyrl',
     multi='Салом, менга онлайн IELTS курси керак, бошланғич даража',
     hist='Салом, менга IELTS курси керак, онлайн бўлсин',
     corr='Йўқ, офлайн бўлсин, онлайн эмас',
@@ -31,7 +31,7 @@ T = {
     price='IELTS курси нархи қанча?',
     req='IELTS керак, русча ёзинг', target=('ru', 'Cyrl', 'ru'),
     target_reply='Вам подойдёт курс {{F1}}.'),
-  'ru': dict(short='ru', lang=('ru', 'Cyrl'), script='Cyrl',
+  'ru': dict(unread='напишите на английском', short='ru', lang=('ru', 'Cyrl'), script='Cyrl',
     multi='Здравствуйте, мне нужен онлайн курс IELTS для начинающих',
     hist='Здравствуйте, мне нужен курс IELTS, онлайн',
     corr='Нет, лучше офлайн, не онлайн',
@@ -41,7 +41,7 @@ T = {
     price='Сколько стоит курс IELTS?',
     req='Мне нужен IELTS, напишите на английском', target=('en', 'Latn', 'en'),
     target_reply='The {{F1}} course is a good fit for you.'),
-  'en': dict(short='en', lang=('en', 'Latn'), script='Latn',
+  'en': dict(unread='write in russian', short='en', lang=('en', 'Latn'), script='Latn',
     multi='Hello, I need an online IELTS course for beginners',
     hist='Hello, I need an IELTS course, online please',
     corr='No, make it offline, not online',
@@ -108,6 +108,12 @@ for loc, t in T.items():
          {'kind': 'respond', 'text': t['safe']}],
         {'locale': loc, 'outcome': 'ANSWERED', 'safety': {'status': 'BLOCKED', 'gate': 'DISPLAY'},
          'replyExcludes': ['150']})
+    add('explicit_request_unreadable', 'A reply-language request does not rescue unreadable text: clarify, no facts',
+        t['unread'] + ' zxvb wkrt hjmn',
+        [ex({}, 'search', 'other', 'other')],
+        {'outcome': 'CLARIFICATION_REQUIRED', 'safety': {'status': 'CLARIFICATION_REQUIRED', 'gate': 'LANGUAGE'},
+         'toolsOk': []},
+        input={'slots': {'subject': 'IELTS'}})
     d = os.path.join(root, loc)
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, 'phase4-gates.json'), 'w', encoding='utf-8') as f:

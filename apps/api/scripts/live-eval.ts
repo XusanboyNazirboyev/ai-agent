@@ -2,7 +2,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
+import { readFileSync } from 'node:fs';
 import { pricingFor, usdToNano } from '../src/core/llm/pricing.js';
+import {
+  buildRoutedProvider,
+  loadRoutingPolicy,
+} from '../src/llm/routing/routing-factory.js';
 import type { LlmProvider } from '../src/core/llm/llm-provider.js';
 import { AnthropicLlmProvider } from '../src/llm/anthropic/anthropic-llm-provider.js';
 import { OpenAiCompatibleLlmProvider } from '../src/llm/openai-compatible/openai-compatible-provider.js';
@@ -24,7 +29,10 @@ import {
  *
  *   LIVE_EVAL=1 pnpm --filter @agentcore/api eval:live
  *
- * - Provider: LIVE_EVAL_PROVIDER (or LLM_PROVIDER) = anthropic (default) or
+ * - Provider: LIVE_EVAL_PROVIDER (or LLM_PROVIDER) = anthropic (default),
+ *   routed (the application's failover router: only candidates whose key
+ *   variable is set and whose model is priced; LLM_ROUTING_POLICY_FILE,
+ *   LLM_PRICING_VERSION required, nothing is trusted) or
  *   openai-compatible (LLM_BASE_URL, optional LLM_API_KEY, LLM_MODEL_FAST /
  *   LLM_MODEL_STRONG, LLM_PRICING_VERSION; LLM_RATE_LIMIT_* respected).
  * - Credentials come from the environment only: `.env.local` (gitignored)
@@ -36,7 +44,13 @@ import {
  *   is checked before every model call.
  * - LIVE_EVAL_MODELS=a,b compares models (each serves both tiers); without
  *   it, LLM_FAST_MODEL / LLM_STRONG_MODEL are evaluated as configured.
- * - LIVE_EVAL_FILTER limits cases by id substring.
+ * - LIVE_EVAL_FILTER limits cases by id substring; LIVE_EVAL_SAMPLE=<file>
+ *   restricts the run to the case ids listed in that JSON ({"ids": [...]}).
+ * - Hard bounds, all checked before a case starts: LIVE_EVAL_MAX_CASES
+ *   (default 30), LIVE_EVAL_MAX_CALLS (default 90 recorded model calls, at
+ *   most LIVE_EVAL_CALLS_PER_TURN=4 per case), LIVE_EVAL_MAX_RUNTIME_MS
+ *   (default 900000), LIVE_EVAL_MAX_OUTPUT_TOKENS (default 200, at most
+ *   200: the per-call output ceiling of every request).
  * - Reports go to LIVE_EVAL_REPORT_DIR (default eval/reports, gitignored).
  * Only fictional eval cases and MockConnector data are used. Never in CI.
  */
@@ -45,7 +59,7 @@ const root = resolve(process.cwd(), '../..');
 loadEnv({ path: resolve(root, '.env.local'), quiet: true });
 loadEnv({ path: resolve(root, '.env'), quiet: true });
 
-const MAX_BUDGET = usdToNano('5');
+const MAX_BUDGET = usdToNano('1');
 
 const MAX_TOKEN_BUDGET = 5_000_000;
 
@@ -71,14 +85,18 @@ async function main(): Promise<void> {
   }
   const providerKind =
     process.env.LIVE_EVAL_PROVIDER ?? process.env.LLM_PROVIDER ?? 'anthropic';
-  if (providerKind !== 'anthropic' && providerKind !== 'openai-compatible')
+  if (
+    providerKind !== 'anthropic' &&
+    providerKind !== 'openai-compatible' &&
+    providerKind !== 'routed'
+  )
     throw new Error(
-      'LIVE_EVAL_PROVIDER must be anthropic or openai-compatible.',
+      'LIVE_EVAL_PROVIDER must be anthropic, openai-compatible or routed.',
     );
   const budgetNano = usdToNano(process.env.LIVE_EVAL_BUDGET_USD ?? '0.50');
   if (budgetNano > MAX_BUDGET || budgetNano <= 0)
     throw new Error(
-      'LIVE_EVAL_BUDGET_USD must be greater than 0 and at most 5.',
+      'LIVE_EVAL_BUDGET_USD must be greater than 0 and at most 1.',
     );
   const budgetTokens = positiveInt(
     'LIVE_EVAL_TOKEN_BUDGET',
@@ -90,6 +108,15 @@ async function main(): Promise<void> {
     process.env.LLM_PRICING_VERSION ??
       (providerKind === 'anthropic' ? 'anthropic-2026-10-23' : ''),
   );
+  const maxCases = positiveInt('LIVE_EVAL_MAX_CASES', 30, 200);
+  const maxCalls = positiveInt('LIVE_EVAL_MAX_CALLS', 90, 1_000);
+  const callsPerTurn = positiveInt('LIVE_EVAL_CALLS_PER_TURN', 4, 6);
+  const maxRuntimeMs = positiveInt(
+    'LIVE_EVAL_MAX_RUNTIME_MS',
+    900_000,
+    3_600_000,
+  );
+  const maxOutputTokens = positiveInt('LIVE_EVAL_MAX_OUTPUT_TOKENS', 200, 200);
   const listed = process.env.LIVE_EVAL_MODELS?.split(',')
     .map((model) => model.trim())
     .filter(Boolean);
@@ -101,16 +128,21 @@ async function main(): Promise<void> {
     providerKind === 'anthropic'
       ? (process.env.LLM_STRONG_MODEL ?? fast)
       : process.env.LLM_MODEL_STRONG;
-  const configurations: Array<{ fast: string; strong: string }> = listed
-    ? listed.map((model) => ({ fast: model, strong: model }))
-    : fast && strong
-      ? [{ fast, strong }]
-      : [];
+  const configurations: Array<{ fast: string; strong: string }> =
+    providerKind === 'routed'
+      ? [{ fast: 'routed-fast', strong: 'routed-strong' }]
+      : listed
+        ? listed.map((model) => ({ fast: model, strong: model }))
+        : fast && strong
+          ? [{ fast, strong }]
+          : [];
   if (configurations.length === 0)
     throw new Error('Set LIVE_EVAL_MODELS or LLM_MODEL_FAST/LLM_MODEL_STRONG.');
-  for (const configuration of configurations)
-    for (const model of [configuration.fast, configuration.strong])
-      pricingFor(pricing, model); // throws for an unpriced model
+  if (providerKind !== 'routed') {
+    for (const configuration of configurations)
+      for (const model of [configuration.fast, configuration.strong])
+        pricingFor(pricing, model); // throws for an unpriced model
+  }
 
   const limits = {
     requestsPerMinute: optionalInt('LLM_RATE_LIMIT_RPM'),
@@ -128,7 +160,28 @@ async function main(): Promise<void> {
 
   let build: (configuration: { fast: string; strong: string }) => LlmProvider;
   let label: string;
-  if (providerKind === 'anthropic') {
+  if (providerKind === 'routed') {
+    // Exactly the application's router: no candidate outside the policy, and
+    // none without its key and a priced model. Nothing is trusted, so only
+    // fictional data may be used (enforced by the fixed case source).
+    const routed = buildRoutedProvider({
+      policy: loadRoutingPolicy(process.env.LLM_ROUTING_POLICY_FILE),
+      snapshot: pricing,
+      env: process.env,
+      trustedProviders: [],
+      requestTimeoutMs: 30_000,
+      maxRetries: 1,
+      maxInputBytes: 48_000,
+    });
+    label = `routed (${routed.policy.version})`;
+    process.stdout.write(
+      `Routed candidates skipped at boot: ${
+        routed.skipped.map((s) => `${s.candidate} (${s.reason})`).join('; ') ||
+        'none'
+      }\n`,
+    );
+    build = (): LlmProvider => routed.provider;
+  } else if (providerKind === 'anthropic') {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey)
       throw new Error(
@@ -185,22 +238,50 @@ async function main(): Promise<void> {
   });
 
   const filter = process.env.LIVE_EVAL_FILTER;
-  const cases = loadCases(resolve(root, 'eval/cases')).filter(
-    (evalCase) => evalCase.live && (!filter || evalCase.id.includes(filter)),
+  const sample = process.env.LIVE_EVAL_SAMPLE
+    ? new Set(
+        (
+          JSON.parse(
+            readFileSync(resolve(root, process.env.LIVE_EVAL_SAMPLE), 'utf8'),
+          ) as { ids: string[] }
+        ).ids,
+      )
+    : undefined;
+  const cases = loadCases(resolve(root, 'eval/cases'))
+    .filter(
+      (evalCase) =>
+        evalCase.live &&
+        (!filter || evalCase.id.includes(filter)) &&
+        (!sample || sample.has(evalCase.id)),
+    )
+    .slice(0, maxCases);
+  process.stdout.write(
+    `Bounds: ${cases.length} cases, <= ${maxCalls} model calls (<= ${callsPerTurn}/case), <= ${maxRuntimeMs} ms, <= ${maxOutputTokens} output tokens per call.\n`,
   );
-  const { runs, spentNano } = await runEvaluation({
-    cases,
-    models,
-    budgetNano,
-    budgetTokens,
-    mode: 'live',
-    onCase: (model, outcome) =>
-      process.stdout.write(
-        `${outcome.passed ? 'PASS' : 'FAIL'} ${model.model} ${outcome.id}${
-          outcome.failures.length ? ` :: ${outcome.failures.join('; ')}` : ''
-        }\n`,
-      ),
-  });
+  const startedAt = Date.now();
+  const { runs, spentNano, spentTokens, calls, stoppedBy } =
+    await runEvaluation({
+      cases,
+      models,
+      budgetNano,
+      budgetTokens,
+      limits: {
+        maxOutputTokensPerCall: maxOutputTokens,
+        maxCallsPerTurn: callsPerTurn,
+      },
+      maxCalls,
+      maxRuntimeMs,
+      mode: 'live',
+      onCase: (model, outcome) =>
+        process.stdout.write(
+          `${outcome.passed ? 'PASS' : 'FAIL'} ${model.model} ${outcome.id}${
+            outcome.failures.length ? ` :: ${outcome.failures.join('; ')}` : ''
+          }${outcome.llmFailure ? ` [model failure: ${outcome.llmFailure}]` : ''}\n`,
+        ),
+    });
+  process.stdout.write(
+    `Run summary: ${calls} recorded model calls, ${spentTokens} tokens, ${Date.now() - startedAt} ms, measured cost ${spentNano} nano-USD, stopped by: ${stoppedBy ?? 'completion'}.\n`,
+  );
   const report = buildReport({ mode: 'live', runs, budgetNano, spentNano });
   const dir = resolve(root, process.env.LIVE_EVAL_REPORT_DIR ?? 'eval/reports');
   mkdirSync(dir, { recursive: true });

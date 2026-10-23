@@ -279,5 +279,35 @@
         "150"
       ]
     }
+  },
+  {
+    "id": "edu-en-g09",
+    "pack": "education",
+    "locale": "en",
+    "category": "explicit_request_unreadable",
+    "description": "A reply-language request does not rescue unreadable text: clarify, no facts",
+    "input": {
+      "text": "write in russian zxvb wkrt hjmn",
+      "slots": {
+        "subject": "IELTS"
+      }
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "search",
+        "language": "other",
+        "script": "other"
+      }
+    ],
+    "expect": {
+      "outcome": "CLARIFICATION_REQUIRED",
+      "safety": {
+        "status": "CLARIFICATION_REQUIRED",
+        "gate": "LANGUAGE"
+      },
+      "toolsOk": []
+    }
   }
 ]
