@@ -215,8 +215,8 @@
           "subject": "IELTS"
         },
         "intent": "search",
-        "language": "ru",
-        "script": "Cyrl"
+        "language": "uz",
+        "script": "Latn"
       },
       {
         "kind": "respond",

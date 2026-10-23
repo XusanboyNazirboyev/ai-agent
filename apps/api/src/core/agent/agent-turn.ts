@@ -201,9 +201,7 @@ export async function runAgentTurn(
     languagePolicy,
     input.supportedLocales,
   );
-  const spoken: typeof past = requested
-    ? { established: requested, pinned: requested, unclearStreak: 0 }
-    : past;
+  const spoken: typeof past = requested ? { ...past, pinned: requested } : past;
   const pin = requested ?? past.pinned;
   if (pin) localeId = pin;
   let modelLocale: LocaleId | undefined;

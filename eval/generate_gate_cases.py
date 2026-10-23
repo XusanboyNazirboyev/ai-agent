@@ -98,7 +98,7 @@ for loc, t in T.items():
         input={'slots': {'subject': 'IELTS'}})
     tl, ts, tloc = t['target']
     add('explicit_language_request', 'An explicit request for another language outranks detection', t['req'],
-        [ex({'subject': 'IELTS'}, 'search', tl, ts), {'kind': 'respond', 'text': t['target_reply']}],
+        [ex({'subject': 'IELTS'}, 'search', lang, script), {'kind': 'respond', 'text': t['target_reply']}],
         {'locale': tloc, 'outcome': 'ANSWERED', 'replyScript': ts},
         input={'conversationLocale': loc})
     add('listed_price_blocked', 'A listed price is blocked when a live quote exists; the safe regeneration is shown', t['price'],

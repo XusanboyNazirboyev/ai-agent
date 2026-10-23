@@ -193,9 +193,9 @@ export function languageHistory(
     if (entry.role !== 'customer') continue;
     const asked = requestedLocale(entry.text, registry, supported);
     if (asked) {
+      // Which language to ANSWER in. It says nothing about which language
+      // the customer's own text is in, so it does not establish anything.
       pinned = asked;
-      established = asked;
-      unclearStreak = 0;
       continue;
     }
     const assessment = assessLanguage(entry.text, registry, policy);
@@ -267,8 +267,31 @@ export function decideBeforeFacts(
     assessment.localeId === replyLocale
   )
     return { action: 'PROCEED' };
-  if (history.established === replyLocale || history.pinned === replyLocale)
-    return { action: 'PROCEED' };
+  if (history.pinned === replyLocale) {
+    // The reply language was requested, so it proves nothing about the
+    // customer's own text. That text must be understood on its own evidence:
+    // clear now, clear earlier, or independently named by the model while
+    // the heuristic does not contradict it.
+    const clearNow =
+      assessment.confidenceClass === 'HIGH' &&
+      assessment.localeId !== undefined;
+    const corroborated =
+      modelLocale !== undefined &&
+      policy.modelCorroboration[registry.get(modelLocale).status] &&
+      assessment.ambiguity !== 'MIXED_SCRIPT' &&
+      (assessment.localeId === undefined ||
+        assessment.localeId === modelLocale);
+    if (clearNow || history.established !== undefined || corroborated)
+      return { action: 'PROCEED' };
+    return unclearDecision(
+      history,
+      policy,
+      assessment.ambiguity === 'NONE'
+        ? ['LOW_CONFIDENCE', assessment.confidenceClass]
+        : [assessment.ambiguity],
+    );
+  }
+  if (history.established === replyLocale) return { action: 'PROCEED' };
   if (
     modelLocale === replyLocale &&
     policy.modelCorroboration[registry.get(replyLocale).status] &&

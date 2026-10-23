@@ -413,4 +413,65 @@ describe('explicit language requests', () => {
     expect(result.locale).toBe('ru');
     expect(result.outcome).toBe('ANSWERED');
   });
+
+  it('does not let the requested reply language stand in for understanding the message', async () => {
+    // A request-only history establishes no source language.
+    expect(
+      languageHistory(
+        [{ role: 'customer', text: 'Please reply in Russian' }],
+        LOCALES,
+      ),
+    ).toEqual({ established: undefined, unclearStreak: 0, pinned: 'ru' });
+
+    const slots = { subject: { value: 'IELTS', source: 'customer' as const } };
+    // Unreadable text plus a request: still no facts, and no model call.
+    const arabic = new ScriptedLlmProvider([]);
+    const a = await runTurn({
+      provider: arabic,
+      text: `reply in russian ${ARABIC}`,
+      input: { slots },
+    });
+    expect(a.result.outcome).toBe('CLARIFICATION_REQUIRED');
+    expect(arabic.calls).toHaveLength(0);
+
+    // Unrecognisable Latin text, model gives no usable language: clarify.
+    const noise = new ScriptedLlmProvider([
+      extraction({}, 'search', 'other', 'other'),
+    ]);
+    const b = await runTurn({
+      provider: noise,
+      text: 'reply in russian zxvb wkrt hjmn',
+      input: { slots },
+    });
+    expect(b.result).toMatchObject({
+      outcome: 'CLARIFICATION_REQUIRED',
+      locale: 'ru',
+      safety: { gate: 'LANGUAGE' },
+    });
+    expect(b.result.tools).toEqual([]);
+    expect(b.result.facts).toEqual([]);
+
+    // The same request with a message understood on its own proceeds.
+    const clear = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'Вам подойдёт курс {{F1}}.' },
+    ]);
+    const c = await runTurn({
+      provider: clear,
+      text: 'Hello, I need an IELTS course, please reply in Russian',
+    });
+    expect(c.result).toMatchObject({ outcome: 'ANSWERED', locale: 'ru' });
+
+    // Conflicting requests are no request: normal detection applies.
+    const conflict = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'The {{F1}} course is a good fit for you.' },
+    ]);
+    const d = await runTurn({
+      provider: conflict,
+      text: 'Hello, I need an IELTS course, write in english or write in russian',
+      input: { conversationLocale: 'en' },
+    });
+    expect(d.result.locale).toBe('en');
+  });
 });
