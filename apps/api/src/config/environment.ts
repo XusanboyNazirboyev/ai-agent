@@ -194,6 +194,17 @@ const environmentSchema = postgresEnvironmentSchema
       .min(10_000)
       .max(900_000)
       .default(120_000),
+    /** Minutes a handover may wait for an operator before the SLA alert. */
+    HANDOVER_SLA_MINUTES: z.coerce.number().int().min(1).max(1_440).default(10),
+    /** How often overdue handovers and failed lead syncs are scanned. */
+    HANDOVER_SCAN_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(3_600)
+      .default(30),
+    /** Earlier no-progress turns before the STUCK handover (spec §7.4). */
+    STUCK_REPEAT_LIMIT: z.coerce.number().int().min(1).max(5).default(2),
   })
   .superRefine((environment, context) => {
     if (
