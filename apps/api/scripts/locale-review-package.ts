@@ -33,6 +33,10 @@ const CONTEXT: Record<string, string> = {
     'Truthful answer when the customer asks whether they talk to a bot.',
   operatorDelayNotice:
     'Sent once when no operator picked up the handover in time; must not promise a time or a reply.',
+  followUp:
+    'One gentle reminder to a customer who went silent; no facts or promises; says how to stop (/stop).',
+  optOutConfirmation:
+    'Confirms that reminders will stop after the customer sent /stop.',
   phoneRequest:
     'One polite request for a phone number after value was delivered; sent at most once per conversation.',
 };
