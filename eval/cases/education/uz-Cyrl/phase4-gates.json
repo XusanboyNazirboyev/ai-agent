@@ -1,0 +1,283 @@
+[
+  {
+    "id": "edu-uz-cyrl-g01",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "multi_slot",
+    "description": "Several slots in one message are all captured and the search starts at once",
+    "input": {
+      "text": "Салом, менга онлайн IELTS курси керак, бошланғич даража"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS",
+          "level": "beginner",
+          "format": "online"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Сизга {{F1}} курси мос келади."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Cyrl",
+      "outcome": "ANSWERED",
+      "slots": {
+        "subject": "IELTS",
+        "level": "beginner",
+        "format": "online"
+      },
+      "replyScript": "Cyrl"
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g02",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "slot_correction",
+    "description": "A correction replaces the earlier value and keeps the other confirmed slots",
+    "input": {
+      "text": "Йўқ, офлайн бўлсин, онлайн эмас",
+      "conversationLocale": "uz-Cyrl",
+      "history": [
+        {
+          "role": "customer",
+          "text": "Салом, менга IELTS курси керак, онлайн бўлсин"
+        }
+      ],
+      "slots": {
+        "subject": "IELTS",
+        "format": "online"
+      }
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "format": "offline"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Сизга {{F1}} курси мос келади."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Cyrl",
+      "slots": {
+        "subject": "IELTS",
+        "format": "offline"
+      }
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g03",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "budget_slot",
+    "description": "A stated budget is stored as a qualifying slot, never as a price",
+    "input": {
+      "text": "IELTS курси керак, бюджетим 1000000 сўм"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS",
+          "budget": "1000000"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Сизга {{F1}} курси мос келади."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Cyrl",
+      "outcome": "ANSWERED",
+      "slots": {
+        "subject": "IELTS",
+        "budget": 1000000
+      }
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g04",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "language_unsupported_script",
+    "description": "Unsupported script: clarification before any model call",
+    "input": {
+      "text": "مرحبا كم سعر الدورة",
+      "conversationLocale": "uz-Cyrl"
+    },
+    "scripted": [],
+    "expect": {
+      "outcome": "CLARIFICATION_REQUIRED",
+      "safety": {
+        "status": "CLARIFICATION_REQUIRED",
+        "gate": "LANGUAGE"
+      },
+      "providerCalls": 0,
+      "toolsOk": [],
+      "locale": "uz-Cyrl"
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g05",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "language_repeated_unclear",
+    "description": "Second unclear turn escalates as LOW_LANG_CONFIDENCE without claiming an operator",
+    "input": {
+      "text": "你好课程多少钱",
+      "conversationLocale": "uz-Cyrl",
+      "history": [
+        {
+          "role": "customer",
+          "text": "مرحبا كم سعر الدورة"
+        },
+        {
+          "role": "agent",
+          "text": "clarification"
+        }
+      ]
+    },
+    "scripted": [],
+    "expect": {
+      "outcome": "HANDOVER",
+      "handover": "LOW_LANG_CONFIDENCE",
+      "safety": {
+        "status": "ESCALATION_REQUIRED",
+        "gate": "LANGUAGE",
+        "escalation": "LOW_LANG_CONFIDENCE"
+      },
+      "providerCalls": 0,
+      "locale": "uz-Cyrl"
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g06",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "language_low_confidence",
+    "description": "No usable language evidence and no model corroboration: clarify before facts",
+    "input": {
+      "text": "IELTS",
+      "slots": {
+        "subject": "IELTS"
+      }
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "search",
+        "language": "other",
+        "script": "other"
+      }
+    ],
+    "expect": {
+      "outcome": "CLARIFICATION_REQUIRED",
+      "safety": {
+        "status": "CLARIFICATION_REQUIRED",
+        "gate": "LANGUAGE"
+      },
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g07",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "explicit_language_request",
+    "description": "An explicit request for another language outranks detection",
+    "input": {
+      "text": "IELTS керак, русча ёзинг",
+      "conversationLocale": "uz-Cyrl"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "search",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Вам подойдёт курс {{F1}}."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "outcome": "ANSWERED",
+      "replyScript": "Cyrl"
+    }
+  },
+  {
+    "id": "edu-uz-cyrl-g08",
+    "pack": "education",
+    "locale": "uz-Cyrl",
+    "category": "listed_price_blocked",
+    "description": "A listed price is blocked when a live quote exists; the safe regeneration is shown",
+    "input": {
+      "text": "IELTS курси нархи қанча?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "price",
+        "language": "uz",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "toolCalls": [
+          {
+            "name": "list_offers",
+            "input": {
+              "itemId": "mock-education:edu-ielts-001"
+            }
+          }
+        ]
+      },
+      {
+        "kind": "respond",
+        "text": "Сизга {{F1}} {{F3}} курси мос келади."
+      },
+      {
+        "kind": "respond",
+        "text": "{{F1}} курси бўйича нархни оператор тасдиқлайди."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Cyrl",
+      "outcome": "ANSWERED",
+      "safety": {
+        "status": "BLOCKED",
+        "gate": "DISPLAY"
+      },
+      "replyExcludes": [
+        "150"
+      ]
+    }
+  }
+]

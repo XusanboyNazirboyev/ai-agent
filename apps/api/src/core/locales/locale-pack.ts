@@ -85,6 +85,13 @@ export interface LocalePack {
    * extras, guarantees); matched case-insensitively in model-written text.
    */
   readonly forbiddenClaimStems: readonly string[];
+  /**
+   * Imperative phrases, in any supported language, with which a customer asks
+   * to be answered in THIS locale ("write in Russian"). Deliberately not bare
+   * language names, which can also be a subject of the conversation. Matched
+   * case-insensitively after apostrophe unification.
+   */
+  readonly languageRequestPhrases: readonly string[];
 }
 
 export class LocaleRegistry {

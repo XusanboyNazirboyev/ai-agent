@@ -1,6 +1,6 @@
 # Phase 4 compliance matrix
 
-Status as of 2026-10-24, branch `feat/agent-telegram-integration`.
+Status as of 2026-10-24, branch `feat/agent-telegram-integration`; rows marked Stage C or Phase 4 completion were updated on branch `phase4/agent-core-completion` (see [PROGRESS.md](PROGRESS.md)).
 
 Sources:
 - `AGENTS.md` v3 (§7.3 guardrails, §15 Phase 4 acceptance).
@@ -41,7 +41,7 @@ No status depends on a live model run: no API key was available, so live quality
 | Code-rendered values | IMPLEMENTED | `{{F<n>}}` references rendered by `FactStore.render` / `checkDraft`. Tests: `agent-components.spec.ts` › "renders referenced facts with locale formatting", "formats money exactly without rounding" | — |
 | Outcome types FOUND / NOT_FOUND / STALE / UNAVAILABLE / INVALID_RESPONSE | IMPLEMENTED | `core/agent/tools.ts` (`ToolOutcomeType`, plus REJECTED for server-refused calls). Tests: `agent-policy.spec.ts` › "reports typed outcomes with redacted input", "marks expired offers STALE and issues no price fact for them"; eval categories `stale_offer`, `price_not_in_catalog`, `unavailable_offer` (`toolOutcomes`) | — |
 | Stale facts never shown as current | IMPLEMENTED | Expired offers yield no facts. A quote or availability past `validUntil` gives `STALE`, and a stale reference gives `STALE_FACT`. Tests: same as above; `agent-components.spec.ts` guardrail cases | — |
-| Live revalidation before display | PARTIAL | Agent tools always call the tenant connector live; the synced catalog copy is never used for replies. `get_quote` and `check_availability` are live calls, and quoted prices carry `confirmedQuote: true`. | A listed price (`confirmedQuote: false`) can still be shown; only a prompt rule asks for `get_quote`. Next: a guardrail rule requiring a confirmed quote for price facts when the connector has `liveQuote`. **Phase 5.** |
+| Live revalidation before display | IMPLEMENTED (Stage C) | Agent tools call the tenant connector live. `core/agent/display-gate.ts` rejects a listed price or availability when the connector can quote/check live (`FACT_NOT_LIVE`), expired or soon-to-expire evidence, and evidence from another tenant, conversation or offer. Tests: `display-gate.spec.ts`; eval category `listed_price_blocked` | Policy is derived from connector capabilities ([ADR 013](adr/013-stage-c-safety-gates.md)). |
 | Quote snapshot | PARTIAL | Each turn stores the facts it used, with full provenance, in `AgentTurn.facts`. Test: `telegram-agent.integration.spec.ts` › "stores the draft and the turn record but never sends" | A `Quote` row with `shownInMessageId` is not written: it needs a connector offer mapped to a synced `Offer` row (FK). **Phase 5**, with leads and bookings. |
 
 ## Addendum §3.3: tool authorization and untrusted data
@@ -86,7 +86,7 @@ No status depends on a live model run: no API key was available, so live quality
 | Language/script detection; transliteration and normalized search | IMPLEMENTED | `agent-components.spec.ts` |
 | Locale packs uz-Latn, uz-Cyrl, ru, en; first pack (education) | IMPLEMENTED (beta) | `locales/locale-packs.ts`, `packs/education/education.pack.ts` |
 | Cost-bounded and safe in a real channel without blocking the database | IMPLEMENTED (4B) | `telegram-agent.integration.spec.ts` › "holds no transaction, lock or pooled connection while the model runs" and the concurrency block |
-| Scripted dialogs in each launch language produce correct, fact-grounded replies in the right script | PARTIAL | 138 deterministic cases pass (`agent-eval.spec.ts`: 50 uz-Latn, 50 uz-Cyrl, 19 ru, 19 en). These test control logic with scripted model outputs; real model quality needs the live eval (`pnpm --filter @agentcore/api eval:live`), which has not been run. |
+| Scripted dialogs in each launch language produce correct, fact-grounded replies in the right script | PARTIAL | 170 deterministic cases pass (`agent-eval.spec.ts`: 58 uz-Latn, 58 uz-Cyrl, 27 ru, 27 en), including the gate cases of `eval/generate_gate_cases.py`. These test control logic with scripted model outputs; real model quality needs the live eval (`pnpm --filter @agentcore/api eval:live`), which has not been run. |
 
 ## Not verified
 

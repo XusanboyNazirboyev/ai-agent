@@ -167,6 +167,20 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
       },
     },
     {
+      key: 'budget',
+      type: 'integer',
+      description:
+        "Budget the customer states for tuition, as a whole number of UZS (so'm / сум). Null when no budget or another currency is stated. Used only to qualify; it is never a price.",
+      min: 1,
+      max: 1_000_000_000,
+      questions: {
+        'uz-Latn': "Taxminan qancha byudjet ajratmoqchisiz (so'mda)?",
+        'uz-Cyrl': 'Тахминан қанча бюджет ажратмоқчисиз (сўмда)?',
+        ru: 'На какой бюджет вы ориентируетесь (в сумах)?',
+        en: 'What budget do you have in mind (in UZS)?',
+      },
+    },
+    {
       key: 'goal',
       type: 'text',
       description:

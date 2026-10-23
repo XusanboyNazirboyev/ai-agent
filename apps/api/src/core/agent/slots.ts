@@ -109,8 +109,10 @@ export function normalizeSlot(
     return { kind: 'invalid' };
   }
   if (slot.type === 'integer') {
-    if (!/^\d{1,3}$/.test(text)) return { kind: 'invalid' };
-    const value = Number(text);
+    // Digit groups may be separated by spaces ("1 000 000"); nothing else.
+    const digits = text.replace(/[\s\u00a0\u202f]/gu, '');
+    if (!/^\d{1,12}$/u.test(digits)) return { kind: 'invalid' };
+    const value = Number(digits);
     if (
       (slot.min !== undefined && value < slot.min) ||
       (slot.max !== undefined && value > slot.max)

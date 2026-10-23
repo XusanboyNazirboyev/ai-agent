@@ -74,6 +74,17 @@ export const EvalCaseSchema = z
       .object({
         text: z.string(),
         conversationLocale: z.enum(LOCALES).optional(),
+        /** Earlier messages of the conversation (oldest first). */
+        history: z
+          .array(
+            z
+              .object({
+                role: z.enum(['customer', 'agent']),
+                text: z.string(),
+              })
+              .strict(),
+          )
+          .optional(),
         slots: z
           .record(z.string(), z.union([z.string(), z.number()]))
           .default({}),
@@ -104,8 +115,20 @@ export const EvalCaseSchema = z
             'NO_RESULTS',
             'HANDOVER',
             'FALLBACK',
+            'CLARIFICATION_REQUIRED',
           ])
           .optional(),
+        /** Typed outcome of a safety gate (Stage C). */
+        safety: z
+          .object({
+            status: z.string(),
+            gate: z.string(),
+            escalation: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+        /** Exact number of model calls (scripted runs; 0 = pre-model stop). */
+        providerCalls: z.number().int().min(0).optional(),
         locale: z.enum(LOCALES).optional(),
         askedSlot: z.string().optional(),
         handover: z.string().nullable().optional(),
@@ -296,6 +319,11 @@ export interface EvalOutcome {
   readonly structuredOk: boolean;
   /** Unsourced digits in the final reply (must be 0). */
   readonly hardFactViolations: number;
+  /** Expected slots of the case, and how many ended with the expected value. */
+  readonly slotsExpected: number;
+  readonly slotsMatched: number;
+  /** Tool rounds the turn used (bounded by the budget). */
+  readonly toolRounds: number;
   /** Fact-related guardrail violations caught in drafts (never shipped). */
   readonly blockedFactViolations: number;
   readonly budgetStopped: boolean;
@@ -358,6 +386,26 @@ export function scoreCase(
     check(
       result.slots[key]?.value === value,
       `slot ${key}=${String(result.slots[key]?.value)} != ${value}`,
+    );
+  }
+  if (e.safety) {
+    const safety = result.safety;
+    check(
+      safety?.status === e.safety.status && safety?.gate === e.safety.gate,
+      `safety ${safety?.status}/${safety?.gate} != ${e.safety.status}/${e.safety.gate}`,
+    );
+    if (e.safety.escalation) {
+      check(
+        safety?.escalation?.reason === e.safety.escalation &&
+          safety.escalation.operatorNotified === false,
+        `escalation ${safety?.escalation?.reason} != ${e.safety.escalation}`,
+      );
+    }
+  }
+  if (e.providerCalls !== undefined && mode === 'scripted') {
+    check(
+      run.usage.length === e.providerCalls,
+      `provider calls ${run.usage.length} != ${e.providerCalls}`,
     );
   }
   let scriptOk: boolean | undefined;
@@ -450,6 +498,11 @@ export function scoreCase(
       result.extractionFailure === undefined ||
       !['malformed', 'truncated', 'refusal'].includes(result.extractionFailure),
     hardFactViolations: invented.length,
+    slotsExpected: Object.keys(e.slots ?? {}).length,
+    slotsMatched: Object.entries(e.slots ?? {}).filter(
+      ([key, value]) => result.slots[key]?.value === value,
+    ).length,
+    toolRounds: result.budget.toolRounds,
     blockedFactViolations: result.violations.filter((v) =>
       FACT_VIOLATIONS.has(v),
     ).length,
@@ -522,14 +575,16 @@ export async function runCase(
     input: {
       conversationLocale: evalCase.input.conversationLocale,
       slots,
-      history: evalCase.input.conversationLocale
-        ? [
-            {
-              role: 'customer' as const,
-              text: ESTABLISHING_MESSAGES[evalCase.input.conversationLocale],
-            },
-          ]
-        : [],
+      history: evalCase.input.history
+        ? evalCase.input.history
+        : evalCase.input.conversationLocale
+          ? [
+              {
+                role: 'customer' as const,
+                text: ESTABLISHING_MESSAGES[evalCase.input.conversationLocale],
+              },
+            ]
+          : [],
     },
   });
   return scoreCase(

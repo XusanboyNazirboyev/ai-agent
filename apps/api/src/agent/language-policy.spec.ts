@@ -5,6 +5,7 @@ import {
   decideBeforeFacts,
   decideBeforeModel,
   languageHistory,
+  requestedLocale,
   type LanguageHistory,
 } from '../core/agent/language-policy.js';
 import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
@@ -344,5 +345,72 @@ describe('language gate in a turn', () => {
       input: { slots: { subject: { value: 'IELTS', source: 'customer' } } },
     });
     expect(foreign.result.outcome).toBe('CLARIFICATION_REQUIRED');
+  });
+});
+
+describe('explicit language requests', () => {
+  const all = ['uz-Latn', 'uz-Cyrl', 'ru', 'en'] as const;
+  it.each([
+    ['Iltimos rus tilida yozing', 'ru'],
+    ['Напишите на английском, пожалуйста', 'en'],
+    ['Please reply in Russian', 'ru'],
+    ['O‘zbekcha yozing', 'uz-Latn'],
+    ['ўзбекча ёзинг', 'uz-Cyrl'],
+    ['kirilchada yozing', 'uz-Cyrl'],
+  ])('reads %j as a request for %s', (text, locale) => {
+    expect(requestedLocale(text, LOCALES, all)).toBe(locale);
+  });
+
+  it.each([
+    ['I want an English course'],
+    ['Курс на русском языке есть?'],
+    ['IELTS kerak'],
+    ['write in english or write in russian'],
+  ])('does not treat %j as a request (subject or ambiguous)', (text) => {
+    expect(requestedLocale(text, LOCALES, all)).toBeUndefined();
+  });
+
+  it('ignores locales the tenant does not support', () => {
+    expect(
+      requestedLocale('reply in english', LOCALES, ['ru']),
+    ).toBeUndefined();
+  });
+
+  it('pins the requested locale in the history until another request', () => {
+    const asked = languageHistory(
+      [
+        { role: 'customer', text: 'Please reply in Russian' },
+        { role: 'customer', text: 'Salom, menga kurs kerak' },
+      ],
+      LOCALES,
+    );
+    expect(asked.pinned).toBe('ru');
+    const changed = languageHistory(
+      [
+        { role: 'customer', text: 'Please reply in Russian' },
+        { role: 'customer', text: 'write in english' },
+      ],
+      LOCALES,
+    );
+    expect(changed.pinned).toBe('en');
+  });
+
+  it('keeps a pinned locale for later messages in a turn', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),
+      { kind: 'tools', text: 'Вам подойдёт курс {{F1}}.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'Salom, menga IELTS kursi kerak',
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [
+          { role: 'customer', text: 'Пожалуйста, напишите на русском' },
+        ],
+      },
+    });
+    expect(result.locale).toBe('ru');
+    expect(result.outcome).toBe('ANSWERED');
   });
 });

@@ -317,3 +317,21 @@ describe('locale packs', () => {
     ).toBe('1 500 000 сўм');
   });
 });
+
+describe('integer slots', () => {
+  const budget = EDUCATION_PACK.slots.find((slot) => slot.key === 'budget')!;
+  const age = EDUCATION_PACK.slots.find((slot) => slot.key === 'studentAge')!;
+  it('accepts grouped digits and still enforces the pack range', () => {
+    const merge = (
+      slot: typeof budget,
+      value: string,
+    ): ReturnType<typeof mergeSlots> =>
+      mergeSlots(EDUCATION_PACK, {}, { [slot.key]: value });
+    expect(merge(budget, '1 000 000').state.budget?.value).toBe(1_000_000);
+    expect(merge(budget, '1000000').invalid).toEqual([]);
+    expect(merge(age, '16').state.studentAge?.value).toBe(16);
+    expect(merge(age, '150').invalid).toEqual(['studentAge']);
+    expect(merge(budget, '12abc').invalid).toEqual(['budget']);
+    expect(merge(budget, '1.5').invalid).toEqual(['budget']);
+  });
+});

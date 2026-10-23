@@ -48,6 +48,10 @@ export interface ModelReport {
   readonly blockedFactViolations: number;
   readonly handoverCorrectness: Rate;
   readonly languageScriptMatch: Rate;
+  /** Expected slots that ended with the expected value, over all cases. */
+  readonly slotExtractionAccuracy: Rate;
+  /** Mean tool rounds per turn. */
+  readonly avgToolRounds: number;
   readonly latencyMs: { readonly p50: number; readonly p95: number };
   readonly inputTokens: number;
   readonly outputTokens: number;
@@ -165,6 +169,15 @@ export function modelReport(run: ModelRun): ModelReport {
     ),
     handoverCorrectness: rate(o.map((x) => x.handoverOk)),
     languageScriptMatch: rate(o.map((x) => x.localeOk && (x.scriptOk ?? true))),
+    slotExtractionAccuracy: {
+      passed: o.reduce((sum, x) => sum + x.slotsMatched, 0),
+      total: o.reduce((sum, x) => sum + x.slotsExpected, 0),
+    },
+    avgToolRounds:
+      Math.round(
+        (1000 * o.reduce((sum, x) => sum + x.toolRounds, 0)) /
+          Math.max(1, o.length),
+      ) / 1000,
     latencyMs: {
       p50: percentile(
         o.map((x) => x.latencyMs),
@@ -209,11 +222,11 @@ export function renderMarkdown(report: EvaluationReport): string {
     '',
     `Generated ${report.generatedAt}. Budget $${report.budgetUsd}, spent $${report.spentUsd}.`,
     '',
-    '| Provider | Model | Cases | Not run | Pass | Tool calls valid | Structured valid | Hard-fact violations shipped | Fact drafts blocked | Handover correct | Language/script | p50 ms | p95 ms | Cost USD |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| Provider | Model | Cases | Not run | Pass | Tool calls valid | Structured valid | Hard-fact violations shipped | Fact drafts blocked | Handover correct | Language/script | Slot accuracy | Tool rounds (avg) | p50 ms | p95 ms | Cost USD |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...report.models.map(
       (m) =>
-        `| ${m.provider} | ${m.model} | ${m.cases} | ${m.notRun} | ${pct(m.passRate)} | ${pct(m.toolCallValidity)} | ${pct(m.structuredOutputValidity)} | ${m.hardFactViolations} | ${m.blockedFactViolations} | ${pct(m.handoverCorrectness)} | ${pct(m.languageScriptMatch)} | ${m.latencyMs.p50} | ${m.latencyMs.p95} | ${m.costUsd} |`,
+        `| ${m.provider} | ${m.model} | ${m.cases} | ${m.notRun} | ${pct(m.passRate)} | ${pct(m.toolCallValidity)} | ${pct(m.structuredOutputValidity)} | ${m.hardFactViolations} | ${m.blockedFactViolations} | ${pct(m.handoverCorrectness)} | ${pct(m.languageScriptMatch)} | ${pct(m.slotExtractionAccuracy)} | ${m.avgToolRounds} | ${m.latencyMs.p50} | ${m.latencyMs.p95} | ${m.costUsd} |`,
     ),
   ];
   for (const m of report.models) {

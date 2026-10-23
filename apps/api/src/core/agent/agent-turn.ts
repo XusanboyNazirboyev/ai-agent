@@ -28,6 +28,7 @@ import {
   decideBeforeFacts,
   decideBeforeModel,
   languageHistory,
+  requestedLocale,
   type LanguageAssessment,
   type LanguageDecision,
   type LanguagePolicy,
@@ -187,7 +188,24 @@ export async function runAgentTurn(
     locales,
     languagePolicy,
   );
-  const spoken = languageHistory(input.history, locales, languagePolicy);
+  // An explicit request ("write in Russian") outranks detection, now and
+  // until the customer asks for another language.
+  const requested = requestedLocale(
+    input.customerText,
+    locales,
+    input.supportedLocales,
+  );
+  const past = languageHistory(
+    input.history,
+    locales,
+    languagePolicy,
+    input.supportedLocales,
+  );
+  const spoken: typeof past = requested
+    ? { established: requested, pinned: requested, unclearStreak: 0 }
+    : past;
+  const pin = requested ?? past.pinned;
+  if (pin) localeId = pin;
   let modelLocale: LocaleId | undefined;
   let slots: SlotState = input.slots;
   let intent: Intent | undefined;
@@ -305,6 +323,7 @@ export async function runAgentTurn(
       if (lang !== 'other' && script !== 'other')
         modelLocale = locales.find(lang, script)?.id;
       if (
+        pin === undefined &&
         input.conversationLocale === undefined &&
         language.confidence < LOCALE_SWITCH_CONFIDENCE &&
         lang !== 'other' &&

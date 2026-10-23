@@ -1,0 +1,283 @@
+[
+  {
+    "id": "edu-ru-g01",
+    "pack": "education",
+    "locale": "ru",
+    "category": "multi_slot",
+    "description": "Several slots in one message are all captured and the search starts at once",
+    "input": {
+      "text": "Здравствуйте, мне нужен онлайн курс IELTS для начинающих"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS",
+          "level": "beginner",
+          "format": "online"
+        },
+        "intent": "search",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Вам подойдёт курс {{F1}}."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "outcome": "ANSWERED",
+      "slots": {
+        "subject": "IELTS",
+        "level": "beginner",
+        "format": "online"
+      },
+      "replyScript": "Cyrl"
+    }
+  },
+  {
+    "id": "edu-ru-g02",
+    "pack": "education",
+    "locale": "ru",
+    "category": "slot_correction",
+    "description": "A correction replaces the earlier value and keeps the other confirmed slots",
+    "input": {
+      "text": "Нет, лучше офлайн, не онлайн",
+      "conversationLocale": "ru",
+      "history": [
+        {
+          "role": "customer",
+          "text": "Здравствуйте, мне нужен курс IELTS, онлайн"
+        }
+      ],
+      "slots": {
+        "subject": "IELTS",
+        "format": "online"
+      }
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "format": "offline"
+        },
+        "intent": "search",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Вам подойдёт курс {{F1}}."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "slots": {
+        "subject": "IELTS",
+        "format": "offline"
+      }
+    }
+  },
+  {
+    "id": "edu-ru-g03",
+    "pack": "education",
+    "locale": "ru",
+    "category": "budget_slot",
+    "description": "A stated budget is stored as a qualifying slot, never as a price",
+    "input": {
+      "text": "Мне нужен курс IELTS, бюджет 1000000 сум"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS",
+          "budget": "1000000"
+        },
+        "intent": "search",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Вам подойдёт курс {{F1}}."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "outcome": "ANSWERED",
+      "slots": {
+        "subject": "IELTS",
+        "budget": 1000000
+      }
+    }
+  },
+  {
+    "id": "edu-ru-g04",
+    "pack": "education",
+    "locale": "ru",
+    "category": "language_unsupported_script",
+    "description": "Unsupported script: clarification before any model call",
+    "input": {
+      "text": "مرحبا كم سعر الدورة",
+      "conversationLocale": "ru"
+    },
+    "scripted": [],
+    "expect": {
+      "outcome": "CLARIFICATION_REQUIRED",
+      "safety": {
+        "status": "CLARIFICATION_REQUIRED",
+        "gate": "LANGUAGE"
+      },
+      "providerCalls": 0,
+      "toolsOk": [],
+      "locale": "ru"
+    }
+  },
+  {
+    "id": "edu-ru-g05",
+    "pack": "education",
+    "locale": "ru",
+    "category": "language_repeated_unclear",
+    "description": "Second unclear turn escalates as LOW_LANG_CONFIDENCE without claiming an operator",
+    "input": {
+      "text": "你好课程多少钱",
+      "conversationLocale": "ru",
+      "history": [
+        {
+          "role": "customer",
+          "text": "مرحبا كم سعر الدورة"
+        },
+        {
+          "role": "agent",
+          "text": "clarification"
+        }
+      ]
+    },
+    "scripted": [],
+    "expect": {
+      "outcome": "HANDOVER",
+      "handover": "LOW_LANG_CONFIDENCE",
+      "safety": {
+        "status": "ESCALATION_REQUIRED",
+        "gate": "LANGUAGE",
+        "escalation": "LOW_LANG_CONFIDENCE"
+      },
+      "providerCalls": 0,
+      "locale": "ru"
+    }
+  },
+  {
+    "id": "edu-ru-g06",
+    "pack": "education",
+    "locale": "ru",
+    "category": "language_low_confidence",
+    "description": "No usable language evidence and no model corroboration: clarify before facts",
+    "input": {
+      "text": "IELTS",
+      "slots": {
+        "subject": "IELTS"
+      }
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "search",
+        "language": "other",
+        "script": "other"
+      }
+    ],
+    "expect": {
+      "outcome": "CLARIFICATION_REQUIRED",
+      "safety": {
+        "status": "CLARIFICATION_REQUIRED",
+        "gate": "LANGUAGE"
+      },
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-ru-g07",
+    "pack": "education",
+    "locale": "ru",
+    "category": "explicit_language_request",
+    "description": "An explicit request for another language outranks detection",
+    "input": {
+      "text": "Мне нужен IELTS, напишите на английском",
+      "conversationLocale": "ru"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "search",
+        "language": "en",
+        "script": "Latn"
+      },
+      {
+        "kind": "respond",
+        "text": "The {{F1}} course is a good fit for you."
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "outcome": "ANSWERED",
+      "replyScript": "Latn"
+    }
+  },
+  {
+    "id": "edu-ru-g08",
+    "pack": "education",
+    "locale": "ru",
+    "category": "listed_price_blocked",
+    "description": "A listed price is blocked when a live quote exists; the safe regeneration is shown",
+    "input": {
+      "text": "Сколько стоит курс IELTS?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "price",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "toolCalls": [
+          {
+            "name": "list_offers",
+            "input": {
+              "itemId": "mock-education:edu-ielts-001"
+            }
+          }
+        ]
+      },
+      {
+        "kind": "respond",
+        "text": "Вам подойдёт курс {{F1}} {{F3}}."
+      },
+      {
+        "kind": "respond",
+        "text": "Цену по курсу {{F1}} подтвердит оператор."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "outcome": "ANSWERED",
+      "safety": {
+        "status": "BLOCKED",
+        "gate": "DISPLAY"
+      },
+      "replyExcludes": [
+        "150"
+      ]
+    }
+  }
+]

@@ -3,6 +3,7 @@ import type {
   LocaleRegistry,
   LocaleStatus,
 } from '../locales/locale-pack.js';
+import { unifyApostrophes } from '@agentcore/shared';
 import { detectLanguage } from './language.js';
 import type { HistoryEntry } from './prompts.js';
 
@@ -125,7 +126,35 @@ export function assessLanguage(
   };
 }
 
+/**
+ * Locale a message explicitly asks to be answered in, from the locale
+ * packs' request phrases. Two different matches are ambiguous: no request.
+ */
+export function requestedLocale(
+  text: string,
+  registry: LocaleRegistry,
+  supported: readonly LocaleId[],
+): LocaleId | undefined {
+  const haystack = unifyApostrophes(text).toLowerCase();
+  const matches = new Set<LocaleId>();
+  for (const pack of registry.all()) {
+    if (!supported.includes(pack.id)) continue;
+    if (
+      pack.languageRequestPhrases.some((phrase) =>
+        haystack.includes(unifyApostrophes(phrase).toLowerCase()),
+      )
+    )
+      matches.add(pack.id);
+  }
+  return matches.size === 1 ? [...matches][0] : undefined;
+}
+
 export interface LanguageHistory {
+  /**
+   * Locale the customer asked for explicitly. It outranks detection until
+   * they ask for another one.
+   */
+  readonly pinned?: LocaleId;
   /** Locale the customer clearly wrote in earlier (latest such message). */
   readonly established: LocaleId | undefined;
   /** Trailing customer turns that were unclear. */
@@ -155,11 +184,20 @@ export function languageHistory(
   history: readonly HistoryEntry[],
   registry: LocaleRegistry,
   policy: LanguagePolicy = DEFAULT_LANGUAGE_POLICY,
+  supported: readonly LocaleId[] = registry.all().map((pack) => pack.id),
 ): LanguageHistory {
   let established: LocaleId | undefined;
+  let pinned: LocaleId | undefined;
   let unclearStreak = 0;
   for (const entry of history) {
     if (entry.role !== 'customer') continue;
+    const asked = requestedLocale(entry.text, registry, supported);
+    if (asked) {
+      pinned = asked;
+      established = asked;
+      unclearStreak = 0;
+      continue;
+    }
     const assessment = assessLanguage(entry.text, registry, policy);
     if (assessment.confidenceClass === 'HIGH' && assessment.localeId) {
       established = assessment.localeId;
@@ -168,7 +206,7 @@ export function languageHistory(
       unclearStreak += 1;
     }
   }
-  return { established, unclearStreak };
+  return { established, unclearStreak, ...(pinned ? { pinned } : {}) };
 }
 
 export type LanguageDecision =
@@ -229,7 +267,8 @@ export function decideBeforeFacts(
     assessment.localeId === replyLocale
   )
     return { action: 'PROCEED' };
-  if (history.established === replyLocale) return { action: 'PROCEED' };
+  if (history.established === replyLocale || history.pinned === replyLocale)
+    return { action: 'PROCEED' };
   if (
     modelLocale === replyLocale &&
     policy.modelCorroboration[registry.get(replyLocale).status] &&

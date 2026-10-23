@@ -91,6 +91,14 @@ export const UZ_LATN: LocalePack = {
       UNKNOWN: 'aniqlanmagan',
     },
   },
+  languageRequestPhrases: [
+    "o'zbekcha yozing",
+    "o'zbek tilida yozing",
+    "o'zbekcha javob bering",
+    'lotin alifbosida yozing',
+    'lotinchada yozing',
+    'напишите латиницей',
+  ],
   forbiddenClaimStems: forbiddenUz,
 };
 
@@ -153,6 +161,15 @@ export const UZ_CYRL: LocalePack = {
       UNKNOWN: 'аниқланмаган',
     },
   },
+  languageRequestPhrases: [
+    'ўзбекча ёзинг',
+    'ўзбек тилида ёзинг',
+    'ўзбекча жавоб беринг',
+    'кирилл алифбосида ёзинг',
+    'kirilchada yozing',
+    'kirill alifbosida yozing',
+    'напишите кириллицей',
+  ],
   forbiddenClaimStems: forbiddenUzCyrl,
 };
 
@@ -215,6 +232,21 @@ export const RU: LocalePack = {
       UNKNOWN: 'не определено',
     },
   },
+  languageRequestPhrases: [
+    'по-русски',
+    'напишите на русском',
+    'пишите на русском',
+    'отвечайте по-русски',
+    'rus tilida yozing',
+    'ruscha yozing',
+    'rus tilida javob bering',
+    'русча ёзинг',
+    'русчада ёзинг',
+    'write in russian',
+    'reply in russian',
+    'answer in russian',
+    'in russian please',
+  ],
   forbiddenClaimStems: ['скидк', 'гарант', 'бесплатн', 'акци', 'подар'],
 };
 
@@ -276,6 +308,19 @@ export const EN: LocalePack = {
       UNKNOWN: 'unknown',
     },
   },
+  languageRequestPhrases: [
+    'write in english',
+    'reply in english',
+    'answer in english',
+    'in english please',
+    'inglizcha yozing',
+    'ingliz tilida yozing',
+    'inglizcha javob bering',
+    'инглизча ёзинг',
+    'напишите на английском',
+    'пишите на английском',
+    'отвечайте по-английски',
+  ],
   forbiddenClaimStems: [
     'discount',
     'guarantee',

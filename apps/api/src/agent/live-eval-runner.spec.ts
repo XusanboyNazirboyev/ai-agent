@@ -20,6 +20,32 @@ const scripted = (model: string): EvaluatedModel => ({
 });
 
 describe('evaluation runner (scripted model only)', () => {
+  it('reports slot extraction accuracy, tool rounds and the markdown columns', async () => {
+    const subset = cases.filter(
+      (c) => c.locale === 'en' && c.id.startsWith('edu-en-g'),
+    );
+    expect(subset.length).toBeGreaterThanOrEqual(8);
+    const { runs, spentNano } = await runEvaluation({
+      cases: subset,
+      models: [scripted('model-a')],
+      budgetNano: usdToNano('1'),
+      mode: 'scripted',
+    });
+    const report = buildReport({
+      mode: 'scripted',
+      runs,
+      budgetNano: usdToNano('1'),
+      spentNano,
+    });
+    const [m] = report.models;
+    expect(m.slotExtractionAccuracy.total).toBeGreaterThan(0);
+    expect(m.slotExtractionAccuracy.passed).toBe(
+      m.slotExtractionAccuracy.total,
+    );
+    expect(m.avgToolRounds).toBeGreaterThan(0);
+    expect(renderMarkdown(report)).toContain('Slot accuracy');
+  });
+
   it('compares models on the same cases and reports every metric', async () => {
     const subset = cases.filter((c) => c.locale === 'uz-Latn');
     const { runs, spentNano } = await runEvaluation({
@@ -110,6 +136,7 @@ describe('evaluation through the OpenAI-compatible adapter (fixtures)', () => {
                       'level',
                       'preferredTime',
                       'studentAge',
+                      'budget',
                       'goal',
                     ].map((key) => [key, null]),
                   ),
