@@ -171,6 +171,7 @@ model Tenant {
 
   connectors      TenantConnector[]
   catalogSyncRuns CatalogSyncRun[]
+  llmUsage        LlmUsageRecord[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
   contacts        Contact[]
@@ -241,6 +242,45 @@ model CatalogSyncRun {
   @@index([tenantId, tenantConnectorId, startedAt])
   @@index([status, heartbeatAt])
   @@map("catalog_sync_runs")
+}
+
+/// One provider request made by the agent, for cost accounting. Holds token
+/// counts and cost only: no prompts, responses or customer text. Idempotent
+/// on the provider response id, so re-recording a response cannot double
+/// count; a retried turn makes new (billed) requests with new ids. There is
+/// deliberately no FK to conversations, so cost history survives a privacy
+/// deletion of conversation content.
+model LlmUsageRecord {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  conversationId     String?  @map("conversation_id") @db.Uuid
+  turnKey            String   @map("turn_key") @db.VarChar(200)
+  callIndex          Int      @map("call_index")
+  purpose            String   @db.VarChar(20)
+  tier               String   @db.VarChar(10)
+  provider           String   @db.VarChar(40)
+  model              String   @db.VarChar(100)
+  responseId         String   @map("response_id") @db.VarChar(200)
+  inputTokens        Int      @map("input_tokens")
+  outputTokens       Int      @map("output_tokens")
+  cacheReadTokens    Int      @map("cache_read_tokens")
+  cacheWrite5mTokens Int      @map("cache_write_5m_tokens")
+  cacheWrite1hTokens Int      @map("cache_write_1h_tokens")
+  reasoningTokens    Int?     @map("reasoning_tokens")
+  costNano           BigInt   @map("cost_nano_usd")
+  reservedNano       BigInt   @map("reserved_nano_usd")
+  pricingVersion     String   @map("pricing_version") @db.VarChar(64)
+  durationMs         Int      @map("duration_ms")
+  attempts           Int
+  outcome            String   @db.VarChar(40)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, provider, responseId])
+  @@index([tenantId, conversationId])
+  @@index([tenantId, createdAt])
+  @@map("llm_usage_records")
 }
 
 model ChannelAccount {

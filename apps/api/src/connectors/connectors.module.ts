@@ -57,7 +57,12 @@ export function createConnectorRegistry(
         }),
     },
   ],
-  exports: [ConnectorRegistry, CatalogSyncQueueRuntime, CatalogSyncStore],
+  exports: [
+    ConnectorRegistry,
+    CatalogSyncQueueRuntime,
+    CatalogSyncStore,
+    TenantConnectorLoader,
+  ],
 })
 export class ConnectorsModule implements OnModuleDestroy {
   constructor(private readonly registry: ConnectorRegistry) {}

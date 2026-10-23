@@ -107,6 +107,55 @@ describe('validateEnvironment', () => {
     }
   });
 
+  it('defaults to the offline mock LLM with bounded provisional limits', () => {
+    expect(validateEnvironment(postgresEnvironment)).toMatchObject({
+      LLM_PROVIDER: 'mock',
+      LLM_FAST_MODEL: 'claude-haiku-5-5',
+      LLM_STRONG_MODEL: 'claude-haiku-5-5',
+      LLM_MAX_OUTPUT_TOKENS: 1_024,
+      LLM_MAX_CALLS_PER_TURN: 6,
+      LLM_MAX_TOOL_ROUNDS: 3,
+      LLM_TURN_BUDGET_USD: '0.02',
+      LLM_CONVERSATION_BUDGET_USD: '0.25',
+    });
+  });
+
+  it('fails fast on an unusable LLM configuration', () => {
+    expect(() =>
+      validateEnvironment({
+        ...postgresEnvironment,
+        LLM_PROVIDER: 'anthropic',
+      }),
+    ).toThrow(/ANTHROPIC_API_KEY is required/);
+    expect(() =>
+      validateEnvironment({
+        ...postgresEnvironment,
+        LLM_PROVIDER: 'anthropic',
+        ANTHROPIC_API_KEY: 'test-only',
+        LLM_FAST_MODEL: 'claude-unpriced-model',
+      }),
+    ).toThrow(/no price/);
+    for (const [key, value] of [
+      ['LLM_TURN_BUDGET_USD', '0'],
+      ['LLM_TURN_BUDGET_USD', '1e-3'],
+      ['LLM_CONVERSATION_BUDGET_USD', '0.01'],
+      ['LLM_MAX_TOOL_ROUNDS', '50'],
+      ['LLM_PRICING_VERSION', 'made-up'],
+      ['LLM_PROVIDER', 'openai'],
+    ]) {
+      expect(() =>
+        validateEnvironment({ ...postgresEnvironment, [key]: value }),
+      ).toThrow();
+    }
+    expect(
+      validateEnvironment({
+        ...postgresEnvironment,
+        LLM_PROVIDER: 'anthropic',
+        ANTHROPIC_API_KEY: 'test-only',
+      }).LLM_PROVIDER,
+    ).toBe('anthropic');
+  });
+
   it('reports missing PostgreSQL settings without printing secrets', () => {
     expect(() => validateEnvironment({})).toThrow(/POSTGRES_HOST/);
     expect(() =>

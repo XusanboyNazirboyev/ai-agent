@@ -1,0 +1,136 @@
+import { z } from 'zod';
+import {
+  DomainPackKeySchema,
+  ItemTypeSchema,
+  LocaleIdSchema,
+  PackVersionSchema,
+  SlotKeySchema,
+} from './persistence-schemas';
+
+/**
+ * Domain Pack contract (AGENTS.md §5.1): everything vertical-specific the
+ * generic agent core needs, as validated data. The core never contains
+ * domain words; it reads slots, questions, tool permissions and prompt
+ * fragments from here.
+ */
+
+/** Generic tools the core can expose; a pack enables a subset. */
+export const AGENT_TOOL_NAMES = [
+  'search_catalog',
+  'get_item_details',
+  'list_offers',
+  'check_availability',
+  'get_quote',
+] as const;
+export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
+
+const SlotValueOptionSchema = z
+  .object({
+    value: z.string().min(1).max(60),
+    /** Spellings customers use, in any script; matched script-insensitively. */
+    synonyms: z.array(z.string().min(1).max(60)).default([]),
+  })
+  .strict();
+
+/** How a slot narrows a catalog search; absent means it does not filter. */
+const SearchFilterSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('title') }).strict(),
+  z
+    .object({
+      kind: z.literal('attribute'),
+      attribute: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/),
+    })
+    .strict(),
+]);
+
+export const SlotDefinitionSchema = z
+  .object({
+    key: SlotKeySchema,
+    type: z.enum(['text', 'enum', 'integer']),
+    /** Extraction guidance for the model (what the slot means, examples). */
+    description: z.string().min(1).max(400),
+    options: z.array(SlotValueOptionSchema).optional(),
+    min: z.number().int().optional(),
+    max: z.number().int().optional(),
+    maxLength: z.number().int().min(1).max(200).default(80),
+    /** Stages that cannot proceed without this slot. */
+    requiredFor: z.array(z.enum(['search', 'quote'])).default([]),
+    searchFilter: SearchFilterSchema.optional(),
+    /** One clarifying question per locale, asked when the slot is missing. */
+    questions: z.record(LocaleIdSchema, z.string().min(1).max(300)),
+  })
+  .strict();
+
+export const DomainPackSchema = z
+  .object({
+    key: DomainPackKeySchema,
+    version: PackVersionSchema,
+    /** Canonical item type the pack sells (matches connector catalogItemType). */
+    catalogItemType: ItemTypeSchema,
+    locales: z.array(LocaleIdSchema).min(1),
+    /** Ordered: the first missing required slot is the next question. */
+    slots: z.array(SlotDefinitionSchema).min(1),
+    tools: z.array(z.enum(AGENT_TOOL_NAMES)).min(1),
+    maxOptionsShown: z.number().int().min(1).max(5).default(3),
+    prompt: z
+      .object({
+        businessRole: z.string().min(1).max(400),
+        rules: z.array(z.string().min(1).max(300)).max(20).default([]),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((pack, context) => {
+    const keys = new Set<string>();
+    pack.slots.forEach((slot, index) => {
+      const at = ['slots', index];
+      if (keys.has(slot.key)) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'key'],
+          message: 'duplicate slot key',
+        });
+      }
+      keys.add(slot.key);
+      if (slot.type === 'enum' && !slot.options?.length) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'options'],
+          message: 'enum slots need options',
+        });
+      }
+      if (slot.type !== 'enum' && slot.options) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'options'],
+          message: 'only enum slots take options',
+        });
+      }
+      for (const locale of pack.locales) {
+        if (!slot.questions[locale]) {
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'questions', locale],
+            message: `missing question for pack locale ${locale}`,
+          });
+        }
+      }
+    });
+    if (!pack.slots.some((slot) => slot.requiredFor.includes('search'))) {
+      context.addIssue({
+        code: 'custom',
+        path: ['slots'],
+        message: 'at least one slot must be required for search',
+      });
+    }
+    if (!pack.tools.includes('search_catalog')) {
+      context.addIssue({
+        code: 'custom',
+        path: ['tools'],
+        message: 'search_catalog is required',
+      });
+    }
+  });
+
+export type SlotDefinition = z.infer<typeof SlotDefinitionSchema>;
+export type DomainPack = z.infer<typeof DomainPackSchema>;
