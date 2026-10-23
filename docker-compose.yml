@@ -2,9 +2,9 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: agentcore
-      POSTGRES_PASSWORD: agentcore
-      POSTGRES_DB: agentcore
+      POSTGRES_USER: ${POSTGRES_USER:-agentcore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentcore}
+      POSTGRES_DB: ${POSTGRES_DATABASE:-agentcore}
     ports:
       - "5432:5432"
     healthcheck:

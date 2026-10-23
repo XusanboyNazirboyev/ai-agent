@@ -1,4 +1,5 @@
 dist
 coverage
 node_modules
+apps/api/src/generated/prisma
 pnpm-lock.yaml

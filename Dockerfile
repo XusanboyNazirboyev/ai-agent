@@ -1,4 +1,4 @@
-FROM node:26-alpine
+FROM node:24-alpine
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -12,6 +12,7 @@ COPY packages/config/package.json packages/config/package.json
 COPY packages/shared/package.json packages/shared/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
+RUN pnpm db:generate
 
 EXPOSE 4000
 CMD ["pnpm", "dev"]

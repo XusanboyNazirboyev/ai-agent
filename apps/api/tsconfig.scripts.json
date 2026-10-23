@@ -1,0 +1,13 @@
+{
+  "extends": "../../packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "prisma/**/*.ts",
+    "prisma.config.ts",
+    "scripts/**/*.ts",
+    "vitest*.mts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

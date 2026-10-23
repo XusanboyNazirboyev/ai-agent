@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.33.3",
   "engines": {
-    "node": ">=20.19.0",
+    "node": "^20.19.0 || ^22.12.0 || ^24.0.0",
     "pnpm": ">=10"
   },
   "scripts": {
@@ -14,8 +14,16 @@
     "format": "pnpm --filter @agentcore/api format && pnpm --filter @agentcore/shared format",
     "format:check": "pnpm --filter @agentcore/api format:check && pnpm --filter @agentcore/shared format:check",
     "typecheck": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api typecheck",
-    "test": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test",
-    "test:coverage": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:coverage"
+    "test": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit",
+    "test:unit": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit",
+    "test:integration": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:integration",
+    "test:coverage": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:coverage",
+    "db:generate": "pnpm --filter @agentcore/api db:generate",
+    "db:migrate": "pnpm --filter @agentcore/api db:migrate",
+    "db:seed": "pnpm --filter @agentcore/api db:seed",
+    "db:test:prepare": "pnpm --filter @agentcore/api db:test:prepare",
+    "db:test:seed": "pnpm --filter @agentcore/api db:test:seed",
+    "db:test:drift": "pnpm --filter @agentcore/api db:test:drift"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -27,5 +35,13 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.46.4",
     "vitest": "^4.1.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

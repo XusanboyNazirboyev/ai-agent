@@ -1,0 +1,647 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum ConnectorStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum CatalogSyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  BLOCKED
+}
+
+enum ChannelAccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum OperatorRole {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+enum ConsentStatus {
+  UNKNOWN
+  GRANTED
+  REVOKED
+}
+
+enum ConversationState {
+  BOT_ACTIVE
+  WAITING_OPERATOR
+  OPERATOR_ACTIVE
+  CLOSED
+}
+
+enum MessageAuthorType {
+  CUSTOMER
+  BOT
+  OPERATOR
+  SYSTEM
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+}
+
+enum DeliveryState {
+  PENDING
+  SENT
+  FAILED
+  UNKNOWN
+}
+
+enum CatalogItemStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+enum PricingBasis {
+  PER_PERSON
+  PER_NIGHT
+  PER_UNIT
+  TOTAL
+  UNSPECIFIED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  LIMITED
+  SOLD_OUT
+  UNKNOWN
+}
+
+enum LeadScore {
+  HOT
+  WARM
+  COLD
+}
+
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  WON
+  LOST
+}
+
+enum CrmSyncStatus {
+  NOT_REQUIRED
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum HandoverStatus {
+  OPEN
+  TAKEN
+  RESOLVED
+  CANCELLED
+}
+
+enum BookingStatus {
+  REQUESTED
+  CONFIRMED
+  CANCELLED
+  FAILED
+}
+
+enum InboundEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum AuditActorType {
+  SYSTEM
+  CUSTOMER
+  OPERATOR
+  ADMIN
+}
+
+model Tenant {
+  id                 String       @id @default(uuid(7)) @db.Uuid
+  slug               String       @unique @db.VarChar(80)
+  name               String       @db.VarChar(200)
+  status             TenantStatus @default(ACTIVE)
+  defaultLocale      String       @map("default_locale") @db.VarChar(32)
+  supportedLocales   String[]     @map("supported_locales")
+  timezone           String       @db.VarChar(64)
+  packKey            String       @map("pack_key") @db.VarChar(100)
+  packVersion        String       @map("pack_version") @db.VarChar(64)
+  enabledCapabilities String[]    @default([]) @map("enabled_capabilities")
+  retentionSettings Json         @default("{}") @map("retention_settings") @db.JsonB
+  config             Json         @default("{}") @db.JsonB
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  connectors      TenantConnector[]
+  catalogSyncRuns CatalogSyncRun[]
+  channelAccounts ChannelAccount[]
+  operators       Operator[]
+  contacts        Contact[]
+  conversations  Conversation[]
+  messages        Message[]
+  conversationSlots ConversationSlots[]
+  catalogItems    CatalogItem[]
+  offers          Offer[]
+  aliases         CatalogAlias[]
+  quotes          Quote[]
+  leads           Lead[]
+  handovers       Handover[]
+  bookings        Booking[]
+  inboundEvents   InboundEvent[]
+  outboxEvents    OutboxEvent[]
+  auditEvents     AuditEvent[]
+
+  @@map("tenants")
+}
+
+model TenantConnector {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  connectorKey  String          @map("connector_key") @db.VarChar(100)
+  status        ConnectorStatus @default(DISABLED)
+  config        Json            @default("{}") @db.JsonB
+  capabilities  String[]        @default([])
+  secretRef     String?         @map("secret_ref") @db.VarChar(500)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncRuns      CatalogSyncRun[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, connectorKey])
+  @@index([tenantId, status])
+  @@map("tenant_connectors")
+}
+
+/// One catalog synchronisation attempt for a tenant connector. A partial
+/// unique index (migration SQL) allows at most one RUNNING run per connector;
+/// a run whose heartbeat goes stale is recovered as FAILED.
+model CatalogSyncRun {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  tenantConnectorId String            @map("tenant_connector_id") @db.Uuid
+  status            CatalogSyncStatus @default(RUNNING)
+  sourceSystem      String?           @map("source_system") @db.VarChar(100)
+  startedAt         DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
+  heartbeatAt       DateTime          @default(now()) @map("heartbeat_at") @db.Timestamptz(6)
+  finishedAt        DateTime?         @map("finished_at") @db.Timestamptz(6)
+  itemsSeen         Int               @default(0) @map("items_seen")
+  itemsUpserted     Int               @default(0) @map("items_upserted")
+  itemsUnchanged    Int               @default(0) @map("items_unchanged")
+  itemsDeactivated  Int               @default(0) @map("items_deactivated")
+  offersSeen        Int               @default(0) @map("offers_seen")
+  offersUpserted    Int               @default(0) @map("offers_upserted")
+  offersUnchanged   Int               @default(0) @map("offers_unchanged")
+  offersDeactivated Int               @default(0) @map("offers_deactivated")
+  errorCode         String?           @map("error_code") @db.VarChar(100)
+  errorCategory     String?           @map("error_category") @db.VarChar(40)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connector         TenantConnector   @relation(fields: [tenantId, tenantConnectorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, tenantConnectorId, startedAt])
+  @@index([status, heartbeatAt])
+  @@map("catalog_sync_runs")
+}
+
+model ChannelAccount {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  channelType       String              @map("channel_type") @db.VarChar(40)
+  externalAccountId String              @map("external_account_id") @db.VarChar(200)
+  status            ChannelAccountStatus @default(DISABLED)
+  credentialRef     String?             @map("credential_ref") @db.VarChar(500)
+  webhookSecretRef  String?             @map("webhook_secret_ref") @db.VarChar(500)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contacts     Contact[]
+  conversations Conversation[]
+  messages     Message[]
+  inboundEvents InboundEvent[]
+
+  @@unique([tenantId, id])
+  // Provider routing resolves the tenant from this globally unique account key.
+  @@unique([channelType, externalAccountId])
+  @@index([tenantId, status])
+  @@map("channel_accounts")
+}
+
+model Operator {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  displayName String       @map("display_name") @db.VarChar(160)
+  role        OperatorRole @default(OPERATOR)
+  telegramUserId String?   @map("telegram_user_id") @db.VarChar(100)
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  assignedConversations Conversation[] @relation("AssignedOperator")
+  assignedHandovers     Handover[]     @relation("AssignedHandoverOperator")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, telegramUserId])
+  @@index([tenantId, isActive])
+  @@map("operators")
+}
+
+model Contact {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  tenantId          String        @map("tenant_id") @db.Uuid
+  channelAccountId  String        @map("channel_account_id") @db.Uuid
+  providerUserId    String        @map("provider_user_id") @db.VarChar(200)
+  name              String?       @db.VarChar(200)
+  phone             String?       @db.VarChar(40)
+  language          String?       @db.VarChar(16)
+  script            String?       @db.VarChar(16)
+  consentStatus     ConsentStatus @default(UNKNOWN) @map("consent_status")
+  consentAt         DateTime?     @map("consent_at") @db.Timestamptz(6)
+  marketingOptOut   Boolean       @default(false) @map("marketing_opt_out")
+  deletedAt         DateTime?     @map("deleted_at") @db.Timestamptz(6)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount    ChannelAccount @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  conversations Conversation[]
+  leads         Lead[]
+  bookings      Booking[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, providerUserId])
+  @@index([tenantId, phone])
+  @@map("contacts")
+}
+
+model Conversation {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  tenantId            String           @map("tenant_id") @db.Uuid
+  channelAccountId    String           @map("channel_account_id") @db.Uuid
+  contactId           String           @map("contact_id") @db.Uuid
+  providerChatId      String           @map("provider_chat_id") @db.VarChar(200)
+  state               ConversationState @default(BOT_ACTIVE)
+  version             Int              @default(1)
+  assignedOperatorId  String?          @map("assigned_operator_id") @db.Uuid
+  language            String?          @db.VarChar(16)
+  script              String?          @db.VarChar(16)
+  lastInboundAt       DateTime?        @map("last_inbound_at") @db.Timestamptz(6)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant              Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount      ChannelAccount   @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+  contact             Contact          @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
+  assignedOperator    Operator?        @relation("AssignedOperator", fields: [tenantId, assignedOperatorId], references: [tenantId, id], onDelete: Restrict)
+
+  messages Message[]
+  slots    ConversationSlots[]
+  quotes   Quote[]
+  leads    Lead[]
+  handovers Handover[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, providerChatId])
+  @@index([tenantId, state, updatedAt])
+  @@index([tenantId, contactId])
+  @@index([tenantId, assignedOperatorId])
+  @@map("conversations")
+}
+
+model Message {
+  id                   String           @id @default(uuid(7)) @db.Uuid
+  tenantId             String           @map("tenant_id") @db.Uuid
+  conversationId       String           @map("conversation_id") @db.Uuid
+  channelAccountId     String           @map("channel_account_id") @db.Uuid
+  authorType           MessageAuthorType @map("author_type")
+  direction            MessageDirection
+  type                 MessageType       @default(TEXT)
+  text                 String            @db.Text
+  sequence             Int
+  providerChatId       String            @map("provider_chat_id") @db.VarChar(200)
+  providerMessageId    String?           @map("provider_message_id") @db.VarChar(200)
+  deliveryState        DeliveryState     @default(UNKNOWN) @map("delivery_state")
+  deliveryAttempts     Int               @default(0) @map("delivery_attempts")
+  deliveryErrorCode    String?           @map("delivery_error_code") @db.VarChar(100)
+  sendIdempotencyKey   String?           @map("send_idempotency_key") @db.VarChar(200)
+  detectedLanguage     String?           @map("detected_language") @db.VarChar(16)
+  detectedScript       String?           @map("detected_script") @db.VarChar(16)
+  languageConfidence   Decimal?          @map("language_confidence") @db.Decimal(4, 3)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation         Conversation       @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  channelAccount       ChannelAccount     @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  shownQuotes Quote[] @relation("QuoteShownInMessage")
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, conversationId, sequence])
+  @@index([tenantId, conversationId, createdAt])
+  @@index([tenantId, channelAccountId, providerMessageId])
+  @@index([tenantId, sendIdempotencyKey])
+  @@map("messages")
+}
+
+model ConversationSlots {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  version        Int
+  slots          Json         @db.JsonB
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, conversationId, version])
+  @@index([tenantId, conversationId])
+  @@map("conversation_slots")
+}
+
+model CatalogItem {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  tenantId         String           @map("tenant_id") @db.Uuid
+  sourceSystem     String           @map("source_system") @db.VarChar(100)
+  sourceEntityId   String           @map("source_entity_id") @db.VarChar(200)
+  itemType         String           @map("item_type") @db.VarChar(100)
+  title            String           @db.VarChar(500)
+  normalizedTitle  String           @map("normalized_title") @db.VarChar(600)
+  normalizerVersion Int             @default(1) @map("normalizer_version")
+  description      String?          @db.Text
+  attributes       Json             @default("{\"fields\":{}}") @db.JsonB
+  syncedAt         DateTime         @map("synced_at") @db.Timestamptz(6)
+  sourceHash       String           @map("source_hash") @db.VarChar(128)
+  status           CatalogItemStatus @default(ACTIVE)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  offers  Offer[]
+  aliases CatalogAlias[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, sourceSystem, sourceEntityId])
+  @@index([tenantId, status, normalizedTitle])
+  @@map("catalog_items")
+}
+
+model Offer {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  itemId            String             @map("item_id") @db.Uuid
+  sourceSystem      String             @map("source_system") @db.VarChar(100)
+  sourceEntityId    String             @map("source_entity_id") @db.VarChar(200)
+  price             Decimal?           @db.Decimal(20, 6)
+  currency          String?            @db.Char(3)
+  pricingBasis      PricingBasis        @default(UNSPECIFIED) @map("pricing_basis")
+  taxesIncluded     Boolean?           @map("taxes_included")
+  feesIncluded      Boolean?           @map("fees_included")
+  availabilityStatus AvailabilityStatus @default(UNKNOWN) @map("availability_status")
+  seatsLeft         Int?               @map("seats_left")
+  startsAt          DateTime?          @map("starts_at") @db.Timestamptz(6)
+  endsAt            DateTime?          @map("ends_at") @db.Timestamptz(6)
+  validFrom         DateTime?          @map("valid_from") @db.Timestamptz(6)
+  validUntil        DateTime?          @map("valid_until") @db.Timestamptz(6)
+  attributes        Json               @default("{\"fields\":{}}") @db.JsonB
+  syncedAt          DateTime           @map("synced_at") @db.Timestamptz(6)
+  sourceHash        String             @map("source_hash") @db.VarChar(128)
+  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item              CatalogItem        @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Cascade)
+
+  quotes   Quote[]
+  bookings Booking[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, sourceSystem, sourceEntityId])
+  @@index([tenantId, itemId, availabilityStatus])
+  @@index([tenantId, validUntil])
+  @@map("offers")
+}
+
+model CatalogAlias {
+  id                String      @id @default(uuid(7)) @db.Uuid
+  tenantId          String      @map("tenant_id") @db.Uuid
+  itemId            String      @map("item_id") @db.Uuid
+  value             String      @db.VarChar(500)
+  normalizedValue   String      @map("normalized_value") @db.VarChar(600)
+  normalizerVersion Int         @default(1) @map("normalizer_version")
+  locale            String      @db.VarChar(32)
+  script            String      @db.VarChar(16)
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant            Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item              CatalogItem @relation(fields: [tenantId, itemId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, itemId, normalizedValue, locale, script])
+  @@index([tenantId, normalizedValue])
+  @@map("catalog_aliases")
+}
+
+model Quote {
+  id                String       @id @default(uuid(7)) @db.Uuid
+  tenantId          String       @map("tenant_id") @db.Uuid
+  offerId           String       @map("offer_id") @db.Uuid
+  conversationId    String       @map("conversation_id") @db.Uuid
+  amount            Decimal      @db.Decimal(20, 6)
+  currency          String       @db.Char(3)
+  pricingBasis      PricingBasis @map("pricing_basis")
+  breakdown         Json         @db.JsonB
+  sourceSystem      String       @map("source_system") @db.VarChar(100)
+  sourceEntityId    String       @map("source_entity_id") @db.VarChar(200)
+  retrievedAt       DateTime     @map("retrieved_at") @db.Timestamptz(6)
+  validUntil        DateTime?    @map("valid_until") @db.Timestamptz(6)
+  snapshot          Json         @db.JsonB
+  shownInMessageId  String?      @map("shown_in_message_id") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  offer             Offer        @relation(fields: [tenantId, offerId], references: [tenantId, id], onDelete: Restrict)
+  conversation      Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  shownInMessage    Message?     @relation("QuoteShownInMessage", fields: [tenantId, shownInMessageId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, conversationId, createdAt])
+  @@index([tenantId, validUntil])
+  @@index([tenantId, offerId])
+  @@map("quotes")
+}
+
+model Lead {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  tenantId        String       @map("tenant_id") @db.Uuid
+  contactId       String       @map("contact_id") @db.Uuid
+  conversationId  String       @map("conversation_id") @db.Uuid
+  score           LeadScore    @default(COLD)
+  reasonCodes     String[]     @default([]) @map("reason_codes")
+  summary         String       @db.Text
+  status          LeadStatus   @default(NEW)
+  crmSyncStatus   CrmSyncStatus @default(PENDING) @map("crm_sync_status")
+  crmLeadId       String?      @map("crm_lead_id") @db.VarChar(200)
+  attempts        Int          @default(0)
+  lastErrorCode   String?      @map("last_error_code") @db.VarChar(100)
+  idempotencyKey  String       @map("idempotency_key") @db.VarChar(200)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact         Contact      @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
+  conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, score])
+  @@index([tenantId, crmSyncStatus, updatedAt])
+  @@index([tenantId, contactId])
+  @@index([tenantId, conversationId])
+  @@map("leads")
+}
+
+model Handover {
+  id                 String         @id @default(uuid(7)) @db.Uuid
+  tenantId           String         @map("tenant_id") @db.Uuid
+  conversationId     String         @map("conversation_id") @db.Uuid
+  reasonCode         String         @map("reason_code") @db.VarChar(100)
+  status             HandoverStatus @default(OPEN)
+  summary            Json           @db.JsonB
+  assignedOperatorId String?        @map("assigned_operator_id") @db.Uuid
+  version            Int            @default(1)
+  openedAt           DateTime       @default(now()) @map("opened_at") @db.Timestamptz(6)
+  takenAt            DateTime?      @map("taken_at") @db.Timestamptz(6)
+  resolvedAt         DateTime?      @map("resolved_at") @db.Timestamptz(6)
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation       Conversation   @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  assignedOperator   Operator?      @relation("AssignedHandoverOperator", fields: [tenantId, assignedOperatorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, openedAt])
+  @@map("handovers")
+}
+
+model Booking {
+  id                   String        @id @default(uuid(7)) @db.Uuid
+  tenantId             String        @map("tenant_id") @db.Uuid
+  offerId              String        @map("offer_id") @db.Uuid
+  contactId            String        @map("contact_id") @db.Uuid
+  status               BookingStatus @default(REQUESTED)
+  confirmedSummaryHash String?       @map("confirmed_summary_hash") @db.VarChar(128)
+  confirmedAt          DateTime?     @map("confirmed_at") @db.Timestamptz(6)
+  idempotencyKey       String        @map("idempotency_key") @db.VarChar(200)
+  crmBookingId         String?       @map("crm_booking_id") @db.VarChar(200)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant               Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  offer                Offer         @relation(fields: [tenantId, offerId], references: [tenantId, id], onDelete: Restrict)
+  contact              Contact       @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, offerId])
+  @@index([tenantId, contactId])
+  @@map("bookings")
+}
+
+model InboundEvent {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  tenantId         String            @map("tenant_id") @db.Uuid
+  channelAccountId String            @map("channel_account_id") @db.Uuid
+  providerEventId  String            @map("provider_event_id") @db.VarChar(200)
+  redactedPayload  Json              @map("redacted_payload") @db.JsonB
+  status           InboundEventStatus @default(RECEIVED)
+  receivedAt       DateTime          @default(now()) @map("received_at") @db.Timestamptz(6)
+  processedAt      DateTime?         @map("processed_at") @db.Timestamptz(6)
+  expiresAt        DateTime?         @map("expires_at") @db.Timestamptz(6)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount   ChannelAccount    @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, providerEventId])
+  @@index([tenantId, status, receivedAt])
+  @@index([tenantId, channelAccountId, receivedAt])
+  @@index([tenantId, expiresAt])
+  @@map("inbound_events")
+}
+
+model OutboxEvent {
+  id            String           @id @default(uuid(7)) @db.Uuid
+  tenantId      String           @map("tenant_id") @db.Uuid
+  type          String           @db.VarChar(100)
+  aggregateType String           @map("aggregate_type") @db.VarChar(100)
+  aggregateId   String           @map("aggregate_id") @db.VarChar(200)
+  idempotencyKey String?         @map("idempotency_key") @db.VarChar(200)
+  payload       Json             @db.JsonB
+  status        OutboxEventStatus @default(PENDING)
+  attempts      Int              @default(0)
+  availableAt   DateTime         @default(now()) @map("available_at") @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status, availableAt])
+  @@index([tenantId, aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model AuditEvent {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  actorType       AuditActorType @map("actor_type")
+  actorId         String?        @map("actor_id") @db.VarChar(200)
+  action          String         @db.VarChar(120)
+  entityType      String         @map("entity_type") @db.VarChar(100)
+  entityId        String         @map("entity_id") @db.VarChar(200)
+  safeInputSummary Json           @default("{}") @map("safe_input_summary") @db.JsonB
+  idempotencyKey  String?        @map("idempotency_key") @db.VarChar(200)
+  correlationId   String?        @map("correlation_id") @db.VarChar(200)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("audit_events")
+}

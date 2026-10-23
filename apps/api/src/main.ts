@@ -1,8 +1,8 @@
 import { LoggerService } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { AppEnvironment } from './config/environment';
-import { AppModule } from './app.module';
+import type { AppEnvironment } from './config/environment.js';
+import { AppModule } from './app.module.js';
 
 type LogLevel = AppEnvironment['LOG_LEVEL'];
 

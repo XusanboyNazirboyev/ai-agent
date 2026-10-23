@@ -7,6 +7,43 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: agentcore
+          POSTGRES_PASSWORD: agentcore
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agentcore -d postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: agentcore
+      POSTGRES_USER: agentcore
+      POSTGRES_PASSWORD: agentcore
+      POSTGRES_SSL_MODE: disable
+      TEST_POSTGRES_HOST: localhost
+      TEST_POSTGRES_PORT: 5432
+      TEST_POSTGRES_DATABASE: agentcore_test
+      TEST_POSTGRES_USER: agentcore
+      TEST_POSTGRES_PASSWORD: agentcore
+      TEST_POSTGRES_SSL_MODE: disable
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -14,11 +51,18 @@ jobs:
           version: 10.33.3
       - uses: actions/setup-node@v4
         with:
-          node-version: 26
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm db:test:prepare
+      - run: pnpm db:test:seed
+      - run: pnpm db:test:seed
+      - run: pnpm db:test:drift
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm test:integration
       - run: pnpm test:coverage
       - run: pnpm format:check
       - run: pnpm build

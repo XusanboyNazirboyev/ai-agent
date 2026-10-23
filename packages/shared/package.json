@@ -15,5 +15,8 @@
     "lint": "eslint --config ../../apps/api/eslint.config.mjs \"src/**/*.ts\"",
     "format": "prettier --config ../config/prettier.json --write \"src/**/*.ts\"",
     "format:check": "prettier --config ../config/prettier.json --check \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

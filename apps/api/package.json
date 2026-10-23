@@ -2,21 +2,30 @@
   "name": "@agentcore/api",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Universal AI sales and support agent platform",
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
-    "lint": "eslint \"src/**/*.ts\"",
-    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.ts\"",
-    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.ts\"",
-    "typecheck": "tsc --noEmit -p tsconfig.build.json",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:watch": "vitest"
+    "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"src/generated/prisma/**\" \"prisma/**/*.ts\" \"scripts/**/*.ts\" \"vitest*.mts\"",
+    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.ts\" \"!src/generated/prisma/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\" \"vitest*.mts\"",
+    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.ts\" \"!src/generated/prisma/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\" \"vitest*.mts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json && tsc --noEmit -p tsconfig.scripts.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run --config vitest.unit.config.mts",
+    "test:unit": "vitest run --config vitest.unit.config.mts",
+    "test:integration": "tsx scripts/test-database.ts prepare && vitest run --config vitest.integration.config.mts",
+    "test:coverage": "vitest run --config vitest.unit.config.mts --coverage",
+    "test:watch": "vitest --config vitest.unit.config.mts",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "db:test:prepare": "tsx scripts/test-database.ts prepare",
+    "db:test:seed": "tsx scripts/test-database.ts seed",
+    "db:test:drift": "tsx scripts/test-database.ts drift"
   },
   "engines": {
-    "node": ">=20.19.0",
+    "node": "^20.19.0 || ^22.12.0 || ^24.0.0",
     "pnpm": ">=10"
   },
   "dependencies": {
@@ -25,16 +34,26 @@
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^12.2.0",
     "@nestjs/platform-express": "^12.2.0",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "bullmq": "^6.4.0",
+    "ioredis": "^6.0.0",
+    "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "undici": "^7.30.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@agentcore/config": "workspace:*",
     "@nestjs/cli": "^12.0.10",
     "@nestjs/schematics": "^12.0.10",
-    "@agentcore/config": "workspace:*",
     "@types/express": "^5.0.5",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "dotenv": "^18.0.8",
+    "prisma": "7.10.0",
     "ts-node": "^10.9.2",
-    "@types/node": "^26.6.5"
+    "tsx": "^4.23.15"
   }
 }
