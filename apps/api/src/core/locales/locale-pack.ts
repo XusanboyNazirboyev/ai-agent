@@ -34,6 +34,7 @@ export const HANDOVER_REASONS = [
   'CONNECTOR_UNAVAILABLE',
   'TOOL_LOOP_LIMIT',
   'LOW_LANG_CONFIDENCE',
+  'STUCK',
 ] as const;
 export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 
@@ -50,6 +51,16 @@ export interface LocaleTemplates {
    * could not identify, so it names every supported language.
    */
   readonly languageClarification: string;
+  /**
+   * Sent once when no operator has picked up a handover within the SLA and
+   * the operators were reached. It must not promise a time or a reply.
+   */
+  readonly operatorDelayNotice: string;
+  /**
+   * Asks for a phone number after value was delivered. Appended at most once
+   * per conversation; never contains digits or promises.
+   */
+  readonly phoneRequest: string;
   /** Truthful answer when the customer asks whether they talk to a bot. */
   readonly aiDisclosure: string;
   /**

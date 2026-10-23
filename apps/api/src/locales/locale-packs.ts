@@ -52,6 +52,10 @@ export const UZ_LATN: LocalePack = {
     notUnderstood: "Kechirasiz, javobingizni to'liq tushunmadim.",
     languageClarification:
       "Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.",
+    operatorDelayNotice:
+      "Xabaringiz jamoamizga yuborilgan, javob biroz kechikmoqda. Kutganingiz uchun uzr so'raymiz.",
+    phoneRequest:
+      "Xohlasangiz, jamoamiz siz bilan bog'lanishi uchun telefon raqamingizni yozib qoldiring.",
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -77,6 +81,8 @@ export const UZ_LATN: LocalePack = {
         'Tekshiruvni yakunlay olmadim. Xabaringiz jamoamiz uchun saqlandi.',
       LOW_LANG_CONFIDENCE:
         "Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.",
+      STUCK:
+        "Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.",
     },
     labels: {
       price: 'narxi',
@@ -122,6 +128,10 @@ export const UZ_CYRL: LocalePack = {
     notUnderstood: 'Кечирасиз, жавобингизни тўлиқ тушунмадим.',
     languageClarification:
       'Илтимос, ўзбек, рус ёки инглиз тилида ёзинг. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.',
+    operatorDelayNotice:
+      'Хабарингиз жамоамизга юборилган, жавоб бироз кечикмоқда. Кутганингиз учун узр сўраймиз.',
+    phoneRequest:
+      'Хоҳласангиз, жамоамиз сиз билан боғланиши учун телефон рақамингизни ёзиб қолдиринг.',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -147,6 +157,8 @@ export const UZ_CYRL: LocalePack = {
         'Текширувни якунлай олмадим. Хабарингиз жамоамиз учун сақланди.',
       LOW_LANG_CONFIDENCE:
         'Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.',
+      STUCK:
+        'Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.',
     },
     labels: {
       price: 'нархи',
@@ -194,6 +206,10 @@ export const RU: LocalePack = {
     notUnderstood: 'Извините, я не совсем понял ваш ответ.',
     languageClarification:
       "Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.",
+    operatorDelayNotice:
+      'Ваше сообщение передано команде, ответ немного задерживается. Спасибо, что ждёте.',
+    phoneRequest:
+      'Если хотите, оставьте номер телефона, чтобы команда могла с вами связаться.',
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -218,6 +234,8 @@ export const RU: LocalePack = {
         'Не удалось завершить проверку. Ваше сообщение сохранено для нашей команды.',
       LOW_LANG_CONFIDENCE:
         'Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.',
+      STUCK:
+        'Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.',
     },
     labels: {
       price: 'стоимость',
@@ -269,6 +287,10 @@ export const EN: LocalePack = {
     notUnderstood: "Sorry, I didn't quite understand your answer.",
     languageClarification:
       "Please write in Uzbek, Russian or English. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском.",
+    operatorDelayNotice:
+      'Your message has been passed to our team and the reply is taking longer than usual. Thank you for waiting.',
+    phoneRequest:
+      'If you like, leave a phone number so our team can contact you.',
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {
@@ -294,6 +316,8 @@ export const EN: LocalePack = {
         "I couldn't finish checking that. Your message has been recorded for our team.",
       LOW_LANG_CONFIDENCE:
         "Sorry, I'm not sure I understood you. Your message has been recorded for our team.",
+      STUCK:
+        'We seem to be going in circles. Your message has been saved for our team.',
     },
     labels: {
       price: 'price',

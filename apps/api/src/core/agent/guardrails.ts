@@ -36,6 +36,8 @@ export interface GuardrailResult {
   readonly violations: readonly GuardrailViolation[];
   /** The customer-facing text, present only when there are no violations. */
   readonly rendered?: string;
+  /** Fact ids referenced by the accepted draft (present with `rendered`). */
+  readonly references?: readonly string[];
 }
 
 const MAX_REPLY_CHARS = 1_500;
@@ -139,6 +141,7 @@ export function checkDraft(
   if (violations.size > 0) return { violations: [...violations] };
   return {
     violations: [],
+    references: [...new Set(references)],
     rendered: text.replace(
       FACT_REFERENCE,
       (_match, id: string) => rendered.get(id) ?? '',

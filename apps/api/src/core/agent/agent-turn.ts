@@ -1,4 +1,4 @@
-import type { DomainPack } from '@agentcore/shared';
+import { normalizeForMatching, type DomainPack } from '@agentcore/shared';
 import type { CrmConnector } from '../../connectors/interfaces/crm-connector.js';
 import {
   BudgetExhaustedError,
@@ -13,6 +13,13 @@ import type {
   LocalePack,
   LocaleRegistry,
 } from '../locales/locale-pack.js';
+import {
+  DEFAULT_STUCK_POLICY,
+  detectStuck,
+  textFingerprint,
+  type PriorTurnSignal,
+  type StuckPolicy,
+} from './stuck.js';
 import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
 import { FactStore, type Fact } from './facts.js';
 import { checkDraft, type GuardrailViolation } from './guardrails.js';
@@ -83,6 +90,19 @@ export interface AgentTurnInput {
   readonly supportedLocales: readonly LocaleId[];
   readonly defaultLocale: LocaleId;
   readonly timeZone: string;
+  /**
+   * Progress signals for the STUCK trigger and the contact request, supplied
+   * by the conversation layer from stored turns (oldest first).
+   */
+  readonly progress?: {
+    readonly priorTurns: readonly PriorTurnSignal[];
+    readonly stuck?: StuckPolicy;
+  };
+  /** What is known about the contact; absent = never ask for a phone. */
+  readonly contact?: {
+    readonly hasPhone: boolean;
+    readonly phoneRequested: boolean;
+  };
 }
 
 export interface AgentDependencies {
@@ -131,6 +151,14 @@ export interface AgentTurnResult {
   readonly tools: readonly ToolTraceEntry[];
   readonly language: LanguageDetection;
   readonly languageAssessment?: LanguageAssessment;
+  /** Why the STUCK trigger fired, when it did. */
+  readonly stuckReason?: string;
+  /** Fingerprint of the normalized customer text (no raw text kept). */
+  readonly textFingerprint: string;
+  /** Fact ids that appear in the final reply (offers-shown tracking). */
+  readonly shownFactIds: readonly string[];
+  /** True when this reply asked the customer for a phone number. */
+  readonly phoneRequested?: boolean;
   /** Typed outcome of a safety gate that blocked, clarified or escalated. */
   readonly safety?: SafetyOutcome;
   /** Provider error code when the turn ended because a model call failed. */
@@ -221,7 +249,8 @@ export async function runAgentTurn(
     : undefined;
 
   const locale = (): LocalePack => locales.get(localeId);
-  const finish = (
+  const fingerprint = textFingerprint(normalizeForMatching(input.customerText));
+  const build = (
     reply: string,
     outcome: TurnOutcome,
     extra: Partial<AgentTurnResult> = {},
@@ -240,8 +269,44 @@ export async function runAgentTurn(
     tools: tools?.trace ?? [],
     language,
     languageAssessment,
+    textFingerprint: fingerprint,
+    shownFactIds: [],
     ...extra,
   });
+  const finish = (
+    reply: string,
+    outcome: TurnOutcome,
+    extra: Partial<AgentTurnResult> = {},
+  ): AgentTurnResult => {
+    // STUCK: the same lack of progress for `repeatLimit` earlier turns ends in
+    // a typed handover instead of asking or answering the same thing again.
+    const stuck = input.progress
+      ? detectStuck(
+          input.progress.priorTurns,
+          {
+            outcome,
+            askedSlot: extra.askedSlot,
+            slotsFilled: Object.keys(extra.slots ?? slots).length,
+            textFingerprint: fingerprint,
+          },
+          input.progress.stuck ?? DEFAULT_STUCK_POLICY,
+        )
+      : undefined;
+    if (stuck) {
+      return build(locale().templates.handover.STUCK, 'HANDOVER', {
+        handover: 'STUCK',
+        stuckReason: stuck,
+        slots: extra.slots ?? slots,
+        safety: {
+          status: 'ESCALATION_REQUIRED',
+          gate: 'PROGRESS',
+          reasonCodes: [stuck],
+          escalation: { reason: 'STUCK', operatorNotified: false },
+        },
+      });
+    }
+    return build(reply, outcome, extra);
+  };
   const handover = (
     reason: HandoverReason,
     extra: Partial<AgentTurnResult> = {},
@@ -542,18 +607,33 @@ export async function runAgentTurn(
       },
     });
   }
-  return finish(checked.rendered, 'ANSWERED', {
-    regenerated,
-    ...(firstViolations.length > 0
-      ? {
-          safety: {
-            status: 'BLOCKED' as const,
-            gate: 'DISPLAY' as const,
-            reasonCodes: firstViolations,
-          },
-        }
-      : {}),
-  });
+  // One polite request for a phone number, after value was delivered and
+  // never twice: a fixed template without numbers or promises.
+  const askPhone =
+    input.contact !== undefined &&
+    !input.contact.hasPhone &&
+    !input.contact.phoneRequested &&
+    (checked.references?.length ?? 0) > 0;
+  return finish(
+    askPhone
+      ? `${checked.rendered}\n\n${locale().templates.phoneRequest}`
+      : checked.rendered,
+    'ANSWERED',
+    {
+      shownFactIds: [...(checked.references ?? [])],
+      ...(askPhone ? { phoneRequested: true } : {}),
+      regenerated,
+      ...(firstViolations.length > 0
+        ? {
+            safety: {
+              status: 'BLOCKED' as const,
+              gate: 'DISPLAY' as const,
+              reasonCodes: firstViolations,
+            },
+          }
+        : {}),
+    },
+  );
 }
 
 /** Bounded tool loop: every round and call is checked against the budget. */
@@ -641,6 +721,8 @@ export function interruptedTurnResult(
     budgetStop: budget.stopReason,
     tools: [],
     language,
+    textFingerprint: textFingerprint(normalizeForMatching(input.customerText)),
+    shownFactIds: [],
     llmFailure,
   };
 }

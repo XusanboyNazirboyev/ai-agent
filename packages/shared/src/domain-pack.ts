@@ -61,6 +61,48 @@ export const SlotDefinitionSchema = z
   })
   .strict();
 
+/** One deterministic lead-scoring rule (Phase 5). */
+export const LeadRuleSchema = z
+  .object({
+    code: z.string().regex(/^[A-Z][A-Z0-9_]{2,40}$/u),
+    points: z.number().int().min(1).max(10),
+    when: z.discriminatedUnion('kind', [
+      z
+        .object({ kind: z.literal('slot_present'), slot: SlotKeySchema })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('slot_equals'),
+          slot: SlotKeySchema,
+          value: z.string().min(1).max(60),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('intent'),
+          intent: z.string().min(1).max(40),
+        })
+        .strict(),
+      z.object({ kind: z.literal('contact_phone') }).strict(),
+      z.object({ kind: z.literal('offer_shown') }).strict(),
+      z.object({ kind: z.literal('quote_shown') }).strict(),
+    ]),
+  })
+  .strict();
+
+export const LeadScoringSchema = z
+  .object({
+    rules: z.array(LeadRuleSchema).min(1).max(30),
+    /** Score at which the lead is HOT / WARM; below `warm` it is COLD. */
+    hot: z.number().int().min(1).max(100),
+    warm: z.number().int().min(1).max(100),
+  })
+  .strict()
+  .refine((scoring) => scoring.hot > scoring.warm, {
+    message: 'hot must be greater than warm',
+  });
+export type LeadScoring = z.infer<typeof LeadScoringSchema>;
+
 export const DomainPackSchema = z
   .object({
     key: DomainPackKeySchema,
@@ -72,6 +114,8 @@ export const DomainPackSchema = z
     slots: z.array(SlotDefinitionSchema).min(1),
     tools: z.array(z.enum(AGENT_TOOL_NAMES)).min(1),
     maxOptionsShown: z.number().int().min(1).max(5).default(3),
+    /** Optional deterministic lead scoring; without it no lead is scored. */
+    leadScoring: LeadScoringSchema.optional(),
     prompt: z
       .object({
         businessRole: z.string().min(1).max(400),

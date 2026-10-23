@@ -10,7 +10,7 @@ import type { HandoverReason } from '../locales/locale-pack.js';
 export type SafetyStatus =
   'BLOCKED' | 'CLARIFICATION_REQUIRED' | 'ESCALATION_REQUIRED';
 
-export type SafetyGate = 'LANGUAGE' | 'DISPLAY';
+export type SafetyGate = 'LANGUAGE' | 'DISPLAY' | 'PROGRESS';
 
 export interface SafetyOutcome {
   readonly status: SafetyStatus;

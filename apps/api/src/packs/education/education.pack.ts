@@ -28,6 +28,41 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
       'Prefer showing matching courses first, then ask about format or schedule only if it changes which option fits.',
     ],
   },
+  leadScoring: {
+    // Deterministic rules; levels from the sum. Tune with the first real data.
+    rules: [
+      { code: 'PHONE_PROVIDED', points: 3, when: { kind: 'contact_phone' } },
+      {
+        code: 'ASKED_TO_BOOK',
+        points: 3,
+        when: { kind: 'intent', intent: 'booking_interest' },
+      },
+      {
+        code: 'CONCRETE_ITEM',
+        points: 2,
+        when: { kind: 'slot_present', slot: 'subject' },
+      },
+      { code: 'OFFER_SHOWN', points: 1, when: { kind: 'offer_shown' } },
+      { code: 'QUOTE_SHOWN', points: 2, when: { kind: 'quote_shown' } },
+      {
+        code: 'FORMAT_SPECIFIED',
+        points: 1,
+        when: { kind: 'slot_present', slot: 'format' },
+      },
+      {
+        code: 'TIME_SPECIFIED',
+        points: 1,
+        when: { kind: 'slot_present', slot: 'preferredTime' },
+      },
+      {
+        code: 'BUDGET_STATED',
+        points: 1,
+        when: { kind: 'slot_present', slot: 'budget' },
+      },
+    ],
+    hot: 7,
+    warm: 4,
+  },
   slots: [
     {
       key: 'subject',
