@@ -23,9 +23,9 @@ Evidence reviewed in the checkout: workspace manifests and lockfile; API source/
 | **IMPLEMENTED — Phase 1 / shared contracts** | Shared runtime schemas, v3 D21/§13; addendum §4.5 | Shared Zod schemas now validate tenant configuration/locales, connector configuration, retention settings, catalog attributes, slots, quote snapshots/breakdowns, handover summaries, and ISO currency codes. API persistence boundaries consume them. | — | Keep shared schemas as the single contract source; add API/web boundary contracts with their consuming features. |
 | **IMPLEMENTED — Phase 1** | Domain and persistence, v3 §9/§15; addendum tenant, privacy and idempotency corrections | Prisma schema, reviewed migrations, composite tenant FKs, provenance fields, exact decimal prices, seed fixtures for two generic tenants, catalog repository, marked isolated PostgreSQL test helper and database-backed constraint tests are present. See [DATA_MODEL.md](DATA_MODEL.md) and [ADR 003](adr/003-phase1-domain-model.md). | — | Complete the validation record below; Phase 2 remains gated on approval and its own implementation plan. |
 | **IMPLEMENTED — Phase 2** | Telegram text channel and queue, v3 §10/§15; addendum §4.1/§3.7 | Implemented and integration-tested on 2026-10-22. The `TelegramSender` DI defect that prevented the app from starting was fixed on 2026-10-23 and is covered by a startup smoke test (see Phase 3 completion). | — | — |
-| **IMPLEMENTED — Phase 3; MISSING — Phases 4–5** | Connector, generic engine, leads/handover, v3 §§5, 7–8, 15 | Connector framework, mock and generic REST connectors, conformance suite, shared config contract, persisted and scheduled catalog sync, outbound write mapping (see Phase 3 completion). No pack/locale, tool loop, LLM, lead, handover or operator notifier exists. No real CRM details or credentials are in the repository. | P0 before customer-facing automation | The real connector waits on Q1. Phase 4 has not started. |
+| **IMPLEMENTED — Phases 3–4; MISSING — Phase 5** | Connector, generic engine, leads/handover, v3 §§5, 7–8, 15 | Phase 3 connector framework (see Phase 3 completion). Phase 4 agent core, provider adapter, cost controls, education pack and locale packs (see Phase 4 status). No lead capture, handover state machine or operator notifier exists. The agent is not yet wired into the Telegram processor. | P0 before customer-facing automation | Wire the agent into channel processing, then Phase 5. |
 | **MISSING — Phase 6 / 6A / 7 onward** | Knowledge, media, inbox, evaluation and analytics, v3 §§6, 12, 12A, 15 | No RAG, media processing, UI framework/screens/i18n, auth/RBAC, eval harness, metrics dashboards, or production operations artifacts exist. `apps/web` is explicitly only a placeholder. | P1, phase-dependent | Add these only at their roadmap gates. Treat voice/image as later work than Phase 2; require tenant isolation, privacy/deletion, provenance/freshness, and eval coverage before customer-facing use. |
-| **CONFLICT — specification wording** | v3 D5/§7.3 vs addendum §§2, 4.1 | v3 calls for a global number/date text check; addendum says it is incomplete and can reject valid text or miss semantic errors. No guardrail implementation exists yet. | P0 before hard-fact replies | Follow addendum: provenance-bearing typed facts, validated scoped references, code-rendered values, distinct `FOUND`/`NOT_FOUND`/`STALE`/`UNAVAILABLE`/`INVALID_RESPONSE` outcomes, and tests for unsupported/altered facts. |
+| **ADDRESSED — guardrail design** | v3 D5/§7.3 vs addendum §§2, 4.1 | Implemented the addendum approach: provenance-bearing facts from tool results, `{{F<n>}}` references rendered by code, a draft guardrail as a backstop, and code-rendered fallbacks ([ADR 008](adr/008-llm-provider-and-cost-controls.md)). | — | Keep the eval gate (`eval/cases`) on prompt, pack, locale, tool and model changes. |
 | **CONFLICT — specification wording** | v3 §§2, 9 “every table has tenantId” vs addendum §3.6 | These v3 statements are broader than the safe ownership model. No database schema exists yet. | P0 before persistence | Require `tenantId` on tenant-owned rows, not the Tenant row or explicitly justified global immutable records. Use tenant-scoped access and composite uniqueness/FKs; verify in schema and negative isolation tests. |
 | **CONFLICT — specification wording** | v3 §10 and Phase 2 include Telegram voice/photo; v3 Phase 6 defers speech/image; addendum §4.1 | Conflicting roadmap placement; no media code exists. | P0 before Phase 2 | Apply the addendum override: Phase 2 is text-only. Move voice/image understanding, downloads, and associated privacy/evals to a later phase. |
 | **CONFLICT — specification wording (connector side addressed)** | v3 §5.2 and §7.2 loose connector/tool types vs addendum §§3.3, 3.5, 4.4–4.5 | Connector side addressed in Phase 3: Zod canonical contracts, validated inputs and outputs, method presence matching configured operations, registry capability checks ([ADR 006](adr/006-connector-outbound-security-and-contract.md)). Tool argument/result schemas remain Phase 4. | P0 before connector/tool execution | Define concrete shared schemas and typed outcomes; validate capability-method consistency; server code authorizes every call and side effect. Conformance tests must cover each connector. |
@@ -37,7 +37,7 @@ Evidence reviewed in the checkout: workspace manifests and lockfile; API source/
 
 **Phase 0 — Foundation: complete.** Acceptance evidence is retained from the Phase 0 implementation turn.
 
-**Phase 2 — Telegram channel and queue: complete.** **Phase 3 — Connector framework: complete as of 2026-10-23** (acceptance evidence under "Phase 3 completion"); a real CRM connector remains blocked on Q1.
+**Phase 4 — Agent core, packs, locales: implemented and verified with deterministic tests (2026-10-23); live model quality unverified (no API key).** **Phase 2 — Telegram channel and queue: complete.** **Phase 3 — Connector framework: complete as of 2026-10-23** (acceptance evidence under "Phase 3 completion"); a real CRM connector remains blocked on Q1.
 
 **Phase 1 — Domain & persistence: implemented; verification recorded below.** The schema and docs deliberately preserve all open project decisions. No Telegram webhook, queue worker, AI engine, real connector, RAG, media handling, or UI work was added.
 
@@ -50,7 +50,7 @@ No Section 4 open question blocks Phase 1: its schema and two-vertical seed can 
 | Open question | Phase(s) affected | Blocking effect |
 |---|---|---|
 | Q1 — first live project and CRM/API details | Phase 3 real connector; Phase 7 universality proof | Does not block Phase 1–2; use `MockConnector` if live API access is unavailable. |
-| Q2 — LLM vendor/models and budget | Phase 4 | Blocks provider selection and budget-specific implementation; keep `LlmProvider` swappable until decided. |
+| Q2 — LLM vendor/models and budget | Phase 4 | **Vendor/model decided by delegated engineering choice** (Anthropic, `claude-haiku-5-5`; [ADR 008](adr/008-llm-provider-and-cost-controls.md)). The monetary budget is **still open**: defaults are provisional. A live API key and the opt-in live evaluation are pending. |
 | Q3 — pilot operator count / whether operators also use CRM | Phase 5 integration details and pilot; Phase 6A before pilot if >~3 operators | Does not block Phase 1–4. Operator group baseline is locked by D19. |
 | Q4 — v1 customer languages | Phase 4 | Do not claim stable launch locale before confirmation and locale eval. |
 | Q5 — currency and price semantics | Phase 4 customer-visible quote/pricing behavior | Must be resolved before rendering actual prices; schema can carry exact amount/currency/basis without choosing values. |
@@ -196,3 +196,53 @@ No commits were made and nothing was staged. Phase 4 was not started.
 - Run history has no retention policy (Q9). The `secret_ref` column is refused rather than dropped.
 - The limitations recorded in session 2 still apply: no dispatcher pooling, deployment-wide env secrets, no per-tenant hostname allowlists, and no live adversarial DNS test.
 - A real CRM connector is blocked on Q1 (recommended EduFlow/Learnix). Phase 4 has not started.
+
+## Phase 4 status — 2026-10-23: implemented; live verification pending
+
+### State found
+
+- Clean tree on `main`, in sync with `origin/main` at `c6946c4`, with the TelegramSender DI fix intact. PostgreSQL (Postgres.app) and Redis were running.
+- No LLM code existed. No provider API key exists in this environment (no `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or `GOOGLE_API_KEY`; `.env` has no provider entry; no CLI profile).
+
+### Decisions
+
+- Provider and model, chosen under delegated authority: Anthropic Claude API with `claude-haiku-5-5` for both tiers. Anthropic and OpenAI tied on the weighted criteria; the tie-breakers and a model-bias disclosure are in [LLM_PROVIDER_EVALUATION.md](LLM_PROVIDER_EVALUATION.md) and [ADR 008](adr/008-llm-provider-and-cost-controls.md).
+- Pricing snapshot `anthropic-2026-10-23`, from the official page checked 2026-10-23.
+- Provisional limits (configurable, not owner-approved): $0.02 per turn, $0.25 per conversation, 6 calls, 3 tool rounds and 6 tool calls per turn, 1,024 output tokens per call, 48 KB input per call. The tenant monthly cap is optional and unset. Estimated cost on Haiku 5.5: about $0.0048 for a typical conversation and $0.029 for a heavy one.
+
+### Implemented
+
+- **Provider abstraction** (`src/core/llm/llm-provider.ts`) and the **Anthropic adapter** (`src/llm/anthropic/`). The adapter uses structured output via JSON Schema, strict tools with `tool_choice: auto`, opaque thinking-block replay, explicit refusal/truncation/malformed outcomes, its own bounded retries with `retry-after` and an accurate attempt count, and SDK retries disabled.
+- **Deterministic `ScriptedLlmProvider`**, which is also the default `LLM_PROVIDER=mock`.
+- **Cost controls:** integer nano-USD pricing (`pricing.ts`), worst-case reservation before every call (`budget.ts`), and settlement against reported usage via `MeteredLlm`. Usage goes to `llm_usage_records` through the additive migration `20261023150000_phase4_llm_usage_records`, which is idempotent on the provider response id.
+- **Agent core** (`src/core/agent/`):
+  - deterministic language/script detection with locale stickiness;
+  - a pack-driven slot engine with script-insensitive enum normalization;
+  - a tool registry and executor: pack and capability gating, argument validation, ids restricted to this turn's results, deduplication, timeouts, output re-validation;
+  - a fact store with provenance;
+  - the draft guardrail;
+  - versioned prompts with sanitized, delimited customer data;
+  - the turn orchestrator, with one question at a time, early search, one relaxed search, a bounded tool loop, one regeneration and code-rendered fallbacks.
+- **Core isolation** is enforced by `src/core/architecture.spec.ts`. It found and fixed domain words in the language detector's vocabulary.
+- **Shared contracts:** the Domain Pack schema, and Uzbek Latin↔Cyrillic transliteration plus `normalizeForMatching`. A `yo'` → `йў` transliteration bug was found while reviewing the Cyrillic templates and fixed with a regression test.
+- **Packs and locales:** `education@1`, and `uz-Latn`, `uz-Cyrl`, `ru`, `en`, all `beta` with `nativeReviewed: false`.
+- **`AgentConversationService` / `AgentModule`:** tenant-scoped context loading (pack, locales, latest slot version, history, active connector, prior spend), turn execution, and persistence of slots and locale.
+- **Environment validation:** `LLM_PROVIDER=anthropic` without a key fails at startup, and unpriced models are rejected.
+- **Evaluation:** 76 cases (19 categories × 4 locales) in `eval/cases/education`, run in CI with scripted model outputs. `pnpm --filter @agentcore/api eval:live` is opt-in (`LIVE_EVAL=1`, key required, budget-capped).
+
+### Verification record (Node v26.7.0 locally)
+
+- `pnpm lint`, `typecheck`, `format:check` and `build` — pass. `git diff --check` — clean.
+- `pnpm test:unit` — 547 passed, 7 skipped. Coverage: all files 84.1% statements, core/agent 91.6%, core/llm 90.5%, Anthropic adapter 87.1%.
+- `pnpm test:integration` — 41 passed: Phase 1–3 suites, the startup smoke test, and 4 agent tests covering a two-turn dialog with slot/locale/usage persistence, idempotent usage recording, the conversation budget enforced from the stored ledger, and ledger CHECK constraints.
+- Migrations applied to `agentcore_test`. Seed ran twice. Drift: `No difference detected.`
+- `dist/main.js` booted against the test database with `AgentModule`, and `/health` returned `{"status":"ok"}`.
+- **Not verified:** any live Claude API request (no key); real latency, rate limits and token counts; model quality in Uzbek, Russian and English; tool-selection accuracy. The adapter is unit-tested on request/response shapes only.
+
+### Known limitations and open items
+
+- The agent is not connected to Telegram yet. The processor builds replies inside a transaction holding a per-conversation advisory lock and must first be split into claim / generate / persist phases with turn-level idempotency.
+- The input-size reservation is a byte-based estimate; any underestimate is recorded as overshoot.
+- Monetary budgets are provisional and need owner approval (Q2). The tenant monthly cap has no default. Anthropic's retention terms are inconsistent between its pages (Q9).
+- Locale wording has not been reviewed by native speakers. No locale may become `stable` before review and a live eval threshold (D18).
+- No lead capture, handover state machine or operator notification (Phase 5). No RAG or voice. A real CRM is still blocked on Q1.
