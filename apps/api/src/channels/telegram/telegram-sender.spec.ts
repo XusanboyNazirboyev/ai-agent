@@ -2,6 +2,7 @@ import type { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppEnvironment } from '../../config/environment.js';
 import {
+  TELEGRAM_FETCH,
   TelegramAmbiguousSendError,
   TelegramApiError,
   TelegramSender,
@@ -84,5 +85,57 @@ describe('telegramRetryDelayMs', () => {
     expect(telegramRetryDelayMs(1, new TelegramApiError(429, 900))).toBe(
       300_000,
     );
+  });
+});
+
+describe('TelegramSender dependency injection', () => {
+  async function resolveSender(
+    extraProviders: Array<{ provide: symbol; useValue: unknown }> = [],
+  ): Promise<{ sender: TelegramSender; close: () => Promise<void> }> {
+    const { Global, Module } = await import('@nestjs/common');
+    const { ConfigService } = await import('@nestjs/config');
+    const { NestFactory } = await import('@nestjs/core');
+
+    @Global()
+    @Module({
+      providers: [
+        { provide: ConfigService, useValue: { get: () => 'test-token' } },
+      ],
+      exports: [ConfigService],
+    })
+    class FakeConfigModule {}
+
+    @Module({
+      imports: [FakeConfigModule],
+      providers: [TelegramSender, ...extraProviders],
+    })
+    class SenderModule {}
+
+    const app = await NestFactory.createApplicationContext(SenderModule, {
+      logger: false,
+    });
+    return { sender: app.get(TelegramSender), close: () => app.close() };
+  }
+
+  it('is resolvable by the Nest container without a transport provider', async () => {
+    const { sender, close } = await resolveSender();
+    expect(sender).toBeInstanceOf(TelegramSender);
+    await close();
+  });
+
+  it('uses an injected transport when one is provided', async () => {
+    const request = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json({ ok: true, result: { message_id: 7 } }),
+      );
+    const { sender, close } = await resolveSender([
+      { provide: TELEGRAM_FETCH, useValue: request },
+    ]);
+    await expect(sender.sendMessage('1', 'hi')).resolves.toEqual({
+      messageId: '7',
+    });
+    expect(request).toHaveBeenCalledOnce();
+    await close();
   });
 });

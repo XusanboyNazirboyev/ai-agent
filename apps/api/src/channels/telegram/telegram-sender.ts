@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../../config/environment.js';
 
@@ -22,15 +22,24 @@ export class TelegramAmbiguousSendError extends Error {
 export type TelegramSendResult = { messageId: string };
 export type TelegramFetch = typeof fetch;
 
+/**
+ * Optional DI token for the Bot API transport. A plain `typeof fetch`
+ * parameter is emitted as a `Function` token Nest cannot resolve, so the
+ * transport is injected explicitly; production uses the global `fetch`.
+ */
+export const TELEGRAM_FETCH = Symbol('TELEGRAM_FETCH');
+
 @Injectable()
 export class TelegramSender {
   private readonly token: string | undefined;
+  private readonly request: TelegramFetch;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
-    private readonly request: TelegramFetch = fetch,
+    @Optional() @Inject(TELEGRAM_FETCH) request?: TelegramFetch,
   ) {
     this.token = config.get('TELEGRAM_BOT_TOKEN', { infer: true });
+    this.request = request ?? fetch;
   }
 
   async sendMessage(chatId: string, text: string): Promise<TelegramSendResult> {
