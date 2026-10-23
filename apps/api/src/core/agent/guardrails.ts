@@ -44,7 +44,7 @@ const MAX_REPLY_CHARS = 1_500;
 const CURRENCY =
   /[$€₽£¥₸]|\b(?:usd|uzs|eur|rub|kzt)\b|so'm|сўм|\bсум\b|\bруб|dollar|доллар|евро|рубл/iu;
 const LEAK =
-  /system prompt|<\/?(?:system|instructions?|tool_result|catalog_context|customer_message)>|\b(?:search_catalog|get_item_details|list_offers|check_availability|get_quote)\b|\{\{(?!\s*F\d)/iu;
+  /system prompt|<\/?(?:system|instructions?|tool_result|catalog_context|customer_message)>|\b(?:search_catalog|get_item_details|list_offers|check_availability|get_quote|knowledge_search)\b|\{\{(?!\s*F\d)/iu;
 
 export function checkDraft(
   draft: string,

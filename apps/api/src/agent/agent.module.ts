@@ -11,10 +11,11 @@ import {
 import { AgentModeStartupCheck } from './agent-mode.startup.js';
 import { createLlmProvider, llmEnvironment } from './llm.factory.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
+import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
 @Module({
-  imports: [PersistenceModule, ConnectorsModule],
+  imports: [PersistenceModule, ConnectorsModule, KnowledgeModule],
   providers: [
     LlmUsageStore,
     LlmBudgetLedger,

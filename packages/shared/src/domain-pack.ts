@@ -21,6 +21,7 @@ export const AGENT_TOOL_NAMES = [
   'list_offers',
   'check_availability',
   'get_quote',
+  'knowledge_search',
 ] as const;
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 
@@ -114,6 +115,16 @@ export const DomainPackSchema = z
     slots: z.array(SlotDefinitionSchema).min(1),
     tools: z.array(z.enum(AGENT_TOOL_NAMES)).min(1),
     maxOptionsShown: z.number().int().min(1).max(5).default(3),
+    /** Knowledge retrieval settings (RAG over textual knowledge only). */
+    knowledge: z
+      .object({
+        /** Minimum cosine similarity for a passage to count as relevant. */
+        minScore: z.number().min(-1).max(1).default(0.5),
+        /** A regulated passage older than this is treated as unverified. */
+        regulatedMaxAgeDays: z.number().int().min(1).max(3650).default(180),
+      })
+      .strict()
+      .default({ minScore: 0.5, regulatedMaxAgeDays: 180 }),
     /**
      * Optional: a confirmed quote at or above this amount (same currency) is
      * not sent to the customer; a person confirms it (HIGH_VALUE handover).

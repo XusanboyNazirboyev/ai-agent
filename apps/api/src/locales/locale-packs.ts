@@ -88,6 +88,8 @@ export const UZ_LATN: LocalePack = {
         "Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.",
       HIGH_VALUE:
         "Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.",
+      LEGAL_UNVERIFIED:
+        "Bu masala bo'yicha tasdiqlangan ma'lumotim yo'q. Savolingiz jamoamiz uchun saqlandi.",
     },
     labels: {
       price: 'narxi',
@@ -176,6 +178,8 @@ export const UZ_CYRL: LocalePack = {
         'Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.',
       HIGH_VALUE:
         'Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.',
+      LEGAL_UNVERIFIED:
+        'Бу масала бўйича тасдиқланган маълумотим йўқ. Саволингиз жамоамиз учун сақланди.',
     },
     labels: {
       price: 'нархи',
@@ -259,6 +263,8 @@ export const RU: LocalePack = {
         'Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.',
       HIGH_VALUE:
         'Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.',
+      LEGAL_UNVERIFIED:
+        'По этому вопросу у меня нет проверенной информации. Ваш вопрос сохранён для нашей команды.',
     },
     labels: {
       price: 'стоимость',
@@ -347,6 +353,8 @@ export const EN: LocalePack = {
         'We seem to be going in circles. Your message has been saved for our team.',
       HIGH_VALUE:
         'Our team confirms amounts like this personally. Your request has been saved for them.',
+      LEGAL_UNVERIFIED:
+        'I do not have verified information on this. Your question has been saved for our team.',
     },
     labels: {
       price: 'price',

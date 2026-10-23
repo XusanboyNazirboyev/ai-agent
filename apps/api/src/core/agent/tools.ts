@@ -22,7 +22,11 @@ import {
   ConnectorErrorCategory,
   isConnectorError,
 } from '../../connectors/interfaces/errors.js';
-import type { TurnBudget } from '../llm/budget.js';
+import { BudgetExhaustedError, type TurnBudget } from '../llm/budget.js';
+import type {
+  KnowledgeSearch,
+  KnowledgeSearchResult,
+} from '../knowledge/passage.js';
 import type { LlmToolDefinition } from '../llm/llm-provider.js';
 import type { FactProvenance, FactStore } from './facts.js';
 import { redactedSummary } from './redaction.js';
@@ -58,6 +62,7 @@ export const TOOL_SIDE_EFFECTS: Readonly<
   list_offers: 'READ',
   check_availability: 'READ',
   get_quote: 'READ',
+  knowledge_search: 'READ',
 };
 
 /**
@@ -136,6 +141,8 @@ export interface ToolContext {
   readonly budget: TurnBudget;
   readonly timeoutMs: number;
   readonly now: () => Date;
+  /** Retrieval over textual knowledge; absent = the tool is not offered. */
+  readonly knowledge?: KnowledgeSearch;
   /** Turn scope stamped on every fact; checked again by the display gate. */
   readonly scope: {
     readonly tenantId: string;
@@ -150,6 +157,7 @@ const INPUTS = {
   list_offers: z.object({ itemId: ID }).strict(),
   check_availability: z.object({ offerId: ID }).strict(),
   get_quote: z.object({ offerId: ID }).strict(),
+  knowledge_search: z.object({ query: z.string().min(2).max(200) }).strict(),
 } as const;
 
 const idSchema = (
@@ -193,6 +201,22 @@ const DEFINITIONS: Readonly<Record<AgentToolName, LlmToolDefinition>> = {
     description: 'Check live availability and seats of one offer.',
     inputSchema: idSchema('offerId', 'offerId exactly as given by list_offers'),
   },
+  knowledge_search: {
+    name: 'knowledge_search',
+    description:
+      'Search the written policies and information texts (rules, procedures, general information). Never use it for prices, dates, seats or availability. Cite a passage only by its fact reference.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          description: 'What the customer wants to know',
+        },
+      },
+    },
+  },
   get_quote: {
     name: 'get_quote',
     description: 'Get a live, confirmed price quote for one offer.',
@@ -221,6 +245,8 @@ function supported(connector: CrmConnector, name: AgentToolName): boolean {
         connector.capabilities.liveQuote &&
         typeof connector.getQuote === 'function'
       );
+    case 'knowledge_search':
+      return false; // offered only when a retrieval port is present
   }
 }
 
@@ -235,7 +261,9 @@ export class AgentTools {
   /** Pack-enabled tools the tenant's connector actually supports. */
   available(): AgentToolName[] {
     return this.context.pack.tools.filter((name) =>
-      supported(this.context.connector, name),
+      name === 'knowledge_search'
+        ? this.context.knowledge !== undefined
+        : supported(this.context.connector, name),
     );
   }
 
@@ -505,7 +533,7 @@ export class AgentTools {
         rawKeys,
       );
     }
-    if (!supported(this.context.connector, tool))
+    if (!this.available().includes(tool))
       return this.fail(name, 'model', 'UNSUPPORTED', started, rawKeys);
     const parsed = INPUTS[tool].safeParse(rawInput);
     if (!parsed.success)
@@ -522,6 +550,8 @@ export class AgentTools {
       return this.fail(name, 'model', 'DUPLICATE_CALL', started, input);
     this.seenCalls.add(signature);
 
+    if (tool === 'knowledge_search')
+      return this.runKnowledge(input.query, started);
     const { connector, pack } = this.context;
     switch (tool) {
       case 'search_catalog':
@@ -566,6 +596,96 @@ export class AgentTools {
           input.offerId,
         );
     }
+  }
+
+  /** Retrieval over textual knowledge; every passage becomes a code-rendered fact. */
+  private async runKnowledge(
+    query: string,
+    started: number,
+  ): Promise<ToolOutcome> {
+    const knowledge = this.context.knowledge!;
+    this.context.budget.countToolCall();
+    let result: KnowledgeSearchResult;
+    try {
+      result = await this.withTimeout(knowledge.search(query));
+    } catch (error: unknown) {
+      if (error instanceof BudgetExhaustedError) throw error;
+      return this.fail(
+        'knowledge_search',
+        'model',
+        error instanceof Error && error.message === 'TOOL_TIMEOUT'
+          ? 'TIMEOUT'
+          : 'UNAVAILABLE',
+        started,
+        { query },
+      );
+    }
+    if (!result.ok)
+      return this.fail('knowledge_search', 'model', 'UNAVAILABLE', started, {
+        query,
+      });
+    const minScore = this.context.pack.knowledge.minScore;
+    const relevant = result.passages.filter((p) => p.score >= minScore);
+    const outcome: ToolOutcomeType =
+      relevant.length > 0 ? 'FOUND' : 'NOT_FOUND';
+    this.trace.push({
+      name: 'knowledge_search',
+      origin: 'model',
+      status: 'ok',
+      outcome,
+      input: redactedSummary({ query }),
+      durationMs: Date.now() - started,
+    });
+    const maxAgeMs =
+      this.context.pack.knowledge.regulatedMaxAgeDays * 86_400_000;
+    const passages = relevant.map((passage) => {
+      const fact = this.context.facts.add(
+        {
+          kind: 'knowledge',
+          text: passage.text,
+          source: passage.source,
+          updatedAt: passage.updatedAt,
+          regulated: passage.regulated,
+        },
+        {
+          ...this.provenance(
+            'knowledge_search',
+            passage.documentId,
+            'knowledge',
+          ),
+          // A regulated passage stops being shown once it is older than the
+          // pack's limit, even if it was retrieved a moment before.
+          ...(passage.regulated
+            ? {
+                validUntil: new Date(
+                  Date.parse(passage.updatedAt) + maxAgeMs,
+                ).toISOString(),
+              }
+            : {}),
+        },
+      );
+      return {
+        passageFact: fact,
+        regulated: passage.regulated,
+        updatedAt: passage.updatedAt,
+        text: passage.text,
+      };
+    });
+    return {
+      ok: true,
+      outcome,
+      summary: promptSafeJson({ passages }),
+      items: [],
+    };
+  }
+
+  /** Code-initiated retrieval (e.g. a regulated question); same facts, same limits. */
+  async searchKnowledge(query: string): Promise<ToolOutcome> {
+    if (!this.context.knowledge)
+      return this.fail('knowledge_search', 'code', 'UNSUPPORTED', Date.now(), {
+        query,
+      });
+    return this.runKnowledge(query.slice(0, 200), Date.now());
   }
 
   private async execute(

@@ -203,6 +203,16 @@ const environmentSchema = postgresEnvironmentSchema
       .min(5)
       .max(3_600)
       .default(30),
+    /**
+     * Embeddings for knowledge retrieval. Off until configured. The embedder
+     * receives customer questions, so an untrusted provider is limited like
+     * the chat providers (test accounts / explicit owner consent).
+     */
+    KNOWLEDGE_EMBEDDINGS: z
+      .enum(['off', 'gemini', 'openai-compatible', 'hashing'])
+      .default('off'),
+    KNOWLEDGE_EMBEDDING_MODEL: z.string().min(1).max(100).optional(),
+    KNOWLEDGE_EMBEDDING_BASE_URL: z.string().url().optional(),
     /** Local hour from which the daily operator digest is posted. */
     DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Follow-ups to silent customers are off until the owner enables them. */

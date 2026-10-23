@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ConversationSlotsSchema,
@@ -31,6 +37,10 @@ import { EDUCATION_PACK } from '../packs/education/education.pack.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { budgetLimits, llmEnvironment } from './llm.factory.js';
 import type { BudgetLedger } from '../core/llm/budget-ledger.js';
+import type { EmbeddingProvider } from '../core/knowledge/embedding.js';
+import { EMBEDDING_PROVIDER } from '../knowledge/embedding.factory.js';
+import { KnowledgeRetriever } from '../knowledge/knowledge-retriever.js';
+import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
@@ -98,6 +108,10 @@ export class AgentConversationService implements OnModuleInit {
     private readonly ledger: LlmBudgetLedger,
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     private readonly config: ConfigService<AppEnvironment, true>,
+    @Optional() private readonly knowledgeStore?: KnowledgeService,
+    @Optional()
+    @Inject(EMBEDDING_PROVIDER)
+    private readonly embedder?: EmbeddingProvider,
   ) {
     this.pricing = PRICING_CATALOG.snapshot(
       this.config.get('LLM_PRICING_VERSION', { infer: true }),
@@ -282,6 +296,31 @@ export class AgentConversationService implements OnModuleInit {
       }),
     ]);
 
+    // Retrieval sends the customer's question to the embedding provider, so
+    // it follows the chat data-protection rule: a trusted provider, a test
+    // account, or the owner's explicit consent.
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { tenantId, id: conversation.channelAccountId },
+      select: { isTestAccount: true },
+    });
+    const knowledgeAllowed =
+      this.embedder !== undefined &&
+      this.knowledgeStore !== undefined &&
+      ((environment.LLM_TRUSTED_PROVIDERS ?? []).includes(
+        this.embedder.providerId,
+      ) ||
+        account?.isTestAccount === true ||
+        environment.LLM_ALLOW_REAL_CUSTOMER_DATA === true);
+    const knowledge =
+      knowledgeAllowed && this.embedder && this.knowledgeStore
+        ? new KnowledgeRetriever(
+            this.knowledgeStore,
+            this.embedder,
+            llm,
+            tenantId,
+          )
+        : undefined;
+
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
       progress: {
@@ -315,6 +354,7 @@ export class AgentConversationService implements OnModuleInit {
         connector,
         llm,
         scope: { tenantId, conversationId },
+        ...(knowledge ? { knowledge } : {}),
         toolTimeoutMs: this.config.get('AGENT_TOOL_TIMEOUT_MS', {
           infer: true,
         }),

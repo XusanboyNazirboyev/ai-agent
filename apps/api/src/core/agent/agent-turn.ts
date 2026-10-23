@@ -21,6 +21,7 @@ import {
   type PriorTurnSignal,
   type StuckPolicy,
 } from './stuck.js';
+import type { KnowledgeSearch } from '../knowledge/passage.js';
 import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
 import { FactStore, type Fact } from './facts.js';
 import { checkDraft, type GuardrailViolation } from './guardrails.js';
@@ -125,6 +126,8 @@ export interface AgentDependencies {
   /** Overrides to the connector-derived display policy (ADR 013). */
   readonly displayPolicy?: Partial<DisplayPolicy>;
   readonly languagePolicy?: LanguagePolicy;
+  /** Retrieval over textual knowledge; absent = knowledge_search is not offered. */
+  readonly knowledge?: KnowledgeSearch;
 }
 
 export type TurnOutcome =
@@ -248,6 +251,7 @@ export async function runAgentTurn(
         timeoutMs: deps.toolTimeoutMs,
         now,
         scope: deps.scope,
+        ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
       })
     : undefined;
 
@@ -442,7 +446,11 @@ export async function runAgentTurn(
   if (intent === 'ai_question')
     return finish(locale().templates.aiDisclosure, 'ANSWERED');
 
-  const missing = firstMissing(pack, slots, 'search');
+  // A question about what the law or an authority requires is answered only
+  // from verified, recent regulated knowledge; otherwise nobody answers it but
+  // a person. No search slots are asked for it.
+  const regulated = intent === 'regulated_info';
+  const missing = regulated ? undefined : firstMissing(pack, slots, 'search');
   if (missing) {
     const prefix = invalid.includes(missing.key)
       ? `${locale().templates.notUnderstood} `
@@ -473,21 +481,52 @@ export async function runAgentTurn(
   if (unsure) return unsure;
 
   // 4. Search early, then one relaxed search before giving up.
-  if (!tools || !tools.available().includes('search_catalog'))
+  let knowledgeOutcome: ToolOutcome | undefined;
+  if (regulated) {
+    if (!tools || !tools.available().includes('knowledge_search'))
+      return handover('LEGAL_UNVERIFIED');
+    try {
+      knowledgeOutcome = await tools.searchKnowledge(input.customerText);
+    } catch (error: unknown) {
+      if (error instanceof BudgetExhaustedError)
+        return handover(budgetHandoverReason(error.reason), {
+          budgetStop: error.reason,
+        });
+      throw error;
+    }
+    // Verified = a regulated passage whose update date is still inside the
+    // pack's limit (its validity ends at updatedAt + regulatedMaxAgeDays).
+    const verified = facts
+      .list()
+      .some(
+        (fact) =>
+          fact.value.kind === 'knowledge' &&
+          fact.value.regulated &&
+          (fact.provenance.validUntil === undefined ||
+            Date.parse(fact.provenance.validUntil) > now().getTime()),
+      );
+    if (
+      !knowledgeOutcome.ok ||
+      knowledgeOutcome.outcome !== 'FOUND' ||
+      !verified
+    )
+      return handover('LEGAL_UNVERIFIED');
+  } else if (!tools || !tools.available().includes('search_catalog')) {
     return handover('NO_DATA');
+  }
   let search: ToolOutcome;
   try {
-    search = await tools.searchBySlots(slots);
-    if (search.ok && search.items.length === 0) {
+    search = knowledgeOutcome ?? (await tools!.searchBySlots(slots));
+    if (!knowledgeOutcome && search.ok && search.items.length === 0) {
       // Same words, canonical Uzbek spelling: only the query is rewritten.
-      const variant = tools.searchByOrthographicVariant(slots);
+      const variant = tools!.searchByOrthographicVariant(slots);
       if (variant) {
         const alt = await variant;
         if (alt.ok && alt.items.length > 0) search = alt;
       }
     }
-    if (search.ok && search.items.length === 0) {
-      const relaxed = await tools.searchBySlots(slots, true);
+    if (!knowledgeOutcome && search.ok && search.items.length === 0) {
+      const relaxed = await tools!.searchBySlots(slots, true);
       if (relaxed.ok) search = relaxed;
     }
   } catch (error: unknown) {
@@ -504,7 +543,7 @@ export async function runAgentTurn(
       CONNECTOR_FAILURES.has(search.code) ? 'CONNECTOR_UNAVAILABLE' : 'NO_DATA',
     );
   }
-  if (search.items.length === 0) {
+  if (!knowledgeOutcome && search.items.length === 0) {
     return finish(
       `${locale().templates.noResults} ${locale().templates.offerOperator}`,
       'NO_RESULTS',

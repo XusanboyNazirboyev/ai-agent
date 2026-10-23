@@ -18,6 +18,7 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
     'list_offers',
     'check_availability',
     'get_quote',
+    'knowledge_search',
   ],
   prompt: {
     businessRole:

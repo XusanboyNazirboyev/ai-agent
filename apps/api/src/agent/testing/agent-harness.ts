@@ -6,6 +6,7 @@ import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../../packs/education/education.pack.js';
 import { TurnBudget, type BudgetLimits } from '../../core/llm/budget.js';
 import type { LlmProvider } from '../../core/llm/llm-provider.js';
+import type { KnowledgeSearch } from '../../core/knowledge/passage.js';
 import { MeteredLlm, type LlmUsageEntry } from '../../core/llm/metered-llm.js';
 import { usdToNano } from '../../core/llm/pricing.js';
 import {
@@ -70,6 +71,7 @@ export async function runTurn(options: {
   pricingVersion?: string;
   input?: Partial<AgentTurnInput>;
   now?: Date;
+  knowledge?: KnowledgeSearch;
 }): Promise<TurnRun> {
   const usage: LlmUsageEntry[] = [];
   const budget = new TurnBudget(
@@ -111,6 +113,7 @@ export async function runTurn(options: {
           ? undefined
           : (options.connector ?? educationConnector()),
       llm,
+      ...(options.knowledge ? { knowledge: options.knowledge } : {}),
       scope: { tenantId: 'tenant-eval', conversationId: 'conversation-eval' },
       toolTimeoutMs: 200,
       maxOutputTokens: { extract: 600, respond: 900 },

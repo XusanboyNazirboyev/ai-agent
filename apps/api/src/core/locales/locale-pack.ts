@@ -36,6 +36,7 @@ export const HANDOVER_REASONS = [
   'LOW_LANG_CONFIDENCE',
   'STUCK',
   'HIGH_VALUE',
+  'LEGAL_UNVERIFIED',
 ] as const;
 export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 
