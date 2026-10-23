@@ -36,6 +36,8 @@ describe('Uzbek transliteration', () => {
     ['шаҳар', 'shahar'],
     ['йўл', "yo'l"],
     ['ёмон', 'yomon'],
+    ['санъат', "san'at"],
+    ['сунъий', "sun'iy"],
   ])('%s <-> %s', (cyrillic, latin) => {
     expect(uzCyrlToLatn(cyrillic)).toBe(latin);
     expect(uzLatnToCyrl(latin)).toBe(cyrillic);
@@ -44,6 +46,7 @@ describe('Uzbek transliteration', () => {
   it('handles word-initial e/э and apostrophe variants', () => {
     expect(uzLatnToCyrl('ertaga')).toBe('эртага');
     expect(uzLatnToCyrl('yo‘naltiraman')).toBe('йўналтираман');
+    expect(uzLatnToCyrl("'salom'")).toBe("'салом'");
     expect(unifyApostrophes('oʻ o‘ o’ o`')).toBe("o' o' o' o'");
     expect(normalizeForMatching('ОНЛАЙН')).toBe(normalizeForMatching('onlayn'));
     expect(normalizeForMatching('O‘ZBEK')).toBe("o'zbek");

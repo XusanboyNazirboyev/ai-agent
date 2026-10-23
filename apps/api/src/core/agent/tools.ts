@@ -18,6 +18,7 @@ import {
 import type { TurnBudget } from '../llm/budget.js';
 import type { LlmToolDefinition } from '../llm/llm-provider.js';
 import type { FactStore } from './facts.js';
+import { redactedSummary } from './redaction.js';
 import type { SlotState } from './slots.js';
 import { searchQuery } from './slots.js';
 
@@ -30,8 +31,39 @@ import { searchQuery } from './slots.js';
  *    so the model cannot probe arbitrary records;
  *  - calls are counted against the turn budget, deduplicated and time-bound;
  *  - the connector is the tenant's own instance, chosen server-side; the
- *    model never picks a tenant, credential or destination.
+ *    model never picks a tenant, credential or destination;
+ *  - every tool here is read-only (side-effect class READ); write tools
+ *    (leads, bookings) are not exposed to the model in this phase;
+ *  - connector text (titles, descriptions, attributes) is untrusted data:
+ *    it is serialized with `<`/`>` escaped so it cannot close the prompt's
+ *    data delimiters, and the prompt tells the model to ignore instructions
+ *    in it.
  */
+
+/** Side-effect class of a tool; only READ tools exist in this phase. */
+export type ToolSideEffect = 'READ' | 'WRITE_IDEMPOTENT' | 'WRITE_EXTERNAL';
+
+export const TOOL_SIDE_EFFECTS: Readonly<
+  Record<AgentToolName, ToolSideEffect>
+> = {
+  search_catalog: 'READ',
+  get_item_details: 'READ',
+  list_offers: 'READ',
+  check_availability: 'READ',
+  get_quote: 'READ',
+};
+
+/**
+ * Typed result class of a tool call (addendum §3.2). REJECTED means the
+ * server refused the call before it reached the connector.
+ */
+export type ToolOutcomeType =
+  | 'FOUND'
+  | 'NOT_FOUND'
+  | 'STALE'
+  | 'UNAVAILABLE'
+  | 'INVALID_RESPONSE'
+  | 'REJECTED';
 
 export type ToolErrorCode =
   | 'UNKNOWN_TOOL'
@@ -41,17 +73,40 @@ export type ToolErrorCode =
   | 'DUPLICATE_CALL'
   | 'TIMEOUT'
   | 'NOT_FOUND'
+  | 'STALE'
   | 'INVALID_OUTPUT'
   | 'UNAVAILABLE';
+
+const OUTCOME_OF_ERROR: Readonly<Record<ToolErrorCode, ToolOutcomeType>> = {
+  UNKNOWN_TOOL: 'REJECTED',
+  UNSUPPORTED: 'REJECTED',
+  INVALID_ARGUMENTS: 'REJECTED',
+  UNKNOWN_REFERENCE: 'REJECTED',
+  DUPLICATE_CALL: 'REJECTED',
+  TIMEOUT: 'UNAVAILABLE',
+  UNAVAILABLE: 'UNAVAILABLE',
+  NOT_FOUND: 'NOT_FOUND',
+  STALE: 'STALE',
+  INVALID_OUTPUT: 'INVALID_RESPONSE',
+};
+
+/** JSON for the model with markup characters escaped (still valid JSON). */
+function promptSafeJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</gu, '\\u003c')
+    .replace(/>/gu, '\\u003e');
+}
 
 export type ToolOutcome =
   | {
       readonly ok: true;
+      readonly outcome: ToolOutcomeType;
       readonly summary: string;
       readonly items: readonly CatalogItem[];
     }
   | {
       readonly ok: false;
+      readonly outcome: ToolOutcomeType;
       readonly code: ToolErrorCode;
       readonly summary: string;
     };
@@ -60,7 +115,10 @@ export interface ToolTraceEntry {
   readonly name: string;
   readonly origin: 'code' | 'model';
   readonly status: 'ok' | 'error';
+  readonly outcome: ToolOutcomeType;
   readonly code?: ToolErrorCode;
+  /** Validated (or rejected) input, PII-redacted, for audit records. */
+  readonly input: Readonly<Record<string, string>>;
   readonly durationMs: number;
 }
 
@@ -196,8 +254,15 @@ export class AgentTools {
     };
   }
 
+  private isStale(validUntil: string | undefined): boolean {
+    return (
+      validUntil !== undefined &&
+      new Date(validUntil).getTime() <= this.context.now().getTime()
+    );
+  }
+
   private describeItems(tool: string, items: readonly CatalogItem[]): string {
-    return JSON.stringify({
+    return promptSafeJson({
       items: items.map((item) => {
         this.knownItems.add(item.id);
         const titleFact = this.context.facts.add(
@@ -217,9 +282,19 @@ export class AgentTools {
 
   private describeOffers(offers: readonly Offer[]): string {
     const { facts } = this.context;
-    return JSON.stringify({
+    return promptSafeJson({
       offers: offers.map((offer) => {
         this.knownOffers.add(offer.id);
+        // An expired offer yields no facts: its price, seats and dates are
+        // not current and must be re-checked live before anyone sees them.
+        if (this.isStale(offer.validUntil)) {
+          return {
+            offerId: offer.id,
+            itemId: offer.itemId,
+            stale: true,
+            note: 'listing expired; use check_availability or get_quote',
+          };
+        }
         const p = this.provenance(
           'list_offers',
           offer.sourceEntityId,
@@ -276,7 +351,7 @@ export class AgentTools {
       sourceSystem,
       availability.validUntil,
     );
-    return JSON.stringify({
+    return promptSafeJson({
       offerId: availability.offerId,
       live: true,
       availabilityFact: this.context.facts.add(
@@ -302,7 +377,7 @@ export class AgentTools {
       quote.sourceSystem,
       quote.validUntil,
     );
-    return JSON.stringify({
+    return promptSafeJson({
       offerId: quote.offerId,
       live: true,
       confirmedPriceFact: this.context.facts.add(
@@ -319,15 +394,24 @@ export class AgentTools {
     origin: 'code' | 'model',
     code: ToolErrorCode,
     started: number,
+    input: Readonly<Record<string, unknown>>,
   ): ToolOutcome {
+    const outcome = OUTCOME_OF_ERROR[code];
     this.trace.push({
       name,
       origin,
       status: 'error',
+      outcome,
       code,
+      input: redactedSummary(input),
       durationMs: Date.now() - started,
     });
-    return { ok: false, code, summary: JSON.stringify({ error: code }) };
+    return {
+      ok: false,
+      outcome,
+      code,
+      summary: promptSafeJson({ error: code }),
+    };
   }
 
   private withTimeout<T>(work: Promise<T>): Promise<T> {
@@ -344,8 +428,14 @@ export class AgentTools {
   /** Code-initiated catalog search from the slot state (value early). */
   searchBySlots(state: SlotState, requiredOnly = false): Promise<ToolOutcome> {
     const query = searchQuery(this.context.pack, state, { requiredOnly });
-    return this.execute('search_catalog', 'code', () =>
-      this.context.connector.searchItems!(query),
+    return this.execute(
+      'search_catalog',
+      'code',
+      {
+        title: query.title,
+        attributes: Object.keys(query.attributes ?? {}).join(','),
+      },
+      () => this.context.connector.searchItems!(query),
     );
   }
 
@@ -353,33 +443,44 @@ export class AgentTools {
   async run(name: string, rawInput: unknown): Promise<ToolOutcome> {
     const started = Date.now();
     const tool = name as AgentToolName;
+    // Rejected input is summarized by its keys only: it is unvalidated.
+    const rawKeys =
+      rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+        ? { keys: Object.keys(rawInput).slice(0, 10).join(',') }
+        : { keys: typeof rawInput };
     if (
       !Object.prototype.hasOwnProperty.call(INPUTS, name) ||
       !this.context.pack.tools.includes(tool)
     ) {
-      return this.fail(name, 'model', 'UNKNOWN_TOOL', started);
+      return this.fail(
+        name.slice(0, 60),
+        'model',
+        'UNKNOWN_TOOL',
+        started,
+        rawKeys,
+      );
     }
     if (!supported(this.context.connector, tool))
-      return this.fail(name, 'model', 'UNSUPPORTED', started);
+      return this.fail(name, 'model', 'UNSUPPORTED', started, rawKeys);
     const parsed = INPUTS[tool].safeParse(rawInput);
     if (!parsed.success)
-      return this.fail(name, 'model', 'INVALID_ARGUMENTS', started);
+      return this.fail(name, 'model', 'INVALID_ARGUMENTS', started, rawKeys);
     const input = parsed.data as Record<string, string>;
     if ('itemId' in input && !this.knownItems.has(input.itemId)) {
-      return this.fail(name, 'model', 'UNKNOWN_REFERENCE', started);
+      return this.fail(name, 'model', 'UNKNOWN_REFERENCE', started, input);
     }
     if ('offerId' in input && !this.knownOffers.has(input.offerId)) {
-      return this.fail(name, 'model', 'UNKNOWN_REFERENCE', started);
+      return this.fail(name, 'model', 'UNKNOWN_REFERENCE', started, input);
     }
     const signature = `${name}:${JSON.stringify(input)}`;
     if (this.seenCalls.has(signature))
-      return this.fail(name, 'model', 'DUPLICATE_CALL', started);
+      return this.fail(name, 'model', 'DUPLICATE_CALL', started, input);
     this.seenCalls.add(signature);
 
     const { connector, pack } = this.context;
     switch (tool) {
       case 'search_catalog':
-        return this.execute(name, 'model', () =>
+        return this.execute(name, 'model', input, () =>
           connector.searchItems!({
             itemType: pack.catalogItemType,
             title: input.query,
@@ -387,13 +488,14 @@ export class AgentTools {
           }),
         );
       case 'get_item_details':
-        return this.execute(name, 'model', async () => [
+        return this.execute(name, 'model', input, async () => [
           await connector.getItem!(input.itemId),
         ]);
       case 'list_offers':
         return this.execute(
           name,
           'model',
+          input,
           () => connector.getOffers!(input.itemId),
           'offers',
         );
@@ -401,6 +503,7 @@ export class AgentTools {
         return this.execute(
           name,
           'model',
+          input,
           () =>
             connector.checkAvailability!(input.offerId, {
               offerId: input.offerId,
@@ -412,6 +515,7 @@ export class AgentTools {
         return this.execute(
           name,
           'model',
+          input,
           () => connector.getQuote!(input.offerId, { offerId: input.offerId }),
           'quote',
           input.offerId,
@@ -422,6 +526,7 @@ export class AgentTools {
   private async execute(
     name: string,
     origin: 'code' | 'model',
+    input: Readonly<Record<string, unknown>>,
     work: () => Promise<unknown>,
     shape: 'items' | 'offers' | 'availability' | 'quote' = 'items',
     expectedOfferId?: string,
@@ -433,7 +538,7 @@ export class AgentTools {
       result = await this.withTimeout(work());
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'TOOL_TIMEOUT') {
-        return this.fail(name, origin, 'TIMEOUT', started);
+        return this.fail(name, origin, 'TIMEOUT', started, input);
       }
       const notFound =
         isConnectorError(error) &&
@@ -443,6 +548,7 @@ export class AgentTools {
         origin,
         notFound ? 'NOT_FOUND' : 'UNAVAILABLE',
         started,
+        input,
       );
     }
     // Connector output is validated again here: the agent never renders a
@@ -460,13 +566,37 @@ export class AgentTools {
       (expectedOfferId !== undefined &&
         (valid.data as { offerId: string }).offerId !== expectedOfferId)
     ) {
-      return this.fail(name, origin, 'INVALID_OUTPUT', started);
+      return this.fail(name, origin, 'INVALID_OUTPUT', started, input);
     }
     result = valid.data;
+    // A live check whose own validity window has already closed is not a
+    // current fact: report it as STALE instead of rendering it.
+    if (
+      (shape === 'availability' || shape === 'quote') &&
+      this.isStale((result as { validUntil?: string }).validUntil)
+    ) {
+      return this.fail(name, origin, 'STALE', started, input);
+    }
+    const outcome: ToolOutcomeType =
+      shape === 'items'
+        ? (result as CatalogItem[]).length > 0
+          ? 'FOUND'
+          : 'NOT_FOUND'
+        : shape === 'offers'
+          ? (result as Offer[]).length === 0
+            ? 'NOT_FOUND'
+            : (result as Offer[]).every((offer) =>
+                  this.isStale(offer.validUntil),
+                )
+              ? 'STALE'
+              : 'FOUND'
+          : 'FOUND';
     this.trace.push({
       name,
       origin,
       status: 'ok',
+      outcome,
+      input: redactedSummary(input),
       durationMs: Date.now() - started,
     });
     const sourceSystem =
@@ -475,17 +605,24 @@ export class AgentTools {
     switch (shape) {
       case 'items': {
         const items = result as CatalogItem[];
-        return { ok: true, summary: this.describeItems(name, items), items };
+        return {
+          ok: true,
+          outcome,
+          summary: this.describeItems(name, items),
+          items,
+        };
       }
       case 'offers':
         return {
           ok: true,
+          outcome,
           summary: this.describeOffers(result as Offer[]),
           items: [],
         };
       case 'availability':
         return {
           ok: true,
+          outcome,
           summary: this.describeAvailability(
             result as Availability,
             sourceSystem,
@@ -495,6 +632,7 @@ export class AgentTools {
       case 'quote':
         return {
           ok: true,
+          outcome,
           summary: this.describeQuote(result as Quote),
           items: [],
         };

@@ -13,13 +13,16 @@ import {
 } from './metered-llm.js';
 import {
   costOfUsage,
-  DEFAULT_PRICING_VERSION,
   nanoToUsd,
+  parsePricingConfig,
+  perMTokToNanoPerToken,
+  pricingAgeDays,
+  PricingCatalog,
   pricingFor,
   usdToNano,
   worstCaseCost,
 } from './pricing.js';
-import { ScriptedLlmProvider } from './scripted-llm-provider.js';
+import { MOCK_MODEL, ScriptedLlmProvider } from './scripted-llm-provider.js';
 
 const usage = (input: number, output: number, cacheRead = 0): LlmUsage => ({
   inputTokens: input,
@@ -29,43 +32,121 @@ const usage = (input: number, output: number, cacheRead = 0): LlmUsage => ({
   cacheWrite1hTokens: 0,
 });
 
-describe('pricing snapshot', () => {
-  const haiku = pricingFor(DEFAULT_PRICING_VERSION, 'claude-haiku-5-5');
+/** Generic two-tier test card (not a real provider price list). */
+const TEST_PRICING = parsePricingConfig({
+  version: 'test-2026-01-01',
+  provider: 'test',
+  asOf: '2026-01-01',
+  sourceUrl: 'https://example.invalid/pricing',
+  models: {
+    tiered: {
+      inputPerMTok: '0.10',
+      cacheWrite5mPerMTok: '0.125',
+      cacheWrite1hPerMTok: '0.20',
+      cacheReadPerMTok: '0.01',
+      outputPerMTok: '0.50',
+      toolUseSystemPromptTokens: 286,
+      longPrompt: {
+        thresholdTokens: 100_000,
+        inputPerMTok: '0.50',
+        cacheWrite5mPerMTok: '0.625',
+        cacheWrite1hPerMTok: '1',
+        cacheReadPerMTok: '0.05',
+        outputPerMTok: '2.50',
+      },
+    },
+    flat: {
+      inputPerMTok: '2',
+      cacheWrite5mPerMTok: '2.50',
+      cacheWrite1hPerMTok: '4',
+      cacheReadPerMTok: '0.10',
+      outputPerMTok: '10',
+    },
+    [MOCK_MODEL]: {
+      inputPerMTok: '0.10',
+      cacheWrite5mPerMTok: '0.125',
+      cacheWrite1hPerMTok: '0.20',
+      cacheReadPerMTok: '0.01',
+      outputPerMTok: '0.50',
+      longPrompt: {
+        thresholdTokens: 2_000,
+        inputPerMTok: '0.50',
+        cacheWrite5mPerMTok: '0.625',
+        cacheWrite1hPerMTok: '1',
+        cacheReadPerMTok: '0.05',
+        outputPerMTok: '2.50',
+      },
+    },
+  },
+});
 
-  it('prices Claude Haiku 5.5 exactly in nano-USD', () => {
+describe('pricing config and cost math', () => {
+  const tiered = pricingFor(TEST_PRICING, 'tiered');
+
+  it('converts decimal USD/MTok strings to integer nano-USD per token exactly', () => {
+    expect(perMTokToNanoPerToken('0.10')).toBe(100);
+    expect(perMTokToNanoPerToken('0.125')).toBe(125);
+    expect(perMTokToNanoPerToken('0.625')).toBe(625);
+    expect(perMTokToNanoPerToken('2.50')).toBe(2_500);
+    expect(perMTokToNanoPerToken('0.0100')).toBe(10);
+    expect(perMTokToNanoPerToken('15')).toBe(15_000);
+    // Not representable as whole nano-USD per token: rejected, never rounded.
+    expect(() => perMTokToNanoPerToken('0.0125')).toThrow(/whole number/);
+    expect(() => perMTokToNanoPerToken('1e-3')).toThrow(/Invalid price/);
+    expect(() => parsePricingConfig({ version: 'x', models: {} })).toThrow();
+  });
+
+  it('prices standard-tier usage exactly in nano-USD', () => {
     // 10,000 input at $0.10/MTok + 1,000 output at $0.50/MTok = $0.0015
-    expect(costOfUsage(haiku, usage(10_000, 1_000))).toBe(1_500_000);
-    // cache reads at $0.01/MTok (100K tokens stays on the standard card)
-    expect(costOfUsage(haiku, usage(0, 0, 100_000))).toBe(usdToNano('0.001'));
-    // cache reads count toward prompt length: 1M cached tokens is long context
-    expect(costOfUsage(haiku, usage(0, 0, 1_000_000))).toBe(usdToNano('0.05'));
+    expect(costOfUsage(tiered, usage(10_000, 1_000))).toBe(usdToNano('0.0015'));
+    // cache reads at $0.01/MTok; 100K tokens stays on the standard tier
+    expect(costOfUsage(tiered, usage(0, 0, 100_000))).toBe(usdToNano('0.001'));
   });
 
-  it('applies the long-context card above 100K prompt tokens', () => {
-    expect(costOfUsage(haiku, usage(100_000, 0))).toBe(usdToNano('0.01'));
-    expect(costOfUsage(haiku, usage(100_001, 0))).toBe(100_001 * 500);
-  });
-
-  it('records the Sonnet/Opus 5.5 cache-read multiplier of 0.05x', () => {
-    expect(
-      pricingFor(DEFAULT_PRICING_VERSION, 'claude-sonnet-5-5').standard
-        .cacheRead,
-    ).toBe(100);
-    expect(
-      pricingFor(DEFAULT_PRICING_VERSION, 'claude-opus-5-5').standard.cacheRead,
-    ).toBe(200);
-  });
-
-  it('bounds worst case by the most expensive input rate and full output', () => {
-    expect(worstCaseCost(haiku, 1_000, 1_024)).toBe(1_000 * 125 + 1_024 * 500);
-  });
-
-  it('refuses unpriced models and unknown versions', () => {
-    expect(() => pricingFor(DEFAULT_PRICING_VERSION, 'gpt-anything')).toThrow(
-      /No pricing/,
+  it('applies the long-prompt tier above the threshold, counting cache reads', () => {
+    expect(costOfUsage(tiered, usage(100_000, 0))).toBe(usdToNano('0.01'));
+    expect(costOfUsage(tiered, usage(100_001, 0))).toBe(usdToNano('0.0500005'));
+    // 1M cached tokens is a long prompt: $0.05/MTok cache-read rate
+    expect(costOfUsage(tiered, usage(0, 0, 1_000_000))).toBe(usdToNano('0.05'));
+    expect(costOfUsage(tiered, usage(50_000, 2_000, 60_000))).toBe(
+      50_000 * 500 + 2_000 * 2_500 + 60_000 * 50,
     );
-    expect(() => pricingFor('2020-01-01', 'claude-haiku-5-5')).toThrow(
+  });
+
+  it('reserves the worst case at the tier the prompt falls in', () => {
+    // Standard tier: max(input, 5m write, 1h write) = 200 nUSD + output 500.
+    expect(worstCaseCost(tiered, 1_000, 1_024)).toBe(1_000 * 200 + 1_024 * 500);
+    expect(worstCaseCost(tiered, 100_001, 10)).toBe(
+      100_001 * 1_000 + 10 * 2_500,
+    );
+    expect(worstCaseCost(pricingFor(TEST_PRICING, 'flat'), 10, 10)).toBe(
+      10 * 4_000 + 10 * 10_000,
+    );
+  });
+
+  it('refuses unpriced models, unknown and duplicate versions', () => {
+    expect(() => pricingFor(TEST_PRICING, 'other-model')).toThrow(/No pricing/);
+    const catalog = new PricingCatalog([]);
+    expect(catalog.has('test-2026-01-01')).toBe(false);
+    expect(() => catalog.snapshot('test-2026-01-01')).toThrow(
       /Unknown pricing/,
+    );
+    const raw = {
+      version: 'dup-1',
+      provider: 'test',
+      asOf: '2026-01-01',
+      sourceUrl: 'https://example.invalid/p',
+      models: {},
+    };
+    expect(() => new PricingCatalog([raw, raw])).toThrow(/Duplicate/);
+  });
+
+  it('reports pricing age in whole days', () => {
+    expect(pricingAgeDays(TEST_PRICING, new Date('2026-01-31T23:59:00Z'))).toBe(
+      30,
+    );
+    expect(pricingAgeDays(TEST_PRICING, new Date('2026-02-01T00:00:00Z'))).toBe(
+      31,
     );
   });
 
@@ -171,7 +252,7 @@ describe('MeteredLlm', () => {
     );
     const llm = new MeteredLlm(
       provider,
-      DEFAULT_PRICING_VERSION,
+      TEST_PRICING,
       budget,
       {
         record: async (entry): Promise<void> => void entries.push(entry),
@@ -239,7 +320,7 @@ describe('MeteredLlm', () => {
     );
     const llm = new MeteredLlm(
       provider,
-      DEFAULT_PRICING_VERSION,
+      TEST_PRICING,
       budget,
       {
         record: async (): Promise<void> => {
@@ -252,6 +333,45 @@ describe('MeteredLlm', () => {
     await llm.structured(request);
     expect(onError).toHaveBeenCalledOnce();
     expect(budget.snapshot.spentNano).toBeGreaterThan(0);
+  });
+
+  it('refuses a prompt over the long-prompt threshold before calling', async () => {
+    const provider = new ScriptedLlmProvider([
+      { kind: 'structured', value: { ok: true } },
+    ]);
+    // The test mock card switches tier at 2,000 prompt tokens.
+    const { llm } = metered(provider, { maxInputBytesPerCall: 1_000_000 });
+    await expect(
+      llm.structured({
+        ...request,
+        messages: [{ role: 'user', text: 'x'.repeat(2_100) }],
+      }),
+    ).rejects.toMatchObject({ reason: 'INPUT_TOO_LARGE' });
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it('passes the turn deadline signal to the provider', async () => {
+    const provider = new ScriptedLlmProvider([
+      { kind: 'structured', value: { ok: true } },
+    ]);
+    const controller = new AbortController();
+    const budget = new TurnBudget(
+      {
+        ...LIMITS,
+        maxTurnCostNano: 10_000_000,
+        maxConversationCostNano: 10_000_000,
+      },
+      { conversationSpentNano: 0, tenantMonthSpentNano: 0 },
+    );
+    const llm = new MeteredLlm(
+      provider,
+      TEST_PRICING,
+      budget,
+      { record: async (): Promise<void> => undefined },
+      { tenantId: 't1', turnKey: 'turn', signal: controller.signal },
+    );
+    await llm.structured(request);
+    expect(provider.calls[0].request.signal).toBe(controller.signal);
   });
 
   it('estimates request size from UTF-8 bytes (Cyrillic counts double)', () => {

@@ -159,10 +159,17 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
 const LATIN = /[a-z]/giu;
 const CYRILLIC = /[\u0400-\u04ff]/giu;
 
+/** All-caps Latin tokens (acronyms, product codes) say nothing about script. */
+const ACRONYM = /\b[A-Z][A-Z0-9]{1,9}\b/gu;
+/** Below this share of one script a message is mixed, not a script choice. */
+const MIXED_SCRIPT_SHARE = 0.75;
+const MIXED_SCRIPT_MAX_CONFIDENCE = 0.45;
+
 export function detectLanguage(input: string): LanguageDetection {
   const text = unifyApostrophes(input).toLowerCase();
-  const latin = text.match(LATIN)?.length ?? 0;
-  const cyrillic = text.match(CYRILLIC)?.length ?? 0;
+  const scriptText = unifyApostrophes(input).replace(ACRONYM, ' ');
+  const latin = scriptText.match(LATIN)?.length ?? 0;
+  const cyrillic = scriptText.match(CYRILLIC)?.length ?? 0;
   if (latin + cyrillic === 0)
     return { language: 'unknown', script: 'unknown', confidence: 0 };
   const script: ScriptCode = cyrillic >= latin ? 'Cyrl' : 'Latn';
@@ -193,14 +200,20 @@ export function detectLanguage(input: string): LanguageDetection {
 
   const margin = (top.value - second.value) / (top.value + 2);
   const lengthFactor = Math.min(1, words.length / 3);
+  const raw = Math.min(
+    1,
+    margin * scriptShare * (0.5 + 0.5 * lengthFactor) * 1.4,
+  );
+  // A message mixing Latin and Cyrillic never switches the conversation's
+  // script on its own (addendum §3.10: conservative on uncertain script).
+  const capped =
+    scriptShare < MIXED_SCRIPT_SHARE
+      ? Math.min(raw, MIXED_SCRIPT_MAX_CONFIDENCE)
+      : raw;
   return {
     language: top.language,
     script,
-    confidence:
-      Math.round(
-        Math.min(1, margin * scriptShare * (0.5 + 0.5 * lengthFactor) * 1.4) *
-          1000,
-      ) / 1000,
+    confidence: Math.round(capped * 1000) / 1000,
   };
 }
 

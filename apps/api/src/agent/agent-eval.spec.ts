@@ -19,7 +19,7 @@ const cases = loadCases(resolve(process.cwd(), '../../eval/cases'));
 const outcomes: EvalOutcome[] = [];
 
 describe('agent evaluation suite (scripted)', () => {
-  it('covers every launch locale with the same categories', () => {
+  it('covers every launch locale with the shared base categories', () => {
     const byLocale = new Map<string, Set<string>>();
     for (const evalCase of cases) {
       const set = byLocale.get(evalCase.locale) ?? new Set<string>();
@@ -32,10 +32,15 @@ describe('agent evaluation suite (scripted)', () => {
       'uz-Cyrl',
       'uz-Latn',
     ]);
-    const categories = [...byLocale.values()].map((set) =>
-      [...set].sort().join(','),
-    );
-    expect(new Set(categories).size).toBe(1);
+    const base = byLocale.get('en')!;
+    for (const categories of byLocale.values())
+      for (const category of base) expect(categories).toContain(category);
+    // Uzbek locales carry the extended script/apostrophe/safety set.
+    const count = (locale: string): number =>
+      cases.filter((evalCase) => evalCase.locale === locale).length;
+    expect(count('uz-Latn')).toBeGreaterThanOrEqual(50);
+    expect(count('uz-Cyrl')).toBeGreaterThanOrEqual(50);
+    expect(byLocale.get('uz-Latn')).toEqual(byLocale.get('uz-Cyrl'));
   });
 
   it.each(cases.map((evalCase) => [evalCase.id, evalCase] as const))(

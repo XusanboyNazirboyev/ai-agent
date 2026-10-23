@@ -32,6 +32,7 @@ export const INTENTS = [
   'complaint',
   'negotiation',
   'account_question',
+  'ai_question',
   'other',
 ] as const;
 export type Intent = (typeof INTENTS)[number];

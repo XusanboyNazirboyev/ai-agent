@@ -7,7 +7,7 @@ import { INTENTS, type SlotState } from './slots.js';
  * history and tool results are passed as delimited, sanitized data so that
  * instructions inside them cannot override policy (D16, §8.5).
  */
-export const PROMPT_VERSION = 'agent-core-2026-10-23.1';
+export const PROMPT_VERSION = 'agent-core-2026-10-23.2';
 
 export interface HistoryEntry {
   readonly role: 'customer' | 'agent';
@@ -39,6 +39,7 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
   negotiation: 'asks for a discount, installments, special terms or a contract',
   account_question:
     'asks about their own existing account, payments or personal records',
+  ai_question: 'asks whether they are talking to a bot, an AI or a person',
   other: 'anything else',
 };
 

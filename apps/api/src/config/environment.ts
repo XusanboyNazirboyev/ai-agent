@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { PRICING_SNAPSHOTS, usdToNano } from '../core/llm/pricing.js';
+import { usdToNano } from '../core/llm/pricing.js';
+import { MOCK_MODEL } from '../core/llm/scripted-llm-provider.js';
+import { PRICING_CATALOG } from '../llm/pricing-catalog.js';
 import { postgresEnvironmentSchema } from './postgres-config.js';
 
 /** USD amount as a decimal string ("0.02"), validated exactly. */
@@ -106,6 +108,23 @@ const environmentSchema = postgresEnvironmentSchema
       .max(30_000)
       .default(8_000),
     AGENT_HISTORY_MESSAGES: z.coerce.number().int().min(0).max(20).default(8),
+    /** Whole-turn deadline (model + tools); on expiry the turn hands over. */
+    AGENT_TURN_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(5_000)
+      .max(300_000)
+      .default(60_000),
+    /**
+     * A COMPUTING turn older than this is presumed dead and may be taken
+     * over by another worker. Must exceed AGENT_TURN_TIMEOUT_MS.
+     */
+    AGENT_TURN_LEASE_MS: z.coerce
+      .number()
+      .int()
+      .min(10_000)
+      .max(900_000)
+      .default(120_000),
   })
   .superRefine((environment, context) => {
     if (
@@ -118,20 +137,45 @@ const environmentSchema = postgresEnvironmentSchema
         message: 'ANTHROPIC_API_KEY is required when LLM_PROVIDER is anthropic',
       });
     }
-    const snapshot = PRICING_SNAPSHOTS[environment.LLM_PRICING_VERSION];
-    if (!snapshot) {
+    if (!PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)) {
       context.addIssue({
         code: 'custom',
         path: ['LLM_PRICING_VERSION'],
         message: 'unknown pricing version',
       });
-    } else if (environment.LLM_PROVIDER === 'anthropic') {
-      for (const key of ['LLM_FAST_MODEL', 'LLM_STRONG_MODEL'] as const) {
-        if (!snapshot.models[environment[key]]) {
+    } else {
+      const snapshot = PRICING_CATALOG.snapshot(
+        environment.LLM_PRICING_VERSION,
+      );
+      const models: ReadonlyArray<readonly [string, string]> =
+        environment.LLM_PROVIDER === 'anthropic'
+          ? [
+              ['LLM_FAST_MODEL', environment.LLM_FAST_MODEL],
+              ['LLM_STRONG_MODEL', environment.LLM_STRONG_MODEL],
+            ]
+          : [['LLM_PROVIDER', MOCK_MODEL]];
+      for (const [key, model] of models) {
+        const pricing = snapshot.models[model];
+        if (!pricing) {
           context.addIssue({
             code: 'custom',
             path: [key],
             message: `model has no price in ${environment.LLM_PRICING_VERSION}; an unpriced model cannot be budgeted`,
+          });
+          continue;
+        }
+        // Every allowed prompt must stay on the standard price tier. The
+        // input estimate is UTF-8 bytes plus the tool preamble.
+        const threshold = pricing.longContext?.threshold;
+        const overhead = pricing.toolUseSystemPromptTokens ?? 400;
+        if (
+          threshold !== undefined &&
+          environment.LLM_MAX_INPUT_BYTES + overhead > threshold
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['LLM_MAX_INPUT_BYTES'],
+            message: `must keep prompts under the ${threshold}-token long-prompt price threshold of ${model}`,
           });
         }
       }
@@ -144,6 +188,17 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['LLM_TURN_BUDGET_USD'],
         message: 'must not exceed LLM_CONVERSATION_BUDGET_USD',
+      });
+    }
+    if (
+      environment.AGENT_TURN_LEASE_MS <
+      environment.AGENT_TURN_TIMEOUT_MS + 10_000
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AGENT_TURN_LEASE_MS'],
+        message:
+          'must exceed AGENT_TURN_TIMEOUT_MS by at least 10000 so a live turn is never taken over',
       });
     }
     if (

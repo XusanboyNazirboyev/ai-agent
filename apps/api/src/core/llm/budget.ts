@@ -127,6 +127,11 @@ export class TurnBudget {
     return worst;
   }
 
+  /** Rejects a call whose prompt would exceed the allowed size. */
+  refuseInput(): never {
+    this.fail('INPUT_TOO_LARGE');
+  }
+
   beginToolRound(): void {
     if (this.toolRounds >= this.limits.maxToolRoundsPerTurn)
       this.fail('TOOL_ROUND_LIMIT');

@@ -146,6 +146,29 @@ enum OutboxEventStatus {
   FAILED
 }
 
+/// Per channel account. OFF keeps the Phase 2 behavior; SHADOW runs the
+/// agent and stores the draft without sending; LIVE sends (refused until an
+/// operator handover notifier exists, except in local development).
+enum AgentMode {
+  OFF
+  SHADOW
+  LIVE
+}
+
+enum AgentTurnStatus {
+  COMPUTING
+  COMMITTED
+  DISCARDED
+  ABANDONED
+  FAILED
+}
+
+enum HandoverNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 enum AuditActorType {
   SYSTEM
   CUSTOMER
@@ -178,6 +201,7 @@ model Tenant {
   conversations  Conversation[]
   messages        Message[]
   conversationSlots ConversationSlots[]
+  agentTurns      AgentTurn[]
   catalogItems    CatalogItem[]
   offers          Offer[]
   aliases         CatalogAlias[]
@@ -283,6 +307,69 @@ model LlmUsageRecord {
   @@map("llm_usage_records")
 }
 
+/// One attempt to answer a batch of inbound messages (claim -> compute ->
+/// commit). The agent runs outside any transaction; only the claim and the
+/// commit are short transactions. Partial unique indexes (migration SQL)
+/// allow one COMPUTING turn per conversation and one COMMITTED turn per
+/// idempotency key. Holds counts, cost, redacted tool summaries, guardrail
+/// results and the draft reply; no raw customer text or prompts.
+model AgentTurn {
+  id                  String          @id @default(uuid(7)) @db.Uuid
+  tenantId            String          @map("tenant_id") @db.Uuid
+  conversationId      String          @map("conversation_id") @db.Uuid
+  channelAccountId    String          @map("channel_account_id") @db.Uuid
+  /// agent-reply:<conversationId>:<answeredSequence>
+  idempotencyKey      String          @map("idempotency_key") @db.VarChar(200)
+  attempt             Int
+  mode                AgentMode
+  status              AgentTurnStatus @default(COMPUTING)
+  /// Outbox event id of the job that owns this attempt.
+  claimToken          String          @map("claim_token") @db.VarChar(200)
+  leaseExpiresAt      DateTime        @map("lease_expires_at") @db.Timestamptz(6)
+  answeredSequence    Int             @map("answered_sequence")
+  /// Highest inbound sequence in the conversation at claim time; a message
+  /// above it at commit arrived during compute and supersedes this reply.
+  seenInboundSequence Int             @default(0) @map("seen_inbound_sequence")
+  conversationVersion Int             @map("conversation_version")
+  inboundEventIds     String[]        @map("inbound_event_ids")
+  correlationId       String          @map("correlation_id") @db.VarChar(100)
+  outcome             String?         @db.VarChar(40)
+  handoverReason      String?         @map("handover_reason") @db.VarChar(100)
+  discardReason       String?         @map("discard_reason") @db.VarChar(40)
+  failureCode         String?         @map("failure_code") @db.VarChar(100)
+  locale              String?         @db.VarChar(16)
+  provider            String?         @db.VarChar(40)
+  models              String[]        @default([])
+  llmCalls            Int             @default(0) @map("llm_calls")
+  inputTokens         Int             @default(0) @map("input_tokens")
+  outputTokens        Int             @default(0) @map("output_tokens")
+  estimatedCostNano   BigInt          @default(0) @map("estimated_cost_nano_usd")
+  actualCostNano      BigInt          @default(0) @map("actual_cost_nano_usd")
+  latencyMs           Int?            @map("latency_ms")
+  toolCalls           Json            @default("[]") @map("tool_calls") @db.JsonB
+  guardrail           Json            @default("{}") @db.JsonB
+  facts               Json            @default("[]") @db.JsonB
+  draftText           String?         @map("draft_text") @db.Text
+  replyMessageId      String?         @map("reply_message_id") @db.Uuid
+  handoverId          String?         @map("handover_id") @db.Uuid
+  pricingVersion      String?         @map("pricing_version") @db.VarChar(64)
+  promptVersion       String?         @map("prompt_version") @db.VarChar(64)
+  packRef             String?         @map("pack_ref") @db.VarChar(170)
+  startedAt           DateTime        @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt         DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation        Conversation    @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  channelAccount      ChannelAccount  @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey, attempt])
+  @@index([tenantId, conversationId, status])
+  @@index([status, leaseExpiresAt])
+  @@map("agent_turns")
+}
+
 model ChannelAccount {
   id                String              @id @default(uuid(7)) @db.Uuid
   tenantId          String              @map("tenant_id") @db.Uuid
@@ -291,6 +378,7 @@ model ChannelAccount {
   status            ChannelAccountStatus @default(DISABLED)
   credentialRef     String?             @map("credential_ref") @db.VarChar(500)
   webhookSecretRef  String?             @map("webhook_secret_ref") @db.VarChar(500)
+  agentMode         AgentMode           @default(OFF) @map("agent_mode")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -299,6 +387,7 @@ model ChannelAccount {
   conversations Conversation[]
   messages     Message[]
   inboundEvents InboundEvent[]
+  agentTurns   AgentTurn[]
 
   @@unique([tenantId, id])
   // Provider routing resolves the tenant from this globally unique account key.
@@ -379,6 +468,7 @@ model Conversation {
   quotes   Quote[]
   leads    Lead[]
   handovers Handover[]
+  agentTurns AgentTurn[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerChatId])
@@ -584,6 +674,9 @@ model Handover {
   conversationId     String         @map("conversation_id") @db.Uuid
   reasonCode         String         @map("reason_code") @db.VarChar(100)
   status             HandoverStatus @default(OPEN)
+  /// Delivery to operators is Phase 5; until then handovers stay PENDING.
+  notificationStatus HandoverNotificationStatus @default(PENDING) @map("notification_status")
+  idempotencyKey     String?        @map("idempotency_key") @db.VarChar(200)
   summary            Json           @db.JsonB
   assignedOperatorId String?        @map("assigned_operator_id") @db.Uuid
   version            Int            @default(1)
@@ -595,7 +688,9 @@ model Handover {
   assignedOperator   Operator?      @relation("AssignedHandoverOperator", fields: [tenantId, assignedOperatorId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status, openedAt])
+  @@index([tenantId, notificationStatus])
   @@map("handovers")
 }
 

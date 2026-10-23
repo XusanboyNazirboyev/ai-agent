@@ -15,12 +15,21 @@ import type {
   ToolGenerationRequest,
   ToolGenerationResult,
 } from './llm-provider.js';
-import { costOfUsage, pricingFor, worstCaseCost } from './pricing.js';
+import {
+  costOfUsage,
+  maxStandardPromptTokens,
+  pricingFor,
+  worstCaseCost,
+  type PricingSnapshot,
+} from './pricing.js';
 
 /** Per-message and per-request framing the provider adds around content. */
 const MESSAGE_OVERHEAD_BYTES = 16;
-/** Covers provider tool-use preambles (286 tokens on the priced models). */
-const TOOLS_OVERHEAD_TOKENS = 400;
+/**
+ * Tool-use preamble used when the pricing config does not state the model's
+ * own figure (286 tokens on the priced Claude models, tool_choice auto).
+ */
+const DEFAULT_TOOLS_OVERHEAD_TOKENS = 400;
 
 /**
  * Conservative input-size estimate taken before a call. Token counts are
@@ -29,12 +38,15 @@ const TOOLS_OVERHEAD_TOKENS = 400;
  * a guarantee: settlement uses the provider-reported usage and records any
  * underestimate as overshoot.
  */
-export function estimateRequest(request: {
-  system: string;
-  messages: readonly LlmMessage[];
-  tools?: readonly LlmToolDefinition[];
-  jsonSchema?: Readonly<Record<string, unknown>>;
-}): { bytes: number; tokens: number } {
+export function estimateRequest(
+  request: {
+    system: string;
+    messages: readonly LlmMessage[];
+    tools?: readonly LlmToolDefinition[];
+    jsonSchema?: Readonly<Record<string, unknown>>;
+  },
+  toolsOverheadTokens: number = DEFAULT_TOOLS_OVERHEAD_TOKENS,
+): { bytes: number; tokens: number } {
   const size = (value: string): number => Buffer.byteLength(value, 'utf8');
   let bytes = size(request.system);
   for (const message of request.messages) {
@@ -49,7 +61,7 @@ export function estimateRequest(request: {
   }
   if (request.tools?.length) bytes += size(JSON.stringify(request.tools));
   if (request.jsonSchema) bytes += size(JSON.stringify(request.jsonSchema));
-  const overhead = request.tools?.length ? TOOLS_OVERHEAD_TOKENS : 0;
+  const overhead = request.tools?.length ? toolsOverheadTokens : 0;
   return { bytes, tokens: bytes + overhead };
 }
 
@@ -81,6 +93,8 @@ export interface MeteringContext {
   readonly tenantId: string;
   readonly conversationId?: string;
   readonly turnKey: string;
+  /** Turn deadline: aborts in-flight provider requests when it fires. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -93,7 +107,7 @@ export class MeteredLlm {
 
   constructor(
     private readonly provider: LlmProvider,
-    private readonly pricingVersion: string,
+    private readonly pricing: PricingSnapshot,
     readonly budget: TurnBudget,
     private readonly sink: LlmUsageSink,
     private readonly context: MeteringContext,
@@ -101,14 +115,24 @@ export class MeteredLlm {
   ) {}
 
   private prepare(
-    tier: LlmTier,
-    maxOutputTokens: number,
-    estimate: { bytes: number; tokens: number },
+    request: Parameters<typeof estimateRequest>[0] & {
+      readonly tier: LlmTier;
+      readonly maxOutputTokens: number;
+    },
   ): { model: string; reservation: Reservation; maxOutputTokens: number } {
-    const model = this.provider.modelFor(tier);
-    const pricing = pricingFor(this.pricingVersion, model);
+    const model = this.provider.modelFor(request.tier);
+    const pricing = pricingFor(this.pricing, model);
+    const estimate = estimateRequest(
+      request,
+      pricing.toolUseSystemPromptTokens,
+    );
+    // Prompts must stay on the standard tier: a prompt over the long-prompt
+    // threshold is refused instead of silently billed at the higher rates.
+    const ceiling = maxStandardPromptTokens(pricing);
+    if (ceiling !== undefined && estimate.tokens > ceiling)
+      this.budget.refuseInput();
     const capped = Math.min(
-      maxOutputTokens,
+      request.maxOutputTokens,
       this.budget.limits.maxOutputTokensPerCall,
     );
     const reservation = this.budget.reserve(
@@ -133,7 +157,7 @@ export class MeteredLlm {
     outcome: string,
   ): Promise<void> {
     const cost = costOfUsage(
-      pricingFor(this.pricingVersion, result.model),
+      pricingFor(this.pricing, result.model),
       result.usage,
     );
     this.budget.settle(reservation, cost);
@@ -151,7 +175,7 @@ export class MeteredLlm {
         usage: result.usage,
         costNano: cost,
         reservedNano: reservation.worstCaseNano,
-        pricingVersion: this.pricingVersion,
+        pricingVersion: this.pricing.version,
         durationMs: result.durationMs,
         attempts: result.attempts,
         outcome,
@@ -165,16 +189,13 @@ export class MeteredLlm {
   async structured<T>(
     request: StructuredGenerationRequest<T>,
   ): Promise<StructuredGenerationResult<T>> {
-    const prep = this.prepare(
-      request.tier,
-      request.maxOutputTokens,
-      estimateRequest(request),
-    );
+    const prep = this.prepare(request);
     let result: StructuredGenerationResult<T>;
     try {
       result = await this.provider.generateStructured({
         ...request,
         maxOutputTokens: prep.maxOutputTokens,
+        signal: request.signal ?? this.context.signal,
       });
     } catch (error: unknown) {
       this.budget.release(prep.reservation);
@@ -193,16 +214,13 @@ export class MeteredLlm {
   async withTools(
     request: ToolGenerationRequest,
   ): Promise<ToolGenerationResult> {
-    const prep = this.prepare(
-      request.tier,
-      request.maxOutputTokens,
-      estimateRequest(request),
-    );
+    const prep = this.prepare(request);
     let result: ToolGenerationResult;
     try {
       result = await this.provider.generateWithTools({
         ...request,
         maxOutputTokens: prep.maxOutputTokens,
+        signal: request.signal ?? this.context.signal,
       });
     } catch (error: unknown) {
       this.budget.release(prep.reservation);

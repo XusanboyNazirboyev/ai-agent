@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { LlmError } from '../core/llm/llm-provider.js';
 import { usdToNano } from '../core/llm/pricing.js';
+import { UZ_LATN } from '../locales/locale-packs.js';
 import {
   ScriptedLlmProvider,
   type ScriptStep,
@@ -171,14 +172,18 @@ describe('agent turn: grounded answers', () => {
     expect(result.reply).not.toMatch(/120|dollar/);
   });
 
-  it('falls back to a code-rendered reply when the regeneration also fails', async () => {
+  it('hands over (GUARDRAIL) when the regeneration also fails', async () => {
     const provider = script(
       extraction({ subject: 'IELTS' }, 'price'),
       { kind: 'tools', text: 'Narxi 99 USD, 20% chegirma bor!' },
       { kind: 'tools', text: 'Narxi {{F99}}' },
     );
     const { result } = await runTurn({ provider, text: 'IELTS narxi?' });
-    expect(result.outcome).toBe('FALLBACK');
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'GUARDRAIL',
+      regenerated: true,
+    });
     expect(result.violations).toEqual(
       expect.arrayContaining([
         'UNSOURCED_NUMBER',
@@ -187,7 +192,7 @@ describe('agent turn: grounded answers', () => {
         'UNKNOWN_FACT',
       ]),
     );
-    expect(result.reply).toContain('• IELTS Preparation');
+    expect(result.reply).toBe(UZ_LATN.templates.handover.GUARDRAIL);
     expect(result.reply).not.toMatch(/99|20%|chegirma/);
   });
 
@@ -301,8 +306,11 @@ describe('agent turn: tool control', () => {
           },
     );
     const { result } = await runTurn({ provider, text: 'IELTS haqida' });
-    expect(result.outcome).toBe('FALLBACK');
-    expect(result.budgetStop).toBe('TOOL_ROUND_LIMIT');
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'TOOL_LOOP_LIMIT',
+      budgetStop: 'TOOL_ROUND_LIMIT',
+    });
     expect(
       result.tools.filter((t) => t.code === 'DUPLICATE_CALL').length,
     ).toBeGreaterThan(0);
@@ -338,14 +346,17 @@ describe('agent turn: tool control', () => {
     expect(result.outcome).toBe('ANSWERED');
   });
 
-  it('hands over when the catalog cannot be searched', async () => {
+  it('separates an unreachable CRM from a missing data source', async () => {
     const down = educationConnector({ failureMode: 'transient' });
     const { result } = await runTurn({
       provider: script(extraction({ subject: 'IELTS' })),
       text: 'IELTS',
       connector: down,
     });
-    expect(result).toMatchObject({ outcome: 'HANDOVER', handover: 'NO_DATA' });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'CONNECTOR_UNAVAILABLE',
+    });
     const none = await runTurn({
       provider: script(extraction({ subject: 'IELTS' })),
       text: 'IELTS',
@@ -364,7 +375,7 @@ describe('agent turn: budgets and failures', () => {
       limits: { maxTurnCostNano: usdToNano('0.000001') },
     });
     expect(result).toMatchObject({
-      handover: 'BUDGET_EXHAUSTED',
+      handover: 'BUDGET_EXCEEDED',
       budgetStop: 'TURN_COST_LIMIT',
     });
     expect(provider.calls).toHaveLength(0);
@@ -378,13 +389,13 @@ describe('agent turn: budgets and failures', () => {
       conversationSpentNano: usdToNano('0.25'),
     });
     expect(result).toMatchObject({
-      handover: 'BUDGET_EXHAUSTED',
+      handover: 'BUDGET_EXCEEDED',
       budgetStop: 'CONVERSATION_COST_LIMIT',
     });
     expect(provider.calls).toHaveLength(0);
   });
 
-  it('degrades to deterministic behaviour when the provider is down', async () => {
+  it('acknowledges and hands over (LLM_UNAVAILABLE) when the provider is down', async () => {
     const provider = script({
       kind: 'error',
       error: new LlmError('LLM_UNAVAILABLE', 'down', true),
@@ -394,9 +405,13 @@ describe('agent turn: budgets and failures', () => {
       text: 'davom etamiz',
       input: { slots: { subject: { value: 'IELTS', source: 'customer' } } },
     });
-    expect(result.outcome).toBe('FALLBACK');
-    expect(result.reply).toContain('• IELTS Preparation');
-    expect(result.extractionFailure).toBe('LLM_UNAVAILABLE');
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'LLM_UNAVAILABLE',
+      llmFailure: 'LLM_UNAVAILABLE',
+      extractionFailure: 'LLM_UNAVAILABLE',
+    });
+    expect(result.reply).toBe(UZ_LATN.templates.handover.LLM_UNAVAILABLE);
   });
 
   it('hands over on a refusal', async () => {
@@ -410,9 +425,9 @@ describe('agent turn: budgets and failures', () => {
 
 describe('agent turn: safety', () => {
   it.each([
-    ['human_request', 'CUSTOMER_REQUEST', 'Albatta, sizni operator bilan'],
-    ['negotiation', 'NEGOTIATION', 'operatorimiz hal qiladi'],
-    ['account_question', 'AUTH_REQUIRED', 'Shaxsiy ma'],
+    ['human_request', 'CUSTOMER_REQUEST', 'Xodim bilan'],
+    ['negotiation', 'NEGOTIATION', 'jamoamiz hal qiladi'],
+    ['account_question', 'AUTH_REQUIRED', 'shaxsiy hisob'],
     ['complaint', 'COMPLAINT', 'Noqulaylik uchun'],
   ])('routes %s to a %s handover', async (intent, reason, text) => {
     const { result } = await runTurn({

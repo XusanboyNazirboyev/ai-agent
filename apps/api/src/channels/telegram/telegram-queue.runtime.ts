@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Queue, Worker } from 'bullmq';
+import { DelayedError, Queue, Worker } from 'bullmq';
 import type { RedisOptions } from 'bullmq';
 import type { AppEnvironment } from '../../config/environment.js';
 import type { Prisma } from '../../generated/prisma/client.js';
@@ -53,7 +53,15 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
     });
     this.worker = new Worker<QueuePayload>(
       queueName,
-      async (job) => this.processor.process(job.data),
+      async (job, token) => {
+        const result = await this.processor.process(job.data);
+        if (result && token) {
+          // Another worker holds the conversation's agent turn: re-check
+          // later without consuming a retry attempt.
+          await job.moveToDelayed(result.retryAt.getTime(), token);
+          throw new DelayedError();
+        }
+      },
       {
         connection: this.connection,
         concurrency: 8,

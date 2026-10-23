@@ -372,7 +372,7 @@
     "pack": "education",
     "locale": "en",
     "category": "invented_price",
-    "description": "An invented price is blocked twice; code renders a safe fallback",
+    "description": "An invented price is blocked twice and the turn hands over (GUARDRAIL)",
     "input": {
       "text": "How much is the IELTS course?"
     },
@@ -398,7 +398,8 @@
     "expect": {
       "locale": "en",
       "replyScript": "Latn",
-      "outcome": "FALLBACK",
+      "outcome": "HANDOVER",
+      "handover": "GUARDRAIL",
       "replyExcludes": [
         "120"
       ]
@@ -540,7 +541,7 @@
       "locale": "en",
       "replyScript": "Latn",
       "outcome": "HANDOVER",
-      "handover": "BUDGET_EXHAUSTED",
+      "handover": "BUDGET_EXCEEDED",
       "budgetStop": "TURN_COST_LIMIT"
     },
     "turnBudgetUsd": "0.000001",
@@ -580,7 +581,8 @@
     "expect": {
       "locale": "en",
       "replyScript": "Latn",
-      "outcome": "FALLBACK",
+      "outcome": "HANDOVER",
+      "handover": "TOOL_LOOP_LIMIT",
       "budgetStop": "TOOL_ROUND_LIMIT"
     },
     "repeatLastStep": true,
@@ -626,7 +628,7 @@
     "pack": "education",
     "locale": "en",
     "category": "provider_outage",
-    "description": "Provider outage degrades to code-rendered options",
+    "description": "Provider outage: safe acknowledgment and LLM_UNAVAILABLE handover",
     "input": {
       "text": "How much is the IELTS course?",
       "slots": {
@@ -641,9 +643,10 @@
     "expect": {
       "locale": "en",
       "replyScript": "Latn",
-      "outcome": "FALLBACK",
-      "replyIncludes": [
-        "IELTS Preparation"
+      "outcome": "HANDOVER",
+      "handover": "LLM_UNAVAILABLE",
+      "replyExcludes": [
+        "150"
       ]
     },
     "live": false
@@ -653,7 +656,7 @@
     "pack": "education",
     "locale": "en",
     "category": "connector_outage",
-    "description": "Catalog outage hands over instead of guessing",
+    "description": "Catalog outage hands over as CONNECTOR_UNAVAILABLE, distinct from missing data",
     "input": {
       "text": "How much is the IELTS course?"
     },
@@ -672,7 +675,7 @@
       "locale": "en",
       "replyScript": "Latn",
       "outcome": "HANDOVER",
-      "handover": "NO_DATA"
+      "handover": "CONNECTOR_UNAVAILABLE"
     },
     "connector": "down"
   }

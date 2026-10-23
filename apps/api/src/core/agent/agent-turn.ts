@@ -50,8 +50,15 @@ import { AgentTools, type ToolOutcome, type ToolTraceEntry } from './tools.js';
  *     try one relaxed search before reporting no results;
  *  5. let the model (STRONG tier) propose further read-only tool calls and
  *     draft the reply with fact references, within the tool/call budget;
- *  6. guard the draft, regenerate once if needed, otherwise fall back to a
- *     code-rendered reply. Business facts never come from the model.
+ *  6. guard the draft and regenerate once if needed; a draft that fails
+ *     twice hands over (GUARDRAIL). Business facts never come from the model.
+ *
+ * Failure policy: every failure ends in a locale template that only says
+ * the message was recorded, with a distinct handover reason:
+ * LLM_UNAVAILABLE (provider error/timeout), BUDGET_EXCEEDED (cost, call or
+ * prompt-size limit), TOOL_LOOP_LIMIT (tool round/call limit),
+ * CONNECTOR_UNAVAILABLE (CRM unreachable or invalid), NO_DATA (no data
+ * source or record), GUARDRAIL (refusal or two rejected drafts).
  */
 
 export interface AgentTurnInput {
@@ -97,6 +104,8 @@ export interface AgentTurnResult {
   readonly budgetStop?: BudgetStopReason;
   readonly tools: readonly ToolTraceEntry[];
   readonly language: LanguageDetection;
+  /** Provider error code when the turn ended because a model call failed. */
+  readonly llmFailure?: string;
 }
 
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
@@ -106,13 +115,29 @@ const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
   account_question: 'AUTH_REQUIRED',
 };
 
+/** Tool-loop limits are distinct from cost/size limits for operators. */
+export function budgetHandoverReason(
+  reason: BudgetStopReason | undefined,
+): HandoverReason {
+  return reason === 'TOOL_ROUND_LIMIT' || reason === 'TOOL_CALL_LIMIT'
+    ? 'TOOL_LOOP_LIMIT'
+    : 'BUDGET_EXCEEDED';
+}
+
+const CONNECTOR_FAILURES: ReadonlySet<string> = new Set([
+  'TIMEOUT',
+  'UNAVAILABLE',
+  'INVALID_OUTPUT',
+]);
+
 type Draft =
   | {
       readonly kind: 'draft';
       readonly text: string;
       readonly messages: LlmMessage[];
     }
-  | { readonly kind: 'refusal' | 'truncated' | 'budget' | 'error' };
+  | { readonly kind: 'refusal' | 'truncated' | 'budget' }
+  | { readonly kind: 'error'; readonly code: string };
 
 export async function runAgentTurn(
   input: AgentTurnInput,
@@ -131,7 +156,6 @@ export async function runAgentTurn(
   let slots: SlotState = input.slots;
   let intent: Intent | undefined;
   let extractionFailure: string | undefined;
-  let llmAvailable = true;
   const tools = deps.connector
     ? new AgentTools({
         connector: deps.connector,
@@ -218,12 +242,14 @@ export async function runAgentTurn(
     }
   } catch (error: unknown) {
     if (error instanceof BudgetExhaustedError) {
-      return handover('BUDGET_EXHAUSTED', { budgetStop: error.reason });
+      return handover(budgetHandoverReason(error.reason), {
+        budgetStop: error.reason,
+      });
     }
     if (!isLlmError(error)) throw error;
-    // Provider down: continue deterministically and never improvise facts.
+    // Provider down or timed out: acknowledge and hand over, never improvise.
     extractionFailure = error.code;
-    llmAvailable = false;
+    return handover('LLM_UNAVAILABLE', { llmFailure: error.code });
   }
   const merged = mergeSlots(pack, slots, proposed);
   slots = merged.state;
@@ -232,6 +258,9 @@ export async function runAgentTurn(
   // 3. Handover intents and missing search information.
   const reason = intent ? HANDOVER_INTENTS[intent] : undefined;
   if (reason) return handover(reason);
+  // Truthful AI disclosure when asked (addendum §3.10).
+  if (intent === 'ai_question')
+    return finish(locale().templates.aiDisclosure, 'ANSWERED');
 
   const missing = firstMissing(pack, slots, 'search');
   if (missing) {
@@ -262,11 +291,18 @@ export async function runAgentTurn(
     }
   } catch (error: unknown) {
     if (error instanceof BudgetExhaustedError) {
-      return handover('BUDGET_EXHAUSTED', { budgetStop: error.reason });
+      return handover(budgetHandoverReason(error.reason), {
+        budgetStop: error.reason,
+      });
     }
     throw error;
   }
-  if (!search.ok) return handover('NO_DATA');
+  if (!search.ok) {
+    // CRM failure is distinct from missing data (addendum §3.4).
+    return handover(
+      CONNECTOR_FAILURES.has(search.code) ? 'CONNECTOR_UNAVAILABLE' : 'NO_DATA',
+    );
+  }
   if (search.items.length === 0) {
     return finish(
       `${locale().templates.noResults} ${locale().templates.offerOperator}`,
@@ -290,7 +326,6 @@ export async function runAgentTurn(
       extra,
     );
   };
-  if (!llmAvailable) return fallback();
 
   // 5. Model-proposed tool calls and the reply draft.
   const draft = await respond(deps, tools, {
@@ -304,13 +339,13 @@ export async function runAgentTurn(
     }),
   });
   if (draft.kind === 'refusal') return handover('GUARDRAIL');
-  if (
-    draft.kind === 'budget' &&
-    llm.budget.snapshot.stopReason === 'CONVERSATION_COST_LIMIT'
-  ) {
-    return handover('BUDGET_EXHAUSTED');
-  }
-  if (draft.kind !== 'draft') return fallback();
+  if (draft.kind === 'budget')
+    return handover(budgetHandoverReason(llm.budget.snapshot.stopReason));
+  if (draft.kind === 'error')
+    return handover('LLM_UNAVAILABLE', { llmFailure: draft.code });
+  // Truncated or empty drafts carry nothing to guard: use the code-rendered
+  // option list, which contains only connector facts.
+  if (draft.kind !== 'draft' || draft.text.trim() === '') return fallback();
 
   // 6. Guardrail, one regeneration, then a safe code-rendered fallback.
   const guard = (text: string): ReturnType<typeof checkDraft> =>
@@ -350,13 +385,27 @@ export async function runAgentTurn(
           violations: [...new Set([...first, ...checked.violations])],
         };
     } catch (error: unknown) {
-      if (!(error instanceof BudgetExhaustedError) && !isLlmError(error))
-        throw error;
-      checked = { violations: first };
+      if (error instanceof BudgetExhaustedError) {
+        return handover(budgetHandoverReason(error.reason), {
+          budgetStop: error.reason,
+          violations: first,
+          regenerated,
+        });
+      }
+      if (!isLlmError(error)) throw error;
+      return handover('LLM_UNAVAILABLE', {
+        llmFailure: error.code,
+        violations: first,
+        regenerated,
+      });
     }
   }
-  if (!checked.rendered)
-    return fallback({ violations: checked.violations, regenerated });
+  if (!checked.rendered) {
+    return handover('GUARDRAIL', {
+      violations: checked.violations,
+      regenerated,
+    });
+  }
   return finish(checked.rendered, 'ANSWERED', { regenerated });
 }
 
@@ -407,7 +456,44 @@ async function respond(
     }
   } catch (error: unknown) {
     if (error instanceof BudgetExhaustedError) return { kind: 'budget' };
-    if (isLlmError(error)) return { kind: 'error' };
+    if (isLlmError(error)) return { kind: 'error', code: error.code };
     throw error;
   }
+}
+
+/**
+ * Result for a turn cut off by the caller's deadline: the same locale choice
+ * as a normal turn, the input slots unchanged, and a handover template. Any
+ * work still running in the background is ignored by the caller.
+ */
+export function interruptedTurnResult(
+  input: AgentTurnInput,
+  locales: LocaleRegistry,
+  budget: BudgetSnapshot,
+  reason: HandoverReason,
+  llmFailure: string,
+): AgentTurnResult {
+  const language = detectLanguage(input.customerText);
+  const localeId = chooseLocale(language, {
+    current: input.conversationLocale,
+    supported: input.supportedLocales,
+    fallback: input.defaultLocale,
+    registry: locales,
+  });
+  return {
+    reply: locales.get(localeId).templates.handover[reason],
+    locale: localeId,
+    slots: input.slots,
+    outcome: 'HANDOVER',
+    intent: undefined,
+    handover: reason,
+    facts: [],
+    violations: [],
+    regenerated: false,
+    budget,
+    budgetStop: budget.stopReason,
+    tools: [],
+    language,
+    llmFailure,
+  };
 }

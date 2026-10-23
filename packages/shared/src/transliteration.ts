@@ -9,7 +9,6 @@
 
 const APOSTROPHES = /[’‘ʻʼ＇`´]/gu;
 const VOWELS_CYRL = new Set('аеёиоуўэюя'.split(''));
-const VOWELS_LATN = new Set('aeiou'.split(''));
 
 const CYRL_TO_LATN: Readonly<Record<string, string>> = {
   а: 'a',
@@ -155,8 +154,17 @@ export function uzLatnToCyrl(input: string): string {
     if (lower === 'e') {
       out += matchCase(char, wordStart ? 'э' : 'е');
     } else if (char === "'") {
-      // Tutuq belgisi after a vowel is the hard sign.
-      out += prev !== undefined && VOWELS_LATN.has(prev) ? 'ъ' : char;
+      // Tutuq belgisi between letters is the hard sign, after a vowel
+      // (ma'lumot -> маълумот) and after a consonant (san'at -> санъат).
+      // A quote at a word edge is punctuation and passes through.
+      const next = text[index + 1];
+      out +=
+        prev !== undefined &&
+        /\p{L}/u.test(prev) &&
+        next !== undefined &&
+        /\p{L}/u.test(next)
+          ? 'ъ'
+          : char;
     } else {
       const mapped = LATN_TO_CYRL[lower];
       out += mapped === undefined ? char : matchCase(char, mapped);

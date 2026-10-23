@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   ConversationSlotsSchema,
@@ -9,15 +9,23 @@ import type { AppEnvironment } from '../config/environment.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import {
+  interruptedTurnResult,
   runAgentTurn,
+  type AgentTurnInput,
   type AgentTurnResult,
 } from '../core/agent/agent-turn.js';
-import type { HistoryEntry } from '../core/agent/prompts.js';
+import { PROMPT_VERSION, type HistoryEntry } from '../core/agent/prompts.js';
 import type { SlotState } from '../core/agent/slots.js';
 import { TurnBudget } from '../core/llm/budget.js';
 import type { LlmProvider } from '../core/llm/llm-provider.js';
-import { MeteredLlm } from '../core/llm/metered-llm.js';
+import { MeteredLlm, type LlmUsageEntry } from '../core/llm/metered-llm.js';
+import { pricingAgeDays, type PricingSnapshot } from '../core/llm/pricing.js';
 import { LocaleRegistry, type LocaleId } from '../core/locales/locale-pack.js';
+import type { Prisma } from '../generated/prisma/client.js';
+import {
+  PRICING_CATALOG,
+  PRICING_MAX_AGE_DAYS,
+} from '../llm/pricing-catalog.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
 import { PrismaService } from '../persistence/prisma.service.js';
@@ -38,23 +46,48 @@ export class AgentConfigurationError extends Error {
   }
 }
 
-export interface CustomerTurn {
+export interface TurnRequest {
   readonly tenantId: string;
   readonly conversationId: string;
-  /** Stable id of the inbound message(s) this turn answers. */
+  /** Metering key: usage records of this attempt carry it as turnKey. */
   readonly turnKey: string;
+  /** The customer text being answered (one or more merged messages). */
   readonly text: string;
+  /**
+   * History is read from messages strictly below this sequence, so the
+   * answered messages are not repeated as history. Omit to use all.
+   */
+  readonly beforeSequence?: number;
 }
 
+/** Everything a commit needs; computing it has no side effects but usage. */
+export interface ComputedTurn {
+  readonly result: AgentTurnResult;
+  readonly slotsBefore: SlotState;
+  readonly usage: readonly LlmUsageEntry[];
+  readonly latencyMs: number;
+  readonly providerId: string;
+  readonly pricingVersion: string;
+  readonly promptVersion: string;
+  readonly packRef: string;
+  /** The turn deadline fired; the result is a LLM_UNAVAILABLE handover. */
+  readonly timedOut: boolean;
+}
+
+type TransactionClient = Prisma.TransactionClient;
+
 /**
- * Loads tenant-scoped conversation context, runs one agent turn, and saves
- * the resulting slots and locale. It returns the reply but does not send it:
- * channel delivery stays with the channel's durable outbox.
+ * Loads tenant-scoped context with short reads and runs one agent turn
+ * without holding a transaction, a row lock or a pooled connection while
+ * the model and tools work. Its only writes are LLM usage records (one per
+ * billed provider response). Slots, language, messages and handovers are
+ * written by the caller's commit step via `applyTurnState`.
  */
 @Injectable()
-export class AgentConversationService {
+export class AgentConversationService implements OnModuleInit {
   private readonly logger = new Logger(AgentConversationService.name);
   private readonly locales = new LocaleRegistry(INITIAL_LOCALE_PACKS);
+  private readonly pricing: PricingSnapshot;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,18 +95,44 @@ export class AgentConversationService {
     private readonly usage: LlmUsageStore,
     @Inject(LLM_PROVIDER) private readonly provider: LlmProvider,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+  ) {
+    this.pricing = PRICING_CATALOG.snapshot(
+      this.config.get('LLM_PRICING_VERSION', { infer: true }),
+    );
+  }
 
-  async handleCustomerMessage(turn: CustomerTurn): Promise<AgentTurnResult> {
-    const { tenantId, conversationId } = turn;
+  onModuleInit(): void {
+    const age = pricingAgeDays(this.pricing, new Date());
+    if (age > PRICING_MAX_AGE_DAYS) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'llm.pricing_stale',
+          pricingVersion: this.pricing.version,
+          asOf: this.pricing.asOf,
+          ageDays: age,
+          source: this.pricing.source,
+        }),
+      );
+    }
+  }
+
+  get localeRegistry(): LocaleRegistry {
+    return this.locales;
+  }
+
+  /** Runs one turn. Throws AgentConfigurationError for unusable tenants. */
+  async compute(request: TurnRequest): Promise<ComputedTurn> {
+    const started = Date.now();
+    const { tenantId, conversationId } = request;
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
     });
     if (!tenant) throw new AgentConfigurationError('Unknown tenant');
-    const pack = DOMAIN_PACKS.get(`${tenant.packKey}@${tenant.packVersion}`);
+    const packRef = `${tenant.packKey}@${tenant.packVersion}`;
+    const pack = DOMAIN_PACKS.get(packRef);
     if (!pack)
       throw new AgentConfigurationError(
-        `Domain pack ${tenant.packKey}@${tenant.packVersion} is not registered`,
+        `Domain pack ${packRef} is not registered`,
       );
     const conversation = await this.prisma.conversation.findFirst({
       where: { tenantId, id: conversationId },
@@ -104,7 +163,13 @@ export class AgentConversationService {
           orderBy: { version: 'desc' },
         }),
         this.prisma.message.findMany({
-          where: { tenantId, conversationId },
+          where: {
+            tenantId,
+            conversationId,
+            ...(request.beforeSequence !== undefined
+              ? { sequence: { lt: request.beforeSequence } }
+              : {}),
+          },
           orderBy: { sequence: 'desc' },
           take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
           select: { direction: true, text: true },
@@ -113,7 +178,7 @@ export class AgentConversationService {
         this.usage.conversationSpendNano(tenantId, conversationId),
         this.usage.tenantMonthSpendNano(tenantId),
       ]);
-    const slots = this.slotState(slotRow?.slots);
+    const slots = slotState(slotRow?.slots);
     const history: HistoryEntry[] = recent.reverse().map((message) => ({
       role: message.direction === 'INBOUND' ? 'customer' : 'agent',
       text: message.text,
@@ -124,12 +189,24 @@ export class AgentConversationService {
       conversationSpentNano: conversationSpent,
       tenantMonthSpentNano: monthSpent,
     });
+    const deadline = new AbortController();
+    const entries: LlmUsageEntry[] = [];
     const llm = new MeteredLlm(
       this.provider,
-      this.config.get('LLM_PRICING_VERSION', { infer: true }),
+      this.pricing,
       budget,
-      this.usage,
-      { tenantId, conversationId, turnKey: turn.turnKey },
+      {
+        record: async (entry): Promise<void> => {
+          entries.push(entry);
+          await this.usage.record(entry);
+        },
+      },
+      {
+        tenantId,
+        conversationId,
+        turnKey: request.turnKey,
+        signal: deadline.signal,
+      },
       (error) =>
         this.logger.error(
           JSON.stringify({
@@ -141,18 +218,23 @@ export class AgentConversationService {
     );
 
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
-    const result = await runAgentTurn(
-      {
-        turnKey: turn.turnKey,
-        customerText: turn.text,
-        history,
-        slots,
-        conversationLocale: current,
-        supportedLocales: supported,
-        defaultLocale,
-        timeZone: tenant.timezone,
-      },
-      {
+    const input: AgentTurnInput = {
+      turnKey: request.turnKey,
+      customerText: request.text,
+      history,
+      slots,
+      conversationLocale: current,
+      supportedLocales: supported,
+      defaultLocale,
+      timeZone: tenant.timezone,
+    };
+    const timeoutMs = this.config.get('AGENT_TURN_TIMEOUT_MS', { infer: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), timeoutMs);
+    });
+    const outcome = await Promise.race([
+      runAgentTurn(input, {
         pack,
         locales: this.locales,
         connector,
@@ -164,21 +246,31 @@ export class AgentConversationService {
           extract: Math.min(600, maxOutput),
           respond: maxOutput,
         },
-      },
-    );
+      }),
+      timedOut,
+    ]).finally(() => clearTimeout(timer));
+    let result: AgentTurnResult;
+    if (outcome === 'timeout') {
+      // Abort in-flight provider calls; late tool or model results are
+      // discarded. Usage already billed stays recorded.
+      deadline.abort();
+      result = interruptedTurnResult(
+        input,
+        this.locales,
+        budget.snapshot,
+        'LLM_UNAVAILABLE',
+        'TURN_TIMEOUT',
+      );
+    } else {
+      result = outcome;
+    }
 
-    await this.persist(
-      tenantId,
-      conversationId,
-      slotRow?.version ?? 0,
-      slots,
-      result,
-    );
     this.logger.log(
       JSON.stringify({
-        event: 'agent.turn',
+        event: 'agent.turn_computed',
         tenant: tenantId,
         conversation: conversationId,
+        turn: request.turnKey,
         outcome: result.outcome,
         locale: result.locale,
         handover: result.handover,
@@ -189,9 +281,71 @@ export class AgentConversationService {
         budgetStop: result.budgetStop,
         violations: result.violations,
         overshootNano: result.budget.overshootNano,
+        timedOut: outcome === 'timeout',
       }),
     );
-    return result;
+    return {
+      result,
+      slotsBefore: slots,
+      usage: entries,
+      latencyMs: Date.now() - started,
+      providerId: this.provider.providerId,
+      pricingVersion: this.pricing.version,
+      promptVersion: PROMPT_VERSION,
+      packRef,
+      timedOut: outcome === 'timeout',
+    };
+  }
+
+  /**
+   * Persists the turn's slots (new version only when they changed) and the
+   * conversation's language/script. Called inside the commit transaction.
+   */
+  async applyTurnState(
+    tx: TransactionClient,
+    tenantId: string,
+    conversationId: string,
+    computed: ComputedTurn,
+  ): Promise<void> {
+    const { result } = computed;
+    const locale = this.locales.get(result.locale);
+    if (JSON.stringify(computed.slotsBefore) !== JSON.stringify(result.slots)) {
+      const latest = await tx.conversationSlots.findFirst({
+        where: { tenantId, conversationId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      const next = (latest?.version ?? 0) + 1;
+      await tx.conversationSlots.create({
+        data: {
+          tenantId,
+          conversationId,
+          version: next,
+          slots: ConversationSlotsSchema.parse({
+            version: next,
+            slots: result.slots,
+          }),
+        },
+      });
+    }
+    await tx.conversation.updateMany({
+      where: { tenantId, id: conversationId },
+      data: { language: locale.language, script: locale.script },
+    });
+  }
+
+  /** Compute and persist in one call (tests and non-channel callers). */
+  async handleCustomerMessage(request: TurnRequest): Promise<AgentTurnResult> {
+    const computed = await this.compute(request);
+    await this.prisma.$transaction((tx) =>
+      this.applyTurnState(
+        tx,
+        request.tenantId,
+        request.conversationId,
+        computed,
+      ),
+    );
+    return computed.result;
   }
 
   /** First active connector of the tenant that can search its catalog. */
@@ -219,49 +373,19 @@ export class AgentConversationService {
     }
     return undefined;
   }
+}
 
-  private slotState(raw: unknown): SlotState {
-    const parsed = ConversationSlotsSchema.safeParse(raw);
-    if (!parsed.success) return {};
-    const state: Record<string, SlotState[string]> = {};
-    for (const [key, entry] of Object.entries(parsed.data.slots)) {
-      if (
-        (entry.source === 'customer' || entry.source === 'inferred') &&
-        (typeof entry.value === 'string' || typeof entry.value === 'number')
-      ) {
-        state[key] = { value: entry.value, source: entry.source };
-      }
+function slotState(raw: unknown): SlotState {
+  const parsed = ConversationSlotsSchema.safeParse(raw);
+  if (!parsed.success) return {};
+  const state: Record<string, SlotState[string]> = {};
+  for (const [key, entry] of Object.entries(parsed.data.slots)) {
+    if (
+      (entry.source === 'customer' || entry.source === 'inferred') &&
+      (typeof entry.value === 'string' || typeof entry.value === 'number')
+    ) {
+      state[key] = { value: entry.value, source: entry.source };
     }
-    return state;
   }
-
-  private async persist(
-    tenantId: string,
-    conversationId: string,
-    version: number,
-    before: SlotState,
-    result: AgentTurnResult,
-  ): Promise<void> {
-    const locale = this.locales.get(result.locale);
-    await this.prisma.$transaction(async (tx) => {
-      if (JSON.stringify(before) !== JSON.stringify(result.slots)) {
-        const next = version + 1;
-        await tx.conversationSlots.create({
-          data: {
-            tenantId,
-            conversationId,
-            version: next,
-            slots: ConversationSlotsSchema.parse({
-              version: next,
-              slots: result.slots,
-            }),
-          },
-        });
-      }
-      await tx.conversation.updateMany({
-        where: { tenantId, id: conversationId },
-        data: { language: locale.language, script: locale.script },
-      });
-    });
-  }
+  return state;
 }

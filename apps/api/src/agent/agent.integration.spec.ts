@@ -44,6 +44,8 @@ const settings: Partial<AppEnvironment> = {
   LLM_CONVERSATION_BUDGET_USD: '0.25',
   AGENT_TOOL_TIMEOUT_MS: 2_000,
   AGENT_HISTORY_MESSAGES: 8,
+  AGENT_TURN_TIMEOUT_MS: 10_000,
+  AGENT_TURN_LEASE_MS: 30_000,
 };
 
 function service(
@@ -254,7 +256,7 @@ describe('AgentConversationService', () => {
       text: 'IELTS kerak',
     });
     expect(result).toMatchObject({
-      handover: 'BUDGET_EXHAUSTED',
+      handover: 'BUDGET_EXCEEDED',
       budgetStop: 'CONVERSATION_COST_LIMIT',
     });
     expect(provider.calls).toHaveLength(0);

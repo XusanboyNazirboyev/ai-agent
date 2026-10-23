@@ -1,15 +1,56 @@
+import { z } from 'zod';
 import type { LlmUsage } from './llm-provider.js';
 
 /**
- * Versioned pricing snapshot. Amounts are integer nano-USD per token
- * (1 nUSD = 1e-9 USD; $1 per million tokens = 1,000 nUSD per token), so cost
- * arithmetic is exact integer math. Prices are never fetched per request.
+ * Versioned model pricing. Prices are configured as decimal strings in USD
+ * per million tokens, exactly as the provider publishes them, and converted
+ * to integer nano-USD per token (1 nUSD = 1e-9 USD; $1/MTok = 1,000 nUSD per
+ * token) by string arithmetic, so no floating-point value ever enters cost
+ * math. A price that is not a whole number of nano-USD per token is
+ * rejected rather than rounded.
  *
- * Source: https://platform.claude.com/docs/en/about-claude/pricing, checked
- * 2026-10-23 (first-party Claude API, global routing; `inference_geo: "us"`
- * would add 1.1x and is not used). Update by adding a new version, never by
- * editing an existing one, so historical usage stays reproducible.
+ * Price data lives outside the core (`src/llm/pricing-catalog.ts`). Update
+ * by adding a new version, never by editing an existing one, so historical
+ * usage stays reproducible.
  */
+
+const decimalUsd = z
+  .string()
+  .regex(/^\d{1,6}(?:\.\d{1,9})?$/u, 'USD per MTok as a decimal string');
+
+const RatesConfigSchema = z
+  .object({
+    inputPerMTok: decimalUsd,
+    outputPerMTok: decimalUsd,
+    cacheReadPerMTok: decimalUsd,
+    cacheWrite5mPerMTok: decimalUsd,
+    cacheWrite1hPerMTok: decimalUsd,
+  })
+  .strict();
+
+const ModelPricingConfigSchema = RatesConfigSchema.extend({
+  /** Provider-added tool-use system prompt (tool_choice auto), in tokens. */
+  toolUseSystemPromptTokens: z.number().int().min(0).max(10_000).optional(),
+  /** Higher prices for prompts over `thresholdTokens` input tokens. */
+  longPrompt: RatesConfigSchema.extend({
+    thresholdTokens: z.number().int().min(1),
+  })
+    .strict()
+    .optional(),
+}).strict();
+
+export const PricingConfigSchema = z
+  .object({
+    version: z.string().regex(/^[a-z0-9][a-z0-9.-]{2,63}$/u),
+    provider: z.string().min(1).max(40),
+    /** Date the prices were read from `sourceUrl` (YYYY-MM-DD). */
+    asOf: z.iso.date(),
+    sourceUrl: z.url(),
+    models: z.record(z.string().min(1).max(100), ModelPricingConfigSchema),
+  })
+  .strict();
+
+export type PricingConfig = z.input<typeof PricingConfigSchema>;
 
 export interface TokenRates {
   readonly input: number;
@@ -21,7 +62,8 @@ export interface TokenRates {
 
 export interface ModelPricing {
   readonly standard: TokenRates;
-  /** Higher card applied when a prompt exceeds `threshold` input tokens. */
+  readonly toolUseSystemPromptTokens?: number;
+  /** Rates applied when a prompt exceeds `threshold` input tokens. */
   readonly longContext?: {
     readonly threshold: number;
     readonly rates: TokenRates;
@@ -30,45 +72,11 @@ export interface ModelPricing {
 
 export interface PricingSnapshot {
   readonly version: string;
-  readonly checkedAt: string;
+  readonly provider: string;
+  readonly asOf: string;
   readonly source: string;
   readonly models: Readonly<Record<string, ModelPricing>>;
 }
-
-const perMTok = (usd: number): number => Math.round(usd * 1_000);
-
-const rates = (input: number, output: number): TokenRates => ({
-  input: perMTok(input),
-  output: perMTok(output),
-  cacheRead: perMTok(input * 0.1),
-  cacheWrite5m: perMTok(input * 1.25),
-  cacheWrite1h: perMTok(input * 2),
-});
-
-export const PRICING_SNAPSHOTS: Readonly<Record<string, PricingSnapshot>> = {
-  'anthropic-2026-10-23': {
-    version: 'anthropic-2026-10-23',
-    checkedAt: '2026-10-23',
-    source: 'https://platform.claude.com/docs/en/about-claude/pricing',
-    models: {
-      'claude-haiku-5-5': {
-        standard: rates(0.1, 0.5),
-        longContext: { threshold: 100_000, rates: rates(0.5, 2.5) },
-      },
-      // Sonnet 5.5 and Opus 5.5 cache reads are 0.05x input, not 0.1x.
-      'claude-sonnet-5-5': {
-        standard: { ...rates(2, 10), cacheRead: perMTok(0.1) },
-      },
-      'claude-opus-5-5': {
-        standard: { ...rates(4, 20), cacheRead: perMTok(0.2) },
-      },
-      // Deterministic mock provider: priced like Haiku so budgets are testable.
-      'mock-deterministic': { standard: rates(0.1, 0.5) },
-    },
-  },
-};
-
-export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';
 
 export class PricingError extends Error {
   constructor(message: string) {
@@ -77,15 +85,104 @@ export class PricingError extends Error {
   }
 }
 
-export function pricingFor(version: string, model: string): ModelPricing {
-  const snapshot = PRICING_SNAPSHOTS[version];
-  if (!snapshot) throw new PricingError(`Unknown pricing version ${version}`);
+/** "0.125" USD/MTok -> 125 nano-USD per token, by string arithmetic. */
+export function perMTokToNanoPerToken(usdPerMTok: string): number {
+  // nano-USD per token = USD per MTok x 1e9 / 1e6 = USD per MTok x 1,000.
+  const match = /^(\d{1,6})(?:\.(\d{1,9}))?$/u.exec(usdPerMTok);
+  if (!match) throw new PricingError(`Invalid price ${usdPerMTok}`);
+  const fraction = (match[2] ?? '').replace(/0+$/u, '');
+  if (fraction.length > 3) {
+    throw new PricingError(
+      `Price ${usdPerMTok}/MTok is not a whole number of nano-USD per token`,
+    );
+  }
+  return Number(match[1]) * 1_000 + Number(fraction.padEnd(3, '0'));
+}
+
+function toRates(config: z.infer<typeof RatesConfigSchema>): TokenRates {
+  return {
+    input: perMTokToNanoPerToken(config.inputPerMTok),
+    output: perMTokToNanoPerToken(config.outputPerMTok),
+    cacheRead: perMTokToNanoPerToken(config.cacheReadPerMTok),
+    cacheWrite5m: perMTokToNanoPerToken(config.cacheWrite5mPerMTok),
+    cacheWrite1h: perMTokToNanoPerToken(config.cacheWrite1hPerMTok),
+  };
+}
+
+export function parsePricingConfig(raw: unknown): PricingSnapshot {
+  const config = PricingConfigSchema.parse(raw);
+  const models: Record<string, ModelPricing> = {};
+  for (const [model, entry] of Object.entries(config.models)) {
+    models[model] = {
+      standard: toRates(entry),
+      ...(entry.toolUseSystemPromptTokens !== undefined
+        ? { toolUseSystemPromptTokens: entry.toolUseSystemPromptTokens }
+        : {}),
+      ...(entry.longPrompt
+        ? {
+            longContext: {
+              threshold: entry.longPrompt.thresholdTokens,
+              rates: toRates(entry.longPrompt),
+            },
+          }
+        : {}),
+    };
+  }
+  return {
+    version: config.version,
+    provider: config.provider,
+    asOf: config.asOf,
+    source: config.sourceUrl,
+    models,
+  };
+}
+
+/** All configured pricing versions, validated once at load. */
+export class PricingCatalog {
+  private readonly snapshots = new Map<string, PricingSnapshot>();
+
+  constructor(configs: readonly unknown[]) {
+    for (const raw of configs) {
+      const snapshot = parsePricingConfig(raw);
+      if (this.snapshots.has(snapshot.version))
+        throw new PricingError(`Duplicate pricing version ${snapshot.version}`);
+      this.snapshots.set(snapshot.version, snapshot);
+    }
+  }
+
+  has(version: string): boolean {
+    return this.snapshots.has(version);
+  }
+
+  snapshot(version: string): PricingSnapshot {
+    const snapshot = this.snapshots.get(version);
+    if (!snapshot) throw new PricingError(`Unknown pricing version ${version}`);
+    return snapshot;
+  }
+}
+
+export function pricingFor(
+  snapshot: PricingSnapshot,
+  model: string,
+): ModelPricing {
   const pricing = snapshot.models[model];
   if (!pricing) {
     // An unpriced model must not run: its cost could not be bounded.
-    throw new PricingError(`No pricing for model ${model} in ${version}`);
+    throw new PricingError(
+      `No pricing for model ${model} in ${snapshot.version}`,
+    );
   }
   return pricing;
+}
+
+/**
+ * Largest prompt (input tokens, cache included) a call may have so it stays
+ * on the standard rates; `undefined` when the model has a single tier.
+ */
+export function maxStandardPromptTokens(
+  pricing: ModelPricing,
+): number | undefined {
+  return pricing.longContext?.threshold;
 }
 
 function ratesForPrompt(
@@ -99,6 +196,7 @@ function ratesForPrompt(
 
 /** Exact cost of reported usage, in integer nano-USD. */
 export function costOfUsage(pricing: ModelPricing, usage: LlmUsage): number {
+  // Prompt length counts every input token, including cache reads/writes.
   const prompt =
     usage.inputTokens +
     usage.cacheReadTokens +
@@ -117,7 +215,8 @@ export function costOfUsage(pricing: ModelPricing, usage: LlmUsage): number {
 
 /**
  * Upper-bound cost reserved before a call: every input token at the most
- * expensive input rate and the full output ceiling.
+ * expensive input rate of the tier the prompt falls in, plus the full
+ * output ceiling.
  */
 export function worstCaseCost(
   pricing: ModelPricing,
@@ -126,14 +225,20 @@ export function worstCaseCost(
 ): number {
   const r = ratesForPrompt(pricing, estimatedInputTokens);
   return (
-    estimatedInputTokens * Math.max(r.input, r.cacheWrite5m) +
+    estimatedInputTokens * Math.max(r.input, r.cacheWrite5m, r.cacheWrite1h) +
     maxOutputTokens * r.output
   );
 }
 
+/** Whole days between `asOf` and `now` (UTC). */
+export function pricingAgeDays(snapshot: PricingSnapshot, now: Date): number {
+  const asOf = Date.parse(`${snapshot.asOf}T00:00:00Z`);
+  return Math.floor((now.getTime() - asOf) / 86_400_000);
+}
+
 /** Parses a USD decimal string ("0.02") into integer nano-USD exactly. */
 export function usdToNano(usd: string): number {
-  const match = /^(\d{1,6})(?:\.(\d{1,9}))?$/.exec(usd.trim());
+  const match = /^(\d{1,6})(?:\.(\d{1,9}))?$/u.exec(usd.trim());
   if (!match) throw new PricingError(`Invalid USD amount: ${usd}`);
   const fraction = (match[2] ?? '').padEnd(9, '0');
   return Number(match[1]) * 1_000_000_000 + Number(fraction);
@@ -142,5 +247,5 @@ export function usdToNano(usd: string): number {
 export function nanoToUsd(nano: number): string {
   const whole = Math.trunc(nano / 1_000_000_000);
   const fraction = String(nano % 1_000_000_000).padStart(9, '0');
-  return `${whole}.${fraction}`.replace(/0+$/, '').replace(/\.$/, '.0');
+  return `${whole}.${fraction}`.replace(/0+$/u, '').replace(/\.$/u, '.0');
 }

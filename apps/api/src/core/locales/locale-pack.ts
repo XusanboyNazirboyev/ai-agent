@@ -17,16 +17,25 @@ export type LanguageCode = 'uz' | 'ru' | 'en';
 export type ScriptCode = 'Latn' | 'Cyrl';
 export type LocaleStatus = 'stable' | 'beta' | 'planned';
 
-/** Handover recommendations the agent core can raise (AGENTS.md §7.4). */
-export type HandoverReason =
-  | 'CUSTOMER_REQUEST'
-  | 'COMPLAINT'
-  | 'NEGOTIATION'
-  | 'AUTH_REQUIRED'
-  | 'NO_DATA'
-  | 'GUARDRAIL'
-  | 'BUDGET_EXHAUSTED'
-  | 'LOW_LANG_CONFIDENCE';
+/**
+ * Handover reasons the agent core can raise (AGENTS.md §7.4). Failure
+ * reasons are distinct so an operator can tell a missing record (NO_DATA)
+ * from an unreachable CRM (CONNECTOR_UNAVAILABLE) or model (LLM_UNAVAILABLE).
+ */
+export const HANDOVER_REASONS = [
+  'CUSTOMER_REQUEST',
+  'COMPLAINT',
+  'NEGOTIATION',
+  'AUTH_REQUIRED',
+  'NO_DATA',
+  'GUARDRAIL',
+  'BUDGET_EXCEEDED',
+  'LLM_UNAVAILABLE',
+  'CONNECTOR_UNAVAILABLE',
+  'TOOL_LOOP_LIMIT',
+  'LOW_LANG_CONFIDENCE',
+] as const;
+export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 
 export interface LocaleTemplates {
   readonly greeting: string;
@@ -35,6 +44,13 @@ export interface LocaleTemplates {
   readonly offerOperator: string;
   readonly optionsIntro: string;
   readonly notUnderstood: string;
+  /** Truthful answer when the customer asks whether they talk to a bot. */
+  readonly aiDisclosure: string;
+  /**
+   * Customer-facing handover notices. They must not claim that a person or
+   * the CRM has accepted anything: until operator notification exists they
+   * may only say that the message was recorded.
+   */
   readonly handover: Readonly<Record<HandoverReason, string>>;
   readonly labels: {
     readonly price: string;

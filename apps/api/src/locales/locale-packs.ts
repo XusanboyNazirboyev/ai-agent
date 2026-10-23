@@ -9,6 +9,10 @@ import type { LocalePack } from '../core/locales/locale-pack.js';
  * Uzbek uses the respectful "siz" form throughout. The Cyrillic pack was
  * transliterated from the Latin text with the shared transliterator and
  * checked by hand; it still needs native review like the others.
+ *
+ * Handover notices say only that the message was recorded: operator
+ * notification is not built yet (Phase 5), so no template may promise a
+ * reply time or claim that a person has taken the case.
  */
 
 const forbiddenUz = [
@@ -46,23 +50,31 @@ export const UZ_LATN: LocalePack = {
     offerOperator: 'Xohlasangiz, savolingizni operatorga yetkazaman.',
     optionsIntro: 'Sizga mos variantlar:',
     notUnderstood: "Kechirasiz, javobingizni to'liq tushunmadim.",
+    aiDisclosure:
+      "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
       CUSTOMER_REQUEST:
-        "Albatta, sizni operator bilan bog'layman. Tez orada javob berishadi.",
+        "Albatta. Xodim bilan bog'lanish haqidagi so'rovingiz saqlandi.",
       COMPLAINT:
-        "Noqulaylik uchun uzr so'raymiz. Murojaatingizni operatorga yetkazaman, tez orada siz bilan bog'lanishadi.",
+        "Noqulaylik uchun uzr so'raymiz. Murojaatingiz jamoamiz uchun saqlandi.",
       NEGOTIATION:
-        "Narx va to'lov shartlari bo'yicha kelishuvlarni operatorimiz hal qiladi. Sizni operator bilan bog'layman.",
+        "Narx shartlari va to'lov masalalarini jamoamiz hal qiladi. So'rovingiz ular uchun saqlandi.",
       AUTH_REQUIRED:
-        "Shaxsiy ma'lumotlar bo'yicha savollarga xavfsizlik uchun operator javob beradi. Sizni operator bilan bog'layman.",
+        "Xavfsizlik uchun shaxsiy hisob ma'lumotlarini bu yerda muhokama qila olmayman. Savolingiz jamoamiz uchun saqlandi.",
       NO_DATA:
-        "Hozircha bu ma'lumotni tekshira olmayapman. Savolingizni operatorga yetkazaman.",
+        "Hozircha bu ma'lumot menda yo'q. Savolingiz jamoamiz uchun saqlandi.",
       GUARDRAIL:
-        "Bu savolga aniq javob berish uchun sizni operator bilan bog'layman.",
-      BUDGET_EXHAUSTED:
-        "Savolingizni operatorga yo'naltiraman, tez orada javob berishadi.",
+        'Hozir bu savolga ishonchli javob bera olmayman. Savolingiz jamoamiz uchun saqlandi.',
+      BUDGET_EXCEEDED:
+        'Hozir suhbatni avtomatik davom ettira olmayman. Xabaringiz jamoamiz uchun saqlandi.',
+      LLM_UNAVAILABLE:
+        'Kechirasiz, texnik nosozlik sababli hozir javob bera olmayman. Xabaringiz jamoamiz uchun saqlandi.',
+      CONNECTOR_UNAVAILABLE:
+        "Kechirasiz, hozir dolzarb ma'lumotni tekshira olmayman. Xabaringiz jamoamiz uchun saqlandi.",
+      TOOL_LOOP_LIMIT:
+        'Tekshiruvni yakunlay olmadim. Xabaringiz jamoamiz uchun saqlandi.',
       LOW_LANG_CONFIDENCE:
-        "Savolingizni to'g'ri tushunishim uchun sizni operator bilan bog'layman.",
+        "Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.",
     },
     labels: {
       price: 'narxi',
@@ -98,23 +110,31 @@ export const UZ_CYRL: LocalePack = {
     offerOperator: 'Хоҳласангиз, саволингизни операторга етказаман.',
     optionsIntro: 'Сизга мос вариантлар:',
     notUnderstood: 'Кечирасиз, жавобингизни тўлиқ тушунмадим.',
+    aiDisclosure:
+      'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
       CUSTOMER_REQUEST:
-        'Албатта, сизни оператор билан боғлайман. Тез орада жавоб беришади.',
+        'Албатта. Ходим билан боғланиш ҳақидаги сўровингиз сақланди.',
       COMPLAINT:
-        'Ноқулайлик учун узр сўраймиз. Мурожаатингизни операторга етказаман, тез орада сиз билан боғланишади.',
+        'Ноқулайлик учун узр сўраймиз. Мурожаатингиз жамоамиз учун сақланди.',
       NEGOTIATION:
-        'Нарх ва тўлов шартлари бўйича келишувларни операторимиз ҳал қилади. Сизни оператор билан боғлайман.',
+        'Нарх шартлари ва тўлов масалаларини жамоамиз ҳал қилади. Сўровингиз улар учун сақланди.',
       AUTH_REQUIRED:
-        'Шахсий маълумотлар бўйича саволларга хавфсизлик учун оператор жавоб беради. Сизни оператор билан боғлайман.',
+        'Хавфсизлик учун шахсий ҳисоб маълумотларини бу ерда муҳокама қила олмайман. Саволингиз жамоамиз учун сақланди.',
       NO_DATA:
-        'Ҳозирча бу маълумотни текшира олмаяпман. Саволингизни операторга етказаман.',
+        'Ҳозирча бу маълумот менда йўқ. Саволингиз жамоамиз учун сақланди.',
       GUARDRAIL:
-        'Бу саволга аниқ жавоб бериш учун сизни оператор билан боғлайман.',
-      BUDGET_EXHAUSTED:
-        'Саволингизни операторга йўналтираман, тез орада жавоб беришади.',
+        'Ҳозир бу саволга ишончли жавоб бера олмайман. Саволингиз жамоамиз учун сақланди.',
+      BUDGET_EXCEEDED:
+        'Ҳозир суҳбатни автоматик давом эттира олмайман. Хабарингиз жамоамиз учун сақланди.',
+      LLM_UNAVAILABLE:
+        'Кечирасиз, техник носозлик сабабли ҳозир жавоб бера олмайман. Хабарингиз жамоамиз учун сақланди.',
+      CONNECTOR_UNAVAILABLE:
+        'Кечирасиз, ҳозир долзарб маълумотни текшира олмайман. Хабарингиз жамоамиз учун сақланди.',
+      TOOL_LOOP_LIMIT:
+        'Текширувни якунлай олмадим. Хабарингиз жамоамиз учун сақланди.',
       LOW_LANG_CONFIDENCE:
-        'Саволингизни тўғри тушунишим учун сизни оператор билан боғлайман.',
+        'Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.',
     },
     labels: {
       price: 'нархи',
@@ -151,21 +171,30 @@ export const RU: LocalePack = {
     offerOperator: 'Если хотите, я передам ваш вопрос оператору.',
     optionsIntro: 'Подходящие варианты:',
     notUnderstood: 'Извините, я не совсем понял ваш ответ.',
+    aiDisclosure:
+      'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
-      CUSTOMER_REQUEST:
-        'Конечно, я соединю вас с оператором. Он скоро ответит.',
+      CUSTOMER_REQUEST: 'Конечно. Ваш запрос на связь с сотрудником сохранён.',
       COMPLAINT:
-        'Приносим извинения за неудобства. Я передам ваше обращение оператору, он скоро с вами свяжется.',
+        'Приносим извинения за неудобства. Ваше обращение сохранено для нашей команды.',
       NEGOTIATION:
-        'Вопросы условий и оплаты решает наш оператор. Я соединю вас с ним.',
+        'Условия и оплату обсуждает наша команда. Ваш запрос сохранён для неё.',
       AUTH_REQUIRED:
-        'Вопросы о личных данных из соображений безопасности решает оператор. Я соединю вас с ним.',
+        'В целях безопасности здесь нельзя обсуждать данные личного кабинета. Ваш вопрос сохранён для нашей команды.',
       NO_DATA:
-        'Сейчас я не могу проверить эту информацию. Я передам ваш вопрос оператору.',
-      GUARDRAIL: 'Чтобы ответить точно, я соединю вас с оператором.',
-      BUDGET_EXHAUSTED: 'Я передам ваш вопрос оператору, он скоро ответит.',
+        'Сейчас у меня нет этой информации. Ваш вопрос сохранён для нашей команды.',
+      GUARDRAIL:
+        'Сейчас я не могу дать на это надёжный ответ. Ваш вопрос сохранён для нашей команды.',
+      BUDGET_EXCEEDED:
+        'Сейчас я не могу продолжить диалог автоматически. Ваше сообщение сохранено для нашей команды.',
+      LLM_UNAVAILABLE:
+        'Извините, сейчас я не могу ответить из-за технической проблемы. Ваше сообщение сохранено для нашей команды.',
+      CONNECTOR_UNAVAILABLE:
+        'Извините, сейчас я не могу проверить актуальную информацию. Ваше сообщение сохранено для нашей команды.',
+      TOOL_LOOP_LIMIT:
+        'Не удалось завершить проверку. Ваше сообщение сохранено для нашей команды.',
       LOW_LANG_CONFIDENCE:
-        'Чтобы правильно понять ваш вопрос, я соединю вас с оператором.',
+        'Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.',
     },
     labels: {
       price: 'стоимость',
@@ -200,23 +229,31 @@ export const EN: LocalePack = {
     offerOperator: 'If you like, I can pass your question to an operator.',
     optionsIntro: 'Here are matching options:',
     notUnderstood: "Sorry, I didn't quite understand your answer.",
+    aiDisclosure:
+      "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {
       CUSTOMER_REQUEST:
-        "Of course, I'll connect you with an operator. They will reply shortly.",
+        'Of course. Your request to talk to a team member has been recorded.',
       COMPLAINT:
-        "We're sorry for the inconvenience. I'll pass your message to an operator, who will contact you shortly.",
+        "We're sorry for the inconvenience. Your message has been recorded for our team.",
       NEGOTIATION:
-        "Our operator handles pricing terms and payment questions. I'll connect you.",
+        'Terms and payment questions are handled by our team. Your request has been recorded for them.',
       AUTH_REQUIRED:
-        "For security, an operator answers questions about personal accounts. I'll connect you.",
+        "For your security, personal account details can't be discussed here. Your question has been recorded for our team.",
       NO_DATA:
-        "I can't check that information right now. I'll pass your question to an operator.",
+        "I don't have that information right now. Your question has been recorded for our team.",
       GUARDRAIL:
-        "To give you an accurate answer, I'll connect you with an operator.",
-      BUDGET_EXHAUSTED:
-        "I'll pass your question to an operator, who will reply shortly.",
+        "I can't give a reliable answer to that right now. Your question has been recorded for our team.",
+      BUDGET_EXCEEDED:
+        "I can't continue this conversation automatically right now. Your message has been recorded for our team.",
+      LLM_UNAVAILABLE:
+        "Sorry, I can't answer right now because of a technical problem. Your message has been recorded for our team.",
+      CONNECTOR_UNAVAILABLE:
+        "Sorry, I can't check our current information right now. Your message has been recorded for our team.",
+      TOOL_LOOP_LIMIT:
+        "I couldn't finish checking that. Your message has been recorded for our team.",
       LOW_LANG_CONFIDENCE:
-        "To make sure I understand you correctly, I'll connect you with an operator.",
+        "Sorry, I'm not sure I understood you. Your message has been recorded for our team.",
     },
     labels: {
       price: 'price',

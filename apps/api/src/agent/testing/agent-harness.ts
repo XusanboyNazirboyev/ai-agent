@@ -7,7 +7,11 @@ import { EDUCATION_PACK } from '../../packs/education/education.pack.js';
 import { TurnBudget, type BudgetLimits } from '../../core/llm/budget.js';
 import type { LlmProvider } from '../../core/llm/llm-provider.js';
 import { MeteredLlm, type LlmUsageEntry } from '../../core/llm/metered-llm.js';
-import { DEFAULT_PRICING_VERSION, usdToNano } from '../../core/llm/pricing.js';
+import { usdToNano } from '../../core/llm/pricing.js';
+import {
+  DEFAULT_PRICING_VERSION,
+  PRICING_CATALOG,
+} from '../../llm/pricing-catalog.js';
 import {
   LocaleRegistry,
   type LocaleId,
@@ -58,6 +62,8 @@ export async function runTurn(options: {
   pack?: DomainPack;
   limits?: Partial<BudgetLimits>;
   conversationSpentNano?: number;
+  /** Spend already counted against `limits.tenantMonthlyBudgetNano`. */
+  tenantMonthSpentNano?: number;
   input?: Partial<AgentTurnInput>;
   now?: Date;
 }): Promise<TurnRun> {
@@ -66,12 +72,12 @@ export async function runTurn(options: {
     { ...TEST_LIMITS, ...options.limits },
     {
       conversationSpentNano: options.conversationSpentNano ?? 0,
-      tenantMonthSpentNano: 0,
+      tenantMonthSpentNano: options.tenantMonthSpentNano ?? 0,
     },
   );
   const llm = new MeteredLlm(
     options.provider,
-    DEFAULT_PRICING_VERSION,
+    PRICING_CATALOG.snapshot(DEFAULT_PRICING_VERSION),
     budget,
     { record: async (entry): Promise<void> => void usage.push(entry) },
     {

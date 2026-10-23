@@ -1,6 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { jsonString, selectInboundBatch } from './inbound-batch.js';
+import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import {
   TelegramAmbiguousSendError,
   TelegramApiError,
@@ -14,35 +16,20 @@ export type TelegramQueueEvent = {
   payload: Prisma.JsonValue;
 };
 
-function jsonString(value: Prisma.JsonValue, key: string): string | null {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const field = value[key];
-    return typeof field === 'string' ? field : null;
-  }
-  return null;
-}
-
-function compareProviderIds(left: string, right: string): number {
-  try {
-    const a = BigInt(left);
-    const b = BigInt(right);
-    return a < b ? -1 : a > b ? 1 : 0;
-  } catch {
-    return left.localeCompare(right);
-  }
-}
+/** The conversation is busy with another worker's turn: retry later. */
+export type ProcessResult = void | { readonly retryAt: Date };
 
 @Injectable()
 export class TelegramProcessor {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sender: TelegramSender,
+    @Optional() private readonly agent?: TelegramAgentPipeline,
   ) {}
 
-  async process(event: TelegramQueueEvent): Promise<void> {
+  async process(event: TelegramQueueEvent): Promise<ProcessResult> {
     if (event.type === 'telegram.inbound') {
-      await this.processInbound(event);
-      return;
+      return this.processInbound(event);
     }
     if (event.type === 'telegram.send') {
       await this.processSend(event);
@@ -54,6 +41,8 @@ export class TelegramProcessor {
   async markExhausted(event: TelegramQueueEvent): Promise<void> {
     if (event.type === 'telegram.inbound') {
       const inboundEventId = jsonString(event.payload, 'inboundEventId');
+      // An agent turn owned by this job can no longer finish.
+      await this.agent?.failOwnedTurns(event);
       if (inboundEventId) {
         await this.prisma.inboundEvent.updateMany({
           where: {
@@ -86,13 +75,33 @@ export class TelegramProcessor {
     });
   }
 
-  private async processInbound(event: TelegramQueueEvent): Promise<void> {
+  private async processInbound(
+    event: TelegramQueueEvent,
+  ): Promise<ProcessResult> {
     const inboundEventId = jsonString(event.payload, 'inboundEventId');
     const conversationId = jsonString(event.payload, 'conversationId');
     if (!inboundEventId || !conversationId) {
       throw new Error('Invalid durable inbound event reference');
     }
+    if (this.agent) {
+      const mode = await this.agent.modeFor(event.tenantId, conversationId);
+      if (mode !== 'OFF') {
+        return this.agent.run(event, {
+          inboundEventId,
+          conversationId,
+          requestedMode: mode,
+        });
+      }
+    }
+    await this.processEcho(event, inboundEventId, conversationId);
+  }
 
+  /** Phase 2 behavior (agent mode OFF): one echo per debounced batch. */
+  private async processEcho(
+    event: TelegramQueueEvent,
+    inboundEventId: string,
+    conversationId: string,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`agentcore:${event.tenantId}:${conversationId}`}, 0))) AS lock_result`;
       const initial = await tx.inboundEvent.findFirst({
@@ -105,107 +114,18 @@ export class TelegramProcessor {
       });
       if (!initial) return;
 
-      const pending = await tx.inboundEvent.findMany({
-        where: {
-          tenantId: event.tenantId,
-          channelAccountId: initial.channelAccountId,
-          status: 'RECEIVED',
-          redactedPayload: {
-            path: ['conversationId'],
-            equals: conversationId,
-          },
-        },
-        orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
-        take: 100,
-      });
-      const candidates = pending
-        .map((candidate) => ({
-          event: candidate,
-          messageId: jsonString(candidate.redactedPayload, 'providerMessageId'),
-          storedMessageId: jsonString(candidate.redactedPayload, 'messageId'),
-        }))
-        .filter(
-          (
-            candidate,
-          ): candidate is typeof candidate & {
-            messageId: string;
-            storedMessageId: string;
-          } => Boolean(candidate.messageId && candidate.storedMessageId),
-        )
-        .sort((a, b) => compareProviderIds(a.messageId, b.messageId));
-
-      if (candidates.length === 0) return;
-      const previous = await tx.inboundEvent.findFirst({
-        where: {
-          tenantId: event.tenantId,
-          channelAccountId: initial.channelAccountId,
-          status: 'PROCESSED',
-          redactedPayload: {
-            path: ['conversationId'],
-            equals: conversationId,
-          },
-        },
-        orderBy: { processedAt: 'desc' },
-      });
-      const cursor = previous
-        ? jsonString(previous.redactedPayload, 'providerMessageId')
-        : null;
-      const late = cursor
-        ? candidates.filter(
-            (candidate) => compareProviderIds(candidate.messageId, cursor) <= 0,
-          )
-        : [];
-      for (const candidate of late) {
-        await tx.inboundEvent.updateMany({
-          where: {
-            id: candidate.event.id,
-            tenantId: event.tenantId,
-            status: 'RECEIVED',
-          },
-          data: { status: 'FAILED' },
-        });
-      }
-      let batch = candidates
-        .filter((candidate) => !late.includes(candidate))
-        .slice(0, 4);
-      if (batch.length === 0) return;
-
-      const messages = await tx.message.findMany({
-        where: {
-          id: { in: batch.map((candidate) => candidate.storedMessageId) },
-          tenantId: event.tenantId,
-          direction: 'INBOUND',
-        },
-        select: { id: true, text: true, sequence: true },
-      });
-      const messageById = new Map(
-        messages.map((message) => [message.id, message]),
+      const batch = await selectInboundBatch(
+        tx,
+        event.tenantId,
+        initial.channelAccountId,
+        conversationId,
       );
-      const orderedMessages = batch
-        .map((candidate) => messageById.get(candidate.storedMessageId))
-        .filter((message) => message !== undefined);
-      if (orderedMessages.length !== batch.length) {
-        throw new Error('Durable inbound message is missing');
-      }
-
-      let responseText = '';
-      let fitCount = 0;
-      for (const message of orderedMessages) {
-        const nextText = responseText
-          ? `${responseText}\n${message.text}`
-          : message.text;
-        if (nextText.length > 4_096) break;
-        responseText = nextText;
-        fitCount += 1;
-      }
-      batch = batch.slice(0, fitCount);
-      if (batch.length === 0)
-        throw new Error('Inbound text exceeds Telegram reply limit');
+      if (!batch) return;
 
       const batchTime = new Date();
       await tx.inboundEvent.updateMany({
         where: {
-          id: { in: batch.map((candidate) => candidate.event.id) },
+          id: { in: [...batch.eventIds] },
           tenantId: event.tenantId,
           status: 'RECEIVED',
         },
@@ -236,11 +156,11 @@ export class TelegramProcessor {
           authorType: 'BOT',
           direction: 'OUTBOUND',
           type: 'TEXT',
-          text: responseText,
+          text: batch.text,
           sequence: (latest?.sequence ?? 0) + 1,
           providerChatId: conversation.providerChatId,
           deliveryState: 'PENDING',
-          sendIdempotencyKey: `telegram-reply:${conversationId}:${batch.at(-1)?.messageId}`,
+          sendIdempotencyKey: `telegram-reply:${conversationId}:${batch.lastProviderMessageId}`,
         },
         select: { id: true },
       });

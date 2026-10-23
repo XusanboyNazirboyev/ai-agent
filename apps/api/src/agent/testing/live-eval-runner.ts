@@ -1,0 +1,218 @@
+import type { LlmProvider } from '../../core/llm/llm-provider.js';
+import { nanoToUsd } from '../../core/llm/pricing.js';
+import { runCase, type EvalCase, type EvalOutcome } from './eval-runner.js';
+
+/**
+ * Model-comparison evaluation (AGENTS.md §12). Runs the same cases against
+ * one or more configured models and reports quality, validity, latency and
+ * cost per model. The spending cap is shared by the whole run and checked
+ * before every model call, so a run can never exceed it; cases left over
+ * once the cap is reached are reported as not run.
+ */
+
+export interface EvaluatedModel {
+  /** Provider id and model name, printed in the report for comparison. */
+  readonly provider: string;
+  readonly model: string;
+  /** Provider for a case: one shared live client, or a script per case. */
+  readonly providerFor: (evalCase: EvalCase) => LlmProvider;
+}
+
+export interface ModelRun {
+  readonly provider: string;
+  readonly model: string;
+  readonly outcomes: readonly EvalOutcome[];
+  readonly notRun: number;
+}
+
+export interface Rate {
+  readonly passed: number;
+  readonly total: number;
+}
+
+export interface ModelReport {
+  readonly provider: string;
+  readonly model: string;
+  readonly cases: number;
+  readonly notRun: number;
+  readonly passRate: Rate;
+  readonly byLocale: Readonly<Record<string, Rate>>;
+  readonly byCategory: Readonly<Record<string, Rate>>;
+  readonly toolCallValidity: Rate;
+  readonly structuredOutputValidity: Rate;
+  /** Unsourced facts that reached a reply; the gate requires 0. */
+  readonly hardFactViolations: number;
+  /** Fact violations caught by the guardrail before sending. */
+  readonly blockedFactViolations: number;
+  readonly handoverCorrectness: Rate;
+  readonly languageScriptMatch: Rate;
+  readonly latencyMs: { readonly p50: number; readonly p95: number };
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly costUsd: string;
+}
+
+export interface EvaluationReport {
+  readonly mode: 'scripted' | 'live';
+  readonly generatedAt: string;
+  readonly budgetUsd: string;
+  readonly spentUsd: string;
+  readonly models: readonly ModelReport[];
+}
+
+export async function runEvaluation(options: {
+  readonly cases: readonly EvalCase[];
+  readonly models: readonly EvaluatedModel[];
+  readonly budgetNano: number;
+  readonly mode: 'scripted' | 'live';
+  readonly onCase?: (model: EvaluatedModel, outcome: EvalOutcome) => void;
+}): Promise<{ runs: ModelRun[]; spentNano: number }> {
+  let spent = 0;
+  const runs: ModelRun[] = [];
+  for (const model of options.models) {
+    const outcomes: EvalOutcome[] = [];
+    let stopped = false;
+    for (const evalCase of options.cases) {
+      if (stopped) break;
+      const outcome = await runCase(
+        evalCase,
+        model.providerFor(evalCase),
+        options.mode,
+        { runBudget: { capNano: options.budgetNano, spentNano: spent } },
+      );
+      spent += outcome.costNano;
+      if (outcome.budgetStopped) {
+        // The cap refused a call: this case is incomplete, stop the run.
+        stopped = true;
+        continue;
+      }
+      outcomes.push(outcome);
+      options.onCase?.(model, outcome);
+    }
+    runs.push({
+      provider: model.provider,
+      model: model.model,
+      outcomes,
+      notRun: options.cases.length - outcomes.length,
+    });
+  }
+  return { runs, spentNano: spent };
+}
+
+function rate(values: readonly (boolean | undefined)[]): Rate {
+  const defined = values.filter((value) => value !== undefined);
+  return {
+    passed: defined.filter(Boolean).length,
+    total: defined.length,
+  };
+}
+
+function groupRate(
+  outcomes: readonly EvalOutcome[],
+  key: (outcome: EvalOutcome) => string,
+): Record<string, Rate> {
+  const groups: Record<string, EvalOutcome[]> = {};
+  for (const outcome of outcomes) (groups[key(outcome)] ??= []).push(outcome);
+  return Object.fromEntries(
+    Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, list]) => [name, rate(list.map((o) => o.passed))]),
+  );
+}
+
+/** Nearest-rank percentile; 0 for an empty list. */
+export function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.max(1, Math.ceil((p / 100) * sorted.length));
+  return sorted[rank - 1];
+}
+
+export function modelReport(run: ModelRun): ModelReport {
+  const o = run.outcomes;
+  const totalTools = o.reduce((sum, x) => sum + x.modelToolCalls, 0);
+  const invalidTools = o.reduce((sum, x) => sum + x.invalidToolCalls, 0);
+  return {
+    provider: run.provider,
+    model: run.model,
+    cases: o.length,
+    notRun: run.notRun,
+    passRate: rate(o.map((x) => x.passed)),
+    byLocale: groupRate(o, (x) => x.locale),
+    byCategory: groupRate(o, (x) => x.category),
+    toolCallValidity: { passed: totalTools - invalidTools, total: totalTools },
+    structuredOutputValidity: rate(o.map((x) => x.structuredOk)),
+    hardFactViolations: o.reduce((sum, x) => sum + x.hardFactViolations, 0),
+    blockedFactViolations: o.reduce(
+      (sum, x) => sum + x.blockedFactViolations,
+      0,
+    ),
+    handoverCorrectness: rate(o.map((x) => x.handoverOk)),
+    languageScriptMatch: rate(o.map((x) => x.localeOk && (x.scriptOk ?? true))),
+    latencyMs: {
+      p50: percentile(
+        o.map((x) => x.latencyMs),
+        50,
+      ),
+      p95: percentile(
+        o.map((x) => x.latencyMs),
+        95,
+      ),
+    },
+    inputTokens: o.reduce((sum, x) => sum + x.inputTokens, 0),
+    outputTokens: o.reduce((sum, x) => sum + x.outputTokens, 0),
+    costUsd: nanoToUsd(o.reduce((sum, x) => sum + x.costNano, 0)),
+  };
+}
+
+export function buildReport(input: {
+  readonly mode: 'scripted' | 'live';
+  readonly runs: readonly ModelRun[];
+  readonly budgetNano: number;
+  readonly spentNano: number;
+  readonly now?: Date;
+}): EvaluationReport {
+  return {
+    mode: input.mode,
+    generatedAt: (input.now ?? new Date()).toISOString(),
+    budgetUsd: nanoToUsd(input.budgetNano),
+    spentUsd: nanoToUsd(input.spentNano),
+    models: input.runs.map(modelReport),
+  };
+}
+
+const pct = (r: Rate): string =>
+  r.total === 0
+    ? 'n/a'
+    : `${((100 * r.passed) / r.total).toFixed(1)}% (${r.passed}/${r.total})`;
+
+/** Markdown summary; provider and model are always named. */
+export function renderMarkdown(report: EvaluationReport): string {
+  const lines = [
+    `# Agent evaluation (${report.mode})`,
+    '',
+    `Generated ${report.generatedAt}. Budget $${report.budgetUsd}, spent $${report.spentUsd}.`,
+    '',
+    '| Provider | Model | Cases | Not run | Pass | Tool calls valid | Structured valid | Hard-fact violations shipped | Fact drafts blocked | Handover correct | Language/script | p50 ms | p95 ms | Cost USD |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+    ...report.models.map(
+      (m) =>
+        `| ${m.provider} | ${m.model} | ${m.cases} | ${m.notRun} | ${pct(m.passRate)} | ${pct(m.toolCallValidity)} | ${pct(m.structuredOutputValidity)} | ${m.hardFactViolations} | ${m.blockedFactViolations} | ${pct(m.handoverCorrectness)} | ${pct(m.languageScriptMatch)} | ${m.latencyMs.p50} | ${m.latencyMs.p95} | ${m.costUsd} |`,
+    ),
+  ];
+  for (const m of report.models) {
+    lines.push(
+      '',
+      `## ${m.provider} / ${m.model}`,
+      '',
+      '| Locale | Pass |',
+      '|---|---|',
+    );
+    for (const [name, r] of Object.entries(m.byLocale))
+      lines.push(`| ${name} | ${pct(r)} |`);
+    lines.push('', '| Category | Pass |', '|---|---|');
+    for (const [name, r] of Object.entries(m.byCategory))
+      lines.push(`| ${name} | ${pct(r)} |`);
+  }
+  return `${lines.join('\n')}\n`;
+}

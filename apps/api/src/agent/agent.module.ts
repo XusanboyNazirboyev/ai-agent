@@ -8,6 +8,7 @@ import {
   AgentConversationService,
   LLM_PROVIDER,
 } from './agent-conversation.service.js';
+import { AgentModeStartupCheck } from './agent-mode.startup.js';
 import { createLlmProvider, llmEnvironment } from './llm.factory.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
@@ -16,6 +17,7 @@ import { LlmUsageStore } from './llm-usage.store.js';
   providers: [
     LlmUsageStore,
     AgentConversationService,
+    AgentModeStartupCheck,
     {
       provide: LLM_PROVIDER,
       inject: [ConfigService],
