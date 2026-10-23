@@ -62,7 +62,7 @@ No status depends on a live model run: no API key was available, so live quality
 | Apostrophe variants and Latin↔Cyrillic matching | IMPLEMENTED | `packages/shared/src/transliteration.ts`. Tests: `agent-components.spec.ts` › "Uzbek transliteration"; eval `apostrophe_variants` (o‘ oʻ o’ \`) | — |
 | Transliteration never merges distinct items | IMPLEMENTED | Normalization is used for matching only; items and facts keep the connector ID and source entity. Test: `agent-policy.spec.ts` › "keeps items distinct when their titles transliterate to the same key" | — |
 | Truthful AI disclosure | IMPLEMENTED | `ai_question` intent → `templates.aiDisclosure`. Tests: `agent-policy.spec.ts` › "answers a bot question truthfully in the conversation script"; eval `ai_disclosure` | — |
-| Conservative handling of uncertain language; locale status honesty | PARTIAL | All locales are `beta` with `nativeReviewed: false`, and the registry refuses `stable` without review. | The `LOW_LANG_CONFIDENCE` handover is defined but has no trigger; it needs live-eval thresholds per locale. **Phase 7.** |
+| Conservative handling of uncertain language; locale status honesty | PARTIAL | All locales are `beta` with `nativeReviewed: false`, and the registry refuses `stable` without review. | Stage C ([ADR 013](adr/013-stage-c-safety-gates.md)) added the trigger (`language-policy.ts`, configurable thresholds). Thresholds are unmeasured on live data; stable status still needs eval + native review. **Phase 7.** |
 
 ## v3 §7.3: guardrails on every reply
 

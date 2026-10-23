@@ -208,6 +208,7 @@ describe('AgentConversationService', () => {
       },
       costNano: 3_500,
       reservedNano: 10_000,
+      usageBasis: 'reported' as const,
       pricingVersion: 'anthropic-2026-10-23',
       durationMs: 1,
       attempts: 1,
@@ -221,6 +222,45 @@ describe('AgentConversationService', () => {
     expect(
       await store.conversationSpendNano(ids.tenantId, ids.conversationId),
     ).toBe(3_500);
+  });
+
+  it('keeps unknown-usage exposure apart from spend and records it once', async () => {
+    const ids = await fixture();
+    const store = new LlmUsageStore(database);
+    const base = {
+      tenantId: ids.tenantId,
+      conversationId: ids.conversationId,
+      turnKey: 't',
+      callIndex: 0,
+      purpose: 'respond' as const,
+      tier: 'STRONG' as const,
+      providerId: 'routed',
+      model: 'ma',
+      responseId: 'unknown:t:0',
+      usage: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWrite5mTokens: 0,
+        cacheWrite1hTokens: 0,
+      },
+      costNano: 0,
+      reservedNano: 7_000,
+      usageBasis: 'unknown' as const,
+      pricingVersion: 'routing-free-2026-10-23',
+      durationMs: 0,
+      attempts: 1,
+      outcome: 'unknown_usage:LLM_TIMEOUT',
+    };
+    expect(await store.record(base)).toBe(true);
+    expect(await store.record(base)).toBe(false);
+    expect(
+      await store.conversationExposureNano(ids.tenantId, ids.conversationId),
+    ).toBe(7_000);
+    expect(await store.tenantMonthExposureNano(ids.tenantId)).toBe(7_000);
+    expect(
+      await store.conversationSpendNano(ids.tenantId, ids.conversationId),
+    ).toBe(0);
   });
 
   it('enforces the conversation budget from the stored ledger', async () => {

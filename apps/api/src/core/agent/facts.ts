@@ -34,6 +34,16 @@ export interface FactProvenance {
   readonly sourceEntityId: string;
   readonly retrievedAt: string;
   readonly validUntil?: string;
+  /**
+   * Evidence binding, stamped by code from the connector that answered and
+   * the turn's scope (never from model output). The display gate rejects a
+   * commercial fact whose binding is missing or does not match the turn.
+   */
+  readonly tenantId?: string;
+  readonly conversationId?: string;
+  readonly offerId?: string;
+  /** True only for a fresh get_quote / check_availability result. */
+  readonly live?: boolean;
 }
 
 export interface Fact {

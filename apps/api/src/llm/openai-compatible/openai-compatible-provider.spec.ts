@@ -567,6 +567,7 @@ describe('OpenAI-compatible adapter: errors and retries', () => {
             turnKey: 't',
           },
         ),
+        scope: { tenantId: 't', conversationId: 'c' },
         toolTimeoutMs: 200,
         maxOutputTokens: { extract: 300, respond: 300 },
       },

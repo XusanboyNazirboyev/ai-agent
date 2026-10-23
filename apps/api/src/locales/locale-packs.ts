@@ -50,6 +50,8 @@ export const UZ_LATN: LocalePack = {
     offerOperator: 'Xohlasangiz, savolingizni operatorga yetkazaman.',
     optionsIntro: 'Sizga mos variantlar:',
     notUnderstood: "Kechirasiz, javobingizni to'liq tushunmadim.",
+    languageClarification:
+      "Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.",
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -110,6 +112,8 @@ export const UZ_CYRL: LocalePack = {
     offerOperator: 'Хоҳласангиз, саволингизни операторга етказаман.',
     optionsIntro: 'Сизга мос вариантлар:',
     notUnderstood: 'Кечирасиз, жавобингизни тўлиқ тушунмадим.',
+    languageClarification:
+      'Илтимос, ўзбек, рус ёки инглиз тилида ёзинг. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -171,6 +175,8 @@ export const RU: LocalePack = {
     offerOperator: 'Если хотите, я передам ваш вопрос оператору.',
     optionsIntro: 'Подходящие варианты:',
     notUnderstood: 'Извините, я не совсем понял ваш ответ.',
+    languageClarification:
+      "Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.",
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -229,6 +235,8 @@ export const EN: LocalePack = {
     offerOperator: 'If you like, I can pass your question to an operator.',
     optionsIntro: 'Here are matching options:',
     notUnderstood: "Sorry, I didn't quite understand your answer.",
+    languageClarification:
+      "Please write in Uzbek, Russian or English. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском.",
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {

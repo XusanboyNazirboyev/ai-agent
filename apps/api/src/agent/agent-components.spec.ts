@@ -16,6 +16,7 @@ import {
 } from '../locales/locale-packs.js';
 import { formatMoney, LocaleRegistry } from '../core/locales/locale-pack.js';
 import { FactStore } from '../core/agent/facts.js';
+import { displayPolicyFor } from '../core/agent/display-gate.js';
 import { checkDraft } from '../core/agent/guardrails.js';
 import { chooseLocale, detectLanguage } from '../core/agent/language.js';
 import {
@@ -174,6 +175,10 @@ describe('facts and guardrail', () => {
     sourceSystem: 'mock-education',
     sourceEntityId: 'o1',
     retrievedAt: '2026-10-23T10:00:00Z',
+    tenantId: 't1',
+    conversationId: 'c1',
+    offerId: 'o1',
+    live: true,
   };
   const now = new Date('2026-10-23T10:00:00Z');
 
@@ -197,6 +202,7 @@ describe('facts and guardrail', () => {
       {
         ...provenance,
         sourceEntityId: 'o2',
+        offerId: 'o2',
         validUntil: '2026-10-22T00:00:00Z',
       },
     );
@@ -213,6 +219,11 @@ describe('facts and guardrail', () => {
       customerTexts,
       timeZone: 'Asia/Tashkent',
       now,
+      evidence: {
+        tenantId: 't1',
+        conversationId: 'c1',
+        policy: displayPolicyFor({ liveQuote: true, availability: true }),
+      },
     });
 
   it('renders referenced facts with locale formatting', () => {

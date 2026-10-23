@@ -111,6 +111,7 @@ export async function runTurn(options: {
           ? undefined
           : (options.connector ?? educationConnector()),
       llm,
+      scope: { tenantId: 'tenant-eval', conversationId: 'conversation-eval' },
       toolTimeoutMs: 200,
       maxOutputTokens: { extract: 600, respond: 900 },
       now: () => now,

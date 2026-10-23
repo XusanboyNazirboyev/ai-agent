@@ -475,6 +475,18 @@ export interface RunCaseOptions {
   };
 }
 
+/**
+ * A case with a `conversationLocale` models a conversation already under
+ * way in that locale. The language gate only trusts a locale the customer
+ * demonstrably wrote in, so the run supplies one clear earlier message.
+ */
+export const ESTABLISHING_MESSAGES: Readonly<Record<string, string>> = {
+  'uz-Latn': 'Salom, menga kurs kerak',
+  'uz-Cyrl': 'Салом, менга курс керак',
+  ru: 'Здравствуйте, мне нужен курс',
+  en: 'Hello, I need a course',
+};
+
 export async function runCase(
   evalCase: EvalCase,
   provider: LlmProvider = scriptedProvider(evalCase),
@@ -507,7 +519,18 @@ export async function runCase(
       ? { pricingVersion: options.pricingVersion }
       : {}),
     tenantMonthSpentNano: options.runBudget?.spentNano ?? 0,
-    input: { conversationLocale: evalCase.input.conversationLocale, slots },
+    input: {
+      conversationLocale: evalCase.input.conversationLocale,
+      slots,
+      history: evalCase.input.conversationLocale
+        ? [
+            {
+              role: 'customer' as const,
+              text: ESTABLISHING_MESSAGES[evalCase.input.conversationLocale],
+            },
+          ]
+        : [],
+    },
   });
   return scoreCase(
     evalCase,

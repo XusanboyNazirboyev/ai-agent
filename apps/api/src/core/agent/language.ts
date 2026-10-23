@@ -16,7 +16,13 @@ import type {
 export interface LanguageDetection {
   readonly language: LanguageCode | 'unknown';
   readonly script: ScriptCode | 'unknown';
+  /**
+   * Heuristic score in [0,1]. Not a calibrated probability: it is compared
+   * only against thresholds in a `LanguagePolicy`.
+   */
   readonly confidence: number;
+  /** True when Latin and Cyrillic letters are mixed in one message. */
+  readonly mixedScript?: boolean;
 }
 
 const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
@@ -196,7 +202,12 @@ export function detectLanguage(input: string): LanguageDetection {
     .sort((a, b) => b.value - a.value);
   const [top, second] = ranked;
   if (top.value === 0)
-    return { language: 'unknown', script, confidence: 0.2 * scriptShare };
+    return {
+      language: 'unknown',
+      script,
+      confidence: 0.2 * scriptShare,
+      mixedScript: scriptShare < MIXED_SCRIPT_SHARE,
+    };
 
   const margin = (top.value - second.value) / (top.value + 2);
   const lengthFactor = Math.min(1, words.length / 3);
@@ -214,6 +225,7 @@ export function detectLanguage(input: string): LanguageDetection {
     language: top.language,
     script,
     confidence: Math.round(capped * 1000) / 1000,
+    mixedScript: scriptShare < MIXED_SCRIPT_SHARE,
   };
 }
 

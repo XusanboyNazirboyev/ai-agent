@@ -3,8 +3,10 @@ import {
   type Reservation,
   type TurnBudget,
 } from './budget.js';
-import type {
-  LlmMessage,
+import {
+  isLlmError,
+  type AmbiguousAttempt,
+  type LlmMessage,
   LlmProvider,
   LlmPurpose,
   LlmTier,
@@ -78,6 +80,13 @@ export interface LlmUsageEntry {
   readonly usage: LlmUsage;
   readonly costNano: number;
   readonly reservedNano: number;
+  /**
+   * How the usage figures were obtained: `reported` by the provider,
+   * `estimated` by an adapter from sizes, or `unknown` (a timed-out attempt
+   * that may have been billed; cost is 0 and the exposure is bounded by
+   * `reservedNano`). Persisted via `outcome` (`unknown_usage:<code>`).
+   */
+  readonly usageBasis: 'reported' | 'estimated' | 'unknown';
   readonly pricingVersion: string;
   readonly durationMs: number;
   readonly attempts: number;
@@ -86,7 +95,11 @@ export interface LlmUsageEntry {
 
 /** Durable usage recording; implementations must be idempotent on responseId. */
 export interface LlmUsageSink {
-  record(entry: LlmUsageEntry): Promise<void>;
+  /**
+   * Resolves `false` when the entry already existed (a retried invocation):
+   * the earlier row is then already part of the persisted totals.
+   */
+  record(entry: LlmUsageEntry): Promise<boolean | void>;
 }
 
 export interface MeteringContext {
@@ -119,7 +132,12 @@ export class MeteredLlm {
       readonly tier: LlmTier;
       readonly maxOutputTokens: number;
     },
-  ): { model: string; reservation: Reservation; maxOutputTokens: number } {
+  ): {
+    model: string;
+    reservation: Reservation;
+    maxOutputTokens: number;
+    allowAmbiguousFailover: boolean;
+  } {
     const model = this.provider.modelFor(request.tier);
     const pricing = pricingFor(this.pricing, model);
     const estimate = estimateRequest(
@@ -140,7 +158,82 @@ export class MeteredLlm {
       estimate.bytes,
       estimate.tokens + capped,
     );
-    return { model, reservation, maxOutputTokens: capped };
+    // A timeout cannot show whether the provider billed it. Failing over to
+    // another candidate is allowed only if the budget could also absorb a
+    // second call of the same worst-case size.
+    const allowAmbiguousFailover = this.budget.canReserve(
+      reservation.worstCaseNano,
+      reservation.worstCaseTokens,
+    );
+    return {
+      model,
+      reservation,
+      maxOutputTokens: capped,
+      allowAmbiguousFailover,
+    };
+  }
+
+  /**
+   * Accounts attempts whose billing is unknowable: counts their worst case
+   * against the turn's limits and records an `unknown` usage entry. The id is
+   * derived from the turn and call index, so a retried job overwrites the
+   * entry instead of adding a second one.
+   */
+  private async accountAmbiguous(
+    request: { tier: LlmTier; purpose: LlmPurpose },
+    reservation: Reservation,
+    attempts: readonly AmbiguousAttempt[],
+  ): Promise<void> {
+    for (const attempt of attempts) {
+      const callIndex = this.callIndex++;
+      let alreadyPersisted = false;
+      try {
+        alreadyPersisted =
+          (await this.sink.record({
+            tenantId: this.context.tenantId,
+            conversationId: this.context.conversationId,
+            turnKey: this.context.turnKey,
+            callIndex,
+            purpose: request.purpose,
+            tier: request.tier,
+            providerId: attempt.providerId,
+            model: attempt.model,
+            responseId: `unknown:${this.context.turnKey}:${callIndex}`,
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWrite5mTokens: 0,
+              cacheWrite1hTokens: 0,
+            },
+            costNano: 0,
+            reservedNano: reservation.worstCaseNano,
+            usageBasis: 'unknown',
+            pricingVersion: this.pricing.version,
+            durationMs: 0,
+            attempts: 1,
+            outcome: `unknown_usage:${attempt.code}`,
+          })) === false;
+      } catch (error: unknown) {
+        this.onRecordError(error);
+      }
+      // A duplicate is already in the persisted exposure loaded at turn
+      // start; counting it again here would charge one invocation twice.
+      if (!alreadyPersisted) {
+        this.budget.addUnknownExposure(
+          reservation.worstCaseNano,
+          reservation.worstCaseTokens,
+        );
+      }
+    }
+  }
+
+  private ambiguousIn(error: unknown, model: string): AmbiguousAttempt[] {
+    if (!isLlmError(error)) return [];
+    if (error.ambiguousAttempts) return [...error.ambiguousAttempts];
+    return error.code === 'LLM_TIMEOUT'
+      ? [{ providerId: this.provider.providerId, model, code: error.code }]
+      : [];
   }
 
   private async settle(
@@ -154,9 +247,15 @@ export class MeteredLlm {
       usage: LlmUsage;
       durationMs: number;
       attempts: number;
+      ambiguousAttempts?: readonly AmbiguousAttempt[];
     },
     outcome: string,
   ): Promise<void> {
+    await this.accountAmbiguous(
+      { tier, purpose },
+      reservation,
+      result.ambiguousAttempts ?? [],
+    );
     const cost = costOfUsage(
       pricingFor(this.pricing, result.model),
       result.usage,
@@ -182,6 +281,7 @@ export class MeteredLlm {
         usage: result.usage,
         costNano: cost,
         reservedNano: reservation.worstCaseNano,
+        usageBasis: result.usage.estimated ? 'estimated' : 'reported',
         pricingVersion: this.pricing.version,
         durationMs: result.durationMs,
         attempts: result.attempts,
@@ -202,9 +302,15 @@ export class MeteredLlm {
       result = await this.provider.generateStructured({
         ...request,
         maxOutputTokens: prep.maxOutputTokens,
+        allowAmbiguousFailover: prep.allowAmbiguousFailover,
         signal: request.signal ?? this.context.signal,
       });
     } catch (error: unknown) {
+      await this.accountAmbiguous(
+        request,
+        prep.reservation,
+        this.ambiguousIn(error, prep.model),
+      );
       this.budget.release(prep.reservation);
       throw error;
     }
@@ -227,9 +333,15 @@ export class MeteredLlm {
       result = await this.provider.generateWithTools({
         ...request,
         maxOutputTokens: prep.maxOutputTokens,
+        allowAmbiguousFailover: prep.allowAmbiguousFailover,
         signal: request.signal ?? this.context.signal,
       });
     } catch (error: unknown) {
+      await this.accountAmbiguous(
+        request,
+        prep.reservation,
+        this.ambiguousIn(error, prep.model),
+      );
       this.budget.release(prep.reservation);
       throw error;
     }

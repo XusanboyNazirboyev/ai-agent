@@ -13,6 +13,7 @@ import type {
   LocalePack,
   LocaleRegistry,
 } from '../locales/locale-pack.js';
+import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
 import { FactStore, type Fact } from './facts.js';
 import { checkDraft, type GuardrailViolation } from './guardrails.js';
 import {
@@ -22,6 +23,16 @@ import {
   type LanguageDetection,
 } from './language.js';
 import {
+  assessLanguage,
+  DEFAULT_LANGUAGE_POLICY,
+  decideBeforeFacts,
+  decideBeforeModel,
+  languageHistory,
+  type LanguageAssessment,
+  type LanguageDecision,
+  type LanguagePolicy,
+} from './language-policy.js';
+import {
   extractionSystemPrompt,
   extractionUserMessage,
   regenerationMessage,
@@ -29,6 +40,7 @@ import {
   responseUserMessage,
   type HistoryEntry,
 } from './prompts.js';
+import type { SafetyOutcome } from './safety.js';
 import {
   detectEnumSlots,
   extractionSchema,
@@ -83,10 +95,23 @@ export interface AgentDependencies {
     readonly respond: number;
   };
   readonly now?: () => Date;
+  /** Tenant and conversation this turn runs for; stamped on every fact. */
+  readonly scope: {
+    readonly tenantId: string;
+    readonly conversationId: string;
+  };
+  /** Overrides to the connector-derived display policy (ADR 013). */
+  readonly displayPolicy?: Partial<DisplayPolicy>;
+  readonly languagePolicy?: LanguagePolicy;
 }
 
 export type TurnOutcome =
-  'ASKED_SLOT' | 'ANSWERED' | 'NO_RESULTS' | 'HANDOVER' | 'FALLBACK';
+  | 'ASKED_SLOT'
+  | 'ANSWERED'
+  | 'NO_RESULTS'
+  | 'HANDOVER'
+  | 'FALLBACK'
+  | 'CLARIFICATION_REQUIRED';
 
 export interface AgentTurnResult {
   readonly reply: string;
@@ -104,6 +129,9 @@ export interface AgentTurnResult {
   readonly budgetStop?: BudgetStopReason;
   readonly tools: readonly ToolTraceEntry[];
   readonly language: LanguageDetection;
+  readonly languageAssessment?: LanguageAssessment;
+  /** Typed outcome of a safety gate that blocked, clarified or escalated. */
+  readonly safety?: SafetyOutcome;
   /** Provider error code when the turn ended because a model call failed. */
   readonly llmFailure?: string;
 }
@@ -153,6 +181,14 @@ export async function runAgentTurn(
     fallback: input.defaultLocale,
     registry: locales,
   });
+  const languagePolicy = deps.languagePolicy ?? DEFAULT_LANGUAGE_POLICY;
+  const languageAssessment = assessLanguage(
+    input.customerText,
+    locales,
+    languagePolicy,
+  );
+  const spoken = languageHistory(input.history, locales, languagePolicy);
+  let modelLocale: LocaleId | undefined;
   let slots: SlotState = input.slots;
   let intent: Intent | undefined;
   let extractionFailure: string | undefined;
@@ -164,6 +200,7 @@ export async function runAgentTurn(
         budget: llm.budget,
         timeoutMs: deps.toolTimeoutMs,
         now,
+        scope: deps.scope,
       })
     : undefined;
 
@@ -186,6 +223,7 @@ export async function runAgentTurn(
     budgetStop: llm.budget.snapshot.stopReason,
     tools: tools?.trace ?? [],
     language,
+    languageAssessment,
     ...extra,
   });
   const handover = (
@@ -196,6 +234,44 @@ export async function runAgentTurn(
       handover: reason,
       ...extra,
     });
+
+  // Tier-0 language gate: runs before any metered model call. Clarification
+  // keeps the slots and history untouched so the conversation resumes once
+  // the customer writes in a supported language.
+  const languageStop = (
+    decision: LanguageDecision,
+  ): AgentTurnResult | undefined => {
+    if (decision.action === 'PROCEED') return undefined;
+    if (decision.action === 'CLARIFY') {
+      return finish(
+        locale().templates.languageClarification,
+        'CLARIFICATION_REQUIRED',
+        {
+          // Nothing extracted from a message we could not read reliably is
+          // kept; the history still carries it for the next turn.
+          slots: input.slots,
+          safety: {
+            status: 'CLARIFICATION_REQUIRED',
+            gate: 'LANGUAGE',
+            reasonCodes: decision.reasonCodes,
+          },
+        },
+      );
+    }
+    return handover('LOW_LANG_CONFIDENCE', {
+      slots: input.slots,
+      safety: {
+        status: 'ESCALATION_REQUIRED',
+        gate: 'LANGUAGE',
+        reasonCodes: decision.reasonCodes,
+        escalation: { reason: 'LOW_LANG_CONFIDENCE', operatorNotified: false },
+      },
+    });
+  };
+  const early = languageStop(
+    decideBeforeModel(languageAssessment, spoken, languagePolicy),
+  );
+  if (early) return early;
 
   // 1-2. Candidate slots: deterministic enum matches plus model extraction.
   const deterministic = detectEnumSlots(pack, input.customerText);
@@ -226,6 +302,8 @@ export async function runAgentTurn(
       );
       proposed = { ...deterministic, ...fromModel };
       const { language: lang, script } = result.value;
+      if (lang !== 'other' && script !== 'other')
+        modelLocale = locales.find(lang, script)?.id;
       if (
         input.conversationLocale === undefined &&
         language.confidence < LOCALE_SWITCH_CONFIDENCE &&
@@ -278,6 +356,19 @@ export async function runAgentTurn(
       },
     );
   }
+
+  // Commercial facts need a language the customer demonstrably uses.
+  const unsure = languageStop(
+    decideBeforeFacts(
+      languageAssessment,
+      spoken,
+      localeId,
+      locales,
+      modelLocale,
+      languagePolicy,
+    ),
+  );
+  if (unsure) return unsure;
 
   // 4. Search early, then one relaxed search before giving up.
   if (!tools || !tools.available().includes('search_catalog'))
@@ -360,8 +451,22 @@ export async function runAgentTurn(
       ],
       timeZone: input.timeZone,
       now: now(),
+      evidence: {
+        tenantId: deps.scope.tenantId,
+        conversationId: deps.scope.conversationId,
+        policy: displayPolicyFor(
+          // Strictest policy when no connector is wired (cannot happen here:
+          // a draft exists only after a connector search).
+          deps.connector?.capabilities ?? {
+            liveQuote: true,
+            availability: true,
+          },
+          deps.displayPolicy,
+        ),
+      },
     });
   let checked = guard(draft.text);
+  const firstViolations = checked.violations;
   let regenerated = false;
   if (checked.violations.length > 0) {
     regenerated = true;
@@ -404,9 +509,26 @@ export async function runAgentTurn(
     return handover('GUARDRAIL', {
       violations: checked.violations,
       regenerated,
+      safety: {
+        status: 'ESCALATION_REQUIRED',
+        gate: 'DISPLAY',
+        reasonCodes: checked.violations,
+        escalation: { reason: 'GUARDRAIL', operatorNotified: false },
+      },
     });
   }
-  return finish(checked.rendered, 'ANSWERED', { regenerated });
+  return finish(checked.rendered, 'ANSWERED', {
+    regenerated,
+    ...(firstViolations.length > 0
+      ? {
+          safety: {
+            status: 'BLOCKED' as const,
+            gate: 'DISPLAY' as const,
+            reasonCodes: firstViolations,
+          },
+        }
+      : {}),
+  });
 }
 
 /** Bounded tool loop: every round and call is checked against the budget. */

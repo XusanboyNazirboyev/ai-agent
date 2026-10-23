@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { LlmUsageEntry, LlmUsageSink } from '../core/llm/metered-llm.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 
+const UNKNOWN_USAGE_PREFIX = 'unknown_usage:';
+
 /**
  * Tenant-scoped LLM usage ledger. Recording is idempotent on the provider
  * response id, so a retried persistence step cannot double count one
@@ -11,8 +13,8 @@ import { PrismaService } from '../persistence/prisma.service.js';
 export class LlmUsageStore implements LlmUsageSink {
   constructor(private readonly prisma: PrismaService) {}
 
-  async record(entry: LlmUsageEntry): Promise<void> {
-    await this.prisma.llmUsageRecord.createMany({
+  async record(entry: LlmUsageEntry): Promise<boolean> {
+    const result = await this.prisma.llmUsageRecord.createMany({
       data: [
         {
           tenantId: entry.tenantId,
@@ -41,6 +43,44 @@ export class LlmUsageStore implements LlmUsageSink {
       ],
       skipDuplicates: true,
     });
+    return result.count > 0;
+  }
+
+  /**
+   * Worst-case exposure of attempts with unknown usage (timeouts), summed
+   * from `reservedNano` of `unknown_usage:*` rows. Kept apart from spend.
+   */
+  async conversationExposureNano(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<number> {
+    const result = await this.prisma.llmUsageRecord.aggregate({
+      where: {
+        tenantId,
+        conversationId,
+        outcome: { startsWith: UNKNOWN_USAGE_PREFIX },
+      },
+      _sum: { reservedNano: true },
+    });
+    return Number(result._sum.reservedNano ?? 0n);
+  }
+
+  async tenantMonthExposureNano(
+    tenantId: string,
+    now: Date = new Date(),
+  ): Promise<number> {
+    const monthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    const result = await this.prisma.llmUsageRecord.aggregate({
+      where: {
+        tenantId,
+        createdAt: { gte: monthStart },
+        outcome: { startsWith: UNKNOWN_USAGE_PREFIX },
+      },
+      _sum: { reservedNano: true },
+    });
+    return Number(result._sum.reservedNano ?? 0n);
   }
 
   async conversationSpendNano(

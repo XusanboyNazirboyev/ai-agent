@@ -58,6 +58,8 @@ export interface BudgetSnapshot {
   readonly remainingTurnNano: number;
   readonly remainingConversationNano: number;
   readonly overshootNano: number;
+  /** Upper bound for attempts that may have been billed with unknown usage. */
+  readonly unknownExposureNano: number;
   readonly tokensUsed: number;
   readonly stopReason: BudgetStopReason | undefined;
 }
@@ -69,6 +71,8 @@ export class TurnBudget {
   private toolRounds = 0;
   private toolCalls = 0;
   private overshoot = 0;
+  private unknown = 0;
+  private unknownTokens = 0;
   private tokens = 0;
   private reservedTokens = 0;
   private nextId = 1;
@@ -84,8 +88,32 @@ export class TurnBudget {
       readonly conversationSpentNano: number;
       readonly tenantMonthSpentNano: number;
       readonly conversationTokensUsed?: number;
+      /**
+       * Worst-case exposure of earlier attempts with unknown usage (timeouts
+       * that may have been billed), kept apart from `*SpentNano`, which holds
+       * only reported cost. Counted against the limits, never reported as
+       * spend.
+       */
+      readonly conversationExposureNano?: number;
+      readonly tenantMonthExposureNano?: number;
     },
   ) {}
+
+  private conversationCommitted(turnCommitted: number): number {
+    return (
+      this.prior.conversationSpentNano +
+      (this.prior.conversationExposureNano ?? 0) +
+      turnCommitted
+    );
+  }
+
+  private monthCommitted(turnCommitted: number): number {
+    return (
+      this.prior.tenantMonthSpentNano +
+      (this.prior.tenantMonthExposureNano ?? 0) +
+      turnCommitted
+    );
+  }
 
   private fail(reason: BudgetStopReason): never {
     this.stop ??= reason;
@@ -107,22 +135,20 @@ export class TurnBudget {
     if (this.calls >= this.limits.maxCallsPerTurn) this.fail('CALL_LIMIT');
     if (inputBytes > this.limits.maxInputBytesPerCall)
       this.fail('INPUT_TOO_LARGE');
-    const committed = this.spent + this.reserved + worstCaseNano;
+    const committed = this.spent + this.unknown + this.reserved + worstCaseNano;
     if (committed > this.limits.maxTurnCostNano) this.fail('TURN_COST_LIMIT');
     if (
-      this.prior.conversationSpentNano + committed >
+      this.conversationCommitted(committed) >
       this.limits.maxConversationCostNano
     ) {
       this.fail('CONVERSATION_COST_LIMIT');
     }
     const monthly = this.limits.tenantMonthlyBudgetNano;
-    if (
-      monthly !== undefined &&
-      this.prior.tenantMonthSpentNano + committed > monthly
-    ) {
+    if (monthly !== undefined && this.monthCommitted(committed) > monthly) {
       this.fail('TENANT_MONTHLY_LIMIT');
     }
-    const tokens = this.tokens + this.reservedTokens + worstCaseTokens;
+    const tokens =
+      this.tokens + this.unknownTokens + this.reservedTokens + worstCaseTokens;
     if (
       this.limits.maxTurnTokens !== undefined &&
       tokens > this.limits.maxTurnTokens
@@ -142,6 +168,39 @@ export class TurnBudget {
     const id = this.nextId++;
     this.open.set(id, { nano: worstCaseNano, tokens: worstCaseTokens });
     return { id, worstCaseNano, worstCaseTokens };
+  }
+
+  /**
+   * Whether one more call of this worst-case size would still be admitted.
+   * Non-throwing mirror of the limit checks in `reserve`.
+   */
+  canReserve(worstCaseNano: number, worstCaseTokens = 0): boolean {
+    const committed = this.spent + this.unknown + this.reserved + worstCaseNano;
+    const tokens =
+      this.tokens + this.unknownTokens + this.reservedTokens + worstCaseTokens;
+    const monthly = this.limits.tenantMonthlyBudgetNano;
+    return (
+      this.calls < this.limits.maxCallsPerTurn &&
+      committed <= this.limits.maxTurnCostNano &&
+      this.conversationCommitted(committed) <=
+        this.limits.maxConversationCostNano &&
+      (monthly === undefined || this.monthCommitted(committed) <= monthly) &&
+      (this.limits.maxTurnTokens === undefined ||
+        tokens <= this.limits.maxTurnTokens) &&
+      (this.limits.maxConversationTokens === undefined ||
+        (this.prior.conversationTokensUsed ?? 0) + tokens <=
+          this.limits.maxConversationTokens)
+    );
+  }
+
+  /**
+   * Counts an attempt that may have been billed with unknown usage (a
+   * timeout) at its worst-case size against this turn's limits. It is an
+   * upper bound, not a charge: persisted spend is unaffected.
+   */
+  addUnknownExposure(worstCaseNano: number, worstCaseTokens: number): void {
+    this.unknown += worstCaseNano;
+    this.unknownTokens += worstCaseTokens;
   }
 
   /** Replaces a reservation with the provider-reported actual cost. */
@@ -193,16 +252,19 @@ export class TurnBudget {
       toolCalls: this.toolCalls,
       remainingTurnNano: Math.max(
         0,
-        this.limits.maxTurnCostNano - this.spent - this.reserved,
+        this.limits.maxTurnCostNano - this.spent - this.unknown - this.reserved,
       ),
       remainingConversationNano: Math.max(
         0,
         this.limits.maxConversationCostNano -
           this.prior.conversationSpentNano -
+          (this.prior.conversationExposureNano ?? 0) -
           this.spent -
+          this.unknown -
           this.reserved,
       ),
       overshootNano: this.overshoot,
+      unknownExposureNano: this.unknown,
       tokensUsed: this.tokens,
       stopReason: this.stop,
     };

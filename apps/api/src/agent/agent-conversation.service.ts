@@ -163,6 +163,8 @@ export class AgentConversationService implements OnModuleInit {
       conversationSpent,
       monthSpent,
       conversationTokens,
+      conversationExposure,
+      monthExposure,
     ] = await Promise.all([
       this.prisma.conversationSlots.findFirst({
         where: { tenantId, conversationId },
@@ -184,6 +186,8 @@ export class AgentConversationService implements OnModuleInit {
       this.usage.conversationSpendNano(tenantId, conversationId),
       this.usage.tenantMonthSpendNano(tenantId),
       this.usage.conversationTokens(tenantId, conversationId),
+      this.usage.conversationExposureNano(tenantId, conversationId),
+      this.usage.tenantMonthExposureNano(tenantId),
     ]);
     const slots = slotState(slotRow?.slots);
     const history: HistoryEntry[] = recent.reverse().map((message) => ({
@@ -196,6 +200,8 @@ export class AgentConversationService implements OnModuleInit {
       conversationSpentNano: conversationSpent,
       tenantMonthSpentNano: monthSpent,
       conversationTokensUsed: conversationTokens,
+      conversationExposureNano: conversationExposure,
+      tenantMonthExposureNano: monthExposure,
     });
     const deadline = new AbortController();
     const entries: LlmUsageEntry[] = [];
@@ -204,9 +210,9 @@ export class AgentConversationService implements OnModuleInit {
       this.pricing,
       budget,
       {
-        record: async (entry): Promise<void> => {
+        record: async (entry): Promise<boolean> => {
           entries.push(entry);
-          await this.usage.record(entry);
+          return this.usage.record(entry);
         },
       },
       {
@@ -247,6 +253,7 @@ export class AgentConversationService implements OnModuleInit {
         locales: this.locales,
         connector,
         llm,
+        scope: { tenantId, conversationId },
         toolTimeoutMs: this.config.get('AGENT_TOOL_TIMEOUT_MS', {
           infer: true,
         }),
@@ -288,6 +295,14 @@ export class AgentConversationService implements OnModuleInit {
         toolCalls: result.budget.toolCalls,
         budgetStop: result.budgetStop,
         violations: result.violations,
+        safety: result.safety
+          ? {
+              status: result.safety.status,
+              gate: result.safety.gate,
+              reasonCodes: result.safety.reasonCodes,
+            }
+          : undefined,
+        unknownExposureNano: result.budget.unknownExposureNano,
         overshootNano: result.budget.overshootNano,
         timedOut: outcome === 'timeout',
       }),

@@ -17,7 +17,7 @@ import {
 } from '../../connectors/interfaces/errors.js';
 import type { TurnBudget } from '../llm/budget.js';
 import type { LlmToolDefinition } from '../llm/llm-provider.js';
-import type { FactStore } from './facts.js';
+import type { FactProvenance, FactStore } from './facts.js';
 import { redactedSummary } from './redaction.js';
 import type { SlotState } from './slots.js';
 import { searchQuery } from './slots.js';
@@ -129,6 +129,11 @@ export interface ToolContext {
   readonly budget: TurnBudget;
   readonly timeoutMs: number;
   readonly now: () => Date;
+  /** Turn scope stamped on every fact; checked again by the display gate. */
+  readonly scope: {
+    readonly tenantId: string;
+    readonly conversationId: string;
+  };
 }
 
 const ID = z.string().min(1).max(300);
@@ -236,14 +241,8 @@ export class AgentTools {
     sourceEntityId: string,
     sourceSystem: string,
     validUntil?: string,
-  ): {
-    tool: string;
-    connectorKey: string;
-    sourceSystem: string;
-    sourceEntityId: string;
-    retrievedAt: string;
-    validUntil?: string;
-  } {
+    binding: { offerId?: string; live?: boolean } = {},
+  ): FactProvenance {
     return {
       tool,
       connectorKey: this.context.connector.connectorKey,
@@ -251,6 +250,9 @@ export class AgentTools {
       sourceEntityId,
       retrievedAt: this.context.now().toISOString(),
       ...(validUntil ? { validUntil } : {}),
+      tenantId: this.context.connector.context.tenantId,
+      conversationId: this.context.scope.conversationId,
+      ...binding,
     };
   }
 
@@ -300,6 +302,7 @@ export class AgentTools {
           offer.sourceEntityId,
           offer.sourceSystem,
           offer.validUntil,
+          { offerId: offer.id, live: false },
         );
         return {
           offerId: offer.id,
@@ -350,6 +353,7 @@ export class AgentTools {
       availability.offerId,
       sourceSystem,
       availability.validUntil,
+      { offerId: availability.offerId, live: true },
     );
     return promptSafeJson({
       offerId: availability.offerId,
@@ -376,6 +380,7 @@ export class AgentTools {
       quote.sourceEntityId,
       quote.sourceSystem,
       quote.validUntil,
+      { offerId: quote.offerId, live: true },
     );
     return promptSafeJson({
       offerId: quote.offerId,

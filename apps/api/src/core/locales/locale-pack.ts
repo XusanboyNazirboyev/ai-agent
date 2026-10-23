@@ -44,6 +44,12 @@ export interface LocaleTemplates {
   readonly offerOperator: string;
   readonly optionsIntro: string;
   readonly notUnderstood: string;
+  /**
+   * Asks the customer to write in a supported language. Must not promise
+   * anything and must be understandable to a customer whose language we
+   * could not identify, so it names every supported language.
+   */
+  readonly languageClarification: string;
   /** Truthful answer when the customer asks whether they talk to a bot. */
   readonly aiDisclosure: string;
   /**

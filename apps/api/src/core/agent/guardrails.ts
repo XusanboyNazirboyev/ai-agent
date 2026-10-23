@@ -1,5 +1,10 @@
 import { unifyApostrophes } from '@agentcore/shared';
 import type { LocalePack } from '../locales/locale-pack.js';
+import {
+  checkReferences,
+  type EvidenceContext,
+  type EvidenceViolation,
+} from './display-gate.js';
 import { FACT_REFERENCE, FactStore } from './facts.js';
 import { detectLanguage } from './language.js';
 
@@ -18,8 +23,8 @@ import { detectLanguage } from './language.js';
 export type GuardrailViolation =
   | 'EMPTY'
   | 'TOO_LONG'
-  | 'UNKNOWN_FACT'
-  | 'STALE_FACT'
+  | EvidenceViolation
+  | 'UNSOURCED_AVAILABILITY'
   | 'UNSOURCED_NUMBER'
   | 'UNSOURCED_CURRENCY'
   | 'FORBIDDEN_CLAIM'
@@ -47,6 +52,8 @@ export function checkDraft(
     readonly customerTexts: readonly string[];
     readonly timeZone: string;
     readonly now: Date;
+    /** Tenant, conversation and display policy the evidence is checked against. */
+    readonly evidence: Omit<EvidenceContext, 'now'>;
   },
 ): GuardrailResult {
   const violations = new Set<GuardrailViolation>();
@@ -54,20 +61,23 @@ export function checkDraft(
   if (text.length === 0) return { violations: ['EMPTY'] };
   if (text.length > MAX_REPLY_CHARS) violations.add('TOO_LONG');
 
+  // Evidence first: every reference must be backed by verified stored facts
+  // (existence, tenant/conversation, offer, expiry, freshness, liveness).
+  const references = FactStore.references(text);
+  for (const violation of checkReferences(references, context.facts, {
+    ...context.evidence,
+    now: context.now,
+  }))
+    violations.add(violation);
   const rendered = new Map<string, string>();
-  for (const id of FactStore.references(text)) {
-    if (!context.facts.get(id)) {
-      violations.add('UNKNOWN_FACT');
-      continue;
-    }
+  for (const id of references) {
     const value = context.facts.render(
       id,
       context.locale,
       context.timeZone,
       context.now,
     );
-    if (value === undefined) violations.add('STALE_FACT');
-    else rendered.set(id, value);
+    if (value !== undefined) rendered.set(id, value);
   }
 
   // Everything below inspects only what the model wrote itself.
@@ -85,6 +95,14 @@ export function checkDraft(
   }
   if (CURRENCY.test(own)) violations.add('UNSOURCED_CURRENCY');
   const lower = own.toLowerCase();
+  // An availability phrase the model typed itself is a claim without a fact.
+  if (
+    Object.values(context.locale.templates.availability).some((phrase) =>
+      lower.includes(unifyApostrophes(phrase).toLowerCase()),
+    )
+  ) {
+    violations.add('UNSOURCED_AVAILABILITY');
+  }
   if (
     context.locale.forbiddenClaimStems.some((stem) =>
       lower.includes(stem.toLowerCase()),

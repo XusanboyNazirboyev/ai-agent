@@ -76,6 +76,19 @@ interface LlmRequestBase {
   /** Hard output ceiling for the call (includes any reasoning tokens). */
   readonly maxOutputTokens: number;
   readonly signal?: AbortSignal;
+  /**
+   * Set by MeteredLlm. False when the budget cannot absorb a second billable
+   * attempt: a router must then not fail over after a timeout, whose billing
+   * is unknowable. Absent means no budget information (unmetered use).
+   */
+  readonly allowAmbiguousFailover?: boolean;
+}
+
+/** A failed attempt whose billing is unknowable (e.g. a timeout). */
+export interface AmbiguousAttempt {
+  readonly providerId: string;
+  readonly model: string;
+  readonly code: LlmErrorCode;
 }
 
 export interface StructuredGenerationRequest<T> extends LlmRequestBase {
@@ -98,6 +111,8 @@ interface LlmResultBase {
   /** Provider response id: idempotency key for usage accounting. */
   readonly responseId: string;
   readonly usage: LlmUsage;
+  /** Earlier attempts of this call that may have been billed (usage unknown). */
+  readonly ambiguousAttempts?: readonly AmbiguousAttempt[];
   readonly stopReason: LlmStopReason;
   readonly durationMs: number;
   readonly attempts: number;
@@ -151,6 +166,9 @@ export class LlmError extends Error {
     super(message);
     this.name = 'LlmError';
   }
+
+  /** Set by a router that already tried other candidates before this error. */
+  ambiguousAttempts?: readonly AmbiguousAttempt[];
 }
 
 export function isLlmError(error: unknown): error is LlmError {

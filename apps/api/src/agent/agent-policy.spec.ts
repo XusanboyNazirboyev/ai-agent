@@ -198,6 +198,7 @@ function tools(
     }),
     timeoutMs: 200,
     now: () => now,
+    scope: { tenantId: 't', conversationId: 'c' },
   });
 }
 
