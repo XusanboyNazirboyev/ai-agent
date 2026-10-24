@@ -490,7 +490,8 @@ export const EN: LocalePack = {
   actionClaimStems: [
     'has been registered',
     'successfully registered',
-    'request has been recorded',
+    'request has been registered',
+    'recorded in our system',
     'booking is confirmed',
     'lead has been created',
   ],

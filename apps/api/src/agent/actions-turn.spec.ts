@@ -143,9 +143,32 @@ describe('action planning (pure)', () => {
     expect(text).toContain('“yes”');
   });
 
+  it('no honest template contains an action-claim phrase (no false positives)', () => {
+    const texts: [string, string][] = [];
+    for (const pack of INITIAL_LOCALE_PACKS) {
+      const walk = (where: string, value: unknown): void => {
+        if (typeof value === 'string')
+          texts.push([`${pack.id}:${where}`, value]);
+        else if (value && typeof value === 'object')
+          for (const [key, inner] of Object.entries(value))
+            walk(`${where}.${key}`, inner);
+      };
+      walk('templates', pack.templates);
+    }
+    const collisions = INITIAL_LOCALE_PACKS.flatMap((pack) =>
+      pack.actionClaimStems.flatMap((stem) =>
+        texts
+          .filter(([where]) => !where.includes('actions.succeeded'))
+          .filter(([, text]) => text.toLowerCase().includes(stem.toLowerCase()))
+          .map(([where]) => `${pack.id} "${stem}" in ${where}`),
+      ),
+    );
+    expect(collisions).toEqual([]);
+  });
+
   it('never lets a model draft claim a completed action', () => {
     for (const [locale, draft] of [
-      [EN, 'Great news, your request has been recorded in our CRM.'],
+      [EN, 'Great news, your request has been registered.'],
       [RU, 'Ваша заявка создана.'],
       [UZ_LATN, "Siz ro'yxatdan o'tdingiz!"],
     ] as const) {
