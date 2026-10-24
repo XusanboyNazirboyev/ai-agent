@@ -6,6 +6,7 @@ import { TelegramApiError } from '../channels/telegram/telegram-sender.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import type { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { ConnectorUnavailableError } from '../connectors/interfaces/errors.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadService } from '../leads/lead.service.js';
 import { ShownOffersService } from '../leads/shown-offers.service.js';
@@ -787,9 +788,13 @@ describe('leads', () => {
     const sync = new LeadSyncService(
       prisma,
       connectorStub(async () => {
+        // A refused connection: provably not applied, so a retry is safe.
+        // (An outage with an unclear outcome is covered in lead-sync.integration.spec.ts.)
         if (!healthy)
-          throw Object.assign(new Error('down'), {
+          throw new ConnectorUnavailableError({
+            message: 'down',
             code: 'CONNECTOR_UNAVAILABLE',
+            executed: 'no',
           });
         return { crmLeadId: 'crm-2' };
       }),
@@ -809,7 +814,7 @@ describe('leads', () => {
     expect(await sync.scanDue(due)).toBe(1);
     expect(await sync.scanDue(due)).toBe(0);
     healthy = true;
-    expect(await sync.sync(w.tenantId, id)).toBe('SYNCED');
+    expect(await sync.sync(w.tenantId, id, due)).toBe('SYNCED');
     // Attempts are bounded.
     await db.lead.update({
       where: { id },

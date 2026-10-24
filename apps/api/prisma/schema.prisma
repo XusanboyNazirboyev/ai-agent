@@ -204,6 +204,7 @@ model Tenant {
   operatorCredentials   OperatorCredential[]
   operatorSessions      OperatorSession[]
   inboxEvents           InboxEvent[]
+  connectorOperations   ConnectorOperation[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
@@ -1043,4 +1044,51 @@ model InboxEvent {
   @@index([tenantId, id])
   @@index([createdAt])
   @@map("inbox_events")
+}
+
+enum ConnectorOperationStatus {
+  PENDING
+  IN_FLIGHT
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  UNCERTAIN
+  RESOLVED_SUCCEEDED
+  RESOLVED_FAILED
+}
+
+/// One logical external write (ADR 023): created once per subject and kind,
+/// carries the idempotency key used for EVERY attempt, a lease so only one
+/// worker attempts it at a time, and the evidence or the reason it stopped.
+/// UNCERTAIN = the remote system may have applied it and nothing can prove
+/// either way; it is never retried automatically and waits for a person.
+model ConnectorOperation {
+  id              String                   @id @default(uuid(7)) @db.Uuid
+  tenantId        String                   @map("tenant_id") @db.Uuid
+  kind            String                   @db.VarChar(40)
+  subjectType     String                   @map("subject_type") @db.VarChar(40)
+  subjectId       String                   @map("subject_id") @db.Uuid
+  idempotencyKey  String                   @unique @map("idempotency_key") @db.VarChar(200)
+  status          ConnectorOperationStatus @default(PENDING)
+  attempts        Int                      @default(0)
+  /// Idempotency mode of the connector during the latest attempt.
+  attemptMode     String?                  @map("attempt_mode") @db.VarChar(10)
+  /// NOT_EXECUTED or UNCERTAIN: what the latest failed attempt proved.
+  lastExecution   String?                  @map("last_execution") @db.VarChar(20)
+  leaseToken      String?                  @map("lease_token") @db.VarChar(64)
+  leaseExpiresAt  DateTime?                @map("lease_expires_at") @db.Timestamptz(6)
+  nextAttemptAt   DateTime?                @map("next_attempt_at") @db.Timestamptz(6)
+  externalId      String?                  @map("external_id") @db.VarChar(200)
+  lastErrorCode   String?                  @map("last_error_code") @db.VarChar(100)
+  resolvedBy      String?                  @map("resolved_by") @db.VarChar(200)
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedAt     DateTime?                @map("completed_at") @db.Timestamptz(6)
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, kind, subjectType, subjectId])
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@map("connector_operations")
 }
