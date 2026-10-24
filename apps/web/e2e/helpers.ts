@@ -96,7 +96,10 @@ export async function login(
 export async function newSession(
   browser: Browser,
   email: string,
-  options: { viewport?: { width: number; height: number } } = {},
+  options: {
+    viewport?: { width: number; height: number };
+    colorScheme?: 'light' | 'dark';
+  } = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     baseURL: 'http://127.0.0.1:3010',
