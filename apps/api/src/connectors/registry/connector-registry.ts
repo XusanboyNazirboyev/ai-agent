@@ -169,6 +169,24 @@ export class ConnectorRegistry {
         });
       }
     }
+    const idempotency = connector.writeIdempotency ?? 'none';
+    if (!['native', 'lookup', 'none'].includes(idempotency)) {
+      throw new ConnectorCapabilityError({
+        message: `Connector '${key}' declares an unknown write idempotency mode`,
+        code: 'CONNECTOR_CAPABILITY_MISMATCH',
+        source: key,
+      });
+    }
+    if (
+      idempotency === 'lookup' &&
+      typeof connector.findLeadByIdempotencyKey !== 'function'
+    ) {
+      throw new ConnectorCapabilityError({
+        message: `Connector '${key}' declares lookup idempotency but does not implement 'findLeadByIdempotencyKey'`,
+        code: 'CONNECTOR_CAPABILITY_MISMATCH',
+        source: key,
+      });
+    }
   }
 
   async shutdownAll(): Promise<void> {

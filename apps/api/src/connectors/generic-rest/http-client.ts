@@ -69,6 +69,19 @@ const MAX_REDIRECTS_LIMIT = 5;
 const DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_RETRY_AFTER_MS = 60 * 60 * 1000;
 const JSON_MEDIA_TYPE = /^application\/(?:[\w.+-]+\+)?json\s*(?:;|$)/i;
+/**
+ * Socket errors raised while establishing the connection, before any request
+ * byte is written: a write that fails with one of these was not applied.
+ */
+const CONNECT_PHASE_ERROR_CODES: ReadonlySet<string> = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
 const TLS_ERROR_CODE =
   /^(?:ERR_TLS_|ERR_SSL_|CERT_|UNABLE_TO_|DEPTH_ZERO_SELF_SIGNED_CERT$|SELF_SIGNED_CERT_IN_CHAIN$|HOSTNAME_MISMATCH$)/;
 
@@ -490,6 +503,9 @@ export class RestHttpClient {
         message: `Request timed out: ${method} ${target}`,
         code: 'CONNECTOR_TIMEOUT',
         cause: error,
+        // No connection was made, so nothing was sent; any later timeout may
+        // follow a request the remote side already applied.
+        executed: code === 'UND_ERR_CONNECT_TIMEOUT' ? 'no' : 'unknown',
       });
     }
     if (code !== undefined && TLS_ERROR_CODE.test(code)) {
@@ -498,12 +514,18 @@ export class RestHttpClient {
         code: 'CONNECTOR_TLS_FAILURE',
         retryable: false,
         cause: error,
+        // The handshake failed before any request byte was sent.
+        executed: 'no',
       });
     }
     return new ConnectorUnavailableError({
       message: `Network failure for ${method} ${target}`,
       code: 'CONNECTOR_NETWORK_FAILURE',
       cause: error,
+      executed:
+        code !== undefined && CONNECT_PHASE_ERROR_CODES.has(code)
+          ? 'no'
+          : 'unknown',
     });
   }
 }
@@ -612,5 +634,8 @@ export async function sendJson(
         ? ConnectorErrorCategory.VALIDATION
         : ConnectorErrorCategory.UNKNOWN,
     retryable: false,
+    // 409 often means "a request with this idempotency key exists or is in
+    // progress": the write may well have been applied.
+    ...(status === 409 ? { executed: 'unknown' as const } : {}),
   });
 }

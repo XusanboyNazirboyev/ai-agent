@@ -83,6 +83,32 @@ describe('ConnectorRegistry', () => {
     );
   });
 
+  it('rejects lookup idempotency without a lookup method, and unknown modes', () => {
+    const registry = new ConnectorRegistry(nullSecretResolver);
+    for (const [key, mode] of [
+      ['no-lookup', 'lookup'],
+      ['odd-mode', 'exactly-once'],
+    ] as const) {
+      registry.register({
+        key,
+        capabilities: { ...none, createLead: true },
+        factory: (context): CrmConnector =>
+          ({
+            connectorKey: context.connectorKey,
+            context,
+            capabilities: { ...none, createLead: true },
+            createLead: async () => ({ crmLeadId: 'x' }),
+            writeIdempotency: mode,
+          }) as unknown as CrmConnector,
+      });
+      expect(() =>
+        registry.create({ tenantId: 'tenant-a', connectorKey: key }, {}),
+      ).toThrow(
+        expect.objectContaining({ code: 'CONNECTOR_CAPABILITY_MISMATCH' }),
+      );
+    }
+  });
+
   it('rejects a connector advertising beyond its registration', () => {
     const registry = new ConnectorRegistry(nullSecretResolver);
     registry.register({

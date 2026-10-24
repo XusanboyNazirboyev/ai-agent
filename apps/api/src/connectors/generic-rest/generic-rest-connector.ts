@@ -28,13 +28,16 @@ import {
   isConnectorError,
   isRetryableConnectorError,
 } from '../interfaces/errors.js';
-import type {
-  AvailabilityRequest,
-  ConnectorCapabilities,
-  ConnectorContext,
-  CrmConnector,
-  ListItemsParams,
-  QuoteRequest,
+import {
+  IDEMPOTENCY_KEY_PATTERN,
+  type AvailabilityRequest,
+  type ConnectorCapabilities,
+  type ConnectorContext,
+  type CrmConnector,
+  type ListItemsParams,
+  type QuoteRequest,
+  type WriteContext,
+  type WriteIdempotency,
 } from '../interfaces/crm-connector.js';
 import {
   nullSecretResolver,
@@ -112,13 +115,21 @@ export class GenericRestConnector implements CrmConnector {
     offerId: string,
     request: QuoteRequest,
   ) => Promise<Quote>;
-  readonly createLead?: (input: LeadInput) => Promise<{ crmLeadId: string }>;
+  readonly createLead?: (
+    input: LeadInput,
+    context?: WriteContext,
+  ) => Promise<{ crmLeadId: string }>;
+  readonly findLeadByIdempotencyKey?: (
+    idempotencyKey: string,
+  ) => Promise<{ crmLeadId: string } | undefined>;
+  readonly writeIdempotency: WriteIdempotency;
   readonly updateLead?: (
     crmLeadId: string,
     patch: Partial<LeadInput>,
   ) => Promise<void>;
   readonly createBooking?: (
     input: BookingInput,
+    context?: WriteContext,
   ) => Promise<{ bookingId: string }>;
   readonly connectorKey: string;
   readonly context: ConnectorContext;
@@ -198,6 +209,10 @@ export class GenericRestConnector implements CrmConnector {
     if (endpoints.updateLead) this.updateLead = this.patchLead.bind(this);
     if (endpoints.createBooking) {
       this.createBooking = this.submitBooking.bind(this);
+    }
+    this.writeIdempotency = this.config.writeIdempotency.mode;
+    if (this.config.writeIdempotency.mode === 'lookup') {
+      this.findLeadByIdempotencyKey = this.lookupLead.bind(this);
     }
   }
 
@@ -294,8 +309,9 @@ export class GenericRestConnector implements CrmConnector {
   private async request(
     operation: RestEndpointKey,
     request: Omit<RestRequest, 'timeoutMs' | 'headers'>,
+    extraHeaders: Readonly<Record<string, string>> = {},
   ): Promise<RestResponse> {
-    const headers = this.authHeaders();
+    const headers = { ...extraHeaders, ...this.authHeaders() };
     const attempt = async (): Promise<RestResponse> => {
       try {
         return await this.breaker.execute(() =>
@@ -312,6 +328,8 @@ export class GenericRestConnector implements CrmConnector {
             source: this.connectorKey,
             retryable: true,
             cause: error,
+            // Failing fast: nothing was sent.
+            executed: 'no',
           });
         }
         throw error;
@@ -966,23 +984,127 @@ export class GenericRestConnector implements CrmConnector {
     return body;
   }
 
-  private async submitLead(input: LeadInput): Promise<{ crmLeadId: string }> {
+  /**
+   * Native mode sends the key in the configured header; lookup mode stores it
+   * on the record at `referenceField` so `lookupLead` can find it later. The
+   * key is validated: it travels in a header or a body field.
+   */
+  private idempotency(context: WriteContext | undefined): {
+    headers: Record<string, string>;
+    reference?: { field: string; value: string };
+  } {
+    const mode = this.config.writeIdempotency;
+    if (mode.mode === 'none' || !context) return { headers: {} };
+    if (!IDEMPOTENCY_KEY_PATTERN.test(context.idempotencyKey))
+      this.invalidInput('idempotency key');
+    if (mode.mode === 'native')
+      return { headers: { [mode.header]: context.idempotencyKey } };
+    return {
+      headers: {},
+      reference: { field: mode.referenceField, value: context.idempotencyKey },
+    };
+  }
+
+  private async submitLead(
+    input: LeadInput,
+    context?: WriteContext,
+  ): Promise<{ crmLeadId: string }> {
     const endpoint = this.endpoint('createLead', 'createLead');
     const lead = this.input(LeadInputSchema, input, 'lead');
-    const response = await this.request('createLead', {
-      method: endpoint.method,
-      url: this.buildUrl(endpoint, {}, {}),
-      body: this.writeBody(endpoint, 'lead', lead, false) ?? {
-        ...lead,
-        ...endpoint.body,
+    const idempotency = this.idempotency(context);
+    if (
+      this.config.writeIdempotency.mode === 'lookup' &&
+      !idempotency.reference
+    )
+      // Without the reference the record could never be found again.
+      this.invalidInput('idempotency key (required in lookup mode)');
+    const body = this.writeBody(endpoint, 'lead', lead, false) ?? {
+      ...lead,
+      ...endpoint.body,
+    };
+    if (idempotency.reference) {
+      const segments = idempotency.reference.field.split('.');
+      let node = body;
+      for (const segment of segments.slice(0, -1))
+        node = (node[segment] ??= {}) as Record<string, unknown>;
+      node[segments[segments.length - 1]] = idempotency.reference.value;
+    }
+    const response = await this.request(
+      'createLead',
+      {
+        method: endpoint.method,
+        url: this.buildUrl(endpoint, {}, {}),
+        body,
       },
-    });
+      idempotency.headers,
+    );
+    return { crmLeadId: this.leadIdFrom(response, endpoint) };
+  }
+
+  private leadIdFrom(
+    response: RestResponse,
+    endpoint: RestEndpointConfig,
+  ): string {
     const mapping = this.config.fieldMappings.lead ?? {};
     const reader = new RecordReader(
       this.readRecord(response.body, endpoint, 'lead'),
       'lead',
       this.connectorKey,
     );
+    return reader.identifier(
+      'crmLeadId',
+      mapping.crmLeadId ? [mapping.crmLeadId] : ['id'],
+    );
+  }
+
+  /**
+   * Finds the lead a previous create stored `idempotencyKey` on. 404 or an
+   * empty result means "not created"; any other failure propagates, so the
+   * caller treats the outcome as still undetermined.
+   */
+  private async lookupLead(
+    idempotencyKey: string,
+  ): Promise<{ crmLeadId: string } | undefined> {
+    const mode = this.config.writeIdempotency;
+    if (mode.mode !== 'lookup') return undefined;
+    if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
+      this.invalidInput('idempotency key');
+    const endpoint = this.endpoint('findLeadByReference', 'createLead');
+    let response: RestResponse;
+    try {
+      response = await this.request('findLeadByReference', {
+        method: endpoint.method,
+        url: this.buildUrl(
+          endpoint,
+          { reference: idempotencyKey },
+          mode.referenceQueryParam
+            ? { [mode.referenceQueryParam]: idempotencyKey }
+            : {},
+        ),
+      });
+    } catch (error) {
+      if (
+        isConnectorError(error) &&
+        error.category === ConnectorErrorCategory.NOT_FOUND
+      )
+        return undefined;
+      throw error;
+    }
+    const located = endpoint.itemPath
+      ? getByPath(response.body, endpoint.itemPath)
+      : getByPath(response.body, endpoint.dataPath);
+    const record = Array.isArray(located) ? located[0] : located;
+    if (record === undefined || record === null) return undefined;
+    if (Array.isArray(located) && located.length > 1) {
+      // Two records carry one reference: the system is already inconsistent.
+      throw new ConnectorInvalidResponseError({
+        message: `Connector '${this.connectorKey}' found several leads for one reference`,
+        code: 'CONNECTOR_AMBIGUOUS_LOOKUP',
+        source: this.connectorKey,
+      });
+    }
+    const mapping = this.config.fieldMappings.lead ?? {};
+    const reader = new RecordReader(record, 'lead', this.connectorKey);
     return {
       crmLeadId: reader.identifier(
         'crmLeadId',
@@ -1019,6 +1141,7 @@ export class GenericRestConnector implements CrmConnector {
 
   private async submitBooking(
     input: BookingInput,
+    context?: WriteContext,
   ): Promise<{ bookingId: string }> {
     const endpoint = this.endpoint('createBooking', 'createBooking');
     const booking = this.input(BookingInputSchema, input, 'booking');
@@ -1026,15 +1149,21 @@ export class GenericRestConnector implements CrmConnector {
       ...booking,
       offerId: this.toSourceId(booking.offerId, 'offer'),
     };
-    const response = await this.request('createBooking', {
-      method: endpoint.method,
-      url: this.buildUrl(endpoint, {}, {}),
-      body: this.writeBody(endpoint, 'booking', canonical, false) ?? {
-        ...canonical,
-        ...endpoint.body,
-        offerId: canonical.offerId,
+    const response = await this.request(
+      'createBooking',
+      {
+        method: endpoint.method,
+        url: this.buildUrl(endpoint, {}, {}),
+        body: this.writeBody(endpoint, 'booking', canonical, false) ?? {
+          ...canonical,
+          ...endpoint.body,
+          offerId: canonical.offerId,
+        },
       },
-    });
+      this.config.writeIdempotency.mode === 'native'
+        ? this.idempotency(context).headers
+        : {},
+    );
     const mapping = this.config.fieldMappings.booking ?? {};
     const reader = new RecordReader(
       this.readRecord(response.body, endpoint, 'booking'),
