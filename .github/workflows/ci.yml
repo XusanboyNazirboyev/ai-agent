@@ -46,6 +46,9 @@ jobs:
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the onboarding gate inspects commits since main.
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.3
@@ -61,6 +64,8 @@ jobs:
       - run: pnpm db:test:seed
       - run: pnpm db:test:drift
       - run: pnpm lint
+      # Universality gate: domain-onboarding commits must not touch the core.
+      - run: pnpm check:onboarding
       - run: pnpm typecheck
       - run: pnpm test:unit
       - run: pnpm test:integration

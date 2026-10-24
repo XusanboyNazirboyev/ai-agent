@@ -26,7 +26,8 @@
     "db:test:drift": "pnpm --filter @agentcore/api db:test:drift",
     "llm:smoke": "pnpm --filter @agentcore/api llm:smoke",
     "test:web": "pnpm --filter @agentcore/web test",
-    "test:e2e": "pnpm --filter @agentcore/web e2e"
+    "test:e2e": "pnpm --filter @agentcore/web e2e",
+    "check:onboarding": "node scripts/check-pack-onboarding.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
