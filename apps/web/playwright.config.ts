@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
@@ -27,7 +28,13 @@ const source = { ...fromDotenv(), ...process.env } as Record<
 const pg = (name: string, fallback = ''): string =>
   source[`TEST_POSTGRES_${name}`] ?? fallback;
 
+/** A throwaway secret per test run, shared by the web server and the API. */
+const PROXY_SECRET =
+  process.env.E2E_PROXY_SECRET ??
+  (process.env.E2E_PROXY_SECRET = randomBytes(24).toString('hex'));
+
 export const E2E_ENV = {
+  WEB_PROXY_SECRET: PROXY_SECRET,
   ENV_FILE: resolve(import.meta.dirname, 'e2e/empty.env'),
   NODE_ENV: 'development',
   PORT: String(API_PORT),
@@ -36,8 +43,9 @@ export const E2E_ENV = {
   WEB_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
   // Streams are recycled quickly so the tests exercise real reconnects.
   INBOX_STREAM_MAX_MS: '6000',
-  // Many tests sign in from one address within a minute.
-  LOGIN_RATE_LIMIT_PER_MINUTE: '1000',
+  // Each browser context is a distinct client (see helpers: X-Forwarded-For
+  // as set by a simulated edge proxy), so a realistic limit can stay on.
+  LOGIN_RATE_LIMIT_PER_MINUTE: '10',
   LLM_PROVIDER: 'mock',
   LLM_TRUSTED_PROVIDERS: 'mock',
   POSTGRES_HOST: pg('HOST', 'localhost'),
@@ -75,10 +83,18 @@ export default defineConfig({
       timeout: 60_000,
     },
     {
-      command: `next build && next start --port ${WEB_PORT} --hostname 127.0.0.1`,
+      command: 'next build && node server.mjs',
       cwd: import.meta.dirname,
       url: `http://127.0.0.1:${WEB_PORT}/login`,
-      env: { API_URL: `http://127.0.0.1:${API_PORT}`, NODE_ENV: 'production' },
+      env: {
+        API_URL: `http://127.0.0.1:${API_PORT}`,
+        NODE_ENV: 'production',
+        PORT: String(WEB_PORT),
+        HOSTNAME: '127.0.0.1',
+        WEB_PROXY_SECRET: PROXY_SECRET,
+        // The tests play the part of one edge proxy that appends the client.
+        TRUSTED_PROXY_HOPS: '1',
+      },
       reuseExistingServer: false,
       timeout: 180_000,
     },

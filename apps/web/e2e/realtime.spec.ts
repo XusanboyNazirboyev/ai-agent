@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  nextClientAddress,
   cookieHeader,
   customerMessage,
   fixtures,
@@ -133,6 +134,7 @@ test('a stream that cannot be opened is retried and the page catches up over RES
   const handover = newHandover(f.a.tenantId, `Blocked ${Date.now()}`);
   const context = await browser.newContext({
     baseURL: 'http://127.0.0.1:3010',
+    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
   });
   const page = await context.newPage();
   let blocked = true;
@@ -224,6 +226,7 @@ test('falls back to periodic refresh when the server refuses the stream, then re
   const handover = newHandover(f.a.tenantId, `Poll ${Date.now()}`);
   const context = await browser.newContext({
     baseURL: 'http://127.0.0.1:3010',
+    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
   });
   const page = await context.newPage();
   let refuse = true;

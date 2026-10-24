@@ -5,13 +5,13 @@
   "description": "AgentCore Web Operator Inbox (Phase 6A)",
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "node server.mjs",
     "build": "next build",
-    "start": "next start --port 3000",
+    "start": "NODE_ENV=production node server.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\"",
-    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,json}\"",
-    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,json}\"",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\" \"*.mjs\"",
+    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,mts,json}\"",
+    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,mts,json}\"",
     "test": "vitest run",
     "e2e": "playwright test"
   },

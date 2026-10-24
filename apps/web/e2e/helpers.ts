@@ -17,6 +17,16 @@ export interface Fixtures {
   b: TenantFixture;
 }
 
+let clients = 0;
+/**
+ * A distinct client address per browser context, as an edge proxy would
+ * append it (the e2e web server trusts exactly one hop).
+ */
+export function nextClientAddress(): string {
+  clients += 1;
+  return `198.18.${Math.floor(clients / 250) % 250}.${(clients % 250) + 1}`;
+}
+
 export const fixtures = (): Fixtures =>
   JSON.parse(readFileSync(FIXTURE_FILE, 'utf8')) as Fixtures;
 
@@ -79,6 +89,7 @@ export async function newSession(
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
     baseURL: 'http://127.0.0.1:3010',
+    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
     ...options,
   });
   const page = await context.newPage();

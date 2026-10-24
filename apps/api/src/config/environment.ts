@@ -28,6 +28,11 @@ const environmentSchema = postgresEnvironmentSchema
       .min(2000)
       .max(24 * 60 * 60 * 1000)
       .default(15 * 60 * 1000),
+    /**
+     * Shared secret the web server presents with the client address it
+     * computed (ADR 021). Without it, logins are attributed to the TCP peer.
+     */
+    WEB_PROXY_SECRET: z.string().min(32).max(512).optional(),
     /** Login attempts allowed per client address and minute. */
     LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
@@ -438,6 +443,17 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['CONNECTOR_OUTBOUND_POLICY'],
         message: 'CONNECTOR_OUTBOUND_POLICY must be strict in production',
+      });
+    }
+    if (
+      environment.NODE_ENV === 'production' &&
+      !environment.WEB_PROXY_SECRET
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['WEB_PROXY_SECRET'],
+        message:
+          'WEB_PROXY_SECRET is required in production (per-client login limits behind the web server)',
       });
     }
     if (

@@ -14,6 +14,10 @@ export default [
     },
   },
   {
+    files: ['*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     ignores: [
       '.next/**',
       'next-env.d.ts',

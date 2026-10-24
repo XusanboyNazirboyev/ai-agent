@@ -14,6 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
+import { loginClientAddress, type AddressedRequest } from './client-address.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
   CSRF_COOKIE,
@@ -88,10 +89,14 @@ export class AuthController {
   @HttpCode(200)
   async login(
     @Body() body: unknown,
-    @Req() request: { ip?: string },
+    @Req() request: AddressedRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<unknown> {
-    if (!this.limiter.allow(request.ip ?? 'unknown'))
+    const client = loginClientAddress(
+      request,
+      this.config.get('WEB_PROXY_SECRET', { infer: true }),
+    );
+    if (!this.limiter.allow(client))
       throw new HttpException(
         {
           code: 'RATE_LIMITED',

@@ -10,7 +10,9 @@ import { HandoverService } from '../handover/handover.service.js';
 import { OperatorCommandsController } from '../handover/operator-commands.controller.js';
 import { OperatorTokenGuard } from '../handover/operator-auth.js';
 import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
+import { EventEmitter } from 'node:events';
 import { AuthController } from './auth.controller.js';
+import { EventsController, openStreams } from './events.controller.js';
 import { InboxEventBus, type BusEvent } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
@@ -33,6 +35,13 @@ const prisma = db as unknown as PrismaService;
 afterAll(async () => {
   await db.$disconnect();
 });
+
+/** Distinct, deterministic peer addresses so limiter buckets never collide. */
+let peerCounter = 0;
+const nextPeer = (): string => {
+  peerCounter += 1;
+  return `10.200.${Math.floor(peerCounter / 250)}.${peerCounter % 250}`;
+};
 
 const FAST = { N: 1024, r: 8, p: 1 };
 const policy = { ...DEFAULT_SESSION_POLICY, scrypt: FAST };
@@ -771,7 +780,12 @@ describe('login cookies', () => {
     };
     const body = (await controller.login(
       { email: w.email, password: 'correct horse' },
-      { ip: `ip-${randomUUID()}` },
+      {
+        headers: {},
+        socket: {
+          remoteAddress: nextPeer(),
+        },
+      },
       reply,
     )) as { csrfToken: string };
     const cookies = headers['Set-Cookie'] as string[];
@@ -790,14 +804,19 @@ describe('login cookies', () => {
       get: () => false,
     } as never);
     const reply = { setHeader: (): void => undefined };
-    const ip = `ip-${randomUUID()}`;
+    const ip = {
+      headers: {},
+      socket: {
+        remoteAddress: nextPeer(),
+      },
+    };
     await expect(
-      controller.login({ nope: 1 }, { ip }, reply),
+      controller.login({ nope: 1 }, ip, reply),
     ).rejects.toMatchObject({ status: 401 });
     let last: unknown;
     for (let i = 0; i < 25; i += 1)
       last = await controller
-        .login({ email: 'x@y.test', password: 'p' }, { ip }, reply)
+        .login({ email: 'x@y.test', password: 'p' }, ip, reply)
         .catch((e: unknown) => e);
     expect(last).toMatchObject({ status: 429 });
   });
@@ -865,6 +884,104 @@ describe('inbox event bus', () => {
     expect(got).toHaveLength(1);
     off1();
     off2();
+    bus.onModuleDestroy();
+  });
+});
+
+describe('event stream resource accounting', () => {
+  class FakeResponse extends EventEmitter {
+    status = 0;
+    frames: string[] = [];
+    constructor(private readonly closeOnHead = false) {
+      super();
+    }
+    writeHead(status: number): void {
+      this.status = status;
+      // Simulates a client that disconnects while the stream is being set up.
+      if (this.closeOnHead) this.emit('close');
+    }
+    write(chunk: string): boolean {
+      this.frames.push(chunk);
+      return true;
+    }
+    end(): void {
+      this.emit('close');
+    }
+  }
+
+  function controllerWith(bus: InboxEventBus): EventsController {
+    return new EventsController(events, bus, { get: () => 60_000 } as never);
+  }
+
+  it('releases the slot, subscription and timers of a client that leaves during setup', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const bus = new InboxEventBus(prisma);
+    const controller = controllerWith(bus);
+    for (let i = 0; i < 7; i += 1) {
+      const response = new FakeResponse(true);
+      await controller.stream(
+        { principal: s.principal } as never,
+        response as never,
+        undefined,
+        undefined,
+      );
+    }
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
+    expect(bus.listenerCount(w.tenantId)).toBe(0);
+    // The operator can still open a stream: no slot was leaked.
+    const live = new FakeResponse();
+    await controller.stream(
+      { principal: s.principal } as never,
+      live as never,
+      undefined,
+      undefined,
+    );
+    expect(live.status).toBe(200);
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(1);
+    expect(bus.listenerCount(w.tenantId)).toBe(1);
+    live.emit('close');
+    live.emit('close');
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
+    expect(bus.listenerCount(w.tenantId)).toBe(0);
+    bus.onModuleDestroy();
+  });
+
+  it('limits concurrent streams per operator and frees them on close', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const bus = new InboxEventBus(prisma);
+    const controller = controllerWith(bus);
+    const streams: FakeResponse[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const response = new FakeResponse();
+      await controller.stream(
+        { principal: s.principal } as never,
+        response as never,
+        undefined,
+        undefined,
+      );
+      streams.push(response);
+    }
+    const sixth = new FakeResponse();
+    await controller.stream(
+      { principal: s.principal } as never,
+      sixth as never,
+      undefined,
+      undefined,
+    );
+    expect(sixth.status).toBe(429);
+    streams[0].emit('close');
+    const again = new FakeResponse();
+    await controller.stream(
+      { principal: s.principal } as never,
+      again as never,
+      undefined,
+      undefined,
+    );
+    expect(again.status).toBe(200);
+    for (const response of [...streams, again]) response.emit('close');
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     bus.onModuleDestroy();
   });
 });
