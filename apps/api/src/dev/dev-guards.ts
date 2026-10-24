@@ -38,3 +38,15 @@ export function buildSetWebhookPayload(
     drop_pending_updates: env.TELEGRAM_DROP_PENDING_UPDATES === 'true',
   };
 }
+
+/** Telegram updates are small; the public route refuses anything larger. */
+export const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+
+export function declaredBodyTooLarge(
+  contentLength: string | undefined,
+  limit = MAX_WEBHOOK_BODY_BYTES,
+): boolean {
+  if (contentLength === undefined) return false;
+  const length = Number(contentLength);
+  return !Number.isFinite(length) || length < 0 || length > limit;
+}

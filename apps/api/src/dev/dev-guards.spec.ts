@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   assertLocalDevelopment,
+  declaredBodyTooLarge,
   isAllowedWebhookRequest,
+  MAX_WEBHOOK_BODY_BYTES,
 } from './dev-guards.js';
 
 const ID = '01a16cb6-c870-77f8-be2b-85dde32e4839';
@@ -44,5 +46,16 @@ describe('isAllowedWebhookRequest', () => {
     [undefined, `/webhooks/telegram/${ID}`],
   ])('refuses %s %s', (method, url) => {
     expect(isAllowedWebhookRequest(method, url, ID)).toBe(false);
+  });
+});
+
+describe('declaredBodyTooLarge', () => {
+  it('allows small and undeclared bodies, refuses large or malformed lengths', () => {
+    expect(declaredBodyTooLarge('512')).toBe(false);
+    expect(declaredBodyTooLarge(String(MAX_WEBHOOK_BODY_BYTES))).toBe(false);
+    expect(declaredBodyTooLarge(String(MAX_WEBHOOK_BODY_BYTES + 1))).toBe(true);
+    expect(declaredBodyTooLarge('abc')).toBe(true);
+    expect(declaredBodyTooLarge('-1')).toBe(true);
+    expect(declaredBodyTooLarge(undefined)).toBe(false);
   });
 });

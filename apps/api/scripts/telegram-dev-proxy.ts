@@ -11,7 +11,9 @@ import { createServer, request } from 'node:http';
 import { config as loadEnv } from 'dotenv';
 import {
   assertLocalDevelopment,
+  declaredBodyTooLarge,
   isAllowedWebhookRequest,
+  MAX_WEBHOOK_BODY_BYTES,
 } from '../src/dev/dev-guards.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
@@ -33,6 +35,11 @@ const server = createServer((incoming, outgoing) => {
     outgoing.writeHead(404).end();
     return;
   }
+  if (declaredBodyTooLarge(incoming.headers['content-length'])) {
+    refused += 1;
+    outgoing.writeHead(413).end();
+    return;
+  }
   const upstream = request(
     {
       host: '127.0.0.1',
@@ -52,6 +59,17 @@ const server = createServer((incoming, outgoing) => {
   upstream.on('error', () => {
     if (!outgoing.headersSent) outgoing.writeHead(502);
     outgoing.end();
+  });
+  // Chunked bodies carry no length up front: count bytes and cut the request.
+  let received = 0;
+  incoming.on('data', (chunk: Buffer) => {
+    received += chunk.length;
+    if (received > MAX_WEBHOOK_BODY_BYTES) {
+      refused += 1;
+      upstream.destroy();
+      outgoing.writeHead(413).end();
+      incoming.destroy();
+    }
   });
   incoming.pipe(upstream);
 });
