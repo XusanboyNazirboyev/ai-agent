@@ -1,6 +1,6 @@
 # ADR 022 — Generic, customer-confirmed business actions
 
-Status: **Proposed — for owner review.** The execution foundation (§8 contract, idempotent operation record) is implemented by ADR 023; the action lifecycle is not. Date: 2026-10-24. Phase 7.0 (`docs/PHASE7_PLAN.md`).
+Status: **Design reference; implemented by ADR 023 (execution foundation) and ADR 024 (lifecycle, second domain).** Owner decisions §16 remain open; the implementation uses the conservative option of each (see ADR 024). Date: 2026-10-24. Phase 7.0 (`docs/PHASE7_PLAN.md`).
 Builds on: D1, D4, D5, D8, D9, D12, D16; ADR 013 (typed safety outcomes), ADR 014 (budget reservations), ADR 018 (handover, leads), ADR 019, ADR 020/021.
 
 ## 1. Context (verified on `phase6a/web-operator-inbox` @ `418872b`)
