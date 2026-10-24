@@ -47,6 +47,8 @@ test('operator completes see → take over → reply → return in the browser',
     .filter({ hasText: handover.contactName })
     .click();
   await page.getByTestId('return-to-bot').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByTestId('confirm-accept').click();
   await expect(state).toHaveAttribute('data-state', 'BOT_ACTIVE');
   await context.close();
 });
@@ -63,6 +65,19 @@ test('closing a conversation moves it to the closed view', async ({
     .click();
   await page.getByTestId('take-over').click();
   await page.getByTestId('close').click();
+  // Cancelling (button or Escape) changes nothing; only the confirmation closes.
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByTestId('confirm-cancel').click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByTestId('close').click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(page.getByTestId('state')).toHaveAttribute(
+    'data-state',
+    'OPERATOR_ACTIVE',
+  );
+  await page.getByTestId('close').click();
+  await page.getByTestId('confirm-accept').click();
   await expect(page.getByTestId('state')).toHaveAttribute(
     'data-state',
     'CLOSED',
@@ -93,13 +108,11 @@ test('changes the lead status and searches by contact name and message text', as
   await page.reload();
   await expect(page.getByLabel('Lead status')).toHaveValue('IN_PROGRESS');
 
-  await page
-    .getByPlaceholder('Search name, phone or message')
-    .fill('need a person');
+  await page.getByLabel('Search name, phone or message').fill('need a person');
   await expect(page.getByTestId('conversation-item')).toHaveCount(1);
   await expect(page.getByTestId('conversation-item')).toContainText('Bob');
   await page
-    .getByPlaceholder('Search name, phone or message')
+    .getByLabel('Search name, phone or message')
     .fill(first.contactName);
   await expect(page.getByTestId('conversation-item')).toHaveCount(1);
   await context.close();

@@ -2,15 +2,20 @@
 
 import type { ReactNode } from 'react';
 import { LOCALES, useI18n, type Locale } from '@/i18n';
+import { Icon } from './ui/icons';
+import { selectClass } from './ui/fields';
 
 export function LocaleSwitcher(): ReactNode {
   const { locale, setLocale, t } = useI18n();
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="relative flex items-center">
       <span className="sr-only">{t('locale.label')}</span>
+      <span className="pointer-events-none absolute left-2.5 text-muted">
+        <Icon name="globe" />
+      </span>
       <select
         aria-label={t('locale.label')}
-        className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className={`${selectClass} min-w-0 pl-8`}
         value={locale}
         onChange={(event) => setLocale(event.target.value as Locale)}
       >
