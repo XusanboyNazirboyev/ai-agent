@@ -5,7 +5,7 @@ import { Providers } from '@/components/providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AgentCore',
+  title: 'tezda',
   robots: { index: false, follow: false },
 };
 
