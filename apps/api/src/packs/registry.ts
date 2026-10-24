@@ -1,5 +1,6 @@
 import type { DomainPack } from '@agentcore/shared';
 import { EDUCATION_PACK } from './education/education.pack.js';
+import { TRAVEL_PACK } from './travel/travel.pack.js';
 
 /**
  * Registered Domain Packs by `key@version` (tenants select one). Onboarding a
@@ -7,5 +8,8 @@ import { EDUCATION_PACK } from './education/education.pack.js';
  * `src/core/**` changes (Phase 7 universality criterion).
  */
 export const DOMAIN_PACKS: ReadonlyMap<string, DomainPack> = new Map(
-  [EDUCATION_PACK].map((pack) => [`${pack.key}@${pack.version}`, pack]),
+  [EDUCATION_PACK, TRAVEL_PACK].map((pack) => [
+    `${pack.key}@${pack.version}`,
+    pack,
+  ]),
 );
