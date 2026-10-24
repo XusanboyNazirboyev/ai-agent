@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
+  CSRF_COOKIE,
   SESSION_COOKIE,
   SessionGuard,
   type InboxRequest,
@@ -28,7 +29,7 @@ const LoginBody = z.object({
 });
 
 interface Reply {
-  setHeader(name: string, value: string): void;
+  setHeader(name: string, value: string | string[]): void;
 }
 
 /** Fixed-window limiter per client address; the account lock is in the database. */
@@ -61,9 +62,21 @@ export class AuthController {
     private readonly config: ConfigService<AppEnvironment, true>,
   ) {}
 
-  private cookie(value: string, maxAgeSeconds: number): string {
-    const secure = this.config.get('SESSION_COOKIE_SECURE', { infer: true });
-    return `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}${secure ? '; Secure' : ''}`;
+  private cookies(
+    session: string,
+    csrf: string,
+    maxAgeSeconds: number,
+  ): string[] {
+    const secure = this.config.get('SESSION_COOKIE_SECURE', { infer: true })
+      ? '; Secure'
+      : '';
+    const common = `SameSite=Strict; Path=/; Max-Age=${maxAgeSeconds}${secure}`;
+    // The CSRF cookie is readable by the page on purpose (double submit): it
+    // proves nothing alone, the server compares its hash with the session's.
+    return [
+      `${SESSION_COOKIE}=${session}; HttpOnly; ${common}`,
+      `${CSRF_COOKIE}=${csrf}; ${common}`,
+    ];
   }
 
   @Post('login')
@@ -103,7 +116,10 @@ export class AuthController {
             : 'errors.invalidCredentials',
       });
     const maxAge = Math.floor((result.expiresAt.getTime() - Date.now()) / 1000);
-    reply.setHeader('Set-Cookie', this.cookie(result.sessionToken, maxAge));
+    reply.setHeader(
+      'Set-Cookie',
+      this.cookies(result.sessionToken, result.csrfToken, maxAge),
+    );
     reply.setHeader('Cache-Control', 'no-store');
     return {
       csrfToken: result.csrfToken,
@@ -139,6 +155,6 @@ export class AuthController {
   ): Promise<void> {
     const principal = request.principal!;
     await this.sessions.logout(principal.sessionId, principal.tenantId);
-    reply.setHeader('Set-Cookie', this.cookie('', 0));
+    reply.setHeader('Set-Cookie', this.cookies('', '', 0));
   }
 }

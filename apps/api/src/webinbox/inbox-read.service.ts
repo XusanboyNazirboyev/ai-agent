@@ -10,6 +10,7 @@ export interface ConversationListItem {
   readonly state: string;
   readonly contactName: string | null;
   readonly language: string | null;
+  readonly leadScore: string | null;
   readonly assignedOperatorId: string | null;
   readonly waitingSince: string | null;
   readonly slaDueAt: string | null;
@@ -40,7 +41,12 @@ export interface ConversationView {
     openedAt: Date;
     takenAt: Date | null;
   } | null;
-  readonly lead: { score: string; status: string; summary: string } | null;
+  readonly lead: {
+    id: string;
+    score: string;
+    status: string;
+    summary: string;
+  } | null;
   readonly messages: readonly {
     id: string;
     authorType: string;
@@ -90,7 +96,14 @@ export class InboxReadService {
 
   async list(
     principal: InboxPrincipal,
-    options: { scope: InboxScope; cursor?: string; limit?: number; q?: string },
+    options: {
+      scope: InboxScope;
+      cursor?: string;
+      limit?: number;
+      q?: string;
+      language?: string;
+      leadScore?: 'HOT' | 'WARM' | 'COLD';
+    },
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), MAX_PAGE);
     const cursor = decode(options.cursor);
@@ -104,26 +117,45 @@ export class InboxReadService {
           }
         : {}),
       ...(options.scope === 'closed' ? { state: 'CLOSED' } : {}),
+      ...(options.language ? { language: options.language } : {}),
+      ...(options.leadScore
+        ? { leads: { some: { score: options.leadScore } } }
+        : {}),
       ...(options.q
         ? {
-            contact: {
-              OR: [
-                {
+            OR: [
+              {
+                contact: {
                   name: {
                     contains: options.q.slice(0, 80),
                     mode: 'insensitive',
                   },
                 },
-                { phone: { contains: options.q.slice(0, 40) } },
-              ],
-            },
+              },
+              { contact: { phone: { contains: options.q.slice(0, 40) } } },
+              {
+                messages: {
+                  some: {
+                    tenantId: principal.tenantId,
+                    text: {
+                      contains: options.q.slice(0, 80),
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            ],
           }
         : {}),
       ...(cursor
         ? {
-            OR: [
-              { updatedAt: { lt: new Date(cursor.t) } },
-              { updatedAt: new Date(cursor.t), id: { lt: cursor.id } },
+            AND: [
+              {
+                OR: [
+                  { updatedAt: { lt: new Date(cursor.t) } },
+                  { updatedAt: new Date(cursor.t), id: { lt: cursor.id } },
+                ],
+              },
             ],
           }
         : {}),
@@ -134,6 +166,11 @@ export class InboxReadService {
       take: limit + 1,
       include: {
         contact: { select: { name: true } },
+        leads: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { score: true },
+        },
         handovers: {
           where: { status: { in: ['OPEN', 'TAKEN'] } },
           orderBy: { openedAt: 'asc' },
@@ -148,6 +185,7 @@ export class InboxReadService {
       state: row.state,
       contactName: row.contact.name,
       language: row.language,
+      leadScore: row.leads[0]?.score ?? null,
       assignedOperatorId: row.assignedOperatorId,
       waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
       slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
@@ -197,7 +235,7 @@ export class InboxReadService {
         leads: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { score: true, status: true, summary: true },
+          select: { id: true, score: true, status: true, summary: true },
         },
       },
     });

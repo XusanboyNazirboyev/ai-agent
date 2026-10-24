@@ -20,7 +20,8 @@ import { PersistenceModule } from './persistence/persistence.module.js';
     AgentModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: resolve(process.cwd(), '../../.env'),
+      // ENV_FILE lets an isolated run (e2e) use its own file instead of .env.
+      envFilePath: process.env.ENV_FILE ?? resolve(process.cwd(), '../../.env'),
       validate: validateEnvironment,
     }),
   ],

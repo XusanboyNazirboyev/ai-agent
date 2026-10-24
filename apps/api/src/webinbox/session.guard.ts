@@ -10,6 +10,7 @@ import type { AppEnvironment } from '../config/environment.js';
 import { SessionService, type InboxPrincipal } from './session.service.js';
 
 export const SESSION_COOKIE = 'ac_session';
+export const CSRF_COOKIE = 'ac_csrf';
 export const CSRF_HEADER = 'x-csrf-token';
 
 export interface InboxRequest {

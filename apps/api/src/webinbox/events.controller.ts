@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
+import { InboxEventBus } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
 
 interface StreamResponse {
@@ -17,7 +18,8 @@ interface StreamResponse {
   on(event: 'close', listener: () => void): void;
 }
 
-const POLL_MS = 1000;
+/** Safety net in case a bus signal is missed (the database stays the truth). */
+const FALLBACK_POLL_MS = 5000;
 const HEARTBEAT_MS = 15_000;
 const MAX_STREAMS_PER_OPERATOR = 5;
 
@@ -27,7 +29,10 @@ const open = new Map<string, number>();
 @Controller('api/v1/events')
 @UseGuards(SessionGuard)
 export class EventsController {
-  constructor(private readonly events: InboxEventsService) {}
+  constructor(
+    private readonly events: InboxEventsService,
+    private readonly bus: InboxEventBus,
+  ) {}
 
   /**
    * Server-sent events for the operator's tenant. A reconnect sends
@@ -86,16 +91,27 @@ export class EventsController {
         busy = false;
       }
     };
-    const timer = setInterval(() => void poll(), POLL_MS);
+    // The bus wakes this stream when its tenant has new events; the stream
+    // always reads the events themselves from its own cursor in the database.
+    let again = false;
+    const wake = (): void => {
+      if (busy) again = true;
+      else
+        void poll().then(() => (again ? ((again = false), poll()) : undefined));
+    };
+    const unsubscribe = await this.bus.subscribe(principal.tenantId, wake);
+    const timer = setInterval(() => void poll(), FALLBACK_POLL_MS);
     const heartbeat = setInterval(() => send(': keep-alive\n\n'), HEARTBEAT_MS);
     response.on('close', () => {
       closed = true;
+      unsubscribe();
       clearInterval(timer);
       clearInterval(heartbeat);
       const left = (open.get(key) ?? 1) - 1;
       if (left <= 0) open.delete(key);
       else open.set(key, left);
     });
-    if (resume !== undefined) await poll();
+    // Catch up from the cursor now that the bus is listening.
+    await poll();
   }
 }

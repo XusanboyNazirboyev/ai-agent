@@ -17,7 +17,12 @@ const ListQuery = z.object({
   scope: z.enum(['waiting', 'mine', 'all', 'closed']).default('waiting'),
   cursor: z.string().max(300).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
-  q: z.string().max(80).optional(),
+  q: z.string().trim().max(80).optional(),
+  language: z
+    .string()
+    .regex(/^[A-Za-z-]{2,16}$/u)
+    .optional(),
+  leadScore: z.enum(['HOT', 'WARM', 'COLD']).optional(),
 });
 
 @Controller('api/v1/inbox')

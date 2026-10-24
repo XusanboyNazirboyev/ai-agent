@@ -10,6 +10,8 @@ import { HandoverService } from '../handover/handover.service.js';
 import { OperatorCommandsController } from '../handover/operator-commands.controller.js';
 import { OperatorTokenGuard } from '../handover/operator-auth.js';
 import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
+import { AuthController } from './auth.controller.js';
+import { InboxEventBus, type BusEvent } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { hashPassword, verifyPassword } from './password.js';
@@ -550,5 +552,319 @@ describe('operator commands through the browser session', () => {
       where: { id: b.conversationId },
     });
     expect(untouched?.state).toBe('WAITING_OPERATOR');
+  });
+});
+
+describe('search and filters', () => {
+  it('finds by contact name, phone and message text, only inside the tenant', async () => {
+    const a = await world();
+    const b = await world();
+    const sa = await signIn(a);
+    const needle = `needle-${randomUUID().slice(0, 8)}`;
+    for (const w of [a, b]) {
+      await db.message.create({
+        data: {
+          tenantId: w.tenantId,
+          conversationId: w.conversationId,
+          channelAccountId: w.accountId,
+          authorType: 'CUSTOMER',
+          direction: 'INBOUND',
+          text: `please call about ${needle}`,
+          sequence: 1,
+          providerChatId: 'c',
+        },
+      });
+    }
+    await db.contact.update({
+      where: { id: a.contactId },
+      data: { phone: '+998901112233' },
+    });
+    const byText = await read.list(sa.principal, {
+      scope: 'all',
+      q: needle.toUpperCase(),
+    });
+    expect(byText.items.map((i) => i.id)).toEqual([a.conversationId]);
+    expect(
+      (await read.list(sa.principal, { scope: 'all', q: '90111' })).items,
+    ).toHaveLength(1);
+    const name = (await db.contact.findUnique({ where: { id: a.contactId } }))!
+      .name!;
+    expect(
+      (await read.list(sa.principal, { scope: 'all', q: name.toLowerCase() }))
+        .items,
+    ).toHaveLength(1);
+    expect(
+      (await read.list(sa.principal, { scope: 'all', q: 'zzz-no-match' }))
+        .items,
+    ).toEqual([]);
+  });
+
+  it('filters by language and lead score', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { language: 'ru' },
+    });
+    await db.lead.create({
+      data: {
+        tenantId: w.tenantId,
+        contactId: w.contactId,
+        conversationId: w.conversationId,
+        score: 'HOT',
+        summary: 's',
+        requirements: {},
+        idempotencyKey: `lead-${randomUUID()}`,
+      },
+    });
+    expect(
+      (await read.list(s.principal, { scope: 'all', language: 'ru' })).items,
+    ).toHaveLength(1);
+    expect(
+      (await read.list(s.principal, { scope: 'all', language: 'uz' })).items,
+    ).toHaveLength(0);
+    const hot = await read.list(s.principal, {
+      scope: 'all',
+      leadScore: 'HOT',
+    });
+    expect(hot.items[0]?.leadScore).toBe('HOT');
+    expect(
+      (await read.list(s.principal, { scope: 'all', leadScore: 'COLD' })).items,
+    ).toHaveLength(0);
+  });
+});
+
+describe('lead status command', () => {
+  const controller = new OperatorCommandsController(
+    new HandoverService(prisma),
+  );
+  const requestGuard = new OperatorRequestGuard(
+    new OperatorTokenGuard(prisma),
+    guard,
+  );
+  const as = async (s: { cookie: string; csrf: string }): Promise<never> => {
+    const request = {
+      method: 'POST',
+      headers: { cookie: s.cookie, [CSRF_HEADER]: s.csrf },
+    };
+    await requestGuard.canActivate(context(request));
+    return request as never;
+  };
+
+  it('changes the latest lead, audits once, is idempotent, and refuses viewers', async () => {
+    const w = await world();
+    const handover = await db.handover.create({
+      data: {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        reasonCode: 'X',
+        summary: {},
+      },
+    });
+    const s = await signIn(w);
+    await expect(
+      controller.leadStatus(
+        handover.id,
+        `k-${randomUUID()}`,
+        { status: 'WON' },
+        await as(s),
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await db.lead.create({
+      data: {
+        tenantId: w.tenantId,
+        contactId: w.contactId,
+        conversationId: w.conversationId,
+        score: 'WARM',
+        summary: 's',
+        requirements: {},
+        idempotencyKey: `lead-${randomUUID()}`,
+      },
+    });
+    const key = `k-${randomUUID()}`;
+    expect(
+      await controller.leadStatus(
+        handover.id,
+        key,
+        { status: 'IN_PROGRESS' },
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'ok' });
+    expect(
+      await controller.leadStatus(
+        handover.id,
+        key,
+        { status: 'IN_PROGRESS' },
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'duplicate' });
+    expect(
+      (await db.lead.findFirst({ where: { tenantId: w.tenantId } }))?.status,
+    ).toBe('IN_PROGRESS');
+    const audits = await db.auditEvent.count({
+      where: { tenantId: w.tenantId, action: 'operator.set_lead_status' },
+    });
+    expect(audits).toBe(1);
+    await expect(
+      controller.leadStatus(
+        handover.id,
+        `k-${randomUUID()}`,
+        { status: 'bogus' },
+        await as(s),
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    const viewer = await world('VIEWER');
+    const vh = await db.handover.create({
+      data: {
+        tenantId: viewer.tenantId,
+        conversationId: viewer.conversationId,
+        reasonCode: 'X',
+        summary: {},
+      },
+    });
+    const sv = await signIn(viewer);
+    await expect(
+      controller.leadStatus(
+        vh.id,
+        `k-${randomUUID()}`,
+        { status: 'WON' },
+        await as(sv),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('never touches another tenant’s lead', async () => {
+    const a = await world();
+    const b = await world();
+    const bh = await db.handover.create({
+      data: {
+        tenantId: b.tenantId,
+        conversationId: b.conversationId,
+        reasonCode: 'X',
+        summary: {},
+      },
+    });
+    const sa = await signIn(a);
+    await expect(
+      controller.leadStatus(
+        bh.id,
+        `k-${randomUUID()}`,
+        { status: 'LOST' },
+        await as(sa),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('login cookies', () => {
+  it('sets an httpOnly session cookie and a readable CSRF cookie, and clears both on logout', async () => {
+    const w = await world();
+    const controller = new AuthController(sessions, prisma, {
+      get: (key: string) =>
+        key === 'SESSION_COOKIE_SECURE' ? true : undefined,
+    } as never);
+    const headers: Record<string, string | string[]> = {};
+    const reply = {
+      setHeader: (n: string, v: string | string[]): void =>
+        void (headers[n] = v),
+    };
+    const body = (await controller.login(
+      { email: w.email, password: 'correct horse' },
+      { ip: `ip-${randomUUID()}` },
+      reply,
+    )) as { csrfToken: string };
+    const cookies = headers['Set-Cookie'] as string[];
+    expect(cookies[0]).toMatch(
+      /^ac_session=.+; HttpOnly; SameSite=Strict; Path=\/; Max-Age=\d+; Secure$/u,
+    );
+    expect(cookies[1]).toBe(
+      `ac_csrf=${body.csrfToken}; ${cookies[1].split('; ').slice(1).join('; ')}`,
+    );
+    expect(cookies[1]).not.toContain('HttpOnly');
+    expect(cookies[1]).toContain('SameSite=Strict');
+  });
+
+  it('rate-limits login attempts per address and answers bad bodies as invalid credentials', async () => {
+    const controller = new AuthController(sessions, prisma, {
+      get: () => false,
+    } as never);
+    const reply = { setHeader: (): void => undefined };
+    const ip = `ip-${randomUUID()}`;
+    await expect(
+      controller.login({ nope: 1 }, { ip }, reply),
+    ).rejects.toMatchObject({ status: 401 });
+    let last: unknown;
+    for (let i = 0; i < 25; i += 1)
+      last = await controller
+        .login({ email: 'x@y.test', password: 'p' }, { ip }, reply)
+        .catch((e: unknown) => e);
+    expect(last).toMatchObject({ status: 429 });
+  });
+});
+
+describe('inbox event bus', () => {
+  it('issues one query per tick for any number of listeners and delivers per tenant', async () => {
+    const a = await world();
+    const b = await world();
+    const bus = new InboxEventBus(prisma);
+    const gotA1: BusEvent[] = [];
+    const gotA2: BusEvent[] = [];
+    const gotB: BusEvent[] = [];
+    const offA1 = await bus.subscribe(a.tenantId, (e) => gotA1.push(e));
+    const offA2 = await bus.subscribe(a.tenantId, (e) => gotA2.push(e));
+    const offB = await bus.subscribe(b.tenantId, (e) => gotB.push(e));
+    await db.conversation.update({
+      where: { id: a.conversationId },
+      data: { state: 'CLOSED' },
+    });
+    const calls: string[] = [];
+    const original = prisma.inboxEvent.findMany.bind(prisma.inboxEvent);
+    (prisma.inboxEvent as { findMany: unknown }).findMany = (
+      ...args: Parameters<typeof original>
+    ): ReturnType<typeof original> => {
+      calls.push('findMany');
+      return original(...args);
+    };
+    try {
+      await bus.tick();
+    } finally {
+      (prisma.inboxEvent as { findMany: unknown }).findMany = original;
+    }
+    expect(calls).toHaveLength(1);
+    expect(gotA1.map((e) => e.type)).toEqual(['conversation.updated']);
+    expect(gotA2).toHaveLength(1);
+    expect(gotB).toEqual([]);
+    await bus.tick();
+    expect(gotA1).toHaveLength(1);
+    offA1();
+    offA2();
+    offB();
+    bus.onModuleDestroy();
+  });
+
+  it('a throwing listener does not stop the others, and events before subscribe are not replayed', async () => {
+    const w = await world();
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'CLOSED' },
+    });
+    const bus = new InboxEventBus(prisma);
+    const got: BusEvent[] = [];
+    const off1 = await bus.subscribe(w.tenantId, () => {
+      throw new Error('boom');
+    });
+    const off2 = await bus.subscribe(w.tenantId, (e) => got.push(e));
+    await bus.tick();
+    expect(got).toEqual([]);
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    await bus.tick();
+    expect(got).toHaveLength(1);
+    off1();
+    off2();
+    bus.onModuleDestroy();
   });
 });
