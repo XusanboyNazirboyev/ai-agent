@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   mkdtempSync,
   readFileSync,
@@ -74,14 +74,22 @@ ${options.action === 'exit-twice' ? 'session_cleanup; session_cleanup; exit 0' :
   const recorded = existsSync(pids)
     ? readFileSync(pids, 'utf8').split('\n').filter(Boolean).map(Number)
     : [];
-  const alive = recorded.filter((pid) => {
+  const isAlive = (pid: number): boolean => {
     try {
-      process.kill(pid, 0);
-      return true;
+      // Zombies (killed, not yet reaped) count as dead.
+      const state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], {
+        encoding: 'utf8',
+      }).trim();
+      return state !== '' && !state.startsWith('Z');
     } catch {
       return false;
     }
-  });
+  };
+  let alive = recorded.filter(isAlive);
+  for (let i = 0; i < 20 && alive.length > 0; i += 1) {
+    await new Promise((done) => setTimeout(done, 100));
+    alive = recorded.filter(isAlive);
+  }
   for (const pid of alive) process.kill(pid, 'SIGKILL'); // never leak from a failing test
   const count = existsSync(calls)
     ? readFileSync(calls, 'utf8').split('\n').filter(Boolean).length

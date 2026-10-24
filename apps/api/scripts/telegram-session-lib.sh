@@ -7,6 +7,13 @@ CLEANED=0
 
 register_pid() { PIDS+=("$1"); }
 
+# A killed child can linger as a zombie until its parent reaps it; that is dead.
+alive() {
+  local state
+  state=$(ps -o stat= -p "$1" 2>/dev/null)
+  [ -n "$state" ] && [ "${state#Z}" = "$state" ]
+}
+
 # Output lines are fixed strings so callers and tests can rely on them.
 session_cleanup() {
   [ "$CLEANED" = 1 ] && return 0
@@ -21,13 +28,14 @@ session_cleanup() {
   for pid in ${PIDS[@]+"${PIDS[@]}"}; do kill "$pid" 2>/dev/null; done
   sleep 1
   for pid in ${PIDS[@]+"${PIDS[@]}"}; do
-    if kill -0 "$pid" 2>/dev/null; then
+    if alive "$pid"; then
       kill -9 "$pid" 2>/dev/null
       echo "cleanup: process $pid needed SIGKILL"
     fi
   done
   for pid in ${PIDS[@]+"${PIDS[@]}"}; do
-    kill -0 "$pid" 2>/dev/null && echo "cleanup: PROCESS $pid STILL RUNNING"
+    sleep 0.2
+    alive "$pid" && echo "cleanup: PROCESS $pid STILL RUNNING"
   done
   return 0
 }
