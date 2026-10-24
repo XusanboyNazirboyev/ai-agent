@@ -58,6 +58,17 @@ export function customerMessage(
   run(['customer-message', tenantId, conversationId, text]);
 }
 
+export function uncertainAction(
+  tenantId: string,
+  conversationId: string,
+): string {
+  const out = run(['uncertain-action', tenantId, conversationId])
+    .trim()
+    .split('\n')
+    .pop()!;
+  return (JSON.parse(out) as { proposalId: string }).proposalId;
+}
+
 export function newHandover(
   tenantId: string,
   name: string,

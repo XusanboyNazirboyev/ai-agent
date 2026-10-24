@@ -124,6 +124,17 @@ describe('source uses the catalog', () => {
       scope: ['waiting', 'mine', 'all', 'closed'],
       canned: ['greeting', 'wait', 'details', 'thanks', 'bye'],
       connection: ['live', 'connecting', 'reconnecting', 'polling'],
+      actionStatus: [
+        'PROPOSED',
+        'CONFIRMED',
+        'DECLINED',
+        'SUPERSEDED',
+        'EXPIRED',
+        'CANCELLED',
+        'SUCCEEDED',
+        'FAILED',
+        'UNCERTAIN',
+      ],
       locale: ['en', 'ru', 'uz-Latn'],
     };
     for (const [family, ids] of Object.entries(families))
@@ -145,6 +156,8 @@ describe('source uses the catalog', () => {
       'FORBIDDEN',
       'NOT_FOUND',
       'NO_LEAD',
+      'MISSING_EVIDENCE',
+      'NOT_UNCERTAIN',
       'INVALID_BODY',
       'CSRF',
       'BAD_ORIGIN',

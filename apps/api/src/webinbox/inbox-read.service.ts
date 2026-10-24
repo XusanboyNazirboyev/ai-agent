@@ -71,6 +71,17 @@ export interface ConversationView {
     shownInMessageId: string | null;
   }[];
   readonly slots: unknown;
+  /** Business actions of the conversation (ADR 024). Values only while UNCERTAIN. */
+  readonly actions: readonly {
+    id: string;
+    actionKey: string;
+    status: string;
+    createdAt: Date;
+    outcomeAt: Date | null;
+    externalId: string | null;
+    errorCode: string | null;
+    payload: unknown;
+  }[];
   readonly notes: readonly {
     id: string;
     operatorId: string;
@@ -255,57 +266,73 @@ export class InboxReadService {
       },
     });
     if (!conversation) return undefined;
-    const [messages, notes, shownOffers, quotes, slots] = await Promise.all([
-      this.prisma.message.findMany({
-        where: { tenantId: principal.tenantId, conversationId },
-        orderBy: { sequence: 'asc' },
-        take: 500,
-        select: {
-          id: true,
-          authorType: true,
-          direction: true,
-          type: true,
-          text: true,
-          deliveryState: true,
-          createdAt: true,
-        },
-      }),
-      this.prisma.internalNote.findMany({
-        where: { tenantId: principal.tenantId, conversationId },
-        orderBy: { createdAt: 'asc' },
-        take: 200,
-        select: { id: true, operatorId: true, text: true, createdAt: true },
-      }),
-      this.prisma.shownOffer.findMany({
-        where: { tenantId: principal.tenantId, conversationId },
-        orderBy: { shownAt: 'asc' },
-        take: 100,
-        select: {
-          id: true,
-          messageId: true,
-          offerRef: true,
-          facts: true,
-          shownAt: true,
-        },
-      }),
-      this.prisma.quote.findMany({
-        where: { tenantId: principal.tenantId, conversationId },
-        orderBy: { createdAt: 'asc' },
-        take: 100,
-        select: {
-          id: true,
-          amount: true,
-          currency: true,
-          validUntil: true,
-          shownInMessageId: true,
-        },
-      }),
-      this.prisma.conversationSlots.findFirst({
-        where: { tenantId: principal.tenantId, conversationId },
-        orderBy: { version: 'desc' },
-        select: { slots: true },
-      }),
-    ]);
+    const [messages, notes, shownOffers, quotes, slots, actions] =
+      await Promise.all([
+        this.prisma.message.findMany({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { sequence: 'asc' },
+          take: 500,
+          select: {
+            id: true,
+            authorType: true,
+            direction: true,
+            type: true,
+            text: true,
+            deliveryState: true,
+            createdAt: true,
+          },
+        }),
+        this.prisma.internalNote.findMany({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { createdAt: 'asc' },
+          take: 200,
+          select: { id: true, operatorId: true, text: true, createdAt: true },
+        }),
+        this.prisma.shownOffer.findMany({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { shownAt: 'asc' },
+          take: 100,
+          select: {
+            id: true,
+            messageId: true,
+            offerRef: true,
+            facts: true,
+            shownAt: true,
+          },
+        }),
+        this.prisma.quote.findMany({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { createdAt: 'asc' },
+          take: 100,
+          select: {
+            id: true,
+            amount: true,
+            currency: true,
+            validUntil: true,
+            shownInMessageId: true,
+          },
+        }),
+        this.prisma.conversationSlots.findFirst({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { version: 'desc' },
+          select: { slots: true },
+        }),
+        this.prisma.actionProposal.findMany({
+          where: { tenantId: principal.tenantId, conversationId },
+          orderBy: { createdAt: 'asc' },
+          take: 50,
+          select: {
+            id: true,
+            actionKey: true,
+            status: true,
+            createdAt: true,
+            outcomeAt: true,
+            externalId: true,
+            errorCode: true,
+            payload: true,
+          },
+        }),
+      ]);
     return {
       conversation: {
         id: conversation.id,
@@ -326,6 +353,11 @@ export class InboxReadService {
         amount: quote.amount.toString(),
       })),
       slots: slots?.slots ?? null,
+      // Customer values are shown only while a person must check the outcome.
+      actions: actions.map((row) => ({
+        ...row,
+        payload: row.status === 'UNCERTAIN' ? row.payload : null,
+      })),
     };
   }
 }

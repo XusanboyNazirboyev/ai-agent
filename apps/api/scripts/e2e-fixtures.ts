@@ -194,6 +194,41 @@ try {
       },
     });
     console.log('ok');
+  } else if (command === 'uncertain-action') {
+    // A confirmed action whose CRM outcome could not be determined (fictional).
+    const [tenantId, conversationId] = args;
+    const proposal = await db.actionProposal.create({
+      data: {
+        tenantId,
+        conversationId,
+        actionKey: 'course_enquiry',
+        operation: 'createLead',
+        packRef: 'education@1',
+        payload: { 'slots.subject': 'IELTS', 'contact.phone': '+998900000000' },
+        digest: 'e2e'.padEnd(64, '0'),
+        status: 'UNCERTAIN',
+        expiresAt: new Date(Date.now() + 3_600_000),
+        proposedTurnKey: `e2e-${randomUUID()}`,
+        confirmedAt: new Date(),
+        outcomeAt: new Date(),
+        errorCode: 'CONNECTOR_TIMEOUT',
+      },
+    });
+    await db.connectorOperation.create({
+      data: {
+        tenantId,
+        kind: 'createLead',
+        subjectType: 'action_proposal',
+        subjectId: proposal.id,
+        idempotencyKey: `createLead:action_proposal:${proposal.id}`,
+        status: 'UNCERTAIN',
+        attempts: 1,
+        attemptMode: 'none',
+        lastExecution: 'UNCERTAIN',
+        lastErrorCode: 'CONNECTOR_TIMEOUT',
+      },
+    });
+    console.log(JSON.stringify({ proposalId: proposal.id }));
   } else if (command === 'new-handover') {
     const [tenantId, name] = args;
     const account = await db.channelAccount.findFirstOrThrow({

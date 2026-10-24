@@ -6,6 +6,7 @@ import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { factLines } from '@/lib/facts';
 import { markSeen } from '@/lib/seen';
+import { ActionsPanel } from './actions-panel';
 import type { ConversationView, LeadStatus, Role } from '@/lib/types';
 
 const CANNED = ['greeting', 'wait', 'details', 'thanks', 'bye'];
@@ -264,6 +265,12 @@ export function ConversationViewPane(props: {
               <p>{t('view.noLead')}</p>
             )}
           </section>
+          <ActionsPanel
+            conversationId={props.id}
+            actions={view.actions ?? []}
+            canResolve={operating}
+            timeZone={props.timeZone}
+          />
           <section>
             <h3 className="font-semibold">{t('view.slots')}</h3>
             {factLines(view.slots).length === 0 ? (
