@@ -28,6 +28,8 @@ export type GuardrailViolation =
   | 'UNSOURCED_NUMBER'
   | 'UNSOURCED_CURRENCY'
   | 'FORBIDDEN_CLAIM'
+  /** The draft claims a business action was completed; only code may say that. */
+  | 'ACTION_CLAIM'
   | 'PROMPT_LEAK'
   | 'SCRIPT_MISMATCH'
   | 'LANGUAGE_MISMATCH';
@@ -111,6 +113,13 @@ export function checkDraft(
     )
   ) {
     violations.add('FORBIDDEN_CLAIM');
+  }
+  if (
+    context.locale.actionClaimStems.some((stem) =>
+      lower.includes(unifyApostrophes(stem).toLowerCase()),
+    )
+  ) {
+    violations.add('ACTION_CLAIM');
   }
   if (LEAK.test(own)) violations.add('PROMPT_LEAK');
 

@@ -110,6 +110,38 @@ export class LeadSyncService {
     const ref = this.ref(tenantId, lead.id);
     const existing = await this.operations.find(ref);
     if (existing?.status === 'UNCERTAIN') return 'UNCERTAIN';
+    // Already created (a later re-score marked the lead stale): the CRM copy
+    // is not updated in v1, but it is never created twice.
+    const done =
+      existing &&
+      ['SUCCEEDED', 'RESOLVED_SUCCEEDED'].includes(existing.status) &&
+      existing.externalId
+        ? existing.externalId
+        : // A customer-confirmed action already created this conversation's CRM lead.
+          (
+            await this.prisma.actionProposal.findFirst({
+              where: {
+                tenantId,
+                conversationId: lead.conversationId,
+                operation: 'createLead',
+                status: 'SUCCEEDED',
+              },
+              orderBy: { outcomeAt: 'desc' },
+              select: { externalId: true },
+            })
+          )?.externalId;
+    if (done) {
+      await this.prisma.lead.updateMany({
+        where: { id: lead.id, tenantId, crmSyncStatus: { not: 'SYNCED' } },
+        data: {
+          crmSyncStatus: 'SYNCED',
+          crmLeadId: done,
+          lastErrorCode: null,
+          nextAttemptAt: null,
+        },
+      });
+      return 'SKIPPED';
+    }
     if (existing && ['FAILED', 'RESOLVED_FAILED'].includes(existing.status))
       return 'SKIPPED';
 
@@ -326,6 +358,7 @@ export class LeadSyncService {
     }
     for (const op of await this.operations.abandoned(
       'createLead',
+      'lead',
       now,
       limit,
     )) {

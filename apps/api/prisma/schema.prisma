@@ -205,6 +205,7 @@ model Tenant {
   operatorSessions      OperatorSession[]
   inboxEvents           InboxEvent[]
   connectorOperations   ConnectorOperation[]
+  actionProposals       ActionProposal[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
@@ -500,6 +501,7 @@ model Conversation {
   leads    Lead[]
   handovers Handover[]
   agentTurns AgentTurn[]
+  actionProposals ActionProposal[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerChatId])
@@ -1091,4 +1093,49 @@ model ConnectorOperation {
   @@index([status, nextAttemptAt])
   @@index([status, leaseExpiresAt])
   @@map("connector_operations")
+}
+
+enum ActionProposalStatus {
+  PROPOSED
+  CONFIRMED
+  DECLINED
+  SUPERSEDED
+  EXPIRED
+  CANCELLED
+  SUCCEEDED
+  FAILED
+  UNCERTAIN
+}
+
+/// A business action the agent proposed to a customer (ADR 024). The payload
+/// holds only the pack-declared fields, is bound by `digest`, and is cleared
+/// once the action reaches a final state. Execution is the connector
+/// operation with subject ('action_proposal', id).
+model ActionProposal {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  conversationId   String               @map("conversation_id") @db.Uuid
+  actionKey        String               @map("action_key") @db.VarChar(41)
+  operation        String               @db.VarChar(40)
+  packRef          String               @map("pack_ref") @db.VarChar(100)
+  payload          Json?                @db.JsonB
+  digest           String               @db.VarChar(64)
+  status           ActionProposalStatus @default(PROPOSED)
+  expiresAt        DateTime             @map("expires_at") @db.Timestamptz(6)
+  proposedTurnKey  String               @map("proposed_turn_key") @db.VarChar(200)
+  confirmedAt      DateTime?            @map("confirmed_at") @db.Timestamptz(6)
+  outcomeAt        DateTime?            @map("outcome_at") @db.Timestamptz(6)
+  externalId       String?              @map("external_id") @db.VarChar(200)
+  errorCode        String?              @map("error_code") @db.VarChar(100)
+  payloadClearedAt DateTime?            @map("payload_cleared_at") @db.Timestamptz(6)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation     Conversation         @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, proposedTurnKey], map: "action_proposals_proposed_turn_key_key")
+  @@index([tenantId, conversationId, status])
+  @@index([status, expiresAt])
+  @@map("action_proposals")
 }

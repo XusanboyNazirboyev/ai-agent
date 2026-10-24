@@ -90,6 +90,24 @@ export const UZ_LATN: LocalePack = {
         "Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.",
       LEGAL_UNVERIFIED:
         "Bu masala bo'yicha tasdiqlangan ma'lumotim yo'q. Savolingiz jamoamiz uchun saqlandi.",
+      ACTION_FAILED:
+        "Kechirasiz, so'rovingizni hozir yakunlay olmadim. U jamoamiz uchun saqlandi.",
+      ACTION_OUTCOME_UNKNOWN:
+        "So'rovingiz o'tganini tasdiqlay olmadim. U jamoamiz tekshirishi uchun saqlandi.",
+    },
+    actions: {
+      proposalIntro: 'Iltimos, tekshiring:',
+      confirmPrompt:
+        'Tasdiqlash uchun «{yes}», bekor qilish uchun «{no}» deb yozing.',
+      received:
+        "Rahmat, so'rovingizni yuboryapman. Natijasini alohida xabar qilaman.",
+      declined: "Xo'p, so'rov yuborilmadi.",
+      succeeded: "So'rovingiz qabul qilindi va tizimda qayd etildi.",
+      succeededWithReference:
+        "So'rovingiz qabul qilindi va tizimda qayd etildi. Raqami: {reference}.",
+      askName: 'Iltimos, ismingizni yozing.',
+      expired:
+        "Bu so'rovning muddati o'tgan, hech narsa yuborilmadi. Davom ettirish uchun so'rovni qaytadan yozing.",
     },
     labels: {
       price: 'narxi',
@@ -118,6 +136,14 @@ export const UZ_LATN: LocalePack = {
     'lotin alifbosida yozing',
     'lotinchada yozing',
     'напишите латиницей',
+  ],
+  actionConfirmPhrases: ['ha', 'tasdiqlayman', 'xa'],
+  actionDeclinePhrases: ["yo'q", 'bekor qilish', 'yoq'],
+  actionClaimStems: [
+    "ro'yxatdan o'tdingiz",
+    'ariza yaratildi',
+    "so'rovingiz qayd etildi",
+    'bron tasdiqlandi',
   ],
   forbiddenClaimStems: forbiddenUz,
 };
@@ -180,6 +206,24 @@ export const UZ_CYRL: LocalePack = {
         'Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.',
       LEGAL_UNVERIFIED:
         'Бу масала бўйича тасдиқланган маълумотим йўқ. Саволингиз жамоамиз учун сақланди.',
+      ACTION_FAILED:
+        'Кечирасиз, сўровингизни ҳозир якунлай олмадим. У жамоамиз учун сақланди.',
+      ACTION_OUTCOME_UNKNOWN:
+        'Сўровингиз ўтганини тасдиқлай олмадим. У жамоамиз текшириши учун сақланди.',
+    },
+    actions: {
+      proposalIntro: 'Илтимос, текширинг:',
+      confirmPrompt:
+        'Тасдиқлаш учун «{yes}», бекор қилиш учун «{no}» деб ёзинг.',
+      received:
+        'Раҳмат, сўровингизни юборяпман. Натижасини алоҳида хабар қиламан.',
+      declined: 'Хўп, сўров юборилмади.',
+      succeeded: 'Сўровингиз қабул қилинди ва тизимда қайд этилди.',
+      succeededWithReference:
+        'Сўровингиз қабул қилинди ва тизимда қайд этилди. Рақами: {reference}.',
+      askName: 'Илтимос, исмингизни ёзинг.',
+      expired:
+        'Бу сўровнинг муддати ўтган, ҳеч нарса юборилмади. Давом эттириш учун сўровни қайтадан ёзинг.',
     },
     labels: {
       price: 'нархи',
@@ -203,6 +247,14 @@ export const UZ_CYRL: LocalePack = {
     'kirilchada yozing',
     'kirill alifbosida yozing',
     'напишите кириллицей',
+  ],
+  actionConfirmPhrases: ['ҳа', 'тасдиқлайман', 'ха'],
+  actionDeclinePhrases: ['йўқ', 'бекор қилиш'],
+  actionClaimStems: [
+    'рўйхатдан ўтдингиз',
+    'ариза яратилди',
+    'сўровингиз қайд этилди',
+    'брон тасдиқланди',
   ],
   forbiddenClaimStems: forbiddenUzCyrl,
 };
@@ -265,6 +317,24 @@ export const RU: LocalePack = {
         'Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.',
       LEGAL_UNVERIFIED:
         'По этому вопросу у меня нет проверенной информации. Ваш вопрос сохранён для нашей команды.',
+      ACTION_FAILED:
+        'К сожалению, сейчас не удалось выполнить ваш запрос. Он сохранён для нашей команды.',
+      ACTION_OUTCOME_UNKNOWN:
+        'Не удалось подтвердить, прошёл ли ваш запрос. Он сохранён, чтобы наша команда проверила.',
+    },
+    actions: {
+      proposalIntro: 'Пожалуйста, проверьте:',
+      confirmPrompt:
+        'Чтобы подтвердить, напишите «{yes}», чтобы отменить — «{no}».',
+      received:
+        'Спасибо, отправляю ваш запрос. О результате сообщу отдельным сообщением.',
+      declined: 'Хорошо, запрос не отправлен.',
+      succeeded: 'Ваш запрос принят и зарегистрирован в системе.',
+      succeededWithReference:
+        'Ваш запрос принят и зарегистрирован в системе. Номер: {reference}.',
+      askName: 'Пожалуйста, напишите ваше имя.',
+      expired:
+        'Срок этого запроса истёк, ничего не отправлено. Чтобы продолжить, напишите запрос ещё раз.',
     },
     labels: {
       price: 'стоимость',
@@ -294,6 +364,15 @@ export const RU: LocalePack = {
     'reply in russian',
     'answer in russian',
     'in russian please',
+  ],
+  actionConfirmPhrases: ['да', 'подтверждаю', 'ок'],
+  actionDeclinePhrases: ['нет', 'отмена', 'отменить'],
+  actionClaimStems: [
+    'заявка создана',
+    'заявка оформлена',
+    'вы зарегистрированы',
+    'запрос зарегистрирован',
+    'бронь подтверждена',
   ],
   forbiddenClaimStems: ['скидк', 'гарант', 'бесплатн', 'акци', 'подар'],
 };
@@ -355,6 +434,23 @@ export const EN: LocalePack = {
         'Our team confirms amounts like this personally. Your request has been saved for them.',
       LEGAL_UNVERIFIED:
         'I do not have verified information on this. Your question has been saved for our team.',
+      ACTION_FAILED:
+        'Sorry, I could not complete your request right now. It has been recorded for our team.',
+      ACTION_OUTCOME_UNKNOWN:
+        'I could not confirm whether your request went through. It has been recorded for our team to check.',
+    },
+    actions: {
+      proposalIntro: 'Please check:',
+      confirmPrompt: 'Reply “{yes}” to confirm or “{no}” to cancel.',
+      received:
+        'Thank you, I am sending your request now. I will tell you the result in a separate message.',
+      declined: 'All right, the request was not sent.',
+      succeeded: 'Your request has been received and recorded in our system.',
+      succeededWithReference:
+        'Your request has been received and recorded in our system. Reference: {reference}.',
+      askName: 'Please write your name.',
+      expired:
+        'This request has expired and nothing was sent. To continue, please write your request again.',
     },
     labels: {
       price: 'price',
@@ -388,6 +484,15 @@ export const EN: LocalePack = {
     'напишите на английском',
     'пишите на английском',
     'отвечайте по-английски',
+  ],
+  actionConfirmPhrases: ['yes', 'confirm', 'ok'],
+  actionDeclinePhrases: ['no', 'cancel'],
+  actionClaimStems: [
+    'has been registered',
+    'successfully registered',
+    'request has been recorded',
+    'booking is confirmed',
+    'lead has been created',
   ],
   forbiddenClaimStems: [
     'discount',

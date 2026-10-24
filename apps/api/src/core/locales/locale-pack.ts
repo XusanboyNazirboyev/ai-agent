@@ -37,6 +37,10 @@ export const HANDOVER_REASONS = [
   'STUCK',
   'HIGH_VALUE',
   'LEGAL_UNVERIFIED',
+  /** A confirmed action could not be completed (connector refused or failed). */
+  'ACTION_FAILED',
+  /** A confirmed action may or may not have been applied; a person checks. */
+  'ACTION_OUTCOME_UNKNOWN',
 ] as const;
 export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 
@@ -78,6 +82,24 @@ export interface LocaleTemplates {
    * may only say that the message was recorded.
    */
   readonly handover: Readonly<Record<HandoverReason, string>>;
+  /**
+   * Business-action wording (ADR 024), always rendered by code. Outcome texts
+   * state only what the connector confirmed; `received` is sent right after
+   * confirmation and must not claim success.
+   */
+  readonly actions: {
+    readonly proposalIntro: string;
+    /** `{yes}` / `{no}` are replaced by the first confirm/decline phrase. */
+    readonly confirmPrompt: string;
+    readonly received: string;
+    readonly declined: string;
+    readonly succeeded: string;
+    /** `{reference}` is the external id, only when the pack allows showing it. */
+    readonly succeededWithReference: string;
+    readonly askName: string;
+    /** The confirmed proposal had expired or changed; nothing was sent. */
+    readonly expired: string;
+  };
   readonly labels: {
     readonly price: string;
     readonly seats: string;
@@ -100,6 +122,14 @@ export interface LocalePack {
   /** Tone and register guidance for the response model. */
   readonly toneGuidance: string;
   readonly templates: LocaleTemplates;
+  /** Whole-message replies that confirm / decline an open action proposal. */
+  readonly actionConfirmPhrases: readonly string[];
+  readonly actionDeclinePhrases: readonly string[];
+  /**
+   * Phrases that claim a business action was completed. A model draft may
+   * never contain them: only code reports outcomes, from connector evidence.
+   */
+  readonly actionClaimStems: readonly string[];
   /**
    * Stems of claims the bot may never make on its own (discounts, free
    * extras, guarantees); matched case-insensitively in model-written text.

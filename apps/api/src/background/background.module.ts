@@ -9,6 +9,8 @@ import { DigestService } from '../handover/digest.service.js';
 import { HandoverModule } from '../handover/handover.module.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadsModule } from '../leads/leads.module.js';
+import { ActionsModule } from '../actions/actions.module.js';
+import { ActionService } from '../actions/action.service.js';
 import { WebInboxModule } from '../webinbox/webinbox.module.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
@@ -19,7 +21,13 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
  * idempotent, so several API processes may run it.
  */
 @Module({
-  imports: [PersistenceModule, HandoverModule, LeadsModule, WebInboxModule],
+  imports: [
+    PersistenceModule,
+    HandoverModule,
+    LeadsModule,
+    WebInboxModule,
+    ActionsModule,
+  ],
   providers: [
     FollowUpService,
     DigestService,
@@ -30,13 +38,15 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         FollowUpService,
         DigestService,
         InboxEventsService,
+        ActionService,
       ],
       useFactory: (
         lead: LeadSyncService,
         followUp: FollowUpService,
         digest: DigestService,
         inbox: InboxEventsService,
-      ): ScheduledScan[] => [lead, followUp, digest, inbox],
+        actions: ActionService,
+      ): ScheduledScan[] => [lead, followUp, digest, inbox, actions],
     },
     HandoverRuntime,
   ],

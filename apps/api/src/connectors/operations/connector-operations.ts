@@ -219,16 +219,45 @@ export class ConnectorOperations {
   /** IN_FLIGHT operations whose lease has expired (crash or lost result). */
   abandoned(
     kind: string,
+    subjectType: string,
     now: Date,
     limit: number,
   ): Promise<
     { id: string; tenantId: string; subjectId: string; attempts: number }[]
   > {
     return this.prisma.connectorOperation.findMany({
-      where: { kind, status: 'IN_FLIGHT', leaseExpiresAt: { lte: now } },
+      where: {
+        kind,
+        subjectType,
+        status: 'IN_FLIGHT',
+        leaseExpiresAt: { lte: now },
+      },
       orderBy: { leaseExpiresAt: 'asc' },
       take: limit,
       select: { id: true, tenantId: true, subjectId: true, attempts: true },
     });
   }
+}
+
+/** Due retries of one subject type (status RETRY_WAIT, time reached). */
+export function dueRetries(
+  prisma: PrismaService,
+  kind: string,
+  subjectType: string,
+  now: Date,
+  limit: number,
+): Promise<
+  { id: string; tenantId: string; subjectId: string; attempts: number }[]
+> {
+  return prisma.connectorOperation.findMany({
+    where: {
+      kind,
+      subjectType,
+      status: 'RETRY_WAIT',
+      nextAttemptAt: { lte: now },
+    },
+    orderBy: { nextAttemptAt: 'asc' },
+    take: limit,
+    select: { id: true, tenantId: true, subjectId: true, attempts: true },
+  });
 }

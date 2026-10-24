@@ -104,6 +104,54 @@ export const LeadScoringSchema = z
   });
 export type LeadScoring = z.infer<typeof LeadScoringSchema>;
 
+/** A field an action sends, and where its value comes from (ADR 024). */
+export const ActionFieldSchema = z
+  .object({
+    /** Canonical target: `slots.<key>` of the operation input, or a contact field. */
+    name: z
+      .string()
+      .regex(/^(slots\.[A-Za-z][A-Za-z0-9_]{0,39}|contact\.(name|phone))$/u),
+    from: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('slot'), slot: SlotKeySchema }).strict(),
+      z
+        .object({
+          kind: z.literal('contact'),
+          field: z.enum(['name', 'phone']),
+        })
+        .strict(),
+    ]),
+    required: z.boolean(),
+    /** Per-locale label shown in the confirmation summary. */
+    label: z.record(LocaleIdSchema, z.string().min(1).max(60)),
+  })
+  .strict();
+
+/**
+ * A business action a pack offers (ADR 022/024). Generic: it maps collected
+ * slots and contact fields to one connector write operation. Whether a tenant
+ * enables it, and under which data policy, is tenant configuration.
+ */
+export const ActionSpecSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/u),
+    /** Generic connector capability the action uses. */
+    operation: z.enum(['createLead']),
+    /** Customer intents that start the action. */
+    triggerIntents: z.array(z.enum(['booking_interest'])).min(1),
+    fields: z.array(ActionFieldSchema).min(1).max(12),
+    /** v1 allows only explicit confirmation (owner decision D-1 still open). */
+    confirmation: z.literal('explicit'),
+    expiresAfterMinutes: z.number().int().min(5).max(1440).default(30),
+    /** Per-locale name of the action in the summary ("course enquiry"). */
+    title: z.record(LocaleIdSchema, z.string().min(1).max(80)),
+    /** Pack-written lead summary prefix sent to the CRM (no customer text). */
+    crmSummary: z.string().min(1).max(200),
+    showExternalReference: z.boolean().default(false),
+  })
+  .strict();
+export type ActionSpec = z.infer<typeof ActionSpecSchema>;
+export type ActionField = z.infer<typeof ActionFieldSchema>;
+
 export const DomainPackSchema = z
   .object({
     key: DomainPackKeySchema,
@@ -138,6 +186,8 @@ export const DomainPackSchema = z
       .optional(),
     /** Optional deterministic lead scoring; without it no lead is scored. */
     leadScoring: LeadScoringSchema.optional(),
+    /** Optional business actions (disabled until a tenant enables them). */
+    actions: z.array(ActionSpecSchema).max(10).default([]),
     prompt: z
       .object({
         businessRole: z.string().min(1).max(400),
@@ -189,6 +239,56 @@ export const DomainPackSchema = z
         message: 'at least one slot must be required for search',
       });
     }
+    const actionKeys = new Set<string>();
+    pack.actions.forEach((action, index) => {
+      const at = ['actions', index];
+      if (actionKeys.has(action.key))
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'key'],
+          message: 'duplicate action key',
+        });
+      actionKeys.add(action.key);
+      const names = new Set<string>();
+      action.fields.forEach((field, fieldIndex) => {
+        if (names.has(field.name))
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'fields', fieldIndex, 'name'],
+            message: 'duplicate field',
+          });
+        names.add(field.name);
+        if (field.from.kind === 'slot' && !keys.has(field.from.slot))
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'fields', fieldIndex, 'from'],
+            message: 'unknown slot',
+          });
+        if (
+          field.from.kind === 'contact' &&
+          field.name !== `contact.${field.from.field}`
+        )
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'fields', fieldIndex, 'name'],
+            message: 'contact fields map to themselves',
+          });
+        for (const locale of pack.locales)
+          if (!field.label[locale])
+            context.addIssue({
+              code: 'custom',
+              path: [...at, 'fields', fieldIndex, 'label', locale],
+              message: `missing label for ${locale}`,
+            });
+      });
+      for (const locale of pack.locales)
+        if (!action.title[locale])
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'title', locale],
+            message: `missing title for ${locale}`,
+          });
+    });
     if (!pack.tools.includes('search_catalog')) {
       context.addIssue({
         code: 'custom',

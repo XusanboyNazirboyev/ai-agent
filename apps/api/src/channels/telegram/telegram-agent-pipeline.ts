@@ -20,6 +20,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { HandoverService } from '../../handover/handover.service.js';
 import { LeadService } from '../../leads/lead.service.js';
+import { ActionService } from '../../actions/action.service.js';
 import { extractPhone } from '../../leads/phone.js';
 import { selectInboundBatch } from './inbound-batch.js';
 import type {
@@ -109,6 +110,7 @@ export class TelegramAgentPipeline {
     @Optional() @Inject(AGENT_MODE_POLICY) policy?: AgentModePolicy,
     @Optional() handovers?: HandoverService,
     @Optional() leads?: LeadService,
+    @Optional() private readonly actions?: ActionService,
   ) {
     this.handoverService = handovers ?? new HandoverService(prisma);
     this.leadService = leads ?? new LeadService(prisma);
@@ -620,6 +622,23 @@ export class TelegramAgentPipeline {
       const { result } = computed;
       let replyMessageId: string | undefined;
       let handoverId: string | undefined;
+      // Business action decision (ADR 024), LIVE only: SHADOW never proposes
+      // or executes anything. A confirmation that no longer matches an open
+      // proposal (expired, superseded) sends nothing and says so.
+      let replyText = result.reply;
+      if (claim.mode === 'LIVE' && result.action && this.actions) {
+        const applied = await this.actions.applyDecision(tx, {
+          tenantId,
+          conversationId,
+          decision: result.action,
+          packRef: computed.packRef,
+          turnKey: claim.idempotencyKey,
+          now,
+        });
+        if (applied.expired)
+          replyText = this.agent.localeRegistry.get(result.locale).templates
+            .actions.expired;
+      }
       if (claim.mode === 'LIVE') {
         const latest = await tx.message.findFirst({
           where: { tenantId, conversationId },
@@ -634,7 +653,7 @@ export class TelegramAgentPipeline {
             authorType: 'BOT',
             direction: 'OUTBOUND',
             type: 'TEXT',
-            text: result.reply.slice(0, 4_096),
+            text: replyText.slice(0, 4_096),
             sequence: (latest?.sequence ?? 0) + 1,
             providerChatId: claim.providerChatId,
             deliveryState: 'PENDING',

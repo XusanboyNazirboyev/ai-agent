@@ -230,4 +230,69 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
       },
     },
   ],
+  // Business action (ADR 024): a course enquiry the customer confirms. Off
+  // until a tenant enables it; fields are this pack's own slots and contact.
+  actions: [
+    {
+      key: 'course_enquiry',
+      operation: 'createLead',
+      triggerIntents: ['booking_interest'],
+      confirmation: 'explicit',
+      expiresAfterMinutes: 30,
+      crmSummary: 'Course enquiry confirmed by the customer in chat',
+      showExternalReference: false,
+      title: {
+        'uz-Latn': 'kursga yozilish so‘rovi',
+        'uz-Cyrl': 'курсга ёзилиш сўрови',
+        ru: 'заявка на курс',
+        en: 'course enquiry',
+      },
+      fields: [
+        {
+          name: 'slots.subject',
+          from: { kind: 'slot', slot: 'subject' },
+          required: true,
+          label: {
+            'uz-Latn': 'Yo‘nalish',
+            'uz-Cyrl': 'Йўналиш',
+            ru: 'Направление',
+            en: 'Subject',
+          },
+        },
+        {
+          name: 'slots.preferredTime',
+          from: { kind: 'slot', slot: 'preferredTime' },
+          required: true,
+          label: {
+            'uz-Latn': 'Qulay vaqt',
+            'uz-Cyrl': 'Қулай вақт',
+            ru: 'Удобное время',
+            en: 'Preferred time',
+          },
+        },
+        {
+          name: 'slots.format',
+          from: { kind: 'slot', slot: 'format' },
+          required: false,
+          label: {
+            'uz-Latn': 'Format',
+            'uz-Cyrl': 'Формат',
+            ru: 'Формат',
+            en: 'Format',
+          },
+        },
+        {
+          name: 'contact.phone',
+          from: { kind: 'contact', field: 'phone' },
+          required: true,
+          label: {
+            'uz-Latn': 'Telefon',
+            'uz-Cyrl': 'Телефон',
+            ru: 'Телефон',
+            en: 'Phone',
+          },
+        },
+      ],
+    },
+  ],
 });

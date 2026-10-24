@@ -132,6 +132,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
               'handover.forward',
               'handover.sla',
               'crm.lead.sync',
+              'action.execute',
               'digest.morning',
             ],
           },

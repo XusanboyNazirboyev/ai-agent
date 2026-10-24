@@ -68,6 +68,34 @@ None of these may promise that a person will reply or has been notified: the sys
   > Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.
 - **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
   > Bu masala bo'yicha tasdiqlangan ma'lumotim yo'q. Savolingiz jamoamiz uchun saqlandi.
+- **ACTION_FAILED** — A confirmed business action could not be completed; must not say it succeeded or promise a reply.
+  > Kechirasiz, so'rovingizni hozir yakunlay olmadim. U jamoamiz uchun saqlandi.
+- **ACTION_OUTCOME_UNKNOWN** — A confirmed business action may or may not have gone through; must not claim either.
+  > So'rovingiz o'tganini tasdiqlay olmadim. U jamoamiz tekshirishi uchun saqlandi.
+
+### Business-action wording (rendered by code, ADR 024)
+
+Outcome texts may state only what the connected system confirmed. `received` is sent right after the customer confirms and must not claim success.
+
+- **actions.proposalIntro** — Starts the summary of the action the customer is asked to confirm.
+  > Iltimos, tekshiring:
+- **actions.confirmPrompt** — Tells how to confirm or cancel; {yes}/{no} are the first phrases below.
+  > Tasdiqlash uchun «{yes}», bekor qilish uchun «{no}» deb yozing.
+- **actions.received** — Right after confirmation, before the result is known; must not claim success.
+  > Rahmat, so'rovingizni yuboryapman. Natijasini alohida xabar qilaman.
+- **actions.declined** — The customer cancelled; nothing was sent.
+  > Xo'p, so'rov yuborilmadi.
+- **actions.succeeded** — The connected system confirmed the record.
+  > So'rovingiz qabul qilindi va tizimda qayd etildi.
+- **actions.succeededWithReference** — Same, with the record reference when the pack allows showing it.
+  > So'rovingiz qabul qilindi va tizimda qayd etildi. Raqami: {reference}.
+- **actions.askName** — Asks for the name an action needs.
+  > Iltimos, ismingizni yozing.
+- **actions.expired** — The confirmation came too late or for changed details; nothing was sent.
+  > Bu so'rovning muddati o'tgan, hech narsa yuborilmadi. Davom ettirish uchun so'rovni qaytadan yozing.
+- confirm phrases (whole message): ha, tasdiqlayman, xa
+- decline phrases (whole message): yo'q, bekor qilish, yoq
+- phrases a model draft may never use (action claims): ro'yxatdan o'tdingiz, ariza yaratildi, so'rovingiz qayd etildi, bron tasdiqlandi
 
 ### Labels and availability words
 
@@ -181,6 +209,34 @@ None of these may promise that a person will reply or has been notified: the sys
   > Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.
 - **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
   > Бу масала бўйича тасдиқланган маълумотим йўқ. Саволингиз жамоамиз учун сақланди.
+- **ACTION_FAILED** — A confirmed business action could not be completed; must not say it succeeded or promise a reply.
+  > Кечирасиз, сўровингизни ҳозир якунлай олмадим. У жамоамиз учун сақланди.
+- **ACTION_OUTCOME_UNKNOWN** — A confirmed business action may or may not have gone through; must not claim either.
+  > Сўровингиз ўтганини тасдиқлай олмадим. У жамоамиз текшириши учун сақланди.
+
+### Business-action wording (rendered by code, ADR 024)
+
+Outcome texts may state only what the connected system confirmed. `received` is sent right after the customer confirms and must not claim success.
+
+- **actions.proposalIntro** — Starts the summary of the action the customer is asked to confirm.
+  > Илтимос, текширинг:
+- **actions.confirmPrompt** — Tells how to confirm or cancel; {yes}/{no} are the first phrases below.
+  > Тасдиқлаш учун «{yes}», бекор қилиш учун «{no}» деб ёзинг.
+- **actions.received** — Right after confirmation, before the result is known; must not claim success.
+  > Раҳмат, сўровингизни юборяпман. Натижасини алоҳида хабар қиламан.
+- **actions.declined** — The customer cancelled; nothing was sent.
+  > Хўп, сўров юборилмади.
+- **actions.succeeded** — The connected system confirmed the record.
+  > Сўровингиз қабул қилинди ва тизимда қайд этилди.
+- **actions.succeededWithReference** — Same, with the record reference when the pack allows showing it.
+  > Сўровингиз қабул қилинди ва тизимда қайд этилди. Рақами: {reference}.
+- **actions.askName** — Asks for the name an action needs.
+  > Илтимос, исмингизни ёзинг.
+- **actions.expired** — The confirmation came too late or for changed details; nothing was sent.
+  > Бу сўровнинг муддати ўтган, ҳеч нарса юборилмади. Давом эттириш учун сўровни қайтадан ёзинг.
+- confirm phrases (whole message): ҳа, тасдиқлайман, ха
+- decline phrases (whole message): йўқ, бекор қилиш
+- phrases a model draft may never use (action claims): рўйхатдан ўтдингиз, ариза яратилди, сўровингиз қайд этилди, брон тасдиқланди
 
 ### Labels and availability words
 
@@ -295,6 +351,34 @@ None of these may promise that a person will reply or has been notified: the sys
   > Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.
 - **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
   > По этому вопросу у меня нет проверенной информации. Ваш вопрос сохранён для нашей команды.
+- **ACTION_FAILED** — A confirmed business action could not be completed; must not say it succeeded or promise a reply.
+  > К сожалению, сейчас не удалось выполнить ваш запрос. Он сохранён для нашей команды.
+- **ACTION_OUTCOME_UNKNOWN** — A confirmed business action may or may not have gone through; must not claim either.
+  > Не удалось подтвердить, прошёл ли ваш запрос. Он сохранён, чтобы наша команда проверила.
+
+### Business-action wording (rendered by code, ADR 024)
+
+Outcome texts may state only what the connected system confirmed. `received` is sent right after the customer confirms and must not claim success.
+
+- **actions.proposalIntro** — Starts the summary of the action the customer is asked to confirm.
+  > Пожалуйста, проверьте:
+- **actions.confirmPrompt** — Tells how to confirm or cancel; {yes}/{no} are the first phrases below.
+  > Чтобы подтвердить, напишите «{yes}», чтобы отменить — «{no}».
+- **actions.received** — Right after confirmation, before the result is known; must not claim success.
+  > Спасибо, отправляю ваш запрос. О результате сообщу отдельным сообщением.
+- **actions.declined** — The customer cancelled; nothing was sent.
+  > Хорошо, запрос не отправлен.
+- **actions.succeeded** — The connected system confirmed the record.
+  > Ваш запрос принят и зарегистрирован в системе.
+- **actions.succeededWithReference** — Same, with the record reference when the pack allows showing it.
+  > Ваш запрос принят и зарегистрирован в системе. Номер: {reference}.
+- **actions.askName** — Asks for the name an action needs.
+  > Пожалуйста, напишите ваше имя.
+- **actions.expired** — The confirmation came too late or for changed details; nothing was sent.
+  > Срок этого запроса истёк, ничего не отправлено. Чтобы продолжить, напишите запрос ещё раз.
+- confirm phrases (whole message): да, подтверждаю, ок
+- decline phrases (whole message): нет, отмена, отменить
+- phrases a model draft may never use (action claims): заявка создана, заявка оформлена, вы зарегистрированы, запрос зарегистрирован, бронь подтверждена
 
 ### Labels and availability words
 
@@ -415,6 +499,34 @@ None of these may promise that a person will reply or has been notified: the sys
   > Our team confirms amounts like this personally. Your request has been saved for them.
 - **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
   > I do not have verified information on this. Your question has been saved for our team.
+- **ACTION_FAILED** — A confirmed business action could not be completed; must not say it succeeded or promise a reply.
+  > Sorry, I could not complete your request right now. It has been recorded for our team.
+- **ACTION_OUTCOME_UNKNOWN** — A confirmed business action may or may not have gone through; must not claim either.
+  > I could not confirm whether your request went through. It has been recorded for our team to check.
+
+### Business-action wording (rendered by code, ADR 024)
+
+Outcome texts may state only what the connected system confirmed. `received` is sent right after the customer confirms and must not claim success.
+
+- **actions.proposalIntro** — Starts the summary of the action the customer is asked to confirm.
+  > Please check:
+- **actions.confirmPrompt** — Tells how to confirm or cancel; {yes}/{no} are the first phrases below.
+  > Reply “{yes}” to confirm or “{no}” to cancel.
+- **actions.received** — Right after confirmation, before the result is known; must not claim success.
+  > Thank you, I am sending your request now. I will tell you the result in a separate message.
+- **actions.declined** — The customer cancelled; nothing was sent.
+  > All right, the request was not sent.
+- **actions.succeeded** — The connected system confirmed the record.
+  > Your request has been received and recorded in our system.
+- **actions.succeededWithReference** — Same, with the record reference when the pack allows showing it.
+  > Your request has been received and recorded in our system. Reference: {reference}.
+- **actions.askName** — Asks for the name an action needs.
+  > Please write your name.
+- **actions.expired** — The confirmation came too late or for changed details; nothing was sent.
+  > This request has expired and nothing was sent. To continue, please write your request again.
+- confirm phrases (whole message): yes, confirm, ok
+- decline phrases (whole message): no, cancel
+- phrases a model draft may never use (action claims): has been registered, successfully registered, request has been recorded, booking is confirmed, lead has been created
 
 ### Labels and availability words
 
