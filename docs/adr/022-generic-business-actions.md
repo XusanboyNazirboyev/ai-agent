@@ -1,6 +1,6 @@
 # ADR 022 — Generic, customer-confirmed business actions
 
-Status: **Proposed — for owner review. Not implemented.** Date: 2026-10-24. Phase 7.0 (`docs/PHASE7_PLAN.md`).
+Status: **Proposed — for owner review.** The execution foundation (§8 contract, idempotent operation record) is implemented by ADR 023; the action lifecycle is not. Date: 2026-10-24. Phase 7.0 (`docs/PHASE7_PLAN.md`).
 Builds on: D1, D4, D5, D8, D9, D12, D16; ADR 013 (typed safety outcomes), ADR 014 (budget reservations), ADR 018 (handover, leads), ADR 019, ADR 020/021.
 
 ## 1. Context (verified on `phase6a/web-operator-inbox` @ `418872b`)
@@ -64,7 +64,7 @@ actions?: Array<{
 ```
 Validation at pack load: every `from.slot` exists; every operation is one the pack's connector type can advertise; required fields have a slot question or a contact source; placeholders exist. The tools list gains no write tools; the model only sees that an action "can be proposed" via a generic `propose_action(actionKey)` signal in its structured extraction output.
 
-## 8. Connector contract additions
+## 8. Connector contract additions (implemented — see ADR 023 for the exact shape)
 - Every write method receives a `WriteContext`: `{ idempotencyKey: string; tenantId; requestedAt }`. The key is stable per execution (= execution id) for all attempts.
 - `capabilities.writeIdempotency: 'native' | 'lookup' | 'none'`, declared per connector instance and verified by conformance tests:
   - `native`: the remote API deduplicates by a key we send (header or field). Retrying with the same key is safe.
@@ -84,7 +84,7 @@ What we **cannot** guarantee: exactly-once on systems without `native`/`lookup`;
 4. Accepted only for the conversation's single current `PROPOSED` proposal, before `expiresAt`, via (a) the channel callback whose token matches proposal id + digest, or (b) a customer message that is, after normalization, exactly one of the locale pack's confirmation phrases (same mechanism as `/stop`). A model-classified "yes" alone never confirms. Any new or changed field value → new proposal (old one `SUPERSEDED`), so details cannot change between confirmation and execution. Decline phrases/button → `DECLINED`.
 5. In the confirming turn's commit transaction: proposal `CONFIRMED`, one `action_executions` row (unique on `proposal_id`; `idempotency_key = execution id`), audit `action.confirmed`, outbox event `action.execute` (idempotency key `action.execute:<execution id>`). Redelivered webhooks or callbacks hit the unique constraints and change nothing.
 
-**Execution** (`action_executions`): `QUEUED → RUNNING → SUCCEEDED | NEEDS_CORRECTION | FAILED | RETRY_WAIT | UNKNOWN → (RESOLVED_SUCCEEDED | RESOLVED_FAILED by an operator)`; `SIMULATED` in SHADOW.
+**Execution** (implemented as `connector_operations`, ADR 023; an action execution is an operation row referenced by the confirmed proposal): `QUEUED → RUNNING → SUCCEEDED | NEEDS_CORRECTION | FAILED | RETRY_WAIT | UNKNOWN → (RESOLVED_SUCCEEDED | RESOLVED_FAILED by an operator)`; `SIMULATED` in SHADOW.
 6. The worker claims the row with a lease (pattern of the agent-turn claim), re-checks enablement, mode, capability and `allowWrites` at execution time (a tenant may have disabled the action since), loads the payload **from the proposal row** (never re-extracts), and calls the connector with the `WriteContext`.
 7. Outcome mapping:
 | Connector result | State | Customer message (code-rendered) | Next |
@@ -113,9 +113,9 @@ Tenant active; channel account mode allows sending (LIVE) or the action runs as 
 - Inbox: executions are shown on the conversation timeline; `UNKNOWN` items have "mark succeeded (external id)" / "mark failed" operator commands (audited, idempotent, role-checked).
 
 ## 13. Compatibility and migration
-- Additive migration: `action_proposals`, `action_executions` (tenant FKs, unique `(tenant_id, proposal_id)`, unique `idempotency_key`), new handover reasons `ACTION_FAILED`, `ACTION_OUTCOME_UNKNOWN`, audit actions.
+- Additive migration: `action_proposals` (tenant FKs) referencing `connector_operations` (already exists, ADR 023, unique per subject and idempotency key), new handover reasons `ACTION_FAILED`, `ACTION_OUTCOME_UNKNOWN`, audit actions.
 - `DomainPackSchema.actions` is optional; existing packs stay valid; no action is enabled until a tenant enables it.
-- Connector contract: `WriteContext` parameter added to write methods (existing callers updated: lead sync passes `lead:<lead id>` as idempotency key, which fixes the duplicate-lead defect for `native`/`lookup` connectors); `writeIdempotency` capability defaults to `none`; conformance suite extended.
+- Connector contract: done in ADR 023 (`WriteContext`, `writeIdempotency`, `findLeadByIdempotencyKey`, `executed` classification, conformance checks; lead sync uses `createLead:lead:<lead id>` and the operation store).
 - Existing handover lead job: unchanged in behaviour, gains the idempotency key; whether it later becomes an action of kind "system, no confirmation" is owner decision D-6.
 - Telegram adapter: customer-chat `callback_query` handling (today only the operator group uses callbacks). The test registration script (`scripts/telegram-live.ts`) already subscribes to `callback_query`; any production webhook registration must too.
 
