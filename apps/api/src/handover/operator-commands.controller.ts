@@ -14,11 +14,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { OperatorRequestGuard } from './operator-request-guard.js';
 import { HandoverService, type CommandResult } from './handover.service.js';
-import {
-  OperatorTokenGuard,
-  type AuthenticatedOperator,
-} from './operator-auth.js';
+import { type AuthenticatedOperator } from './operator-auth.js';
 
 export interface CommandResponse {
   status: 'ok' | 'duplicate';
@@ -56,7 +54,7 @@ function error(
  * the web inbox are Phase 6A.
  */
 @Controller('api/v1/handovers')
-@UseGuards(OperatorTokenGuard)
+@UseGuards(OperatorRequestGuard)
 export class OperatorCommandsController {
   constructor(private readonly handovers: HandoverService) {}
 

@@ -18,6 +18,21 @@ const environmentSchema = postgresEnvironmentSchema
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
     /** Interface the API listens on. Deployment default stays 0.0.0.0. */
     API_HOST: z.string().min(1).default('0.0.0.0'),
+    /** Browser origins allowed to make state-changing inbox requests. */
+    WEB_ORIGINS: z
+      .string()
+      .default('http://localhost:3000')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+      ),
+    /** `Secure` flag of the session cookie; off only for plain-http local development. */
+    SESSION_COOKIE_SECURE: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     REDIS_URL: z.url().default('redis://localhost:6379'),
     TELEGRAM_CHANNEL_ACCOUNT_ID: z.uuid().optional(),
@@ -406,6 +421,16 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['CONNECTOR_OUTBOUND_POLICY'],
         message: 'CONNECTOR_OUTBOUND_POLICY must be strict in production',
+      });
+    }
+    if (
+      environment.NODE_ENV === 'production' &&
+      !environment.SESSION_COOKIE_SECURE
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['SESSION_COOKIE_SECURE'],
+        message: 'SESSION_COOKIE_SECURE=false is refused in production',
       });
     }
     const configured = [
