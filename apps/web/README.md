@@ -7,3 +7,5 @@ Next.js (App Router), Tailwind, TanStack Query, ICU messages (`intl-messageforma
 - `pnpm test:e2e`: Playwright (Chromium) against the built API and web app and the isolated `agentcore_test` database. Needs `pnpm build`, a running PostgreSQL (pgvector) and Redis, and `pnpm --filter @agentcore/web exec playwright install chromium` once. It reads only `TEST_POSTGRES_*` and `REDIS_URL` and starts the API with an empty env file, so no Telegram or LLM secret can reach it.
 
 Strings live in `src/i18n/<locale>.json`; add a key to all three files. UI translations (ru, uz-Latn) are not native-reviewed.
+
+Serving: `node server.mjs` (scripts `dev` and `start`) runs Next behind a thin server that owns the client-address trust boundary (ADR 021). Production needs `WEB_PROXY_SECRET` (same value as the API) and `TRUSTED_PROXY_HOPS` = number of reverse proxies in front that append `X-Forwarded-For` (0 if none). `next start` alone would lose per-client login limits. The CSP is nonce-based and set per request in `src/proxy.ts`.

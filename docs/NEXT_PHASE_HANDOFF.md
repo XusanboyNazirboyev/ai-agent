@@ -13,5 +13,5 @@ Source: roadmap "Phase 6A", `docs/spec/10-frontend.md` §12A.4, D19, D20, D22. M
 - **Sequence:** ADR for auth/session + SSE contract → read endpoints (list/view) with tenant tests → `InboxNotifier` + SSE with resume → web app shell + i18n parity check → actions wired to existing commands → Playwright e2e (flow + isolation) → CI gate.
 - **Risks:** `apps/web` is only a placeholder; no Operator rows or credentials exist; tenant isolation must be tested at the HTTP layer.
 
-## Next after 6A is merged: Phase 7 (evaluation, observability, universality proof)
+## Next after 6A is merged: Phase 7 — see the proposal in [PHASE7_PLAN.md](PHASE7_PLAN.md) (evaluation, observability, universality proof)
 100+ eval cases per pack/locale, CI gate, dashboards, cost tracking, second pack with zero `src/core/**` changes. Do not start before 6A acceptance (AGENTS rule 10).
