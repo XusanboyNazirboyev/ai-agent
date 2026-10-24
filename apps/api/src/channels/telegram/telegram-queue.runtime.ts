@@ -22,7 +22,8 @@ type QueuePayload = {
 };
 
 const queueName = 'agentcore-telegram';
-const maxAttempts = 5;
+/** Publish attempts after which a FAILED outbox row is no longer re-queued. */
+export const OUTBOX_MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
@@ -45,7 +46,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
     this.queue = new Queue<QueuePayload>(queueName, {
       connection: this.connection,
       defaultJobOptions: {
-        attempts: maxAttempts,
+        attempts: OUTBOX_MAX_ATTEMPTS,
         backoff: { type: 'agentcore-exponential', delay: 1_000 },
         removeOnComplete: true,
         removeOnFail: false,
@@ -80,7 +81,9 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
           name: error.name,
         }),
       );
-      if ((job.attemptsMade ?? 0) >= (job.opts.attempts ?? maxAttempts)) {
+      if (
+        (job.attemptsMade ?? 0) >= (job.opts.attempts ?? OUTBOX_MAX_ATTEMPTS)
+      ) {
         void this.processor.markExhausted(job.data).catch(() => {
           this.logger.error('Failed to persist exhausted Telegram job state');
         });
@@ -117,7 +120,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
       await this.prisma.outboxEvent.updateMany({
         where: {
           status: 'FAILED',
-          attempts: { lt: maxAttempts },
+          attempts: { lt: OUTBOX_MAX_ATTEMPTS },
           availableAt: { lte: new Date() },
         },
         data: { status: 'PENDING' },

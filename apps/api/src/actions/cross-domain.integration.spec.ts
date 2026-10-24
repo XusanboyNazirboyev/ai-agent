@@ -21,6 +21,7 @@ import {
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { retireOutbox } from '../channels/telegram/testing/outbox.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { UZ_LATN } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
@@ -41,7 +42,11 @@ const db = new PrismaClient({
   adapter: createPostgresAdapter(process.env, 'TEST_'),
 });
 const prisma = db as unknown as PrismaService;
-afterAll(async () => db.$disconnect());
+const createdTenants: string[] = [];
+afterAll(async () => {
+  await retireOutbox(db, createdTenants);
+  await db.$disconnect();
+});
 
 const settings: Record<string, unknown> = {
   NODE_ENV: 'test',
@@ -186,6 +191,7 @@ async function tenant(
       } as never,
     },
   });
+  createdTenants.push(created.id);
   await db.tenantConnector.create({
     data: {
       tenantId: created.id,
