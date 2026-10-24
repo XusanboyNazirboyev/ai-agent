@@ -29,6 +29,7 @@ import {
   type ScriptRequest,
   type ScriptStep,
 } from '../../core/llm/scripted-llm-provider.js';
+import { retireForeignBacklog } from './testing/outbox.js';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { UZ_LATN } from '../../locales/locale-packs.js';
 import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
@@ -925,6 +926,7 @@ describe('BullMQ end to end (shadow mode, mock model)', () => {
     const chatId = 900_000 + Math.floor(Math.random() * 99_000);
     f.sender.sendMessage.mockResolvedValue({ messageId: '1' });
     await receive(f, 'IELTS kursi kerak', chatId);
+    await retireForeignBacklog(prisma, [f.tenantId]);
     const runtime = new TelegramQueueRuntime(
       config({ REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379' }),
       limited as unknown as PrismaService,

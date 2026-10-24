@@ -741,7 +741,7 @@ describe('execution', () => {
       expiresAfterMinutes: 30,
     });
     const later = new Date(Date.now() + 31 * 60_000);
-    await actions.scanDue(later);
+    await actions.scanDue(later, 100_000);
     expect(
       await db.actionProposal.findFirstOrThrow({
         where: { tenantId: w.tenantId },
@@ -754,7 +754,7 @@ describe('execution', () => {
     const op = await db.connectorOperation.findFirstOrThrow({
       where: { tenantId: v.tenantId },
     });
-    await actions.scanDue(new Date(op.nextAttemptAt!.getTime() + 1));
+    await actions.scanDue(new Date(op.nextAttemptAt!.getTime() + 1), 100_000);
     expect(
       await db.outboxEvent.count({
         where: { tenantId: v.tenantId, type: 'action.execute' },
@@ -768,7 +768,10 @@ describe('execution', () => {
     const zid = await proposeAndConfirm(service(dead), z);
     void service(dead).execute(z.tenantId, zid);
     await new Promise((done) => setTimeout(done, 100));
-    await actions.scanDue(new Date(Date.now() + ACTION_LEASE_MS + 1_000));
+    await actions.scanDue(
+      new Date(Date.now() + ACTION_LEASE_MS + 1_000),
+      100_000,
+    );
     expect(
       await db.outboxEvent.count({
         where: { tenantId: z.tenantId, type: 'action.execute' },

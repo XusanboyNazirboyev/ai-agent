@@ -347,9 +347,11 @@ describe('SLA', () => {
       event(unreached, 'handover.notify', { handoverId: unreached.handoverId }),
     );
     const sla = new HandoverSlaService(prisma);
-    const first = await sla.scan(new Date());
+    // Explicit batch: overdue handovers of earlier runs in the shared test
+    // database must not push this test's own out of the first 50.
+    const first = await sla.scan(new Date(), 100_000);
     expect(first).toBeGreaterThanOrEqual(2);
-    expect(await sla.scan(new Date())).toBe(0); // idempotent: compare-and-set
+    expect(await sla.scan(new Date(), 100_000)).toBe(0); // idempotent: compare-and-set
     for (const w of [reached, unreached]) {
       const queued = await db.outboxEvent.findMany({
         where: { tenantId: w.tenantId, type: 'handover.sla' },

@@ -35,3 +35,29 @@ export async function markPublished(
     data: { status: 'SENT' },
   });
 }
+
+/**
+ * For tests that run the real relay (TelegramQueueRuntime): the relay works
+ * through due rows of every tenant, oldest first, 25 per poll. Rows left by
+ * earlier runs in the shared test database would delay the test's own event
+ * past its deadline, so rows of all OTHER tenants are retired first (status
+ * update only, nothing deleted; refuses any database but agentcore_test).
+ */
+export async function retireForeignBacklog(
+  db: PrismaClient,
+  keepTenantIds: string[],
+): Promise<number> {
+  const [{ name }] = await db.$queryRaw<
+    { name: string }[]
+  >`select current_database() as name`;
+  if (name !== 'agentcore_test')
+    throw new Error('retireForeignBacklog only runs on agentcore_test');
+  const { count } = await db.outboxEvent.updateMany({
+    where: {
+      tenantId: { notIn: keepTenantIds },
+      status: { in: ['PENDING', 'PROCESSING', 'FAILED'] },
+    },
+    data: { status: 'FAILED', attempts: OUTBOX_MAX_ATTEMPTS },
+  });
+  return count;
+}
