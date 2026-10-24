@@ -28,6 +28,11 @@ const MAX_STREAMS_PER_OPERATOR = 5;
 /** Opens streams per operator; a plain counter, one process (ADR 020). */
 const open = new Map<string, number>();
 
+/** Open streams of one operator in this process (tests, metrics). */
+export function openStreams(tenantId: string, operatorId: string): number {
+  return open.get(`${tenantId}:${operatorId}`) ?? 0;
+}
+
 @Controller('api/v1/events')
 @UseGuards(SessionGuard)
 export class EventsController {
@@ -59,6 +64,24 @@ export class EventsController {
       return;
     }
     open.set(key, (open.get(key) ?? 0) + 1);
+    // Cleanup is registered before any await: a client that disconnects while
+    // the stream is being set up must still release its slot, its bus
+    // subscription and its timers (they are created only if still open).
+    let closed = false;
+    const subscription: { off?: () => void } = {};
+    const timers: ReturnType<typeof setInterval>[] = [];
+    let released = false;
+    const release = (): void => {
+      closed = true;
+      if (released) return;
+      released = true;
+      subscription.off?.();
+      for (const timer of timers) clearInterval(timer);
+      const left = (open.get(key) ?? 1) - 1;
+      if (left <= 0) open.delete(key);
+      else open.set(key, left);
+    };
+    response.on('close', release);
     response.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
       'cache-control': 'no-store, no-transform',
@@ -67,7 +90,7 @@ export class EventsController {
     });
     const resume = parseEventId(header) ?? parseEventId(query);
     let cursor = resume ?? (await this.events.latestId(principal.tenantId));
-    let closed = false;
+    if (closed) return;
     let busy = false;
     const send = (frame: string): void => {
       if (!closed) response.write(frame);
@@ -102,27 +125,24 @@ export class EventsController {
       else
         void poll().then(() => (again ? ((again = false), poll()) : undefined));
     };
-    const unsubscribe = await this.bus.subscribe(principal.tenantId, wake);
-    const timer = setInterval(() => void poll(), FALLBACK_POLL_MS);
-    const heartbeat = setInterval(() => send(': keep-alive\n\n'), HEARTBEAT_MS);
+    const off = await this.bus.subscribe(principal.tenantId, wake);
+    if (closed) {
+      off();
+      return;
+    }
+    subscription.off = off;
+    timers.push(setInterval(() => void poll(), FALLBACK_POLL_MS));
+    timers.push(setInterval(() => send(': keep-alive\n\n'), HEARTBEAT_MS));
     // Recycle the connection (with jitter) so no proxy holds it forever.
     const maxMs = this.config.get('INBOX_STREAM_MAX_MS', { infer: true });
-    const recycle = setTimeout(
-      () => {
-        if (!closed) response.end();
-      },
-      maxMs + Math.floor(Math.random() * Math.min(maxMs / 10, 30_000)),
+    timers.push(
+      setTimeout(
+        () => {
+          if (!closed) response.end();
+        },
+        maxMs + Math.floor(Math.random() * Math.min(maxMs / 10, 30_000)),
+      ),
     );
-    response.on('close', () => {
-      clearTimeout(recycle);
-      closed = true;
-      unsubscribe();
-      clearInterval(timer);
-      clearInterval(heartbeat);
-      const left = (open.get(key) ?? 1) - 1;
-      if (left <= 0) open.delete(key);
-      else open.set(key, left);
-    });
     // Catch up from the cursor now that the bus is listening.
     await poll();
   }

@@ -60,6 +60,11 @@ export class InboxEventBus implements OnModuleDestroy {
     };
   }
 
+  /** Listeners of one tenant (tests, metrics). */
+  listenerCount(tenantId: string): number {
+    return this.listeners.get(tenantId)?.size ?? 0;
+  }
+
   /** Test hook: one poll now. */
   async tick(): Promise<void> {
     if (this.busy) return;
