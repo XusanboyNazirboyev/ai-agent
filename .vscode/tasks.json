@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "API: dev server (127.0.0.1:4000)",
+      "type": "shell",
+      "command": "API_HOST=127.0.0.1 pnpm start:dev",
+      "options": { "cwd": "${workspaceFolder}/apps/api" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "group": "agentcore-dev"
+      }
+    },
+    {
+      "label": "Web: dev server (127.0.0.1:3000)",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "group": "agentcore-dev"
+      }
+    },
+    {
+      "label": "Dev: API + Web",
+      "dependsOn": [
+        "API: dev server (127.0.0.1:4000)",
+        "Web: dev server (127.0.0.1:3000)"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}
