@@ -9,8 +9,12 @@ import { timingSafeEqual } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { AppEnvironment } from '../../config/environment.js';
+import { isOptOutMessage } from '../../core/followup/optout.js';
+import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import type { NormalizedTelegramText } from './telegram-normalizer.js';
+
+const OPT_OUT_PACKS = INITIAL_LOCALE_PACKS;
 
 export type WebhookAcceptance = 'accepted' | 'duplicate' | 'unsupported';
 
@@ -179,6 +183,32 @@ export class TelegramWebhookService {
           },
           select: { id: true },
         });
+
+        // A /stop is recorded at intake, whoever owns the conversation: it
+        // must still stop reminders after an operator hands the chat back.
+        if (isOptOutMessage(update.text, OPT_OUT_PACKS)) {
+          const changed = await tx.contact.updateMany({
+            where: {
+              tenantId: channel.tenantId,
+              id: contact.id,
+              marketingOptOut: false,
+            },
+            data: { marketingOptOut: true },
+          });
+          if (changed.count === 1)
+            await tx.auditEvent.create({
+              data: {
+                tenantId: channel.tenantId,
+                actorType: 'CUSTOMER',
+                actorId: contact.id,
+                action: 'contact.opt_out',
+                entityType: 'contact',
+                entityId: contact.id,
+                safeInputSummary: { via: 'intake' },
+                idempotencyKey: `opt-out-intake:${inboundEvent.id}`,
+              },
+            });
+        }
 
         // A customer writing to a closed conversation reopens it for the bot
         // (state machine: CLOSED + REOPEN -> BOT_ACTIVE).

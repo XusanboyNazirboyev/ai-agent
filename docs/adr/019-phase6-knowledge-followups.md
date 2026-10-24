@@ -1,0 +1,26 @@
+# ADR 019: Phase 6 knowledge (RAG), follow-ups, morning digest
+
+- **Status:** Accepted (branch `phase6/knowledge-followups`, not merged: voice and images are not done)
+- **Date:** 2026-10-24
+
+## Decisions
+- **Knowledge is text only (D1, D2).** `knowledge_documents` / `knowledge_chunks` (additive migration `20261029090000`, pgvector extension required: CI and docker-compose use the `pgvector/pgvector` image; the migrating role must be able to `CREATE EXTENSION vector`). The vector column is untyped; each chunk records `embedding_model` and `embedding_dims`, and every search filters tenant, `ACTIVE` status, model and length, so another tenant's text or another model's vectors are never compared. Ingestion embeds before opening the write transaction, replaces a source's chunks atomically and is a no-op for unchanged text.
+- **Embeddings are metered.** `MeteredLlm.embed` reuses the turn budget, the durable ledger and the unknown-usage rules (purpose `embed`); the embedding model must be priced or the call is refused. A budget stop propagates; any other failure is reported as unavailable, never as "no knowledge". `OpenAiCompatibleEmbeddingProvider` follows the documented `{model, input}` shape (Gemini: https://ai.google.dev/gemini-api/docs/openai). The hashing embedder is test-only and refused in production.
+- **Data protection.** The embedder receives customer questions, so retrieval is enabled for a conversation only if the embedder is in `LLM_TRUSTED_PROVIDERS`, the account is a test account, or `LLM_ALLOW_REAL_CUSTOMER_DATA=true`. Off by default (`KNOWLEDGE_EMBEDDINGS=off`).
+- **Passages are facts.** `knowledge_search` returns passages as `{{Fn}}` facts with provenance (document, tool, tenant, conversation); code renders the passage text verbatim, so the model cannot paraphrase a number into an answer (the guardrail still blocks typed numbers and currency). Source and update date live in the turn record; for a `regulated` document the rendering also shows source and date to the customer, and the fact expires at `updatedAt + regulatedMaxAgeDays`.
+- **LEGAL_UNVERIFIED.** A new `regulated_info` intent is answered only from a regulated passage whose date is inside the pack's limit and whose score is above the pack's `knowledge.minScore`; otherwise the turn hands over before any draft is written. The score threshold (default 0.5) and age limit (180 days) are untuned defaults.
+- **Follow-ups** (Telegram): off unless `FOLLOWUP_ENABLED=true`. A pure policy (`core/followup/policy.ts`) requires: bot owns the conversation, the bot's delivered message is the newest, silence long enough, something of value shown or a WARM/HOT lead, no opt-out/revoked consent, limit not reached, outside the tenant's quiet hours (local time; deferred, not skipped). The unique `(conversation, ordinal)` row makes scans idempotent. Text is a fixed template that tells how to stop. `/stop` (and equivalents, whole message only) is a Tier-0 opt-out before any model call; a Telegram 403 marks the contact opted out.
+- **Morning digest**: one outbox event per tenant per local day (from `DIGEST_HOUR`), built at delivery time, posted to the operator group.
+- **Background scans** moved into `BackgroundModule` (one interval, overlap guard). This also fixes a Phase 5 gap: failed CRM lead syncs were never rescheduled because no scan was registered.
+
+## Not done
+- **Speech-to-text** is blocked by Open Question 8 (provider and verified Uzbek quality are an owner decision); no voice plumbing was added, so voice messages are still ignored. **Image understanding** (optional) not started.
+- Cross-lingual quality is checked only by a small opt-in live smoke test ([KNOWLEDGE_EVAL.md](../KNOWLEDGE_EVAL.md)); CI cannot test it. No admin UI or upload API for knowledge (script only).
+
+## Pre-merge audit (defects fixed)
+- `/stop` is now recorded at intake, before the conversation state is touched, so an opt-out sent while an operator owns the conversation is not lost; audit row only when the flag actually changes.
+- Per-tenant rolling-24h follow-up cap (`FOLLOWUP_MAX_PER_TENANT_PER_DAY`, default 200).
+- Digest is behind `DIGEST_ENABLED` (default false).
+- Changing the embedding model: ingest re-embeds (no UNCHANGED shortcut across models) and search returns `EMBEDDING_MODEL_MISMATCH` instead of an empty answer when only other-model vectors exist.
+- Voice: port and policy only (`docs/VOICE_READINESS.md`); no provider chosen.
+- Prerequisite for local/integration tests: PostgreSQL with the pgvector extension available (`pgvector/pgvector:pg16` image, or the extension installed and the role allowed to `CREATE EXTENSION vector`).

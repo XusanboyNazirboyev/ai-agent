@@ -36,6 +36,7 @@ export const HANDOVER_REASONS = [
   'LOW_LANG_CONFIDENCE',
   'STUCK',
   'HIGH_VALUE',
+  'LEGAL_UNVERIFIED',
 ] as const;
 export type HandoverReason = (typeof HANDOVER_REASONS)[number];
 
@@ -62,6 +63,13 @@ export interface LocaleTemplates {
    * per conversation; never contains digits or promises.
    */
   readonly phoneRequest: string;
+  /**
+   * One gentle message to a customer who went silent after the bot spoke.
+   * No commercial facts, no promises, and it tells how to stop messages.
+   */
+  readonly followUp: string;
+  /** Confirms that no more reminders will be sent. */
+  readonly optOutConfirmation: string;
   /** Truthful answer when the customer asks whether they talk to a bot. */
   readonly aiDisclosure: string;
   /**
@@ -104,6 +112,12 @@ export interface LocalePack {
    * case-insensitively after apostrophe unification.
    */
   readonly languageRequestPhrases: readonly string[];
+  /**
+   * Whole-message phrases (after normalization) with which a customer stops
+   * reminders, in any supported language. Deliberately short and exact: a
+   * sentence containing "stop" is not an opt-out.
+   */
+  readonly optOutPhrases: readonly string[];
 }
 
 export class LocaleRegistry {

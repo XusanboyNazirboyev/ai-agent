@@ -21,6 +21,8 @@
 **Phase 6: Knowledge, follow-ups, media.** Knowledge ingestion + multilingual pgvector RAG with source/date; cross-lingual retrieval tests; follow-up scheduler (Telegram); speech-to-text (per Open Question 8); image understanding (optional); after-hours digest.
 *Done when*: knowledge answers carry internal source/date; follow-ups honor opt-out; voice yields correct slots in launch languages.
 
+**Owner decision 2026-10-24 (Phase 6 voice deferral):** the criterion "voice yields correct slots in launch languages" is **UNMET and explicitly deferred** to a separate follow-up task, because no STT provider is selected (Open Question 8) and Uzbek speech quality is unmeasured. It is not completed. Voice messages are currently unsupported. Live Telegram integration is unverified. The follow-up must be completed before any claim of voice support ([VOICE_READINESS.md](../VOICE_READINESS.md)). Image understanding remains optional.
+
 **Phase 6A: Web Operator Inbox (apps/web).** Auth + RBAC + tenant isolation, SSE event stream with resume, conversation list/view/actions per Section 12A.4, `InboxNotifier`, UI i18n with CI key-parity check (uz-Latn, ru, en pending confirmation), responsive layout, Playwright e2e for the core flow and tenant isolation. **Must be complete before a pilot with more than ~3 operators.**
 *Done when*: an operator completes the full flow (see handover → take over → reply → return to bot) in the browser; two browsers stay in sync in real time; operator of tenant A cannot access tenant B (tested); no hardcoded UI strings; e2e green in CI.
 

@@ -203,6 +203,48 @@ const environmentSchema = postgresEnvironmentSchema
       .min(5)
       .max(3_600)
       .default(30),
+    /**
+     * Embeddings for knowledge retrieval. Off until configured. The embedder
+     * receives customer questions, so an untrusted provider is limited like
+     * the chat providers (test accounts / explicit owner consent).
+     */
+    KNOWLEDGE_EMBEDDINGS: z
+      .enum(['off', 'gemini', 'openai-compatible', 'hashing'])
+      .default('off'),
+    KNOWLEDGE_EMBEDDING_MODEL: z.string().min(1).max(100).optional(),
+    KNOWLEDGE_EMBEDDING_BASE_URL: z.string().url().optional(),
+    /** Local hour from which the daily operator digest is posted. */
+    DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(9),
+    /** Follow-ups to silent customers are off until the owner enables them. */
+    FOLLOWUP_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    FOLLOWUP_AFTER_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+    FOLLOWUP_MAX_PER_CONVERSATION: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(3)
+      .default(1),
+    FOLLOWUP_MAX_PER_TENANT_PER_DAY: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .default(200),
+    /** The daily operator digest is off until the owner enables it. */
+    DIGEST_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    FOLLOWUP_QUIET_START_HOUR: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(23)
+      .default(21),
+    FOLLOWUP_QUIET_END_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Earlier no-progress turns before the STUCK handover (spec §7.4). */
     STUCK_REPEAT_LIMIT: z.coerce.number().int().min(1).max(5).default(2),
   })

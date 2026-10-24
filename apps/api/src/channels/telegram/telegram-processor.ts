@@ -230,6 +230,35 @@ export class TelegramProcessor {
     }
   }
 
+  private async markBlocked(
+    tenantId: string,
+    messageId: string,
+  ): Promise<void> {
+    const row = await this.prisma.message.findFirst({
+      where: { id: messageId, tenantId },
+      select: { conversation: { select: { contactId: true } } },
+    });
+    const contactId = row?.conversation.contactId;
+    if (!contactId) return;
+    await this.prisma.contact.updateMany({
+      where: { tenantId, id: contactId },
+      data: { marketingOptOut: true },
+    });
+    await this.prisma.auditEvent
+      .create({
+        data: {
+          tenantId,
+          actorType: 'SYSTEM',
+          action: 'telegram.bot_blocked',
+          entityType: 'contact',
+          entityId: contactId,
+          safeInputSummary: { messageId },
+          idempotencyKey: `bot-blocked:${messageId}`,
+        },
+      })
+      .catch(() => undefined); // already recorded for this message
+  }
+
   private async processSend(event: TelegramQueueEvent): Promise<void> {
     const messageId = jsonString(event.payload, 'messageId');
     if (!messageId)
@@ -289,6 +318,10 @@ export class TelegramProcessor {
         return;
       }
       if (error instanceof TelegramApiError) {
+        // 403: the customer blocked the bot or deleted the chat. Never message
+        // them again (reminders stop), and keep the fact in the audit log.
+        if (error.errorCode === 403)
+          await this.markBlocked(event.tenantId, message.id);
         const retryable = error.errorCode === 429 || error.errorCode >= 500;
         await this.prisma.message.updateMany({
           where: { id: message.id, tenantId: event.tenantId },

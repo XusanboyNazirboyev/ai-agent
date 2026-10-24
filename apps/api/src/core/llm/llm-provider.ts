@@ -9,7 +9,7 @@ import type { z } from 'zod';
 export type LlmTier = 'FAST' | 'STRONG';
 
 /** Why a model call was made; recorded for cost attribution. */
-export type LlmPurpose = 'extract' | 'respond' | 'evaluate';
+export type LlmPurpose = 'extract' | 'respond' | 'evaluate' | 'embed';
 
 export type LlmStopReason =
   'end' | 'tool_calls' | 'max_tokens' | 'refusal' | 'other';

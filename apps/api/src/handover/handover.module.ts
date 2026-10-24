@@ -4,7 +4,6 @@ import {
   HandoverNotificationService,
   OPERATOR_NOTIFIER,
 } from './handover-notification.service.js';
-import { HandoverRuntime } from './handover-runtime.js';
 import { HandoverSlaService } from './handover-sla.service.js';
 import { HandoverService } from './handover.service.js';
 import { OperatorCommandsController } from './operator-commands.controller.js';
@@ -21,7 +20,6 @@ import { TelegramGroupNotifier } from './telegram-group-notifier.js';
     HandoverService,
     HandoverSlaService,
     HandoverNotificationService,
-    HandoverRuntime,
     OperatorUpdateHandler,
     TelegramBotApi,
     TelegramGroupNotifier,
@@ -31,7 +29,6 @@ import { TelegramGroupNotifier } from './telegram-group-notifier.js';
     HandoverService,
     HandoverSlaService,
     HandoverNotificationService,
-    HandoverRuntime,
     OperatorUpdateHandler,
   ],
 })

@@ -40,6 +40,8 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
   account_question:
     'asks about their own existing account, payments or personal records',
   ai_question: 'asks whether they are talking to a bot, an AI or a person',
+  regulated_info:
+    'asks about legal, regulatory or official-requirement rules (what the law or an authority requires)',
   other: 'anything else',
 };
 
@@ -83,7 +85,7 @@ export function responseSystemPrompt(
     pack.prompt.businessRole,
     `Write your reply to the customer in ${locale.promptName}. ${locale.toneGuidance}`,
     'Rules:',
-    '1. Facts: item names, prices, seats, dates, schedules and availability may appear only as fact references copied exactly from tool results, such as {{F3}}. Never write digits, prices or currency names yourself, and never invent items, dates, prices or policies. If a fact you need is missing, call a tool; if no tool can provide it, say an operator will confirm it.',
+    '1. Facts: item names, prices, seats, dates, schedules and availability may appear only as fact references copied exactly from tool results, such as {{F3}}. Never write digits, prices or currency names yourself, and never invent items, dates, prices or policies. If a fact you need is missing, call a tool; if no tool can provide it, say an operator will confirm it. Policies and general information may be stated only by citing a knowledge_search passage as its fact reference, never from memory.',
     '2. A price from list_offers is a listed price; when the customer asks what they will pay, call get_quote and use its confirmedPriceFact.',
     `3. Show at most ${pack.maxOptionsShown} options, briefly, and ask at most one question.`,
     '4. Never promise discounts, free extras, guarantees or outcomes.',

@@ -30,6 +30,9 @@ interface Strings {
   needReply: string;
   slaAlert: (minutes: number) => string;
   customer: string;
+  digestTitle: (date: string) => string;
+  digestEmpty: string;
+  digestWaiting: (count: number) => string;
 }
 
 const EN: Strings = {
@@ -57,6 +60,9 @@ const EN: Strings = {
   needReply: 'Reply to the handover message to send text to the customer',
   slaAlert: (minutes) => `Nobody has taken this handover for ${minutes} min`,
   customer: 'Customer',
+  digestTitle: (date) => `Morning digest ${date}`,
+  digestEmpty: 'No new hot or warm leads.',
+  digestWaiting: (count) => `Waiting for an operator: ${count}`,
 };
 
 const RU: Strings = {
@@ -84,6 +90,9 @@ const RU: Strings = {
   needReply: 'Ответьте на сообщение о передаче, чтобы написать клиенту',
   slaAlert: (minutes) => `Передачу никто не взял уже ${minutes} мин`,
   customer: 'Клиент',
+  digestTitle: (date) => `Утренняя сводка ${date}`,
+  digestEmpty: 'Новых горячих и тёплых лидов нет.',
+  digestWaiting: (count) => `Ждут оператора: ${count}`,
 };
 
 const UZ: Strings = {
@@ -111,6 +120,9 @@ const UZ: Strings = {
   needReply: 'Mijozga yozish uchun uzatish xabariga javob bering',
   slaAlert: (minutes) => `Uzatishni ${minutes} daqiqadan beri hech kim olmadi`,
   customer: 'Mijoz',
+  digestTitle: (date) => `Ertalabki xulosa ${date}`,
+  digestEmpty: 'Yangi issiq va iliq lidlar yo\u2018q.',
+  digestWaiting: (count) => `Operatorni kutayotganlar: ${count}`,
 };
 
 export function operatorStrings(locale: string): Strings {

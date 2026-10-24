@@ -29,6 +29,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Xabaringiz jamoamizga yuborilgan, javob biroz kechikmoqda. Kutganingiz uchun uzr so'raymiz.
 - **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
   > Xohlasangiz, jamoamiz siz bilan bog'lanishi uchun telefon raqamingizni yozib qoldiring.
+- **followUp** — One gentle reminder to a customer who went silent; no facts or promises; says how to stop (/stop).
+  > Assalomu alaykum! Savolingiz bo'yicha yordam kerak bo'lsa, yozing. Eslatmalarni to'xtatish uchun /stop deb yozing.
+- **optOutConfirmation** — Confirms that reminders will stop after the customer sent /stop.
+  > Xo'p, endi eslatma yubormaymiz.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.
 
@@ -62,6 +66,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.
 - **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
   > Bu summani jamoamiz o'zi tasdiqlaydi. So'rovingiz ular uchun saqlandi.
+- **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
+  > Bu masala bo'yicha tasdiqlangan ma'lumotim yo'q. Savolingiz jamoamiz uchun saqlandi.
 
 ### Labels and availability words
 
@@ -136,6 +142,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Хабарингиз жамоамизга юборилган, жавоб бироз кечикмоқда. Кутганингиз учун узр сўраймиз.
 - **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
   > Хоҳласангиз, жамоамиз сиз билан боғланиши учун телефон рақамингизни ёзиб қолдиринг.
+- **followUp** — One gentle reminder to a customer who went silent; no facts or promises; says how to stop (/stop).
+  > Ассалому алайкум! Саволингиз бўйича ёрдам керак бўлса, ёзинг. Эслатмаларни тўхтатиш учун /stop деб ёзинг.
+- **optOutConfirmation** — Confirms that reminders will stop after the customer sent /stop.
+  > Хўп, энди эслатма юбормаймиз.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.
 
@@ -169,6 +179,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.
 - **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
   > Бу суммани жамоамиз ўзи тасдиқлайди. Сўровингиз улар учун сақланди.
+- **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
+  > Бу масала бўйича тасдиқланган маълумотим йўқ. Саволингиз жамоамиз учун сақланди.
 
 ### Labels and availability words
 
@@ -244,6 +256,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Ваше сообщение передано команде, ответ немного задерживается. Спасибо, что ждёте.
 - **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
   > Если хотите, оставьте номер телефона, чтобы команда могла с вами связаться.
+- **followUp** — One gentle reminder to a customer who went silent; no facts or promises; says how to stop (/stop).
+  > Здравствуйте! Если нужна помощь с вашим вопросом, напишите. Чтобы остановить напоминания, отправьте /stop.
+- **optOutConfirmation** — Confirms that reminders will stop after the customer sent /stop.
+  > Хорошо, больше не будем напоминать.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.
 
@@ -277,6 +293,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.
 - **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
   > Эту сумму подтвердит наша команда. Ваш запрос сохранён для неё.
+- **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
+  > По этому вопросу у меня нет проверенной информации. Ваш вопрос сохранён для нашей команды.
 
 ### Labels and availability words
 
@@ -358,6 +376,10 @@ Status: `beta`, native reviewed: `false`. Tone guidance given to the model:
   > Your message has been passed to our team and the reply is taking longer than usual. Thank you for waiting.
 - **phoneRequest** — One polite request for a phone number after value was delivered; sent at most once per conversation.
   > If you like, leave a phone number so our team can contact you.
+- **followUp** — One gentle reminder to a customer who went silent; no facts or promises; says how to stop (/stop).
+  > Hello! If you still need help with your question, just write. To stop reminders, send /stop.
+- **optOutConfirmation** — Confirms that reminders will stop after the customer sent /stop.
+  > Okay, we will not send reminders any more.
 - **aiDisclosure** — Truthful answer when the customer asks whether they talk to a bot.
   > I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.
 
@@ -391,6 +413,8 @@ None of these may promise that a person will reply or has been notified: the sys
   > We seem to be going in circles. Your message has been saved for our team.
 - **HIGH_VALUE** — A confirmed amount above the pack threshold is confirmed by a person, not by the bot.
   > Our team confirms amounts like this personally. Your request has been saved for them.
+- **LEGAL_UNVERIFIED** — A regulated or legal question without verified, recent knowledge: the bot gives no answer.
+  > I do not have verified information on this. Your question has been saved for our team.
 
 ### Labels and availability words
 

@@ -574,6 +574,54 @@ describe('agent mode LIVE (local development policy)', () => {
     },
   );
 
+  it('records a /stop as an opt-out, answers with the template and calls no model', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    await f.processor.process(await receive(f, '/stop'));
+    expect(await turns(f)).toHaveLength(1);
+    expect((await turns(f))[0].llmCalls).toBe(0);
+    const reply = await prisma.message.findFirstOrThrow({
+      where: { tenantId: f.tenantId, direction: 'OUTBOUND' },
+    });
+    expect(reply.text).toBe(UZ_LATN.templates.optOutConfirmation);
+    const contact = await prisma.contact.findFirstOrThrow({
+      where: { tenantId: f.tenantId },
+    });
+    expect(contact.marketingOptOut).toBe(true);
+    expect(
+      await prisma.auditEvent.count({
+        where: { tenantId: f.tenantId, action: 'contact.opt_out' },
+      }),
+    ).toBe(1);
+  });
+
+  it('records a /stop at intake even while an operator owns the conversation', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    const first = await receive(f, 'Salom');
+    await prisma.conversation.updateMany({
+      where: { tenantId: f.tenantId },
+      data: { state: 'OPERATOR_ACTIVE', version: { increment: 1 } },
+    });
+    await receive(f, 'please stop by the office');
+    expect(
+      (
+        await prisma.contact.findFirstOrThrow({
+          where: { tenantId: f.tenantId },
+        })
+      ).marketingOptOut,
+    ).toBe(false);
+    await receive(f, '/stop');
+    const contact = await prisma.contact.findFirstOrThrow({
+      where: { tenantId: f.tenantId },
+    });
+    expect(contact.marketingOptOut).toBe(true);
+    expect(
+      await prisma.auditEvent.count({
+        where: { tenantId: f.tenantId, action: 'contact.opt_out' },
+      }),
+    ).toBe(1);
+    expect(first.tenantId).toBe(f.tenantId);
+  });
+
   it('stays silent while an operator owns the conversation and forwards the customer', async () => {
     const f = await fixture({ mode: 'LIVE' });
     const event = await receive(f, 'Salom, hali kutyapman');

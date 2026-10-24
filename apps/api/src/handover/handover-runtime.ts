@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -9,7 +10,9 @@ import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { HandoverSlaService } from './handover-sla.service.js';
 
-/** Periodic background scans (SLA alerts; lead retries register here too). */
+export const SCHEDULED_SCANS = Symbol('SCHEDULED_SCANS');
+
+/** Periodic background scans (lead CRM retries, follow-ups, ...). */
 export interface ScheduledScan {
   scanDue(now: Date): Promise<number>;
 }
@@ -24,9 +27,9 @@ export class HandoverRuntime implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly sla: HandoverSlaService,
-    @Optional() lead?: ScheduledScan,
+    @Optional() @Inject(SCHEDULED_SCANS) extra?: ScheduledScan[],
   ) {
-    if (lead) this.scans.push(lead);
+    if (extra) this.scans.push(...extra);
   }
 
   onModuleInit(): void {

@@ -137,6 +137,10 @@ const ROUTING_FREE_2026_10_23: PricingConfig = {
     'gemini-3.1-flash-lite': { free: true },
     'gemini-2.5-flash': { free: true },
     'gemini-2.5-flash-lite': { free: true },
+    // Embedding model listed on the Gemini pricing page with free input on
+    // the Free Tier (checked 2026-10-24; free-tier content is used to improve
+    // Google's products, so only fictional text may be sent).
+    'gemini-embedding-2': { free: true },
   },
 };
 

@@ -6,11 +6,13 @@ import { HealthController } from './health/health.controller.js';
 import { TelegramModule } from './channels/telegram/telegram.module.js';
 import { AgentModule } from './agent/agent.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
+import { BackgroundModule } from './background/background.module.js';
 import { PersistenceModule } from './persistence/persistence.module.js';
 
 @Module({
   imports: [
     TelegramModule,
+    BackgroundModule,
     PersistenceModule,
     ConnectorsModule,
     AgentModule,

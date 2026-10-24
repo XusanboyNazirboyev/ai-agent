@@ -20,6 +20,7 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "telegram:live": "tsx scripts/telegram-live.ts",
     "db:test:prepare": "tsx scripts/test-database.ts prepare",
     "db:test:seed": "tsx scripts/test-database.ts seed",
     "db:test:drift": "tsx scripts/test-database.ts drift",
@@ -27,7 +28,9 @@
     "agent:mode": "tsx scripts/agent-mode.ts",
     "llm:smoke": "tsx scripts/llm-smoke.ts",
     "locale:review": "tsx scripts/locale-review-package.ts",
-    "operator:token": "tsx scripts/operator-token.ts"
+    "operator:token": "tsx scripts/operator-token.ts",
+    "knowledge:ingest": "tsx scripts/knowledge-ingest.ts",
+    "knowledge:eval": "tsx scripts/knowledge-eval.ts"
   },
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || ^24.0.0",

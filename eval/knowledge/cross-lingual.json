@@ -1,0 +1,73 @@
+{
+  "description": "Fictional education-center policies in three languages, for the opt-in cross-lingual retrieval check. Invented text; the Uzbek and Russian wording has not been reviewed by a native speaker.",
+  "documents": [
+    {
+      "id": "refund",
+      "texts": {
+        "en": "Refund policy. A student may cancel within the first week of lessons and ask for the unused lessons to be refunded. After the first week the administrator decides each case individually.",
+        "ru": "Политика возврата. Ученик может отказаться от обучения в течение первой недели занятий и попросить вернуть оплату за неиспользованные занятия. После первой недели администратор решает каждый случай отдельно.",
+        "uz": "Pulni qaytarish tartibi. O'quvchi darslarning birinchi haftasida o'qishdan voz kechib, foydalanilmagan darslar uchun to'lovni qaytarishni so'rashi mumkin. Birinchi haftadan keyin har bir holatni ma'mur alohida hal qiladi."
+      }
+    },
+    {
+      "id": "parking",
+      "texts": {
+        "en": "Parking. Visitors can leave a car in the yard behind the building. The yard has room for about ten cars and is open during the center's working hours.",
+        "ru": "Парковка. Посетители могут оставить машину во дворе за зданием. Во дворе есть место примерно на десять машин, он открыт в рабочее время центра.",
+        "uz": "To'xtash joyi. Mehmonlar mashinani bino orqasidagi hovlida qoldirishi mumkin. Hovlida taxminan o'nta mashinaga joy bor va u markazning ish vaqtida ochiq."
+      }
+    },
+    {
+      "id": "lost-items",
+      "texts": {
+        "en": "Lost items. Things left in classrooms are kept at the reception desk for thirty days. Ask the receptionist and describe the item.",
+        "ru": "Забытые вещи. Вещи, оставленные в классах, хранятся на ресепшене тридцать дней. Обратитесь к администратору на ресепшене и опишите вещь.",
+        "uz": "Yo'qolgan narsalar. Sinfxonalarda qolib ketgan narsalar qabulxonada o'ttiz kun saqlanadi. Qabulxona xodimiga murojaat qilib, narsani tasvirlab bering."
+      }
+    },
+    {
+      "id": "late",
+      "texts": {
+        "en": "Late arrival. A student who arrives more than fifteen minutes late may join the lesson quietly, but the teacher is not obliged to repeat the part that was missed.",
+        "ru": "Опоздание. Ученик, опоздавший более чем на пятнадцать минут, может тихо присоединиться к уроку, но преподаватель не обязан повторять пропущенную часть.",
+        "uz": "Kechikish. O'n besh daqiqadan ortiq kechikkan o'quvchi darsga jimgina qo'shilishi mumkin, ammo o'qituvchi o'tkazib yuborilgan qismni takrorlashga majbur emas."
+      }
+    },
+    {
+      "id": "certificate",
+      "texts": {
+        "en": "Certificate. After finishing a course with at least eighty percent attendance the student receives a certificate of completion from the center. The certificate is not a state document.",
+        "ru": "Сертификат. После окончания курса при посещаемости не менее восьмидесяти процентов ученик получает сертификат об окончании от центра. Сертификат не является государственным документом.",
+        "uz": "Sertifikat. Kursni kamida sakson foiz qatnashuv bilan tugatgan o'quvchi markazdan tugatganlik sertifikatini oladi. Sertifikat davlat hujjati hisoblanmaydi."
+      }
+    },
+    {
+      "id": "payment",
+      "texts": {
+        "en": "Payment methods. Tuition can be paid at the reception desk in cash or by card, or by bank transfer using the details given on the invoice.",
+        "ru": "Способы оплаты. Обучение можно оплатить на ресепшене наличными или картой, либо банковским переводом по реквизитам из счёта.",
+        "uz": "To'lov usullari. O'qish uchun qabulxonada naqd pul yoki karta bilan, yoki hisob-fakturadagi rekvizitlar bo'yicha bank o'tkazmasi orqali to'lash mumkin."
+      }
+    }
+  ],
+  "queries": [
+    { "lang": "en", "text": "Can I get my money back if I stop studying?", "expect": "refund" },
+    { "lang": "ru", "text": "Можно ли вернуть деньги, если я брошу учёбу?", "expect": "refund" },
+    { "lang": "uz", "text": "O'qishni tashlasam, pulimni qaytarib olsam bo'ladimi?", "expect": "refund" },
+    { "lang": "en", "text": "Where can I leave my car when I visit?", "expect": "parking" },
+    { "lang": "ru", "text": "Где можно припарковать машину, когда я приезжаю?", "expect": "parking" },
+    { "lang": "uz", "text": "Kelganimda mashinamni qayerga qo'ysam bo'ladi?", "expect": "parking" },
+    { "lang": "en", "text": "I forgot my jacket in the classroom, what should I do?", "expect": "lost-items" },
+    { "lang": "ru", "text": "Я забыл куртку в классе, что мне делать?", "expect": "lost-items" },
+    { "lang": "uz", "text": "Sinfxonada kurtkamni unutib qoldirdim, nima qilishim kerak?", "expect": "lost-items" },
+    { "lang": "en", "text": "What happens if I come to the lesson twenty minutes late?", "expect": "late" },
+    { "lang": "ru", "text": "Что будет, если я приду на урок на двадцать минут позже?", "expect": "late" },
+    { "lang": "uz", "text": "Darsga yigirma daqiqa kech qolsam nima bo'ladi?", "expect": "late" },
+    { "lang": "en", "text": "Will I get a document after the course and is it official?", "expect": "certificate" },
+    { "lang": "ru", "text": "Дадут ли мне документ после курса и он официальный?", "expect": "certificate" },
+    { "lang": "uz", "text": "Kursdan keyin hujjat berishadimi va u rasmiymi?", "expect": "certificate" },
+    { "lang": "en", "text": "Can I pay by card?", "expect": "payment" },
+    { "lang": "ru", "text": "Можно ли оплатить картой?", "expect": "payment" },
+    { "lang": "uz", "text": "Karta bilan to'lasam bo'ladimi?", "expect": "payment" }
+  ]
+}

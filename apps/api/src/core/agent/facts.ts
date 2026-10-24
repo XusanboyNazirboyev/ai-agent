@@ -27,7 +27,15 @@ export type FactValue =
     }
   | { readonly kind: 'seats'; readonly count: number }
   | { readonly kind: 'availability'; readonly status: AvailabilityStatus }
-  | { readonly kind: 'datetime'; readonly iso: string };
+  | { readonly kind: 'datetime'; readonly iso: string }
+  | {
+      /** A retrieved knowledge passage; rendered verbatim by code. */
+      readonly kind: 'knowledge';
+      readonly text: string;
+      readonly source: string;
+      readonly updatedAt: string;
+      readonly regulated: boolean;
+    };
 
 export interface FactProvenance {
   readonly tool: string;
@@ -73,6 +81,16 @@ export function renderFactValue(
       return locale.templates.availability[value.status];
     case 'datetime':
       return formatDateTime(locale, value.iso, timeZone);
+    case 'knowledge': {
+      // A regulated statement always carries where it comes from and when it
+      // was last verified; other passages are attributed internally only.
+      if (!value.regulated) return value.text;
+      const date = new Intl.DateTimeFormat(locale.intlLocale, {
+        dateStyle: 'medium',
+        timeZone,
+      }).format(new Date(value.updatedAt));
+      return `${value.text} (${value.source}, ${date})`;
+    }
   }
 }
 

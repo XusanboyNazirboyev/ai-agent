@@ -197,6 +197,9 @@ model Tenant {
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
   internalNotes         InternalNote[]
+  followUps             FollowUp[]
+  knowledgeDocuments    KnowledgeDocument[]
+  knowledgeChunks       KnowledgeChunk[]
   operatorApiTokens     OperatorApiToken[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
@@ -484,6 +487,7 @@ model Conversation {
 
   messages Message[]
   notes    InternalNote[]
+  followUps FollowUp[]
   shownOffers ShownOffer[]
   slots    ConversationSlots[]
   quotes   Quote[]
@@ -909,4 +913,71 @@ model OperatorApiToken {
   @@unique([tenantId, id])
   @@index([tenantId, operatorId])
   @@map("operator_api_tokens")
+}
+
+/// One follow-up sent to a silent customer (Phase 6). The unique ordinal makes
+/// the scheduler idempotent: a scan can never send the same follow-up twice.
+model FollowUp {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  ordinal        Int
+  messageId      String?      @map("message_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, conversationId, ordinal])
+  @@index([tenantId, createdAt])
+  @@map("follow_ups")
+}
+
+/// Textual knowledge (policies, FAQ, info texts) for RAG (D2). Never a source
+/// of prices, dates, seats or availability (D1): those come from the CRM.
+/// `source` and `sourceUpdatedAt` are the internal attribution; for a
+/// `regulated` document the update date is also shown to the customer.
+model KnowledgeDocument {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  title           String   @db.VarChar(300)
+  source          String   @db.VarChar(300)
+  sourceUpdatedAt DateTime @map("source_updated_at") @db.Timestamptz(6)
+  language        String?  @db.VarChar(8)
+  topic           String?  @db.VarChar(100)
+  regulated       Boolean  @default(false)
+  status          String   @default("ACTIVE") @db.VarChar(16)
+  contentHash     String   @map("content_hash") @db.VarChar(64)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chunks          KnowledgeChunk[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, source])
+  @@index([tenantId, status, topic])
+  @@map("knowledge_documents")
+}
+
+/// One embedded passage. The vector column is untyped (any length) because
+/// the embedding model, and so its size, is configuration; searches filter on
+/// `embedding_model` and `embedding_dims` so vectors of different models are
+/// never compared. Read and written with raw SQL (pgvector).
+model KnowledgeChunk {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  documentId     String   @map("document_id") @db.Uuid
+  ordinal        Int
+  text           String   @db.Text
+  embedding      Unsupported("vector")?
+  embeddingModel String   @map("embedding_model") @db.VarChar(100)
+  embeddingDims  Int      @map("embedding_dims")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  document       KnowledgeDocument @relation(fields: [tenantId, documentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, documentId, ordinal])
+  @@index([tenantId, embeddingModel])
+  @@map("knowledge_chunks")
 }
