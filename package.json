@@ -27,7 +27,8 @@
     "llm:smoke": "pnpm --filter @agentcore/api llm:smoke",
     "test:web": "pnpm --filter @agentcore/web test",
     "test:e2e": "pnpm --filter @agentcore/web e2e",
-    "check:onboarding": "node scripts/check-pack-onboarding.mjs"
+    "check:onboarding": "node scripts/check-pack-onboarding.mjs",
+    "test:eval": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:eval && node scripts/eval-summary.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

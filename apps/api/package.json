@@ -16,6 +16,7 @@
     "test": "vitest run --config vitest.unit.config.mts",
     "test:unit": "vitest run --config vitest.unit.config.mts",
     "test:integration": "tsx scripts/test-database.ts prepare && vitest run --config vitest.integration.config.mts",
+    "test:eval": "vitest run src/agent/agent-eval.spec.ts && vitest run --config vitest.integration.config.mts src/actions/action-eval.integration.spec.ts",
     "test:coverage": "vitest run --config vitest.unit.config.mts --coverage",
     "test:watch": "vitest --config vitest.unit.config.mts",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
