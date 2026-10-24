@@ -7,6 +7,7 @@
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
+    "start:dev": "nest start --watch",
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\" --ignore-pattern \"src/generated/prisma/**\" \"prisma/**/*.ts\" \"scripts/**/*.ts\" \"vitest*.mts\"",
     "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.ts\" \"!src/generated/prisma/**/*.ts\" \"prisma/**/*.ts\" \"scripts/**/*.ts\" \"vitest*.mts\"",
