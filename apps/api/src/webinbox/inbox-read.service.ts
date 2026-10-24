@@ -56,6 +56,21 @@ export interface ConversationView {
     deliveryState: string;
     createdAt: Date;
   }[];
+  readonly shownOffers: readonly {
+    id: string;
+    messageId: string;
+    offerRef: string;
+    facts: unknown;
+    shownAt: Date;
+  }[];
+  readonly quotes: readonly {
+    id: string;
+    amount: string;
+    currency: string;
+    validUntil: Date | null;
+    shownInMessageId: string | null;
+  }[];
+  readonly slots: unknown;
   readonly notes: readonly {
     id: string;
     operatorId: string;
@@ -240,7 +255,7 @@ export class InboxReadService {
       },
     });
     if (!conversation) return undefined;
-    const [messages, notes] = await Promise.all([
+    const [messages, notes, shownOffers, quotes, slots] = await Promise.all([
       this.prisma.message.findMany({
         where: { tenantId: principal.tenantId, conversationId },
         orderBy: { sequence: 'asc' },
@@ -261,6 +276,35 @@ export class InboxReadService {
         take: 200,
         select: { id: true, operatorId: true, text: true, createdAt: true },
       }),
+      this.prisma.shownOffer.findMany({
+        where: { tenantId: principal.tenantId, conversationId },
+        orderBy: { shownAt: 'asc' },
+        take: 100,
+        select: {
+          id: true,
+          messageId: true,
+          offerRef: true,
+          facts: true,
+          shownAt: true,
+        },
+      }),
+      this.prisma.quote.findMany({
+        where: { tenantId: principal.tenantId, conversationId },
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          validUntil: true,
+          shownInMessageId: true,
+        },
+      }),
+      this.prisma.conversationSlots.findFirst({
+        where: { tenantId: principal.tenantId, conversationId },
+        orderBy: { version: 'desc' },
+        select: { slots: true },
+      }),
     ]);
     return {
       conversation: {
@@ -276,6 +320,12 @@ export class InboxReadService {
       lead: conversation.leads[0] ?? null,
       messages,
       notes,
+      shownOffers,
+      quotes: quotes.map((quote) => ({
+        ...quote,
+        amount: quote.amount.toString(),
+      })),
+      slots: slots?.slots ?? null,
     };
   }
 }

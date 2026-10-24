@@ -10,3 +10,8 @@ coverage/
 *.tsbuildinfo
 apps/api/src/generated/prisma/
 eval/reports/
+.next/
+next-env.d.ts
+test-results/
+playwright-report/
+.e2e/

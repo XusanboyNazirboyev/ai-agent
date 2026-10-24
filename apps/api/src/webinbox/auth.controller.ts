@@ -54,13 +54,18 @@ export class LoginRateLimiter {
 
 @Controller('api/v1/auth')
 export class AuthController {
-  private readonly limiter = new LoginRateLimiter();
+  private readonly limiter: LoginRateLimiter;
 
   constructor(
     private readonly sessions: SessionService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+  ) {
+    const limit = Number(
+      this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
+    );
+    this.limiter = new LoginRateLimiter(limit > 1 ? limit : 20);
+  }
 
   private cookies(
     session: string,

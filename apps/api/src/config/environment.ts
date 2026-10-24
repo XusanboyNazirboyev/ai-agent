@@ -18,6 +18,23 @@ const environmentSchema = postgresEnvironmentSchema
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
     /** Interface the API listens on. Deployment default stays 0.0.0.0. */
     API_HOST: z.string().min(1).default('0.0.0.0'),
+    /**
+     * A stream is closed after this long so proxies and load balancers never
+     * keep a stale connection; the browser reconnects with Last-Event-ID.
+     */
+    INBOX_STREAM_MAX_MS: z.coerce
+      .number()
+      .int()
+      .min(2000)
+      .max(24 * 60 * 60 * 1000)
+      .default(15 * 60 * 1000),
+    /** Login attempts allowed per client address and minute. */
+    LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .default(20),
     /** Browser origins allowed to make state-changing inbox requests. */
     WEB_ORIGINS: z
       .string()

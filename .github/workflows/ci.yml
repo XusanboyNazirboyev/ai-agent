@@ -67,3 +67,13 @@ jobs:
       - run: pnpm test:coverage
       - run: pnpm format:check
       - run: pnpm build
+      # Browser end-to-end tests: real Chromium against the built API and web
+      # app and the isolated agentcore_test database.
+      - run: pnpm --filter @agentcore/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
+          if-no-files-found: ignore

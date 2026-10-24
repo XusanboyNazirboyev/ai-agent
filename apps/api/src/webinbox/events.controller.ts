@@ -7,6 +7,8 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 import { InboxEventBus } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
@@ -32,6 +34,7 @@ export class EventsController {
   constructor(
     private readonly events: InboxEventsService,
     private readonly bus: InboxEventBus,
+    private readonly config: ConfigService<AppEnvironment, true>,
   ) {}
 
   /**
@@ -102,7 +105,16 @@ export class EventsController {
     const unsubscribe = await this.bus.subscribe(principal.tenantId, wake);
     const timer = setInterval(() => void poll(), FALLBACK_POLL_MS);
     const heartbeat = setInterval(() => send(': keep-alive\n\n'), HEARTBEAT_MS);
+    // Recycle the connection (with jitter) so no proxy holds it forever.
+    const maxMs = this.config.get('INBOX_STREAM_MAX_MS', { infer: true });
+    const recycle = setTimeout(
+      () => {
+        if (!closed) response.end();
+      },
+      maxMs + Math.floor(Math.random() * Math.min(maxMs / 10, 30_000)),
+    );
     response.on('close', () => {
+      clearTimeout(recycle);
       closed = true;
       unsubscribe();
       clearInterval(timer);
