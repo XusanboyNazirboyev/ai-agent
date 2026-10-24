@@ -169,10 +169,20 @@ export class ActionService {
       orderBy: { completedAt: 'desc' },
       select: { askedSlot: true },
     });
-    const collecting = last?.askedSlot?.startsWith(ACTION_SLOT_PREFIX)
-      ? last.askedSlot.slice(ACTION_SLOT_PREFIX.length).split(':')[0]
+    const asked = last?.askedSlot?.startsWith(ACTION_SLOT_PREFIX)
+      ? last.askedSlot.slice(ACTION_SLOT_PREFIX.length).split(':')
       : undefined;
+    const collecting = asked?.[0];
     const phone = input.contact.phone ?? extractPhone(input.customerText);
+    // A reply to the action's own name question is the name, if it looks like
+    // one (letters, spaces, apostrophes, hyphens; 2-60 characters). It is used
+    // for this proposal only and not stored on the contact.
+    const answeredName =
+      asked?.[1] === 'contact.name' &&
+      /^[\p{L}][\p{L}\s'ʻʼ‘’-]{1,59}$/u.test(input.customerText.trim())
+        ? input.customerText.trim().replace(/\s+/gu, ' ')
+        : undefined;
+    const name = input.contact.name ?? answeredName;
     return {
       available: candidates,
       // A pending proposal of an action that is no longer available is not offered for confirmation.
@@ -181,7 +191,7 @@ export class ActionService {
         : {}),
       ...(collecting ? { collecting } : {}),
       contact: {
-        ...(input.contact.name ? { name: input.contact.name } : {}),
+        ...(name ? { name } : {}),
         ...(phone ? { phone } : {}),
       },
       scope: {
