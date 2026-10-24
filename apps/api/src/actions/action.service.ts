@@ -50,6 +50,12 @@ export const ACTION_LEASE_MS = 10 * 60_000;
 const actionRetryDelayMs = (attempts: number): number =>
   Math.min(3_600_000, 30_000 * 2 ** Math.max(0, attempts - 1));
 
+/** A plausible personal name: letters, spaces, apostrophes, hyphens; 2-60 characters. */
+export function nameFrom(text: string): string | undefined {
+  const trimmed = text.trim().replace(/\s+/gu, ' ');
+  return /^[\p{L}][\p{L} 'ʻʼ‘’-]{1,59}$/u.test(trimmed) ? trimmed : undefined;
+}
+
 export type ExecuteResult =
   'SUCCEEDED' | 'FAILED' | 'UNCERTAIN' | 'RETRY_WAIT' | 'CANCELLED' | 'SKIPPED';
 
@@ -200,6 +206,39 @@ export class ActionService {
         packRef: input.packRef,
       },
     };
+  }
+
+  /**
+   * LIVE commit step: a name written in answer to an action's name question
+   * is kept on the contact when it has none (never overwritten, never guessed).
+   */
+  async captureName(
+    tx: Tx,
+    tenantId: string,
+    conversationId: string,
+    customerText: string,
+  ): Promise<void> {
+    const name = nameFrom(customerText);
+    if (!name) return;
+    const last = await tx.agentTurn.findFirst({
+      where: { tenantId, conversationId, status: 'COMMITTED' },
+      orderBy: { completedAt: 'desc' },
+      select: { askedSlot: true },
+    });
+    if (
+      !last?.askedSlot?.startsWith(ACTION_SLOT_PREFIX) ||
+      !last.askedSlot.endsWith(':contact.name')
+    )
+      return;
+    const conversation = await tx.conversation.findFirst({
+      where: { tenantId, id: conversationId },
+      select: { contactId: true },
+    });
+    if (!conversation) return;
+    await tx.contact.updateMany({
+      where: { tenantId, id: conversation.contactId, name: null },
+      data: { name },
+    });
   }
 
   private audit(

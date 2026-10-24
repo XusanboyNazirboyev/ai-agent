@@ -735,6 +735,13 @@ export class TelegramAgentPipeline {
           where: { tenantId, id: conversationId },
           select: { contactId: true },
         });
+        if (this.actions)
+          await this.actions.captureName(
+            tx,
+            tenantId,
+            conversationId,
+            claim.text,
+          );
         if (phone && conversationRow)
           await this.leadService.capturePhone(
             tx,
