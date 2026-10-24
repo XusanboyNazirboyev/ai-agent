@@ -8,6 +8,7 @@
  */
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
+import { buildSetWebhookPayload } from '../src/dev/dev-guards.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
 
@@ -64,14 +65,12 @@ if (command === 'register') {
     );
     process.exit(2);
   }
-  // drop_pending_updates=true DISCARDS every update Telegram is holding for
-  // the bot; they are never delivered. Intended for a clean test start.
-  const body = await callBotApi('setWebhook', {
-    url: `${base}/webhooks/telegram/${process.env.TELEGRAM_CHANNEL_ACCOUNT_ID}`,
-    secret_token: process.env.TELEGRAM_WEBHOOK_SECRET,
-    allowed_updates: ['message', 'callback_query'],
-    drop_pending_updates: true,
-  });
+  // Pending updates are kept unless TELEGRAM_DROP_PENDING_UPDATES=true is set
+  // explicitly; true DISCARDS every update Telegram holds for the bot.
+  const body = await callBotApi(
+    'setWebhook',
+    buildSetWebhookPayload(process.env, base),
+  );
   console.log(
     `setWebhook: ok=${String(body.ok)} ${body.ok ? '' : String(body.description)}`,
   );

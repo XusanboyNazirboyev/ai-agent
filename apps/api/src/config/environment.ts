@@ -16,6 +16,8 @@ const environmentSchema = postgresEnvironmentSchema
       .enum(['development', 'test', 'production'])
       .default('development'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
+    /** Interface the API listens on. Deployment default stays 0.0.0.0. */
+    API_HOST: z.string().min(1).default('0.0.0.0'),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
     REDIS_URL: z.url().default('redis://localhost:6379'),
     TELEGRAM_CHANNEL_ACCOUNT_ID: z.uuid().optional(),

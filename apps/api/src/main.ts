@@ -72,7 +72,10 @@ async function bootstrap(): Promise<void> {
   const logger = new StructuredLogger(config.get('LOG_LEVEL', { infer: true }));
 
   app.useLogger(logger);
-  await app.listen(config.get('PORT', { infer: true }), '0.0.0.0');
+  await app.listen(
+    config.get('PORT', { infer: true }),
+    config.get('API_HOST', { infer: true }),
+  );
 }
 
 void bootstrap();

@@ -22,3 +22,19 @@ export function isAllowedWebhookRequest(
 ): boolean {
   return method === 'POST' && url === `/webhooks/telegram/${channelAccountId}`;
 }
+
+/**
+ * setWebhook body. Pending updates are kept unless the developer explicitly
+ * asks to discard them (TELEGRAM_DROP_PENDING_UPDATES=true).
+ */
+export function buildSetWebhookPayload(
+  env: Record<string, string | undefined>,
+  publicBaseUrl: string,
+): Record<string, unknown> {
+  return {
+    url: `${publicBaseUrl.replace(/\/+$/u, '')}/webhooks/telegram/${env.TELEGRAM_CHANNEL_ACCOUNT_ID}`,
+    secret_token: env.TELEGRAM_WEBHOOK_SECRET,
+    allowed_updates: ['message', 'callback_query'],
+    drop_pending_updates: env.TELEGRAM_DROP_PENDING_UPDATES === 'true',
+  };
+}
