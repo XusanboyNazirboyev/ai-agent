@@ -250,7 +250,7 @@
   "knowledge.search": "Search questions",
   "knowledge.empty": "No questions yet. Add the first one.",
   "knowledge.emptyFiltered": "Nothing matches your search.",
-  "knowledge.notConfigured": "Knowledge search is not set up on this server, so questions cannot be saved yet. Ask your administrator to enable it.",
+  "knowledge.notConfigured": "Knowledge search is not set up on this server, so questions and documents cannot be saved yet. Administrator: set KNOWLEDGE_EMBEDDINGS in the server settings (hashing for local tests, gemini or openai-compatible for real use) and restart the API.",
   "knowledge.readOnly": "Only an owner or admin can change questions.",
   "knowledge.question": "Question",
   "knowledge.answer": "Answer",
