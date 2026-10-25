@@ -1054,9 +1054,11 @@ function channelsController(
     LLM_ALLOW_REAL_CUSTOMER_DATA: false,
     ...overrides,
   };
-  return new ChannelsController(prisma, {
-    get: (key: string) => settings[key],
-  } as never);
+  return new ChannelsController(
+    prisma,
+    { get: (key: string) => settings[key] } as never,
+    new PrismaChannelSecretStore(prisma, undefined),
+  );
 }
 
 describe('assistant mode', () => {
