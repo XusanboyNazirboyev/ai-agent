@@ -49,7 +49,7 @@ Telegram is the primary channel, at about 76% of the internet audience by a seco
 | Templates and pricing | Marketing, utility and authentication categories, review ≤ 24h. 250 templates unverified, 6,000 verified. Per-message pricing since 2025-07-01. **From 2026-10-01, service messages over 1,000/month/number and utility messages inside the window are charged. Opt-in required** | D/…/whatsapp/templates/overview, …/pricing |
 | Limits | 250 → 2k → 10k → 100k → unlimited unique users per 24h. 80 msg/s, up to 1,000. Error 130429 | [messaging limits](https://developers.facebook.com/docs/whatsapp/messaging-limits) |
 | Types | Text, media, location, contacts, reaction. Reply buttons ≤ 3 × 20 characters. Lists ≤ 10 rows. CTA URL, Flows. Typing indicator ≤ 25s. CTWA `referral` (schema only partly verified) | send-messages, D/…/interactive-* |
-| **Policy risk** | **Meta Terms §4.7 bars "AI Providers" whose primary functionality is AI** from the platform; a business's own support bot is not explicitly carved out. Must offer prompt escalation to a human. Must not train models on platform data. **Needs legal review before WhatsApp** | [WhatsApp Business Platform terms](https://www.facebook.com/legal/Meta-Terms-for-WhatsApp-Business-Platform), [policy](https://whatsappbusiness.com/policy/) |
+| **Policy risk (unverified)** | A ban on "AI Providers" whose primary functionality is AI (§4.7). The Stage 0 researcher reported it from a Russian-language version of the terms page linked here. The owner notes the reading traces to a **secondary source (respond.io blog)**, and the press dates a general-purpose-AI chatbot restriction to 2026-01-15. **Status: unverified.** It must be confirmed against Meta's official terms text, or in writing from Meta or a BSP, before any WhatsApp work (decision 4). Verified: automation must offer prompt escalation to a human, and platform data must not be used to train models | [WhatsApp Business Platform terms](https://www.facebook.com/legal/Meta-Terms-for-WhatsApp-Business-Platform), [policy](https://whatsappbusiness.com/policy/) |
 
 ## Design consequences (input to ADR 026 §D)
 1. **One `ChannelAdapter` contract.** Covers `verify(request)`, `parse(raw) → CanonicalInbound[]`, `capabilities()`, `render(CanonicalOutbound, capabilities) → provider payloads`, `send()` with typed errors (`RATE_LIMITED{retryAfter}`, `WINDOW_CLOSED`, `NOT_THREAD_OWNER`, `PERMANENT`) and `dedupeKey()`. The core never sees provider payloads.
@@ -74,9 +74,52 @@ Start these now, in parallel with design. Lead times are *unverified* unless sta
 |---|---|---|---|---|
 | 1 | Telegram production bot (BotFather) + domain with HTTPS for the webhook | Telegram live | Create bot, choose name, keep token in the secret store | Same day |
 | 2 | Decide whether to support **Telegram Business** connected-bot mode; check the Premium requirement on a test account | Telegram for SMBs that answer from a personal/business account | Test with one SMB owner account | Days |
-| 3 | **Meta Business portfolio + Business Verification** (legal entity documents, domain, phone) | Instagram, Messenger, WhatsApp beyond own accounts | Start immediately | Days to weeks (*unverified*) |
-| 4 | Meta developer app with Instagram + Messenger use cases; privacy policy URL, data deletion URL, screencast | **App Review → Advanced Access** for `instagram_business_manage_messages`, `pages_messaging` | Prepare after #3; review needs a working demo | Weeks (*unverified*) |
+| 3 | **Meta Business portfolio + Business Verification** (legal entity documents, domain, phone) | Instagram, Messenger, WhatsApp beyond own accounts | **Started by the owner (2026-10-25)** | Days to weeks (*unverified*) |
+| 4 | Meta developer app with Instagram + Messenger use cases; see [App Review prerequisites](#meta-app-review-prerequisites) | **App Review → Advanced Access** for `instagram_business_manage_messages`, `pages_messaging` | Prepare now; **submit only when the Instagram adapter demo works** (decision 4) | Weeks (*unverified*) |
 | 5 | Instagram professional account(s) of the pilot tenant | Instagram slice | Pilot tenant converts account | Same day |
-| 6 | WhatsApp: legal review of Meta Terms §4.7 (AI Providers) for our use case; then Tech Provider + Embedded Signup v4; WABA + number per tenant | WhatsApp | Lawyer opinion first | Weeks (*unverified*) |
+| 6 | WhatsApp: confirm the §4.7 "AI Providers" reading against Meta's official text, or in writing from Meta or a BSP; then Tech Provider + Embedded Signup v4; WABA + number per tenant | WhatsApp (slice C3, last) | Written confirmation first | Weeks (*unverified*) |
 | 7 | Consent texts and privacy notice per locale (also ADR 022 D-5) | All channels, actions | Owner/legal | — |
 | 8 | Disclosure-of-automation wording per locale | Messenger policy, general trust | Owner approves wording | — |
+
+## Meta App Review prerequisites
+Checked 2026-10-25 against official Meta pages. Items not confirmed are marked *unverified*. Confirm each item in the App Dashboard before submitting. Per owner decision 4, **submit only once the Instagram adapter demo works end to end.**
+
+**App settings (before submission)**
+- [ ] Privacy policy URL; app icon 1024×1024 (no Meta trademarks); category; primary contact email; app purpose "Clients". See the [submission guide](https://developers.facebook.com/documentation/resp-plat-initiatives/individual-processes/app-review/submission-guide.md).
+- [ ] Data deletion request URL (or callback), next to the deauthorize callback URL ([Instagram create-app](https://developers.facebook.com/docs/instagram-platform/create-an-instagram-app/), [Pages create-app](https://developers.facebook.com/documentation/pages-api/create-an-app)). For the Instagram messaging permissions it is listed in setup, not shown as an explicit review gate.
+- [ ] Terms of service URL and app domains (*unverified* as review requirements; prepare them anyway).
+- [ ] **Verified business connected to the app.** Business Verification is needed for Advanced Access ([IG overview](https://developers.facebook.com/documentation/instagram-platform/overview)). We serve other businesses, so we are a Tech Provider ([Pages create-app](https://developers.facebook.com/documentation/pages-api/create-an-app)).
+- [ ] Messenger: the linked Facebook Page is published, and the webhook answers 200 within 20 s ([Messenger app review](https://developers.facebook.com/documentation/business-messaging/messenger-platform/app-review)).
+
+**Per permission**, see [permissions reference](https://developers.facebook.com/documentation/development/permissions):
+- [ ] Its own usage description (no copy-paste between permissions) and **≥ 1 successful API call within 30 days before submitting**.
+- [ ] `instagram_business_manage_messages`: describe the messaging features for onboarded businesses. Screencast: full Instagram login, the app sending a message to an Instagram user, and a cURL send.
+- [ ] `instagram_business_basic`: concrete reason. Screencast: login, then username and ID retrieval.
+- [ ] Facebook-Login variant `instagram_manage_messages`, if used: needs `instagram_basic`, `pages_read_engagement`, `pages_show_list`.
+- [ ] `pages_messaging` (needs `pages_manage_metadata`, `pages_show_list`). Screencast: Facebook login, a message sent to a Messenger user, a cURL request.
+- [ ] Screencasts: ≥ 1080p, English UI or captions, no audio, the full flow from logged-out through permission grant (including Page selection), annotated ([screen recordings](https://developers.facebook.com/docs/app-review/submission-guide/screen-recordings/)). One clip per permission is *unverified*.
+- [ ] Reviewer access: public app or step-by-step instructions, test credentials or a trigger phrase; never personal developer credentials.
+
+**Data handling and verification**
+- [ ] Data-handling questions after business verification; Access Verification for some permissions (submission guide).
+- [ ] Annual Data Use Checkup (*unverified*; mentioned only in the permissions reference).
+
+**Documented rejection reasons**, from [app review](https://developers.facebook.com/docs/resp-plat-initiatives/app-review/):
+- the reviewer cannot access the app
+- a permission has no recording, or the use shown is not an allowed use
+- the login flow is incomplete
+- no test credentials, or steps that cannot be reproduced
+- non-English UI without captions
+
+Changing settings after submission can trigger re-review.
+
+**Timing:** Meta states "within a week", often 2–3 days ([introduction](https://developers.facebook.com/docs/resp-plat-initiatives/app-review/introduction)). Business Verification time is not stated (*unverified*).
+
+**Our demo must show:**
+1. Instagram login and account connection in our web app.
+2. An inbound DM appearing in the inbox.
+3. The agent (or an operator) replying.
+4. The reply arriving in the Instagram app.
+5. Data deletion working.
+
+This needs slice C1, the privacy policy and the data-deletion endpoint first.

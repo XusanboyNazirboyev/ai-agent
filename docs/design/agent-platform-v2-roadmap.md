@@ -1,8 +1,10 @@
 # Agent platform v2 — roadmap and quality bar (Stage 0)
 
-Companion to [ADR 026](../adr/026-agent-platform-v2.md). Slices are vertical (user-visible), ordered by value-to-risk, and built strangler-style beside v1 behind `engine: v1|v2` per channel account. **Prerequisite:** `phase6a/web-operator-inbox` is merged into `main` (owner decision 1), because every slice builds on its inbox, actions and eval gate.
+Companion to [ADR 026](../adr/026-agent-platform-v2.md). Slices are vertical (user-visible), ordered by value-to-risk, and built strangler-style beside v1 behind `engine: v1|v2` per channel account. **Prerequisite met:** `phase6a/web-operator-inbox` merged into `main` as `25be79b` (owner decision 1; CI run 40170183486 success). Slice 1 starts only after the owner's GO.
 
-## Quality bar (defined before implementation)
+## Quality bar (defined before implementation; frozen 2026-10-25)
+**Frozen by owner amendment C:** any change to a threshold below requires the owner's written approval and a reason recorded in this file.
+
 **Harness.** Scenarios in YAML:
 - persona: language and script, style, patience, typos
 - goal and hidden facts
@@ -11,13 +13,17 @@ Companion to [ADR 026](../adr/026-agent-platform-v2.md). Slices are vertical (us
 
 A simulated customer (LLM) talks to an `AgentVersion` in dry-run. Grading runs deterministic checks first, then an LLM judge with stored reasons. Each scenario runs **k = 3** times and passes only if all three runs pass (pass^3).
 
+The LLM judge is used for gating only after **calibration against ≥ 20 human-graded conversations per language**, and Uzbek judgments need native review (amendment B). Until it is calibrated, only the deterministic metrics gate.
+
+**Cost:** the dev loop uses free or cheap providers on synthetic data. Paid runs are for gating only, within a **$50/month hard cap**. Each slice publishes a cost estimate per full suite run before any paid run (decision 2).
+
 **Suites.**
 
 | Suite | Scenarios | Languages | Runs |
 |---|---|---|---|
 | Education | ≥ 30 | uz-Latn, ru, en (+ 10 uz-Cyrl) | 90 + 30 runs |
 | Tourism | ≥ 10 | uz-Latn, ru, en | 30 runs |
-| Retail | ≥ 10 | uz-Latn, ru, en | 30 runs; needs the retail pack (slice 3b) |
+| Retail | ≥ 10 | uz-Latn, ru, en | 30 runs; needs the retail pack (slice 3b), **mock-only** (decision 3) |
 
 **Metrics and thresholds per suite and language.** A slice may switch a tenant to v2 only when all blocking thresholds hold and v2 ≥ v1 on every non-blocking metric.
 
@@ -98,15 +104,15 @@ Effort tier: the model tier for most of the work. Opus does design and review on
 | # | Slice | Goal / user-visible outcome | Modules touched | Migration | Tests | Rollback | Tier |
 |---|---|---|---|---|---|---|---|
 | 1 | **Scenario harness + v1 baseline** (J) | Owner sees an objective report of how today's agent performs on the suites above | `agent/testing/simulation/*`, `eval/scenarios/*`, CLI script, report | None (additive) | Harness unit tests; a judge sensitivity test (known-bad transcripts must fail) | Delete files | sonnet |
-| 2 | **Agent profile + memory** (A, C, N) | Each tenant has its own name, tone and guidance. The bot remembers context (summary), handles corrections and clears slots. Versions can be published and rolled back | `core/agent/{prompts,slots}`, new `core/profile`, `AgentVersion` + `ConversationSummary` tables (additive migration), shared schema | Profile v0 generated from today's pack and locale, so outputs are equivalent; `engine` flag | Unit, integration, scripted eval unchanged, education suite ≥ baseline | Unpublish → previous version; flag off | sonnet (opus for schema review) |
+| 2 | **Agent profile + memory** (A, C, N). Memory is narrow per decision 6; no real-customer live use before the legal review | Each tenant has its own name, tone and guidance. The bot remembers context (summary), handles corrections and clears slots. Versions can be published and rolled back | `core/agent/{prompts,slots}`, new `core/profile`, `AgentVersion` + `ConversationSummary` tables (additive migration), shared schema | Profile v0 generated from today's pack and locale, so outputs are equivalent; `engine` flag | Unit, integration, scripted eval unchanged, education suite ≥ baseline | Unpublish → previous version; flag off | sonnet (opus for schema review) |
 | 3 | **Playbook engine + education sales playbooks** (B, G) | Qualification, objection handling, booking flow, lifecycle stages, 2-step follow-up cadence | new `core/playbooks/*`, packs gain `playbooks[]`, `LifecycleStage`, follow-up cadence | v1 flow wrapped as `default` playbook; v2 per channel account | Engine property tests, scenario suite meets the quality bar in simulation **and** SHADOW | Flag back to v1 | opus design → sonnet build |
 | 3b | **Retail pack** (config only) | Third vertical, proving universality again | `packs/retail`, mock fixtures, eval cases | `Pack-Onboarding` gate (no core change) | Retail suite ≥ bar | Remove pack | sonnet |
-| 4 | **Channel contract + rich Telegram + Telegram Business** (D, D2) | Buttons, quick replies, typing, deep-link attribution, long-message splitting. SMBs can connect their own Telegram Business account | `channels/contract/*`, `channels/telegram/*` refactor, canonical message model, `ChannelAccount` capabilities, `secretRef` tokens | Telegram adapter behind contract; parity test vs current behaviour | **Adapter conformance suite** (Telegram reference), e2e | Previous adapter build | sonnet (opus contract review) |
+| 4 | **Channel contract + rich Telegram + Telegram Business** (D, D2). **Starts only after live Telegram verification evidence (shadow + live) exists (amendment A); Telegram Business only after the Premium requirement is re-verified from official docs (decision 5)** | Buttons, quick replies, typing, deep-link attribution, long-message splitting. SMBs can connect their own Telegram Business account | `channels/contract/*`, `channels/telegram/*` refactor, canonical message model, `ChannelAccount` capabilities, `secretRef` tokens | Telegram adapter behind contract; parity test vs current behaviour | **Adapter conformance suite** (Telegram reference), e2e | Previous adapter build | sonnet (opus contract review) |
 | 5 | **Operator copilot + routing + analytics** (H, K) | Context pack, draft replies, language/online/least-open routing, resolution and funnel analytics | `handover/*`, `webinbox/*`, `apps/web` analytics page, outcome table | Additive; routing off by default | Integration, e2e, analytics query tests with fixed clocks | Feature flags | sonnet |
 | 6 | **Studio** (L, E, M) | Owner edits profile and playbooks in forms, manages knowledge sources and glossary, test-chats a draft, runs simulations, publishes | `apps/web/studio/*`, API endpoints with RBAC (OWNER/ADMIN) | Read-only first, then edit | e2e + axe, RBAC and isolation tests | Hide routes | sonnet |
-| C1 | **Instagram adapter** (D2) | DMs, story replies/mentions, comment-to-DM, ad referral, 24h/HUMAN_AGENT windows | `channels/instagram/*`, policy gate | Per account, starts SHADOW | Conformance suite + window/policy tests + Meta signature tests | Disable account | sonnet |
+| C1 | **Instagram adapter** (D2). App Review is submitted only once this demo works (decision 4) | DMs, story replies/mentions, comment-to-DM, ad referral, 24h/HUMAN_AGENT windows | `channels/instagram/*`, policy gate | Per account, starts SHADOW | Conformance suite + window/policy tests + Meta signature tests | Disable account | sonnet |
 | C2 | **Messenger adapter** | Same contract | `channels/messenger/*` | Same | Same | Same | haiku → sonnet (reuses C1) |
-| C3 | **WhatsApp adapter** (after legal review) | Template-aware sends, opt-in store, CTWA referral | `channels/whatsapp/*`, template registry | Same | Same + template/window tests | Same | sonnet |
+| C3 | **WhatsApp adapter**, only after the §4.7 reading is confirmed from Meta's official text or in writing from Meta or a BSP | Template-aware sends, opt-in store, CTWA referral | `channels/whatsapp/*`, template registry | Same | Same + template/window tests | Same | sonnet |
 
 **Order and rationale.**
 - 1 → 2 → 3: measure first, then the cheapest big perceived gain (persona plus memory), then the deep change (playbooks).
