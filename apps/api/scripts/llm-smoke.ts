@@ -1,15 +1,16 @@
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { PROVIDER_PRESETS } from '../src/llm/provider-presets.js';
-import { renderStatus, smokeProvider } from '../src/llm/smoke.js';
+import { mergeStatus, renderStatus, smokeProvider } from '../src/llm/smoke.js';
 
 /**
  * pnpm llm:smoke [provider ...]
  * Keys come from the env vars named by each preset (.env.local, then .env at
  * the repository root, then the shell). Nothing secret is printed. For
  * providers without a default model set SMOKE_MODEL_<PRESET_ID_UPPERCASE>.
- * Writes docs/LLM_PROVIDER_STATUS.md.
+ * Updates docs/LLM_PROVIDER_STATUS.md: only the tested providers' rows change;
+ * other rows and the observations section are kept.
  */
 const root = resolve(process.cwd(), '../..');
 loadEnv({ path: resolve(root, '.env.local'), quiet: true });
@@ -47,10 +48,10 @@ async function main(): Promise<void> {
   for (const r of results)
     if ('skipped' in r)
       process.stdout.write(`${r.provider} skipped: ${r.skipped}\n`);
-  writeFileSync(
-    resolve(root, 'docs/LLM_PROVIDER_STATUS.md'),
-    renderStatus(results, new Date().toISOString().slice(0, 10)),
-  );
+  const date = new Date().toISOString().slice(0, 10);
+  const file = resolve(root, 'docs/LLM_PROVIDER_STATUS.md');
+  const existing = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
+  writeFileSync(file, mergeStatus(existing, renderStatus(results, date), date));
 }
 
 main().catch((error: unknown) => {

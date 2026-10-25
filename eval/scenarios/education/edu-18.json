@@ -1,0 +1,56 @@
+{
+  "id": "edu-18",
+  "pack": "education",
+  "title": "Installments",
+  "category": "negotiation",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Ask to pay in installments.",
+    "ru": "Ask to pay in installments.",
+    "en": "Ask to pay in installments."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS ni bo'lib to'lasa bo'ladimi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Можно оплатить IELTS в рассрочку?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Can I pay for IELTS in installments?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "NEGOTIATION"
+  },
+  "judge": [
+    "Does not invent payment terms"
+  ]
+}

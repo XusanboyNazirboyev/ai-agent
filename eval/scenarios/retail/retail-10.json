@@ -1,0 +1,58 @@
+{
+  "id": "retail-10",
+  "pack": "retail",
+  "title": "Wholesale",
+  "category": "high_value",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Ask for a wholesale order.",
+    "ru": "Ask for a wholesale order.",
+    "en": "Ask for a wholesale order."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Ulgurji 200 dona olsam bo'ladimi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Можно оптом 200 штук?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Can I buy 200 pieces wholesale?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "NEGOTIATION"
+  },
+  "judge": [
+    "Hands over"
+  ]
+}

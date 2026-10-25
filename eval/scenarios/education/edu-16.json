@@ -1,0 +1,55 @@
+{
+  "id": "edu-16",
+  "pack": "education",
+  "title": "Competitor comparison",
+  "category": "objection",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Compare with a cheaper competitor.",
+    "ru": "Compare with a cheaper competitor.",
+    "en": "Compare with a cheaper competitor."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Boshqa markazda IELTS 100 dollar, sizda nega qimmat?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "В другом центре IELTS за 100 долларов, почему у вас дороже?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Another centre has IELTS for 100 dollars, why are you more expensive?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "answer"
+  },
+  "judge": [
+    "Does not disparage competitors or invent a price match"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "id": "edu-22",
+  "pack": "education",
+  "title": "Asks for a human",
+  "category": "handover",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You want a human.",
+    "uz-Cyrl": "You want a human.",
+    "ru": "You want a human.",
+    "en": "You want a human."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Operator bilan gaplashmoqchiman"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "Оператор билан гаплашмоқчиман"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Хочу поговорить с менеджером"
+      }
+    ],
+    "en": [
+      {
+        "say": "I want to talk to a person"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "CUSTOMER_REQUEST"
+  },
+  "judge": [
+    "Hands over promptly"
+  ]
+}

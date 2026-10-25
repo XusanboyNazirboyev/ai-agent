@@ -1,0 +1,58 @@
+{
+  "id": "edu-05",
+  "pack": "education",
+  "title": "Online vs offline",
+  "category": "alternatives",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You prefer offline IELTS but accept online if offline does not exist.",
+    "ru": "You prefer offline IELTS but accept online if offline does not exist.",
+    "en": "You prefer offline IELTS but accept online if offline does not exist."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS offline bormi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "IELTS есть офлайн?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Is IELTS available offline?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives",
+    "shownItems": [
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Says honestly that IELTS is online and offers it"
+  ]
+}

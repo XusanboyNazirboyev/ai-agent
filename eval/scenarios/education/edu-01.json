@@ -1,0 +1,67 @@
+{
+  "id": "edu-01",
+  "pack": "education",
+  "title": "Course search with all slots in one message",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find an online evening IELTS course and learn its schedule and price.",
+    "uz-Cyrl": "Find an online evening IELTS course and learn its schedule and price.",
+    "ru": "Find an online evening IELTS course and learn its schedule and price.",
+    "en": "Find an online evening IELTS course and learn its schedule and price."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Salom, IELTS kursi kerak, online, kechqurun"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "Салом, IELTS курси керак, онлайн, кечқурун"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Здравствуйте, нужен курс IELTS, онлайн, по вечерам"
+      }
+    ],
+    "en": [
+      {
+        "say": "Hi, I need an IELTS course, online, evenings"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ],
+    "noHandover": true
+  },
+  "judge": [
+    "Shows a matching IELTS group with schedule and price from the catalog"
+  ]
+}

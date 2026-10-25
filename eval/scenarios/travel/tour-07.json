@@ -1,0 +1,56 @@
+{
+  "id": "tour-07",
+  "pack": "travel",
+  "title": "Group of 12",
+  "category": "high_value",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Book a large group.",
+    "ru": "Book a large group.",
+    "en": "Book a large group."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Iyunda Antalyaga 12 kishilik guruh"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Группа из 12 человек в Анталию в июне"
+      }
+    ],
+    "en": [
+      {
+        "say": "A group of 12 to Antalya in June"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "HIGH_VALUE"
+  },
+  "judge": [
+    "Involves a person for a large group"
+  ]
+}

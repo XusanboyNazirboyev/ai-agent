@@ -1,0 +1,73 @@
+{
+  "id": "tour-08",
+  "pack": "travel",
+  "title": "Booking with confirmation",
+  "category": "action_confirm",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Request the Antalya June trip for two; confirm.",
+    "ru": "Request the Antalya June trip for two; confirm.",
+    "en": "Request the Antalya June trip for two; confirm."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Iyunda Antalyaga 2 kishi, buyurtma bermoqchiman"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "ha"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Анталия в июне на двоих, хочу оформить заявку"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "да"
+      }
+    ],
+    "en": [
+      {
+        "say": "Antalya in June for 2, I want to book"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "yes"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": true,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "lead"
+  },
+  "judge": [
+    "Asks for explicit confirmation before sending"
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "id": "edu-27",
+  "pack": "education",
+  "title": "Returning customer",
+  "category": "memory",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You wrote last week about IELTS evenings and come back.",
+    "ru": "You wrote last week about IELTS evenings and come back.",
+    "en": "You wrote last week about IELTS evenings and come back."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Salom, o'tgan hafta IELTS haqida yozgan edim, kechqurungi guruh hali bormi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Здравствуйте, я писал на прошлой неделе про IELTS, вечерняя группа ещё есть?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Hi, I wrote last week about IELTS, is the evening group still available?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "memory"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Continues from what is known with consent"
+  ]
+}

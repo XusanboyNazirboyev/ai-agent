@@ -1,0 +1,59 @@
+{
+  "id": "tour-01",
+  "pack": "travel",
+  "title": "Destination, month and party size",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find an Antalya tour in June for two.",
+    "ru": "Find an Antalya tour in June for two.",
+    "en": "Find an Antalya tour in June for two."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Iyun oyida Antalyaga 2 kishi borish kerak"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Нужна Анталия в июне на двоих"
+      }
+    ],
+    "en": [
+      {
+        "say": "Antalya in June for 2 people"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "tour-antalya-001"
+    ],
+    "noHandover": true
+  },
+  "judge": [
+    "Shows the June departure with catalog price"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "id": "edu-30",
+  "pack": "education",
+  "title": "Follow-up after 24h silence",
+  "category": "follow_up",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Ask the price, then go silent.",
+    "uz-Cyrl": "Ask the price, then go silent.",
+    "ru": "Ask the price, then go silent.",
+    "en": "Ask the price, then go silent."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS kechqurungi guruh narxi?"
+      },
+      {
+        "wait": {
+          "hours": 25
+        }
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "IELTS кечқурунги гуруҳ нархи?"
+      },
+      {
+        "wait": {
+          "hours": 25
+        }
+      }
+    ],
+    "ru": [
+      {
+        "say": "Сколько стоит вечерняя группа IELTS?"
+      },
+      {
+        "wait": {
+          "hours": 25
+        }
+      }
+    ],
+    "en": [
+      {
+        "say": "How much is the IELTS evening group?"
+      },
+      {
+        "wait": {
+          "hours": 25
+        }
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "follow_up"
+  },
+  "judge": [
+    "The follow-up is polite and fact-free"
+  ]
+}

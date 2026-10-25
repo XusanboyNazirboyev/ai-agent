@@ -1,0 +1,58 @@
+{
+  "id": "edu-12",
+  "pack": "education",
+  "title": "Group nearly full",
+  "category": "alternatives",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Three people want the Saturday IELTS group.",
+    "ru": "Three people want the Saturday IELTS group.",
+    "en": "Three people want the Saturday IELTS group."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS shanba guruhi, 3 kishimiz"
+      }
+    ],
+    "ru": [
+      {
+        "say": "IELTS субботняя группа, нас трое"
+      }
+    ],
+    "en": [
+      {
+        "say": "IELTS Saturday group, there are 3 of us"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives",
+    "shownItems": [
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Reports limited seats from the catalog and offers the weekday group"
+  ]
+}

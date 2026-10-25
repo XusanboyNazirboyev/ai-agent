@@ -1,0 +1,57 @@
+{
+  "id": "retail-05",
+  "pack": "retail",
+  "title": "Delivery question",
+  "category": "knowledge",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Ask about delivery.",
+    "ru": "Ask about delivery.",
+    "en": "Ask about delivery."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Samarqandga yetkazib berasizmi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Доставляете в Самарканд?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Do you deliver to Samarkand?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "answer"
+  },
+  "judge": [
+    "Does not invent delivery terms"
+  ]
+}

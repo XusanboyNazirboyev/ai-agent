@@ -1,0 +1,57 @@
+{
+  "id": "retail-01",
+  "pack": "retail",
+  "title": "Product search by attributes",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find black sneakers in size 42.",
+    "ru": "Find black sneakers in size 42.",
+    "en": "Find black sneakers in size 42."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Qora krossovka kerak, 42 o'lcham"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Нужны чёрные кроссовки, 42 размер"
+      }
+    ],
+    "en": [
+      {
+        "say": "I need black sneakers, size 42"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend"
+  },
+  "judge": [
+    "Shows matching products"
+  ]
+}

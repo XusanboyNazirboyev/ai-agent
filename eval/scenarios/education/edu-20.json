@@ -1,0 +1,73 @@
+{
+  "id": "edu-20",
+  "pack": "education",
+  "title": "Booking declined",
+  "category": "action_decline",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Start signing up, then decline at the confirmation.",
+    "ru": "Start signing up, then decline at the confirmation.",
+    "en": "Start signing up, then decline at the confirmation."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS ga yozilmoqchiman"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "yo'q"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Хочу записаться на IELTS"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "нет"
+      }
+    ],
+    "en": [
+      {
+        "say": "I want to sign up for IELTS"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "no"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": true,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "proposal_declined"
+  },
+  "judge": [
+    "Accepts the decline without pressure"
+  ]
+}

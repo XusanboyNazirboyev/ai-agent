@@ -1,0 +1,57 @@
+{
+  "id": "retail-03",
+  "pack": "retail",
+  "title": "Out of stock",
+  "category": "alternatives",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Want an item that is out of stock.",
+    "ru": "Want an item that is out of stock.",
+    "en": "Want an item that is out of stock."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Oq kurtka L o'lcham"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Белая куртка размер L"
+      }
+    ],
+    "en": [
+      {
+        "say": "White jacket size L"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives"
+  },
+  "judge": [
+    "Offers alternatives"
+  ]
+}
