@@ -37,7 +37,16 @@ interface Call {
 }
 
 /** A fake api.telegram.org: bots are the tokens in `valid`. */
-function fakeTelegram(valid: Map<string, { id: number; username: string }>) {
+interface FakeTelegram {
+  request: ReturnType<typeof vi.fn>;
+  calls: Call[];
+  webhooks: Map<string, string>;
+  failNextWebhook: () => void;
+}
+
+function fakeTelegram(
+  valid: Map<string, { id: number; username: string }>,
+): FakeTelegram {
   const calls: Call[] = [];
   let failWebhook = false;
   const webhooks = new Map<string, string>();
@@ -88,11 +97,15 @@ function fakeTelegram(valid: Map<string, { id: number; username: string }>) {
     request,
     calls,
     webhooks,
-    failNextWebhook: () => (failWebhook = true),
+    failNextWebhook: (): void => {
+      failWebhook = true;
+    },
   };
 }
 
-async function tenant(role: 'ADMIN' | 'OPERATOR' = 'ADMIN') {
+async function tenant(
+  role: 'ADMIN' | 'OPERATOR' = 'ADMIN',
+): Promise<{ tenantId: string; request: never }> {
   const suffix = randomUUID();
   const created = await db.tenant.create({
     data: {
@@ -128,12 +141,20 @@ const SETTINGS: Record<string, unknown> = {
   LLM_ALLOW_REAL_CUSTOMER_DATA: false,
   PUBLIC_BASE_URL: 'https://bot.example.test/',
 };
-const configWith = (overrides: Record<string, unknown> = {}) =>
+const configWith = (overrides: Record<string, unknown> = {}): never =>
   ({ get: (key: string) => ({ ...SETTINGS, ...overrides })[key] }) as never;
+
+interface Setup {
+  bots: Map<string, { id: number; username: string }>;
+  telegram: FakeTelegram;
+  store: PrismaChannelSecretStore;
+  controller: TelegramConnectController;
+  config: never;
+}
 
 function setup(
   options: { withKey?: boolean; config?: Record<string, unknown> } = {},
-) {
+): Setup {
   const bots = new Map<string, { id: number; username: string }>();
   const telegram = fakeTelegram(bots);
   const store = new PrismaChannelSecretStore(
@@ -225,7 +246,7 @@ describe('connecting a Telegram bot from the web', () => {
   });
 
   it('enable registers the webhook with the stored secret; the webhook route then accepts exactly that secret', async () => {
-    const { bots, telegram, controller, store, config } = setup();
+    const { bots, telegram, controller, store } = setup();
     const t = await tenant();
     bots.set(TOKEN(RUN + 444), { id: RUN + 444, username: 'live_bot' });
     const { id } = await controller.connect(t.request, {

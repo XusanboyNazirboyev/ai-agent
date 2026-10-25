@@ -24,6 +24,7 @@ import {
   TelegramManagement,
   TelegramManagementError,
 } from '../channels/telegram/telegram-management.js';
+import type { ChannelAccount } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
   ChannelSecretStore,
@@ -132,7 +133,7 @@ export class TelegramConnectController {
     if (!this.secrets.configured) throw refuse('SECRETS_NOT_CONFIGURED');
   }
 
-  private async account(tenantId: string, id: string) {
+  private async account(tenantId: string, id: string): Promise<ChannelAccount> {
     const account = await this.prisma.channelAccount.findFirst({
       where: { id, tenantId, channelType: 'telegram' },
     });
