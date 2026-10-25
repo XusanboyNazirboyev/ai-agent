@@ -250,7 +250,9 @@ function buildProvider(): {
   const apiKey = preset.apiKeyEnvVar ? env[preset.apiKeyEnvVar] : undefined;
   if (preset.apiKeyRequired && !apiKey)
     throw new Error(`${preset.apiKeyEnvVar} is required (never printed).`);
-  const fast = env.SIM_MODEL_FAST ?? preset.defaultModels.FAST;
+  const fast = env.SIM_MODEL_FAST ?? preset.defaultModels?.FAST;
+  if (!fast)
+    throw new Error(`${preset.id} has no default model; set SIM_MODEL_FAST.`);
   const strong = env.SIM_MODEL_STRONG ?? fast;
   const structured =
     preset.capabilities[fast]?.structured === 'json_object'
