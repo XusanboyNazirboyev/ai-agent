@@ -9,7 +9,12 @@ Decisions:
 1. Merge `phase6a/web-operator-inbox` into `main` before slice 1. **Done:** `25be79b`, CI run 40170183486 success.
 2. Live-model budget: **$50/month hard cap** to start. The strong tier may use Sonnet. The dev loop uses free or cheap providers on synthetic data only; paid runs are for gating only. **A cost estimate per full suite run is required before any paid run.**
 3. Retail stays **mock-only**. EduFlow is the first live project.
-4. The owner starts Meta Business Verification. App Review prerequisites are listed in [channel-rules](../research/channel-rules.md#meta-app-review-prerequisites). Review is submitted only when the Instagram adapter demo works. WhatsApp stays last (C3). The reading of Meta Terms §4.7 must be confirmed against Meta's official text, or in writing from Meta or a BSP, before any WhatsApp work.
+4. **Amended 2026-10-25:** the owner has no company documents yet, so **Business Verification is not started**.
+   - The Instagram adapter (C1) is built and demonstrated under **Meta Standard Access**, using the owner's own Instagram professional account and people with roles on the app (admins, developers, testers). No App Review is needed for that.
+   - Per Meta's [send-message doc](https://developers.facebook.com/docs/messenger-platform/instagram/features/send-message), *"Apps with Standard Access can only send messages to people that have a role on the app"*, so the demo can reply only to role holders, not to the public.
+   - **App Review / Advanced Access is deferred** until a verified legal entity exists. The [prerequisites list](../research/channel-rules.md#meta-app-review-prerequisites) stays ready.
+   - WhatsApp stays last (C3). The reading of Meta Terms §4.7 must be confirmed against Meta's official text, or in writing from Meta or a BSP, before any WhatsApp work.
+   - Messaging costs are recorded in [channel-rules](../research/channel-rules.md#messaging-costs).
 5. Telegram Business mode: yes, but **re-verify the Premium requirement from official docs before building it**.
 6. Customer memory, narrow scope:
    - structured facts only, never raw transcripts across conversations
