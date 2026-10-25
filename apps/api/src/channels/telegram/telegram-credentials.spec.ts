@@ -66,7 +66,9 @@ describe('per-account bots', () => {
     );
 
   it('the sender uses the account token, or the environment token without an account', async () => {
-    const request = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) => ok());
+    const request = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
+      ok(),
+    );
     const sender = new TelegramSender(config, request, credentials);
     await sender.sendMessage('1', 'hi', UI_ACCOUNT);
     await sender.sendMessage('1', 'hi');
@@ -80,7 +82,9 @@ describe('per-account bots', () => {
   });
 
   it('the operator-group Bot API client does the same', async () => {
-    const request = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) => ok());
+    const request = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
+      ok(),
+    );
     const api = new TelegramBotApi(config, request, credentials);
     await api.sendMessage({
       chatId: '-1',

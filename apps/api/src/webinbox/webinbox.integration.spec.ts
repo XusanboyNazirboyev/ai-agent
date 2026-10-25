@@ -1,5 +1,5 @@
 import { config as loadEnv } from 'dotenv';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -13,6 +13,8 @@ import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
 import { EventEmitter } from 'node:events';
 import { AuthController } from './auth.controller.js';
 import { ChannelsController } from './channels.controller.js';
+import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
+import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { ContactsController } from './contacts.controller.js';
 import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
@@ -1006,6 +1008,17 @@ describe('channels list', () => {
         operatorChatId: '-100123',
       },
     });
+    const store = new PrismaChannelSecretStore(
+      prisma,
+      new SecretCipher(
+        createKeyring({
+          SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
+        }),
+      ),
+    );
+    const owner = { tenantId: a.tenantId, channelAccountId: a.accountId };
+    await store.put(owner, 'bot_token', 'PLAINTEXT_BOT_TOKEN');
+    await store.put(owner, 'webhook_secret', 'PLAINTEXT_HOOK_SECRET');
     const s = await signIn(a);
     const result = await channelsController().list({
       principal: s.principal,
@@ -1014,11 +1027,18 @@ describe('channels list', () => {
     expect(result.items[0]).toMatchObject({
       channelType: 'telegram',
       status: 'ACTIVE',
+      credentialSource: 'ui',
       credentialsConfigured: true,
       operatorGroupConfigured: true,
     });
     const text = JSON.stringify(result);
-    for (const secret of ['SECRET_TOKEN_NAME', 'SECRET_HOOK_NAME', '-100123'])
+    for (const secret of [
+      'SECRET_TOKEN_NAME',
+      'SECRET_HOOK_NAME',
+      '-100123',
+      'PLAINTEXT_BOT_TOKEN',
+      'PLAINTEXT_HOOK_SECRET',
+    ])
       expect(text).not.toContain(secret);
     expect(text).not.toContain(b.accountId);
   });

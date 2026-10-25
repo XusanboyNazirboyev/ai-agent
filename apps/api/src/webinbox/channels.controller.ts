@@ -13,32 +13,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
-import {
-  agentModePolicy,
-  modeRefusalCode,
-  type AgentModePolicy,
-  type AgentModeValue,
-  type ModeRefusalCode,
-} from '../agent/agent-mode.js';
+import { modeRefusalCode, type AgentModePolicy } from '../agent/agent-mode.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import {
+  credentialSource,
+  policyFrom,
+  summarizeChannel,
+  type ChannelAccountSummary,
+} from './channel-summary.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
-
-const MODES: AgentModeValue[] = ['OFF', 'SHADOW', 'LIVE'];
-
-export interface ChannelAccountSummary {
-  id: string;
-  channelType: string;
-  status: 'ACTIVE' | 'DISABLED';
-  agentMode: AgentModeValue;
-  /** Why a mode cannot be selected right now (absent: it can). */
-  modeRefusals: Partial<Record<AgentModeValue, ModeRefusalCode>>;
-  isTestAccount: boolean;
-  /** Whether bot credentials are configured (never the credentials). */
-  credentialsConfigured: boolean;
-  operatorGroupConfigured: boolean;
-  createdAt: Date;
-}
 
 const Body_ = z.object({ mode: z.enum(['OFF', 'SHADOW', 'LIVE']) });
 
@@ -57,58 +41,44 @@ export class ChannelsController {
   ) {}
 
   private policy(): AgentModePolicy {
-    const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
-      this.config.get(key, { infer: true });
-    return agentModePolicy({
-      NODE_ENV: get('NODE_ENV'),
-      LLM_PROVIDER: get('LLM_PROVIDER'),
-      LLM_TRUSTED_PROVIDERS: get('LLM_TRUSTED_PROVIDERS'),
-      LLM_ALLOW_REAL_CUSTOMER_DATA: get('LLM_ALLOW_REAL_CUSTOMER_DATA'),
-    });
+    return policyFrom(this.config);
   }
 
-  private summarize(
-    row: {
-      id: string;
-      channelType: string;
-      status: 'ACTIVE' | 'DISABLED';
-      agentMode: AgentModeValue;
-      isTestAccount: boolean;
-      credentialRef: string | null;
-      operatorChatId: string | null;
-      createdAt: Date;
-    },
-    policy: AgentModePolicy,
-  ): ChannelAccountSummary {
-    const modeRefusals: ChannelAccountSummary['modeRefusals'] = {};
-    for (const mode of MODES) {
-      const code = modeRefusalCode(mode, policy, row);
-      if (code) modeRefusals[mode] = code;
-    }
-    return {
-      id: row.id,
-      channelType: row.channelType,
-      status: row.status,
-      agentMode: row.agentMode,
-      modeRefusals,
-      isTestAccount: row.isTestAccount,
-      credentialsConfigured: Boolean(row.credentialRef),
-      operatorGroupConfigured: Boolean(row.operatorChatId),
-      createdAt: row.createdAt,
-    };
+  private async summaries(tenantId: string): Promise<ChannelAccountSummary[]> {
+    const [rows, secrets] = await Promise.all([
+      this.prisma.channelAccount.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      }),
+      this.prisma.channelSecret.findMany({
+        where: { tenantId },
+        select: { channelAccountId: true, purpose: true },
+      }),
+    ]);
+    const policy = this.policy();
+    return rows.map((row) =>
+      summarizeChannel(
+        row,
+        policy,
+        credentialSource(
+          row,
+          new Set(
+            secrets
+              .filter((secret) => secret.channelAccountId === row.id)
+              .map((secret) => secret.purpose),
+          ),
+          this.config,
+        ),
+      ),
+    );
   }
 
   @Get()
   async list(
     @Req() request: InboxRequest,
   ): Promise<{ items: ChannelAccountSummary[] }> {
-    const policy = this.policy();
-    const rows = await this.prisma.channelAccount.findMany({
-      where: { tenantId: request.principal!.tenantId },
-      orderBy: { createdAt: 'asc' },
-      take: 50,
-    });
-    return { items: rows.map((row) => this.summarize(row, policy)) };
+    return { items: await this.summaries(request.principal!.tenantId) };
   }
 
   @Put(':id/agent-mode')
@@ -168,6 +138,8 @@ export class ChannelsController {
       });
       return row;
     });
-    return this.summarize(updated, policy);
+    return (await this.summaries(principal.tenantId)).find(
+      (item) => item.id === updated.id,
+    )!;
   }
 }
