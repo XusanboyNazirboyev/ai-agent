@@ -8,7 +8,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ConversationSlotsSchema,
-  type DomainPack,
   type TenantConnectorKey,
 } from '@agentcore/shared';
 import type { AppEnvironment } from '../config/environment.js';
@@ -33,7 +32,7 @@ import {
   PRICING_MAX_AGE_DAYS,
 } from '../llm/pricing-catalog.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
-import { EDUCATION_PACK } from '../packs/education/education.pack.js';
+import { DOMAIN_PACKS } from '../packs/registry.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { budgetLimits, llmEnvironment } from './llm.factory.js';
 import type { BudgetLedger } from '../core/llm/budget-ledger.js';
@@ -41,15 +40,13 @@ import type { EmbeddingProvider } from '../core/knowledge/embedding.js';
 import { EMBEDDING_PROVIDER } from '../knowledge/embedding.factory.js';
 import { KnowledgeRetriever } from '../knowledge/knowledge-retriever.js';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { ActionService } from '../actions/action.service.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 
-/** Registered Domain Packs by `key@version` (tenants select one). */
-export const DOMAIN_PACKS: ReadonlyMap<string, DomainPack> = new Map([
-  [`${EDUCATION_PACK.key}@${EDUCATION_PACK.version}`, EDUCATION_PACK],
-]);
+export { DOMAIN_PACKS } from '../packs/registry.js';
 
 export class AgentConfigurationError extends Error {
   constructor(message: string) {
@@ -112,6 +109,7 @@ export class AgentConversationService implements OnModuleInit {
     @Optional()
     @Inject(EMBEDDING_PROVIDER)
     private readonly embedder?: EmbeddingProvider,
+    @Optional() private readonly actions?: ActionService,
   ) {
     this.pricing = PRICING_CATALOG.snapshot(
       this.config.get('LLM_PRICING_VERSION', { infer: true }),
@@ -281,7 +279,7 @@ export class AgentConversationService implements OnModuleInit {
       }),
       this.prisma.contact.findFirst({
         where: { tenantId, id: conversation.contactId },
-        select: { phone: true },
+        select: { phone: true, name: true },
       }),
       this.prisma.message.findFirst({
         where: {
@@ -321,8 +319,22 @@ export class AgentConversationService implements OnModuleInit {
           )
         : undefined;
 
+    // Business actions (ADR 024): only what the tenant enabled and the
+    // connector can do now; the pending proposal is looked up from storage.
+    const action = this.actions
+      ? await this.actions.turnContext({
+          tenantId,
+          conversationId,
+          pack,
+          packRef,
+          contact: { name: contactRow?.name, phone: contactRow?.phone },
+          customerText: request.text,
+        })
+      : undefined;
+
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
+      ...(action ? { action } : {}),
       progress: {
         priorTurns: priorTurns
           .reverse()

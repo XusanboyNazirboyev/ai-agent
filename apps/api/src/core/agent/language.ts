@@ -189,6 +189,19 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
     'me',
     'would',
     'like',
+    // Common function words (Phase 7.2 eval: "Which documents are required
+    // to travel ...?" was not recognised as English). None is an Uzbek or
+    // transliterated Russian word.
+    'which',
+    'are',
+    'of',
+    'with',
+    'there',
+    'any',
+    'does',
+    'will',
+    'should',
+    'required',
   ]),
 };
 

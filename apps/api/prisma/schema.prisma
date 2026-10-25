@@ -201,6 +201,11 @@ model Tenant {
   knowledgeDocuments    KnowledgeDocument[]
   knowledgeChunks       KnowledgeChunk[]
   operatorApiTokens     OperatorApiToken[]
+  operatorCredentials   OperatorCredential[]
+  operatorSessions      OperatorSession[]
+  inboxEvents           InboxEvent[]
+  connectorOperations   ConnectorOperation[]
+  actionProposals       ActionProposal[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
   operators       Operator[]
@@ -429,6 +434,8 @@ model Operator {
   tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   apiTokens             OperatorApiToken[]
+  credentials           OperatorCredential[] // at most one: operator_id is unique
+  sessions              OperatorSession[]
   assignedConversations Conversation[] @relation("AssignedOperator")
   assignedHandovers     Handover[]     @relation("AssignedHandoverOperator")
 
@@ -494,6 +501,7 @@ model Conversation {
   leads    Lead[]
   handovers Handover[]
   agentTurns AgentTurn[]
+  actionProposals ActionProposal[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerChatId])
@@ -980,4 +988,154 @@ model KnowledgeChunk {
   @@unique([tenantId, documentId, ordinal])
   @@index([tenantId, embeddingModel])
   @@map("knowledge_chunks")
+}
+
+/// Web-inbox login of one operator (Phase 6A, ADR 020). Only a scrypt hash of
+/// the password is stored. Email is unique across tenants and resolves the
+/// tenant at login; it is never taken from a request afterwards.
+model OperatorCredential {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  operatorId     String    @unique @map("operator_id") @db.Uuid
+  email          String    @unique @db.VarChar(254)
+  passwordHash   String    @map("password_hash") @db.VarChar(255)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  lockedUntil    DateTime? @map("locked_until") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operator       Operator  @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@map("operator_credentials")
+}
+
+/// Browser session of an operator. The cookie carries a random token; only its
+/// SHA-256 is stored. csrfHash is the hash of the per-session CSRF token.
+model OperatorSession {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  operatorId String    @map("operator_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  csrfHash   String    @map("csrf_hash") @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operator   Operator  @relation(fields: [tenantId, operatorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, operatorId])
+  @@map("operator_sessions")
+}
+
+/// Ordered per-tenant change feed for the inbox SSE stream. Rows are written
+/// by database triggers on conversations, messages and handovers (so every
+/// writer is covered, atomically) and carry only ids. `id` is the SSE event id.
+model InboxEvent {
+  id             BigInt   @id @default(autoincrement())
+  tenantId       String   @map("tenant_id") @db.Uuid
+  type           String   @db.VarChar(40)
+  conversationId String?  @map("conversation_id") @db.Uuid
+  handoverId     String?  @map("handover_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, id])
+  @@index([createdAt])
+  @@map("inbox_events")
+}
+
+enum ConnectorOperationStatus {
+  PENDING
+  IN_FLIGHT
+  RETRY_WAIT
+  SUCCEEDED
+  FAILED
+  UNCERTAIN
+  RESOLVED_SUCCEEDED
+  RESOLVED_FAILED
+}
+
+/// One logical external write (ADR 023): created once per subject and kind,
+/// carries the idempotency key used for EVERY attempt, a lease so only one
+/// worker attempts it at a time, and the evidence or the reason it stopped.
+/// UNCERTAIN = the remote system may have applied it and nothing can prove
+/// either way; it is never retried automatically and waits for a person.
+model ConnectorOperation {
+  id              String                   @id @default(uuid(7)) @db.Uuid
+  tenantId        String                   @map("tenant_id") @db.Uuid
+  kind            String                   @db.VarChar(40)
+  subjectType     String                   @map("subject_type") @db.VarChar(40)
+  subjectId       String                   @map("subject_id") @db.Uuid
+  idempotencyKey  String                   @unique @map("idempotency_key") @db.VarChar(200)
+  status          ConnectorOperationStatus @default(PENDING)
+  attempts        Int                      @default(0)
+  /// Idempotency mode of the connector during the latest attempt.
+  attemptMode     String?                  @map("attempt_mode") @db.VarChar(10)
+  /// NOT_EXECUTED or UNCERTAIN: what the latest failed attempt proved.
+  lastExecution   String?                  @map("last_execution") @db.VarChar(20)
+  leaseToken      String?                  @map("lease_token") @db.VarChar(64)
+  leaseExpiresAt  DateTime?                @map("lease_expires_at") @db.Timestamptz(6)
+  nextAttemptAt   DateTime?                @map("next_attempt_at") @db.Timestamptz(6)
+  externalId      String?                  @map("external_id") @db.VarChar(200)
+  lastErrorCode   String?                  @map("last_error_code") @db.VarChar(100)
+  resolvedBy      String?                  @map("resolved_by") @db.VarChar(200)
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  completedAt     DateTime?                @map("completed_at") @db.Timestamptz(6)
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, kind, subjectType, subjectId])
+  @@index([status, nextAttemptAt])
+  @@index([status, leaseExpiresAt])
+  @@map("connector_operations")
+}
+
+enum ActionProposalStatus {
+  PROPOSED
+  CONFIRMED
+  DECLINED
+  SUPERSEDED
+  EXPIRED
+  CANCELLED
+  SUCCEEDED
+  FAILED
+  UNCERTAIN
+}
+
+/// A business action the agent proposed to a customer (ADR 024). The payload
+/// holds only the pack-declared fields, is bound by `digest`, and is cleared
+/// once the action reaches a final state. Execution is the connector
+/// operation with subject ('action_proposal', id).
+model ActionProposal {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  conversationId   String               @map("conversation_id") @db.Uuid
+  actionKey        String               @map("action_key") @db.VarChar(41)
+  operation        String               @db.VarChar(40)
+  packRef          String               @map("pack_ref") @db.VarChar(100)
+  payload          Json?                @db.JsonB
+  digest           String               @db.VarChar(64)
+  status           ActionProposalStatus @default(PROPOSED)
+  expiresAt        DateTime             @map("expires_at") @db.Timestamptz(6)
+  proposedTurnKey  String               @map("proposed_turn_key") @db.VarChar(200)
+  confirmedAt      DateTime?            @map("confirmed_at") @db.Timestamptz(6)
+  outcomeAt        DateTime?            @map("outcome_at") @db.Timestamptz(6)
+  externalId       String?              @map("external_id") @db.VarChar(200)
+  errorCode        String?              @map("error_code") @db.VarChar(100)
+  payloadClearedAt DateTime?            @map("payload_cleared_at") @db.Timestamptz(6)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation     Conversation         @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, proposedTurnKey], map: "action_proposals_proposed_turn_key_key")
+  @@index([tenantId, conversationId, status])
+  @@index([status, expiresAt])
+  @@map("action_proposals")
 }

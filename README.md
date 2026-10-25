@@ -19,7 +19,27 @@ pnpm dev
 
 The API listens on port 4000. Check `http://localhost:4000/health` for `{"status":"ok"}`.
 
-The repository is a pnpm workspace: the NestJS API is in `apps/api`, the future web app is reserved in `apps/web`, and shared contracts/configuration live in `packages/`. The web package is a placeholder; no frontend framework is installed yet.
+The repository is a pnpm workspace: the NestJS API is in `apps/api`, the operator inbox (Next.js, brand name tezda) is in `apps/web`, and shared contracts/configuration live in `packages/`.
+
+### Run the API and the web inbox locally
+
+Two terminals (or, in VS Code, the task **Dev: API + Web** from `.vscode/tasks.json`, which opens one dedicated terminal each):
+
+```sh
+cd apps/api && API_HOST=127.0.0.1 pnpm start:dev   # API on 127.0.0.1:4000, rebuilds on change
+cd apps/web && pnpm dev                            # web on 127.0.0.1:3000, proxies /api to the API
+```
+
+Open `http://127.0.0.1:3000`. The browser only talks to the web origin; `/api/*` is proxied.
+
+### Local login (development only)
+
+```sh
+cd apps/api && pnpm dev:superadmin --demo   # once; idempotent; --reset-password to rotate
+pbcopy < ~/.config/agentcore/dev-superadmin.password   # macOS: copy the password, it is never printed
+```
+
+Login `superadmin@agentcore.local`. This is an `OWNER` of one dedicated local tenant (fake data), not a platform administrator: there is no cross-tenant role ([ADR 025](docs/adr/025-local-development-superadmin.md)). The script refuses anything but `NODE_ENV=development` on a localhost database, stores only an scrypt hash, and writes the password to a 0600 file outside the repository. With the real Telegram bot token in `.env`, do not reply from the local demo conversations: the demo channel account is fake and a reply would try to reach Telegram.
 
 ## Database development
 

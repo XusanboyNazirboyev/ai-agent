@@ -297,6 +297,7 @@ export const REST_ENDPOINT_KEYS = [
   'createLead',
   'updateLead',
   'createBooking',
+  'findLeadByReference',
 ] as const;
 
 export type RestEndpointKey = (typeof REST_ENDPOINT_KEYS)[number];
@@ -314,10 +315,35 @@ export const ENDPOINT_PLACEHOLDERS: Readonly<
   createLead: [],
   updateLead: ['crmLeadId'],
   createBooking: [],
+  findLeadByReference: ['reference'],
 };
 
 const isWriteEndpoint = (key: RestEndpointKey): key is WriteEndpointKey =>
   key in REQUEST_SOURCES;
+
+/**
+ * How the remote API protects creates against duplicates (ADR 023). Only
+ * declare what the API documentation guarantees:
+ *  - native: the API deduplicates by a key sent in `header`;
+ *  - lookup: the key is stored on the created record at `referenceField` of
+ *    the create body, and `findLeadByReference` finds it (by `{reference}`
+ *    in the path or the `referenceQueryParam` query parameter);
+ *  - none (default): no automatic retry after an unclear outcome.
+ */
+export const WriteIdempotencyConfigSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('none') }).strict(),
+  z.object({ mode: z.literal('native'), header: HeaderNameSchema }).strict(),
+  z
+    .object({
+      mode: z.literal('lookup'),
+      referenceField: RequestTargetPathSchema,
+      referenceQueryParam: QueryParamNameSchema.optional(),
+    })
+    .strict(),
+]);
+export type WriteIdempotencyConfig = z.infer<
+  typeof WriteIdempotencyConfigSchema
+>;
 
 export const GenericRestConnectorConfigSchema = z
   .object({
@@ -369,13 +395,58 @@ export const GenericRestConnectorConfigSchema = z
         createLead: RestEndpointConfigSchema.optional(),
         updateLead: RestEndpointConfigSchema.optional(),
         createBooking: RestEndpointConfigSchema.optional(),
+        /** Lookup of a lead by the idempotency reference sent on create. */
+        findLeadByReference: RestEndpointConfigSchema.optional(),
       })
       .strict()
       .default({}),
     fieldMappings: FieldMappingsSchema.default({}),
+    writeIdempotency: WriteIdempotencyConfigSchema.default({ mode: 'none' }),
   })
   .strict()
   .superRefine((config, context) => {
+    const idempotency = config.writeIdempotency;
+    if (
+      idempotency &&
+      idempotency.mode !== 'none' &&
+      !config.endpoints?.createLead
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['writeIdempotency'],
+        message: 'requires the createLead endpoint',
+      });
+    }
+    if (
+      idempotency?.mode === 'native' &&
+      config.auth?.type === 'apiKey' &&
+      config.auth.headerName.toLowerCase() === idempotency.header.toLowerCase()
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['writeIdempotency', 'header'],
+        message: 'must differ from the authentication header',
+      });
+    }
+    if (idempotency?.mode === 'lookup') {
+      const find = config.endpoints?.findLeadByReference;
+      if (!find) {
+        context.addIssue({
+          code: 'custom',
+          path: ['endpoints', 'findLeadByReference'],
+          message: 'is required for lookup idempotency',
+        });
+      } else if (
+        !idempotency.referenceQueryParam &&
+        !find.path.includes('{reference}')
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['writeIdempotency', 'referenceQueryParam'],
+          message: 'set it, or use {reference} in the findLeadByReference path',
+        });
+      }
+    }
     let base: URL | undefined;
     try {
       base = new URL(config.baseUrl);

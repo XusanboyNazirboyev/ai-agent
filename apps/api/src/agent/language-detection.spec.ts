@@ -50,6 +50,22 @@ describe('language detection evidence rules', () => {
     });
   });
 
+  it('recognises plain English questions built from function words (Phase 7.2 finding)', () => {
+    for (const text of [
+      'Which documents are required to travel to Antalya?',
+      'Are there any seats left?',
+      'Does it come with a certificate?',
+    ]) {
+      const detection = detectLanguage(text);
+      expect(detection.language, text).toBe('en');
+      expect(detection.confidence, text).toBeGreaterThanOrEqual(0.75);
+    }
+    // Uzbek Latin sentences stay Uzbek.
+    expect(
+      detectLanguage('Antalyaga borish uchun qanday hujjatlar kerak?').language,
+    ).toBe('uz');
+  });
+
   it('keeps a genuine Uzbek Cyrillic sentence without listed words out of the high range', () => {
     // Only marker letters: honest LOW, so the safe clarification path applies.
     const a = assessLanguage('Мен ўқимоқчиман', LOCALES);

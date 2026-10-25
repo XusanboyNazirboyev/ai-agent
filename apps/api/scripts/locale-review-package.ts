@@ -40,7 +40,27 @@ const CONTEXT: Record<string, string> = {
   phoneRequest:
     'One polite request for a phone number after value was delivered; sent at most once per conversation.',
 };
+const ACTION_CONTEXT: Record<string, string> = {
+  proposalIntro:
+    'Starts the summary of the action the customer is asked to confirm.',
+  confirmPrompt:
+    'Tells how to confirm or cancel; {yes}/{no} are the first phrases below.',
+  received:
+    'Right after confirmation, before the result is known; must not claim success.',
+  declined: 'The customer cancelled; nothing was sent.',
+  succeeded: 'The connected system confirmed the record.',
+  succeededWithReference:
+    'Same, with the record reference when the pack allows showing it.',
+  askName: 'Asks for the name an action needs.',
+  expired:
+    'The confirmation came too late or for changed details; nothing was sent.',
+};
+
 const HANDOVER_CONTEXT: Record<string, string> = {
+  ACTION_FAILED:
+    'A confirmed business action could not be completed; must not say it succeeded or promise a reply.',
+  ACTION_OUTCOME_UNKNOWN:
+    'A confirmed business action may or may not have gone through; must not claim either.',
   CUSTOMER_REQUEST: 'Customer asked for a person.',
   COMPLAINT: 'Customer is unhappy.',
   NEGOTIATION:
@@ -99,6 +119,23 @@ for (const pack of INITIAL_LOCALE_PACKS) {
       `  ${q(pack.templates.handover[reason])}`,
     );
   }
+  md.push(
+    '',
+    '### Business-action wording (rendered by code, ADR 024)',
+    '',
+    'Outcome texts may state only what the connected system confirmed. `received` is sent right after the customer confirms and must not claim success.',
+    '',
+  );
+  for (const [key, value] of Object.entries(pack.templates.actions))
+    md.push(
+      `- **actions.${key}** — ${ACTION_CONTEXT[key] ?? ''}`,
+      `  ${q(value)}`,
+    );
+  md.push(
+    `- confirm phrases (whole message): ${pack.actionConfirmPhrases.join(', ')}`,
+    `- decline phrases (whole message): ${pack.actionDeclinePhrases.join(', ')}`,
+    `- phrases a model draft may never use (action claims): ${pack.actionClaimStems.join(', ')}`,
+  );
   md.push('', '### Labels and availability words', '');
   for (const [key, value] of Object.entries(pack.templates.labels))
     md.push(`- label **${key}**: ${value}`);

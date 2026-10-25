@@ -135,8 +135,10 @@ describe('knowledge_search tool', () => {
         kind: 'tools',
         toolCalls: [{ name: 'knowledge_search', input: { query: 'contact' } }],
       },
-      { kind: 'tools', text: '{{F1}} You can call 0000.' }, // number typed by the model
-      { kind: 'tools', text: '{{F1}} The details are in {{F2}}' },
+      // Drafts are in the customer's language so that the display gate, not
+      // the reply-language check, is what this test exercises.
+      { kind: 'tools', text: '{{F1}} 0000 raqamiga qoʻngʻiroq qiling.' }, // number typed by the model
+      { kind: 'tools', text: '{{F1}} Batafsil maʼlumot: {{F2}}' },
     ]);
     const { result } = await runTurn({
       provider,

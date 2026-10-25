@@ -1,0 +1,867 @@
+[
+ {
+  "id": "lc-edu-en-01",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_confirm",
+  "description": "Propose, confirm, execute once (native idempotency): verified success message",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-02",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_confirm",
+  "description": "Lost response, lookup finds the record: success without a second create",
+  "crm": {
+   "idempotency": "lookup",
+   "writes": [
+    "commit-then-timeout"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "execute": "untilFinal"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-03",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_confirm",
+  "description": "The phone is collected first, then proposed, confirmed and executed",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {},
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "+998 90 123 45 67",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-04",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_confirm",
+  "description": "An operator takes over after confirmation: executed, but the bot stays silent",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "operatorTakesOver": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "received"
+  }
+ },
+ {
+  "id": "lc-edu-en-05",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_decline",
+  "description": "Decline: nothing is written",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "no"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "DECLINED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "declined"
+  }
+ },
+ {
+  "id": "lc-edu-en-06",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_decline",
+  "description": "An unrelated message retires the proposal; a later \"yes\" confirms nothing",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "How much is the IELTS course?",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   },
+   {
+    "say": "yes",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUPERSEDED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-en-07",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_failure",
+  "description": "Unclear outcome through an allowed unprotected connector: UNCERTAIN and handover, never success",
+  "crm": {
+   "idempotency": "none",
+   "writes": [
+    "commit-then-timeout"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "UNCERTAIN"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "ACTION_OUTCOME_UNKNOWN",
+   "handover": "ACTION_OUTCOME_UNKNOWN"
+  },
+  "tenant": {
+   "actionMode": "live",
+   "allowUnprotectedConnector": true
+  }
+ },
+ {
+  "id": "lc-edu-en-08",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_failure",
+  "description": "Rejected on every attempt: FAILED after the bound, handover, honest message",
+  "crm": {
+   "idempotency": "native",
+   "writes": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "execute": "untilFinal"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "FAILED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 6,
+   "lastMessage": "ACTION_FAILED",
+   "handover": "ACTION_FAILED"
+  }
+ },
+ {
+  "id": "lc-edu-en-09",
+  "pack": "education",
+  "locale": "en",
+  "category": "action_failure",
+  "description": "Policy revoked between confirmation and execution: nothing written, honest message",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "revokePolicy": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "CANCELLED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "ACTION_FAILED",
+   "handover": "ACTION_FAILED"
+  }
+ },
+ {
+  "id": "lc-edu-en-10",
+  "pack": "education",
+  "locale": "en",
+  "category": "duplicate_request",
+  "description": "Telegram redelivers the confirmation: one operation, one CRM write",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "say": "yes",
+    "redeliver": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-11",
+  "pack": "education",
+  "locale": "en",
+  "category": "duplicate_request",
+  "description": "The execution job is delivered twice: one CRM call",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "twice"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-12",
+  "pack": "education",
+  "locale": "en",
+  "category": "duplicate_request",
+  "description": "Two workers run the same execution at once: one CRM call",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "concurrent"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-en-13",
+  "pack": "education",
+  "locale": "en",
+  "category": "duplicate_request",
+  "description": "A second \"yes\" after success creates nothing new",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "say": "yes",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-en-14",
+  "pack": "education",
+  "locale": "en",
+  "category": "tenant_isolation",
+  "description": "Another tenant's customer saying \"yes\" and its worker cannot touch this proposal",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes",
+    "tenant": "B",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {},
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "crossTenantExecute": true
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "PROPOSED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "proposal",
+   "otherTenantUntouched": true
+  }
+ },
+ {
+  "id": "lc-edu-en-15",
+  "pack": "education",
+  "locale": "en",
+  "category": "authorization",
+  "description": "Action switched off for the tenant: an ordinary answer, no proposal",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  },
+  "tenant": {
+   "actionMode": "off",
+   "allowUnprotectedConnector": false
+  }
+ },
+ {
+  "id": "lc-edu-en-16",
+  "pack": "education",
+  "locale": "en",
+  "category": "authorization",
+  "description": "An unprotected connector is not used unless the tenant allows it",
+  "crm": {
+   "idempotency": "none"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-en-17",
+  "pack": "education",
+  "locale": "en",
+  "category": "shadow_mode",
+  "description": "SHADOW proposes nothing, executes nothing and sends nothing",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS, mornings, I want to enrol",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "en",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yes",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "en",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "The {{F1}} course is a good fit."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "none"
+  },
+  "agentMode": "SHADOW"
+ }
+]

@@ -17,7 +17,8 @@ export type CommandRejection =
   | 'ILLEGAL_STATE'
   | 'ALREADY_TAKEN'
   | 'NOT_ASSIGNED'
-  | 'EMPTY_TEXT';
+  | 'EMPTY_TEXT'
+  | 'NO_LEAD';
 
 export type CommandResult =
   | {
@@ -432,6 +433,33 @@ export class HandoverService {
         return { status: 'OK', state: c.conversation.state } as const;
       },
       { length: text.length },
+    );
+  }
+
+  /** Changes the status of the conversation's latest lead (audited, idempotent). */
+  setLeadStatus(
+    command: CommandBase & { status: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST' },
+  ): Promise<CommandResult> {
+    return this.command(
+      'operator.set_lead_status',
+      command,
+      async (c) => {
+        const lead = await c.tx.lead.findFirst({
+          where: {
+            tenantId: command.tenantId,
+            conversationId: c.conversation.id,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        });
+        if (!lead) return { status: 'REJECTED', code: 'NO_LEAD' } as const;
+        await c.tx.lead.updateMany({
+          where: { tenantId: command.tenantId, id: lead.id },
+          data: { status: command.status },
+        });
+        return { status: 'OK', state: c.conversation.state } as const;
+      },
+      { leadStatus: command.status },
     );
   }
 }

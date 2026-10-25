@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
+import { ActionsModule } from '../actions/actions.module.js';
 import { ConnectorsModule } from '../connectors/connectors.module.js';
 import type { LlmProvider } from '../core/llm/llm-provider.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
@@ -15,7 +16,12 @@ import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
 @Module({
-  imports: [PersistenceModule, ConnectorsModule, KnowledgeModule],
+  imports: [
+    PersistenceModule,
+    ConnectorsModule,
+    KnowledgeModule,
+    ActionsModule,
+  ],
   providers: [
     LlmUsageStore,
     LlmBudgetLedger,

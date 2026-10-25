@@ -1,0 +1,867 @@
+[
+ {
+  "id": "lc-edu-uz-latn-01",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "Propose, confirm, execute once (native idempotency): verified success message",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-02",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "Lost response, lookup finds the record: success without a second create",
+  "crm": {
+   "idempotency": "lookup",
+   "writes": [
+    "commit-then-timeout"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "execute": "untilFinal"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-03",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "The phone is collected first, then proposed, confirmed and executed",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {},
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "+998 90 123 45 67",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-04",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "An operator takes over after confirmation: executed, but the bot stays silent",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "operatorTakesOver": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "received"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-05",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_decline",
+  "description": "Decline: nothing is written",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "yo'q"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "DECLINED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "declined"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-06",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_decline",
+  "description": "An unrelated message retires the proposal; a later \"yes\" confirms nothing",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "IELTS kursi narxi qancha?",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   },
+   {
+    "say": "ha",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUPERSEDED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-07",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_failure",
+  "description": "Unclear outcome through an allowed unprotected connector: UNCERTAIN and handover, never success",
+  "crm": {
+   "idempotency": "none",
+   "writes": [
+    "commit-then-timeout"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "UNCERTAIN"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "ACTION_OUTCOME_UNKNOWN",
+   "handover": "ACTION_OUTCOME_UNKNOWN"
+  },
+  "tenant": {
+   "actionMode": "live",
+   "allowUnprotectedConnector": true
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-08",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_failure",
+  "description": "Rejected on every attempt: FAILED after the bound, handover, honest message",
+  "crm": {
+   "idempotency": "native",
+   "writes": [
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject",
+    "reject"
+   ]
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "execute": "untilFinal"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "FAILED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 6,
+   "lastMessage": "ACTION_FAILED",
+   "handover": "ACTION_FAILED"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-09",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_failure",
+  "description": "Policy revoked between confirmation and execution: nothing written, honest message",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "revokePolicy": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "CANCELLED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "ACTION_FAILED",
+   "handover": "ACTION_FAILED"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-10",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "duplicate_request",
+  "description": "Telegram redelivers the confirmation: one operation, one CRM write",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "say": "ha",
+    "redeliver": true
+   },
+   {
+    "execute": "once"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-11",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "duplicate_request",
+  "description": "The execution job is delivered twice: one CRM call",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "twice"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-12",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "duplicate_request",
+  "description": "Two workers run the same execution at once: one CRM call",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "concurrent"
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "succeeded"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-13",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "duplicate_request",
+  "description": "A second \"yes\" after success creates nothing new",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha"
+   },
+   {
+    "execute": "once"
+   },
+   {
+    "say": "ha",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "SUCCEEDED"
+   ],
+   "crmRecords": 1,
+   "crmCalls": 1,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-14",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "tenant_isolation",
+  "description": "Another tenant's customer saying \"yes\" and its worker cannot touch this proposal",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha",
+    "tenant": "B",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {},
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "crossTenantExecute": true
+   }
+  ],
+  "expect": {
+   "proposals": [
+    "PROPOSED"
+   ],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "proposal",
+   "otherTenantUntouched": true
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-15",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "authorization",
+  "description": "Action switched off for the tenant: an ordinary answer, no proposal",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  },
+  "tenant": {
+   "actionMode": "off",
+   "allowUnprotectedConnector": false
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-16",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "authorization",
+  "description": "An unprotected connector is not used unless the tenant allows it",
+  "crm": {
+   "idempotency": "none"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "answer"
+  }
+ },
+ {
+  "id": "lc-edu-uz-latn-17",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "shadow_mode",
+  "description": "SHADOW proposes nothing, executes nothing and sends nothing",
+  "crm": {
+   "idempotency": "native"
+  },
+  "contact": {
+   "phone": "+998901234567"
+  },
+  "steps": [
+   {
+    "say": "IELTS ertalab, yozilmoqchiman",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "booking_interest",
+      "language": "uz",
+      "script": "Latn"
+     }
+    ]
+   },
+   {
+    "say": "ha",
+    "model": [
+     {
+      "kind": "extract",
+      "slots": {
+       "subject": "IELTS",
+       "preferredTime": "morning"
+      },
+      "intent": "other",
+      "language": "uz",
+      "script": "Latn"
+     },
+     {
+      "kind": "respond",
+      "text": "Sizga {{F1}} kursi mos keladi."
+     }
+    ]
+   }
+  ],
+  "expect": {
+   "proposals": [],
+   "crmRecords": 0,
+   "crmCalls": 0,
+   "lastMessage": "none"
+  },
+  "agentMode": "SHADOW"
+ }
+]

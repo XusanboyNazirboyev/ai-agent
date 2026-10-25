@@ -3,6 +3,7 @@ import { HttpException } from '@nestjs/common';
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { retireForeignBacklog } from './testing/outbox.js';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import type { AppEnvironment } from '../../config/environment.js';
 import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
@@ -353,6 +354,7 @@ describe('Telegram persistence and processing integration', () => {
       prisma as unknown as PrismaService,
       { sendMessage } as unknown as TelegramSender,
     );
+    await retireForeignBacklog(prisma, [fixture.tenantId]);
     const runtime = new TelegramQueueRuntime(
       config({ REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379' }),
       prisma as unknown as PrismaService,

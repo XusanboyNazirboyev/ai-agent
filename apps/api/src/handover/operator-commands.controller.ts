@@ -14,11 +14,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { OperatorRequestGuard } from './operator-request-guard.js';
 import { HandoverService, type CommandResult } from './handover.service.js';
-import {
-  OperatorTokenGuard,
-  type AuthenticatedOperator,
-} from './operator-auth.js';
+import { type AuthenticatedOperator } from './operator-auth.js';
 
 export interface CommandResponse {
   status: 'ok' | 'duplicate';
@@ -55,8 +53,12 @@ function error(
  * take-over race answers 409. Full session auth, CSRF and the role matrix of
  * the web inbox are Phase 6A.
  */
+const LEAD_STATUS = z.object({
+  status: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']),
+});
+
 @Controller('api/v1/handovers')
-@UseGuards(OperatorTokenGuard)
+@UseGuards(OperatorRequestGuard)
 export class OperatorCommandsController {
   constructor(private readonly handovers: HandoverService) {}
 
@@ -97,6 +99,10 @@ export class OperatorCommandsController {
       case 'FORBIDDEN':
         throw new ForbiddenException(
           error('FORBIDDEN', 'Operator may not do this'),
+        );
+      case 'NO_LEAD':
+        throw new ConflictException(
+          error('NO_LEAD', 'This conversation has no lead yet'),
         );
       case 'EMPTY_TEXT':
         throw new BadRequestException(
@@ -202,6 +208,30 @@ export class OperatorCommandsController {
       await this.handovers.addNote({
         ...this.base(request.operator, id, key),
         text: this.text(body),
+      }),
+    );
+  }
+
+  @Post(':id/lead-status')
+  @HttpCode(200)
+  async leadStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: unknown,
+    @Req() request: { operator: AuthenticatedOperator },
+  ): Promise<CommandResponse> {
+    const parsed = LEAD_STATUS.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException(
+        error(
+          'INVALID_BODY',
+          'Body must be { "status": "NEW" | "IN_PROGRESS" | "WON" | "LOST" }',
+        ),
+      );
+    return this.outcome(
+      await this.handovers.setLeadStatus({
+        ...this.base(request.operator, id, key),
+        status: parsed.data.status,
       }),
     );
   }

@@ -50,6 +50,20 @@ export function educationConnector(
   );
 }
 
+/** The fictional tourism catalog (second-domain conformance example). */
+export function tourismConnector(
+  overrides: Partial<ConstructorParameters<typeof MockConnector>[1]> = {},
+): MockConnector {
+  return new MockConnector(
+    { tenantId: 'tenant-eval', connectorKey: 'mock' },
+    {
+      sourceSystem: 'mock-tourism',
+      items: allFixtures('mock-tourism'),
+      ...overrides,
+    },
+  );
+}
+
 export interface TurnRun {
   readonly result: AgentTurnResult;
   readonly usage: readonly LlmUsageEntry[];
@@ -72,6 +86,8 @@ export async function runTurn(options: {
   input?: Partial<AgentTurnInput>;
   now?: Date;
   knowledge?: KnowledgeSearch;
+  /** Locale packs (default: all); mutation tests replace them. */
+  locales?: LocaleRegistry;
 }): Promise<TurnRun> {
   const usage: LlmUsageEntry[] = [];
   const budget = new TurnBudget(
@@ -107,7 +123,7 @@ export async function runTurn(options: {
     },
     {
       pack: options.pack ?? EDUCATION_PACK,
-      locales: LOCALES,
+      locales: options.locales ?? LOCALES,
       connector:
         options.connector === null
           ? undefined
@@ -123,16 +139,15 @@ export async function runTurn(options: {
   return { result, usage, budget };
 }
 
-/** A schema-valid extraction with the given slots and intent. */
+/** A schema-valid extraction with the given slots and intent (any pack). */
 export function extraction(
   slots: Record<string, string | null>,
   intent = 'search',
   language = 'uz',
   script = 'Latn',
+  pack: DomainPack = EDUCATION_PACK,
 ): { kind: 'structured'; value: unknown } {
-  const all = Object.fromEntries(
-    EDUCATION_PACK.slots.map((slot) => [slot.key, null]),
-  );
+  const all = Object.fromEntries(pack.slots.map((slot) => [slot.key, null]));
   return {
     kind: 'structured',
     value: { language, script, intent, slots: { ...all, ...slots } },

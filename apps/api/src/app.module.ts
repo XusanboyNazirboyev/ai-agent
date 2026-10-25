@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { resolve } from 'node:path';
 import { validateEnvironment } from './config/environment.js';
 import { HealthController } from './health/health.controller.js';
+import { WebInboxModule } from './webinbox/webinbox.module.js';
 import { TelegramModule } from './channels/telegram/telegram.module.js';
 import { AgentModule } from './agent/agent.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
@@ -12,13 +13,15 @@ import { PersistenceModule } from './persistence/persistence.module.js';
 @Module({
   imports: [
     TelegramModule,
+    WebInboxModule,
     BackgroundModule,
     PersistenceModule,
     ConnectorsModule,
     AgentModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: resolve(process.cwd(), '../../.env'),
+      // ENV_FILE lets an isolated run (e2e) use its own file instead of .env.
+      envFilePath: process.env.ENV_FILE ?? resolve(process.cwd(), '../../.env'),
       validate: validateEnvironment,
     }),
   ],

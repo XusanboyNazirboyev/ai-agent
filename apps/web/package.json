@@ -2,5 +2,45 @@
   "name": "@agentcore/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Placeholder for the future AgentCore operator web app"
+  "description": "AgentCore Web Operator Inbox (Phase 6A)",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "next build",
+    "start": "NODE_ENV=production node server.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"e2e/**/*.ts\" \"*.mjs\"",
+    "format": "prettier --config ../../packages/config/prettier.json --write \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,mts,json}\"",
+    "format:check": "prettier --config ../../packages/config/prettier.json --check \"src/**/*.{ts,tsx,css,json}\" \"e2e/**/*.ts\" \"*.{ts,mjs,mts,json}\"",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "intl-messageformat": "^12.1.4",
+    "next": "^16.4.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@agentcore/config": "workspace:*",
+    "@axe-core/playwright": "4.11.3",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "jsdom": "^26.0.0",
+    "prettier": "^3.6.2",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.46.4",
+    "vitest": "^4.1.3"
+  }
 }

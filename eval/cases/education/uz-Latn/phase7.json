@@ -1,0 +1,417 @@
+[
+ {
+  "id": "edu7-uz-latn-01",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "regulated_info",
+  "description": "Regulated questions are never answered from memory",
+  "input": {
+   "text": "Sizning sertifikatingiz xorijda tan olinadimi?"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "regulated_info",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "HANDOVER",
+   "handover": "LEGAL_UNVERIFIED",
+   "providerCalls": 1
+  }
+ },
+ {
+  "id": "edu7-uz-latn-02",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "regulated_info",
+  "description": "Regulated questions are never answered from memory",
+  "input": {
+   "text": "Talaba vizasi uchun qanday hujjatlar kerak?"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "regulated_info",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "HANDOVER",
+   "handover": "LEGAL_UNVERIFIED",
+   "providerCalls": 1
+  }
+ },
+ {
+  "id": "edu7-uz-latn-03",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "regulated_info",
+  "description": "Regulated questions are never answered from memory",
+  "input": {
+   "text": "O'quv markazingiz litsenziyasi bormi?"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "regulated_info",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "HANDOVER",
+   "handover": "LEGAL_UNVERIFIED",
+   "providerCalls": 1
+  }
+ },
+ {
+  "id": "edu7-uz-latn-04",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_field_question",
+  "description": "Enrolment interest without a time asks the action’s next field",
+  "input": {
+   "text": "IELTS kursiga yozilmoqchiman",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    }
+   }
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "booking_interest",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ASKED_SLOT",
+   "askedSlot": "action:course_enquiry:slots.preferredTime",
+   "action": "NONE"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-05",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "All fields known: proposal with exactly the declared fields",
+  "input": {
+   "text": "IELTS ertalab, yozilmoqchiman",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    }
+   }
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS",
+     "preferredTime": "morning"
+    },
+    "intent": "booking_interest",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ACTION_PROPOSED",
+   "action": "PROPOSE",
+   "actionPayloadKeys": [
+    "contact.phone",
+    "slots.preferredTime",
+    "slots.subject"
+   ],
+   "providerCalls": 1,
+   "replyIncludes": [
+    "IELTS"
+   ]
+  }
+ },
+ {
+  "id": "edu7-uz-latn-06",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "An exact confirmation is decided by code",
+  "input": {
+   "text": "ha",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    },
+    "pending": true
+   },
+   "conversationLocale": "uz-Latn"
+  },
+  "scripted": [],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ACTION_CONFIRMED",
+   "action": "CONFIRM",
+   "providerCalls": 0
+  }
+ },
+ {
+  "id": "edu7-uz-latn-07",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_confirm",
+  "description": "A conditional \"yes, but\" is not a confirmation",
+  "input": {
+   "text": "ha, lekin ertaga",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    },
+    "pending": true
+   },
+   "conversationLocale": "uz-Latn"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {},
+    "intent": "other",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "action": "SUPERSEDE"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-08",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_decline",
+  "description": "An exact decline cancels without a model call",
+  "input": {
+   "text": "yo'q",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    },
+    "pending": true
+   },
+   "conversationLocale": "uz-Latn"
+  },
+  "scripted": [],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ACTION_DECLINED",
+   "action": "DECLINE",
+   "providerCalls": 0
+  }
+ },
+ {
+  "id": "edu7-uz-latn-09",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_decline",
+  "description": "A price question retires the open proposal",
+  "input": {
+   "text": "IELTS kursi narxi qancha?",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    },
+    "pending": true
+   },
+   "conversationLocale": "uz-Latn"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "price",
+    "language": "uz",
+    "script": "Latn"
+   },
+   {
+    "kind": "respond",
+    "text": "Sizga {{F1}} kursi mos keladi."
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "action": "SUPERSEDE",
+   "outcome": "ANSWERED"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-10",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "action_failure",
+  "description": "A model draft claiming registration is blocked twice",
+  "input": {
+   "text": "IELTS ertalab",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    }
+   }
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS"
+    },
+    "intent": "search",
+    "language": "uz",
+    "script": "Latn"
+   },
+   {
+    "kind": "respond",
+    "text": "Siz {{F1}} kursiga ro'yxatdan o'tdingiz."
+   },
+   {
+    "kind": "respond",
+    "text": "Siz {{F1}} kursiga ro'yxatdan o'tdingiz."
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "HANDOVER",
+   "handover": "GUARDRAIL"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-11",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "duplicate_request",
+  "description": "A confirmation phrase with no open proposal confirms nothing",
+  "input": {
+   "text": "ha",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    }
+   }
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {},
+    "intent": "other",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ASKED_SLOT",
+   "action": "NONE"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-12",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "authorization",
+  "description": "With the action not enabled, enrolment interest is an ordinary answer",
+  "input": {
+   "text": "IELTS ertalab, yozilmoqchiman",
+   "action": {
+    "contact": {
+     "phone": "+998901234567"
+    },
+    "enabled": false
+   }
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "IELTS",
+     "preferredTime": "morning"
+    },
+    "intent": "booking_interest",
+    "language": "uz",
+    "script": "Latn"
+   },
+   {
+    "kind": "respond",
+    "text": "Sizga {{F1}} kursi mos keladi."
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "ANSWERED",
+   "action": "NONE"
+  }
+ },
+ {
+  "id": "edu7-uz-latn-13",
+  "pack": "education",
+  "locale": "uz-Latn",
+  "category": "tenant_isolation",
+  "description": "An education tenant never shows another domain’s catalog",
+  "input": {
+   "text": "Antalyaga tur kerak"
+  },
+  "scripted": [
+   {
+    "kind": "extract",
+    "slots": {
+     "subject": "Antalya"
+    },
+    "intent": "search",
+    "language": "uz",
+    "script": "Latn"
+   }
+  ],
+  "expect": {
+   "locale": "uz-Latn",
+   "replyScript": "Latn",
+   "outcome": "NO_RESULTS",
+   "replyExcludes": [
+    "Antalya 7 nights"
+   ]
+  }
+ }
+]

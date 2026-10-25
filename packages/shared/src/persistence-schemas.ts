@@ -49,6 +49,28 @@ export const TenantConfigSchema = z
     tone: z.string().trim().min(1).max(120).optional(),
     handoverSlaMinutes: z.number().int().positive().max(10_080).optional(),
     fallbackLocale: LocaleIdSchema.optional(),
+    /**
+     * Business actions this tenant enables (ADR 024). Absent = all off.
+     * - mode `live` lets the agent propose and, after confirmation, execute.
+     * - allowUnprotectedConnector: allow execution through a connector without
+     *   native/lookup idempotency (owner decision D-2; default false).
+     * - consent: per-locale text shown with every proposal that sends contact
+     *   data; required for such actions (owner decision D-5 decides wording).
+     */
+    actions: z
+      .record(
+        z.string().regex(/^[a-z][a-z0-9_]{2,40}$/u),
+        z
+          .object({
+            mode: z.enum(['off', 'live']).default('off'),
+            allowUnprotectedConnector: z.boolean().default(false),
+            consent: z
+              .record(LocaleIdSchema, z.string().min(1).max(400))
+              .optional(),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 

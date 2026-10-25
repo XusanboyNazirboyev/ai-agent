@@ -281,6 +281,31 @@ export function describeConnectorConformance(
         ),
         ConnectorErrorCategory.VALIDATION,
       );
+      // Idempotency claims must hold (ADR 023): a connector that declares
+      // native deduplication returns the original record for a repeated key;
+      // a lookup connector finds what it created and nothing else.
+      const mode = connector.writeIdempotency ?? 'none';
+      if (mode === 'native') {
+        const key = `conformance:native:${Date.now()}`;
+        const first = await connector.createLead?.(sampleLead, {
+          idempotencyKey: key,
+        });
+        const again = await connector.createLead?.(sampleLead, {
+          idempotencyKey: key,
+        });
+        expect(again?.crmLeadId).toBe(first?.crmLeadId);
+      }
+      if (mode === 'lookup') {
+        expect(typeof connector.findLeadByIdempotencyKey).toBe('function');
+        const key = `conformance:lookup:${Date.now()}`;
+        expect(await connector.findLeadByIdempotencyKey?.(key)).toBeUndefined();
+        const made = await connector.createLead?.(sampleLead, {
+          idempotencyKey: key,
+        });
+        expect(await connector.findLeadByIdempotencyKey?.(key)).toEqual({
+          crmLeadId: made?.crmLeadId,
+        });
+      }
       if (connector.capabilities.updateLead && created) {
         await expect(
           connector.updateLead?.(created.crmLeadId, {

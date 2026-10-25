@@ -9,13 +9,13 @@
   },
   "scripts": {
     "dev": "pnpm --filter @agentcore/api dev",
-    "build": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api build",
-    "lint": "pnpm --filter @agentcore/api lint && pnpm --filter @agentcore/shared lint",
-    "format": "pnpm --filter @agentcore/api format && pnpm --filter @agentcore/shared format",
-    "format:check": "pnpm --filter @agentcore/api format:check && pnpm --filter @agentcore/shared format:check",
-    "typecheck": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api typecheck",
+    "build": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api build && pnpm --filter @agentcore/web build",
+    "lint": "pnpm --filter @agentcore/api lint && pnpm --filter @agentcore/shared lint && pnpm --filter @agentcore/web lint",
+    "format": "pnpm --filter @agentcore/api format && pnpm --filter @agentcore/shared format && pnpm --filter @agentcore/web format",
+    "format:check": "pnpm --filter @agentcore/api format:check && pnpm --filter @agentcore/shared format:check && pnpm --filter @agentcore/web format:check",
+    "typecheck": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api typecheck && pnpm --filter @agentcore/web typecheck",
     "test": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit",
-    "test:unit": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit",
+    "test:unit": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit && pnpm --filter @agentcore/web test",
     "test:integration": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:integration",
     "test:coverage": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:coverage",
     "db:generate": "pnpm --filter @agentcore/api db:generate",
@@ -24,7 +24,11 @@
     "db:test:prepare": "pnpm --filter @agentcore/api db:test:prepare",
     "db:test:seed": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api db:test:seed",
     "db:test:drift": "pnpm --filter @agentcore/api db:test:drift",
-    "llm:smoke": "pnpm --filter @agentcore/api llm:smoke"
+    "llm:smoke": "pnpm --filter @agentcore/api llm:smoke",
+    "test:web": "pnpm --filter @agentcore/web test",
+    "test:e2e": "pnpm --filter @agentcore/web e2e",
+    "check:onboarding": "node scripts/check-pack-onboarding.mjs",
+    "test:eval": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:eval && node scripts/eval-summary.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

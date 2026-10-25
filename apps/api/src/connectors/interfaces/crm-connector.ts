@@ -71,6 +71,28 @@ export interface ChangeHandler {
 }
 
 /**
+ * How a connector protects a create operation against duplicates when the
+ * same logical write is attempted again (ADR 022 §8, ADR 023):
+ *  - `native`: the remote system deduplicates by the idempotency key we send;
+ *    repeating the call with the same key returns the original record.
+ *  - `lookup`: the connector can find a record it created by that key
+ *    (`findLeadByIdempotencyKey`); a retry after an unclear outcome looks up first.
+ *  - `none`: neither. A call whose outcome is unclear is never repeated
+ *    automatically.
+ * Passing a key never guarantees exactly-once on its own: only what the
+ * remote system honours counts.
+ */
+export type WriteIdempotency = 'native' | 'lookup' | 'none';
+
+/** Stable for every attempt of one logical write; never regenerated per attempt. */
+export interface WriteContext {
+  readonly idempotencyKey: string;
+}
+
+/** Idempotency keys: printable, header-safe, bounded. */
+export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9:_-]{8,200}$/u;
+
+/**
  * Universal CRM connector contract.
  *
  * Connectors declare which capabilities they support and only implement the
@@ -100,9 +122,25 @@ export interface CrmConnector {
     request: AvailabilityRequest,
   ): Promise<Availability>;
   getQuote?(offerId: string, request: QuoteRequest): Promise<Quote>;
-  createLead?(input: LeadInput): Promise<{ crmLeadId: string }>;
+  /** Default `none`. Verified by the registry and the conformance suite. */
+  readonly writeIdempotency?: WriteIdempotency;
+  createLead?(
+    input: LeadInput,
+    context?: WriteContext,
+  ): Promise<{ crmLeadId: string }>;
+  /**
+   * Required when `writeIdempotency` is `lookup`: the record a previous
+   * `createLead` with this key created, or undefined when there is none.
+   * A failure means "could not determine", never "not found".
+   */
+  findLeadByIdempotencyKey?(
+    idempotencyKey: string,
+  ): Promise<{ crmLeadId: string } | undefined>;
   updateLead?(crmLeadId: string, patch: Partial<LeadInput>): Promise<void>;
-  createBooking?(input: BookingInput): Promise<{ bookingId: string }>;
+  createBooking?(
+    input: BookingInput,
+    context?: WriteContext,
+  ): Promise<{ bookingId: string }>;
   subscribeChanges?(handler: ChangeHandler): void;
 
   validateConfiguration?(): Promise<void>;

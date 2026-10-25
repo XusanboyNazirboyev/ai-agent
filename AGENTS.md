@@ -71,6 +71,6 @@ Limit command output (`| tail -n 60`, quiet reporters, grep for failures). Never
 | Operator inbox / admin UI | `docs/spec/10-frontend.md` |
 | Repo layout, definition of done | `docs/spec/11-repo-conventions-dod.md` |
 | Phase gates, acceptance | `docs/spec/12-roadmap.md` |
-| Design decisions made so far | `docs/adr/` (latest: 014) |
+| Design decisions made so far | `docs/adr/` (latest: 024) |
 | Phase 4 compliance status | `docs/PHASE4_COMPLIANCE.md` |
 | Claude Code workflow, managed settings | `docs/CLAUDE_CODE_SETUP.md` |

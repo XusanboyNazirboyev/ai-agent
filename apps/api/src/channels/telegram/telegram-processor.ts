@@ -7,6 +7,7 @@ import {
   isHandoverEvent,
 } from '../../handover/handover-notification.service.js';
 import { LeadService } from '../../leads/lead.service.js';
+import { ActionService } from '../../actions/action.service.js';
 import { LeadSyncService } from '../../leads/lead-sync.service.js';
 import { ShownOffersService } from '../../leads/shown-offers.service.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
@@ -36,6 +37,7 @@ export class TelegramProcessor {
     @Optional() private readonly shownOffers?: ShownOffersService,
     @Optional() private readonly leads?: LeadService,
     @Optional() private readonly leadSync?: LeadSyncService,
+    @Optional() private readonly actions?: ActionService,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
@@ -44,6 +46,12 @@ export class TelegramProcessor {
     }
     if (event.type === 'telegram.send') {
       await this.processSend(event);
+      return;
+    }
+    if (event.type === 'action.execute') {
+      const proposalId = jsonString(event.payload, 'proposalId');
+      if (proposalId && this.actions)
+        await this.actions.execute(event.tenantId, proposalId);
       return;
     }
     if (event.type === 'crm.lead.sync') {

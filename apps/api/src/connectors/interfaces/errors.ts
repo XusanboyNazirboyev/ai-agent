@@ -22,6 +22,12 @@ export interface ConnectorErrorOptions {
   cause?: unknown;
   /** Upstream-requested delay (e.g. `Retry-After`) before a retry may run. */
   retryAfterMs?: number;
+  /**
+   * For writes: whether the remote side may have applied the operation.
+   * `no` only when the connector can show it did not (rejected before or by
+   * the remote). Absent = derived from the category (see writeExecutionOf).
+   */
+  executed?: 'no' | 'unknown';
 }
 
 /** Base error for all connector failures. Never includes credentials or raw customer payloads. */
@@ -31,6 +37,7 @@ export class ConnectorError extends Error {
   readonly retryable: boolean;
   readonly source: string | undefined;
   readonly retryAfterMs: number | undefined;
+  readonly executed: 'no' | 'unknown' | undefined;
 
   constructor(options: ConnectorErrorOptions) {
     super(options.message);
@@ -40,6 +47,7 @@ export class ConnectorError extends Error {
     this.retryable = options.retryable ?? false;
     this.source = options.source;
     this.retryAfterMs = options.retryAfterMs;
+    this.executed = options.executed;
     if (options.cause instanceof Error) {
       this.cause = options.cause;
     }
@@ -59,6 +67,7 @@ export class ConnectorConfigurationError extends ConnectorError {
       retryable: false,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorConfigurationError';
   }
@@ -77,6 +86,7 @@ export class ConnectorUnauthorizedError extends ConnectorError {
       retryable: false,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorUnauthorizedError';
   }
@@ -95,6 +105,7 @@ export class ConnectorNotFoundError extends ConnectorError {
       retryable: false,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorNotFoundError';
   }
@@ -113,6 +124,7 @@ export class ConnectorTimeoutError extends ConnectorError {
       retryable: true,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorTimeoutError';
   }
@@ -133,6 +145,7 @@ export class ConnectorUnavailableError extends ConnectorError {
       source: options.source,
       cause: options.cause,
       retryAfterMs: options.retryAfterMs,
+      executed: options.executed,
     });
     this.name = 'ConnectorUnavailableError';
   }
@@ -151,6 +164,7 @@ export class ConnectorInvalidResponseError extends ConnectorError {
       retryable: false,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorInvalidResponseError';
   }
@@ -169,6 +183,7 @@ export class ConnectorCapabilityError extends ConnectorError {
       retryable: false,
       source: options.source,
       cause: options.cause,
+      executed: options.executed,
     });
     this.name = 'ConnectorCapabilityError';
   }
@@ -186,4 +201,29 @@ export function connectorErrorCategory(error: unknown): ConnectorErrorCategory {
 
 export function isRetryableConnectorError(error: unknown): boolean {
   return isConnectorError(error) && error.retryable;
+}
+
+/** Categories whose failure means the remote side did not apply a write. */
+const NOT_EXECUTED_CATEGORIES: ReadonlySet<ConnectorErrorCategory> = new Set([
+  ConnectorErrorCategory.CONFIGURATION,
+  ConnectorErrorCategory.AUTHENTICATION,
+  ConnectorErrorCategory.AUTHORIZATION,
+  ConnectorErrorCategory.VALIDATION,
+  ConnectorErrorCategory.CAPABILITY,
+  ConnectorErrorCategory.RATE_LIMITED,
+]);
+
+/**
+ * Execution outcome of a failed write. `NOT_EXECUTED` is claimed only when
+ * the failure proves the remote side did not apply it (local validation,
+ * configuration, an explicit 4xx rejection); timeouts, lost connections,
+ * 5xx, unreadable responses and unknown errors are `UNCERTAIN`.
+ */
+export function writeExecutionOf(error: unknown): 'NOT_EXECUTED' | 'UNCERTAIN' {
+  if (!isConnectorError(error)) return 'UNCERTAIN';
+  if (error.executed === 'no') return 'NOT_EXECUTED';
+  if (error.executed === 'unknown') return 'UNCERTAIN';
+  return NOT_EXECUTED_CATEGORIES.has(error.category)
+    ? 'NOT_EXECUTED'
+    : 'UNCERTAIN';
 }

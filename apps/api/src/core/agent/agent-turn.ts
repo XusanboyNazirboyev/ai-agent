@@ -23,6 +23,15 @@ import {
   type StuckPolicy,
 } from './stuck.js';
 import type { KnowledgeSearch } from '../knowledge/passage.js';
+import {
+  ACTION_SLOT_PREFIX,
+  confirmationOf,
+  planAction,
+  proposalDigest,
+  renderProposal,
+  type ActionDecision,
+  type ActionTurnContext,
+} from '../actions/actions.js';
 import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
 import { FactStore, type Fact } from './facts.js';
 import { checkDraft, type GuardrailViolation } from './guardrails.js';
@@ -101,6 +110,8 @@ export interface AgentTurnInput {
     readonly priorTurns: readonly PriorTurnSignal[];
     readonly stuck?: StuckPolicy;
   };
+  /** Business actions this turn may propose or confirm (ADR 024). */
+  readonly action?: ActionTurnContext;
   /** What is known about the contact; absent = never ask for a phone. */
   readonly contact?: {
     readonly hasPhone: boolean;
@@ -137,7 +148,10 @@ export type TurnOutcome =
   | 'NO_RESULTS'
   | 'HANDOVER'
   | 'FALLBACK'
-  | 'CLARIFICATION_REQUIRED';
+  | 'CLARIFICATION_REQUIRED'
+  | 'ACTION_PROPOSED'
+  | 'ACTION_CONFIRMED'
+  | 'ACTION_DECLINED';
 
 export interface AgentTurnResult {
   readonly reply: string;
@@ -170,6 +184,8 @@ export interface AgentTurnResult {
   readonly safety?: SafetyOutcome;
   /** Provider error code when the turn ended because a model call failed. */
   readonly llmFailure?: string;
+  /** What the commit step must do with business-action proposals. */
+  readonly action?: ActionDecision;
 }
 
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
@@ -257,6 +273,9 @@ export async function runAgentTurn(
     : undefined;
 
   const locale = (): LocalePack => locales.get(localeId);
+  // Any message other than an exact confirmation or decline retires the open
+  // proposal: what the customer confirms is always what they were shown last.
+  let supersede: ActionDecision | undefined;
   const fingerprint = textFingerprint(normalizeForMatching(input.customerText));
   const build = (
     reply: string,
@@ -279,6 +298,7 @@ export async function runAgentTurn(
     languageAssessment,
     textFingerprint: fingerprint,
     shownFactIds: [],
+    ...(supersede ? { action: supersede } : {}),
     ...extra,
   });
   const finish = (
@@ -364,6 +384,25 @@ export async function runAgentTurn(
       optOut: true,
     });
   }
+  // Tier-0: an exact confirmation or decline of the open proposal is decided
+  // by code, before any model call. A model-classified "yes" never confirms.
+  const pending = input.action?.pending;
+  if (pending) {
+    const answer = confirmationOf(input.customerText, locales.all());
+    if (answer === 'CONFIRM')
+      return build(locale().templates.actions.received, 'ACTION_CONFIRMED', {
+        action: {
+          kind: 'CONFIRM',
+          proposalId: pending.id,
+          digest: pending.digest,
+        },
+      });
+    if (answer === 'DECLINE')
+      return build(locale().templates.actions.declined, 'ACTION_DECLINED', {
+        action: { kind: 'DECLINE', proposalId: pending.id },
+      });
+    supersede = { kind: 'SUPERSEDE', proposalId: pending.id };
+  }
   const early = languageStop(
     decideBeforeModel(languageAssessment, spoken, languagePolicy),
   );
@@ -436,6 +475,55 @@ export async function runAgentTurn(
   // Truthful AI disclosure when asked (addendum §3.10).
   if (intent === 'ai_question')
     return finish(locale().templates.aiDisclosure, 'ANSWERED');
+
+  // Business action: started by a trigger intent or continued while its
+  // fields are being collected. Questions and the proposal are code-rendered.
+  const actionContext = input.action;
+  const candidate = actionContext?.available.find(
+    (entry) =>
+      (intent !== undefined &&
+        (entry.spec.triggerIntents as readonly string[]).includes(intent)) ||
+      entry.spec.key === actionContext.collecting,
+  );
+  if (actionContext && candidate) {
+    const plan = planAction(candidate.spec, slots, actionContext.contact);
+    if (plan.kind === 'ASK') {
+      const field = plan.field;
+      const question =
+        field.from.kind === 'slot'
+          ? pack.slots.find(
+              (slot) => slot.key === (field.from as { slot: string }).slot,
+            )?.questions[localeId]
+          : field.from.field === 'phone'
+            ? locale().templates.phoneRequest
+            : locale().templates.actions.askName;
+      return finish(
+        question ?? locale().templates.notUnderstood,
+        'ASKED_SLOT',
+        {
+          askedSlot: `${ACTION_SLOT_PREFIX}${candidate.spec.key}:${field.name}`,
+        },
+      );
+    }
+    return finish(
+      renderProposal(candidate, plan.payload, locale()),
+      'ACTION_PROPOSED',
+      {
+        action: {
+          kind: 'PROPOSE',
+          actionKey: candidate.spec.key,
+          payload: plan.payload,
+          digest: proposalDigest(
+            actionContext.scope,
+            candidate.spec.key,
+            plan.payload,
+          ),
+          expiresAfterMinutes: candidate.spec.expiresAfterMinutes,
+          ...(pending ? { supersedes: pending.id } : {}),
+        },
+      },
+    );
+  }
 
   // A question about what the law or an authority requires is answered only
   // from verified, recent regulated knowledge; otherwise nobody answers it but

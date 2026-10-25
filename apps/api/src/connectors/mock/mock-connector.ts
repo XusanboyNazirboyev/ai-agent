@@ -31,6 +31,7 @@ import type {
   CrmConnector,
   ListItemsParams,
   QuoteRequest,
+  WriteContext,
 } from '../interfaces/crm-connector.js';
 import {
   allFixtures,
@@ -333,15 +334,25 @@ export class MockConnector implements CrmConnector {
     };
   }
 
-  async createLead(input: LeadInput): Promise<{ crmLeadId: string }> {
+  /** The mock deduplicates creates by idempotency key, like a native API. */
+  readonly writeIdempotency = 'native' as const;
+  private readonly leadsByKey = new Map<string, string>();
+
+  async createLead(
+    input: LeadInput,
+    context?: WriteContext,
+  ): Promise<{ crmLeadId: string }> {
     this.requireCapability('createLead', 'createLead');
     const lead = this.input(LeadInputSchema, input, 'lead');
     this.recordCall();
     this.shouldFail();
 
+    const existing = context && this.leadsByKey.get(context.idempotencyKey);
+    if (existing) return { crmLeadId: existing };
     this.leadCounter += 1;
     const crmLeadId = `${this.sourceSystem}:lead:${this.leadCounter}`;
     this.leads.set(crmLeadId, lead);
+    if (context) this.leadsByKey.set(context.idempotencyKey, crmLeadId);
     return { crmLeadId };
   }
 
