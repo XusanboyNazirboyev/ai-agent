@@ -237,5 +237,15 @@ test('the question form and the assistant switch have no violations', async ({
   await page.getByTestId('faq-add').click();
   await expect(page.getByTestId('faq-dialog')).toBeVisible();
   await audit(page, 'faq form');
+  await page.getByTestId('faq-cancel').click();
+  await page.getByTestId('faq-import').click();
+  await expect(page.getByTestId('faq-import-dialog')).toBeVisible();
+  await page.getByTestId('faq-import-file').setInputFiles({
+    name: 'a.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('question,answer\nIs it free?,No.\n'),
+  });
+  await expect(page.getByTestId('faq-import-summary')).toBeVisible();
+  await audit(page, 'faq import dialog');
   await context.close();
 });

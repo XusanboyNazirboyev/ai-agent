@@ -131,6 +131,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Safari/Firefox draw their own arrows on a select unless told otherwise. */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
 /* One visible focus treatment for every interactive element. */
 :focus-visible {
   outline: 2px solid var(--ring);

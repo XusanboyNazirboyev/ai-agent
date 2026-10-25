@@ -1126,6 +1126,85 @@ describe('assistant mode', () => {
   });
 });
 
+describe('FAQ import', () => {
+  const controller = (): KnowledgeFaqController =>
+    new KnowledgeFaqController(
+      prisma,
+      new KnowledgeService(prisma),
+      new HashingEmbeddingProvider(),
+    );
+
+  it('creates, updates by question instead of duplicating, and reports bad entries one by one', async () => {
+    const w = await world('ADMIN');
+    const s = await signIn(w);
+    const request = { principal: s.principal } as never;
+    const c = controller();
+    const batch = [
+      { question: 'Where are you?', answer: 'Tashkent.', language: 'en' },
+      { question: 'Opening hours?', answer: '9 to 6.' },
+      { question: 'x', answer: 'too short question' },
+      'not an object',
+    ];
+    const first = await c.import(request, {
+      entries: batch,
+      confirmProviderMayReadText: true,
+    });
+    expect(first).toEqual({
+      created: 2,
+      updated: 0,
+      failed: [
+        { index: 2, code: 'INVALID_ENTRY' },
+        { index: 3, code: 'INVALID_ENTRY' },
+      ],
+    });
+    const again = await c.import(request, {
+      entries: [
+        { question: '  where ARE   you? ', answer: 'Samarkand now.' },
+        batch[1],
+      ],
+      confirmProviderMayReadText: true,
+    });
+    expect(again).toEqual({ created: 0, updated: 2, failed: [] });
+    const listed = await c.list(request);
+    expect(listed.items).toHaveLength(2);
+    expect(
+      listed.items.find(
+        (item) => item.question.toLowerCase() === 'where are you?',
+      )?.answer,
+    ).toBe('Samarkand now.');
+  });
+
+  it('needs the writer role, consent, a batch within the limit and an embedder', async () => {
+    const op = await world('OPERATOR');
+    const admin = await world('ADMIN');
+    const asOp = { principal: (await signIn(op)).principal } as never;
+    const asAdmin = { principal: (await signIn(admin)).principal } as never;
+    const c = controller();
+    const entries = [{ question: 'Fine question', answer: 'Fine.' }];
+    await expect(
+      c.import(asOp, { entries, confirmProviderMayReadText: true }),
+    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    for (const bad of [
+      { entries, confirmProviderMayReadText: false },
+      { entries: [], confirmProviderMayReadText: true },
+      {
+        entries: Array.from({ length: 26 }, () => entries[0]),
+        confirmProviderMayReadText: true,
+      },
+    ])
+      await expect(c.import(asAdmin, bad)).rejects.toMatchObject({
+        response: { code: 'INVALID_BODY' },
+      });
+    await expect(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        undefined,
+      ).import(asAdmin, { entries, confirmProviderMayReadText: true }),
+    ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
+  });
+});
+
 describe('FAQ knowledge', () => {
   const faqController = (enabled = true): KnowledgeFaqController =>
     new KnowledgeFaqController(
