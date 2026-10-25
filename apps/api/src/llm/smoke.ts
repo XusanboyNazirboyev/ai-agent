@@ -161,3 +161,51 @@ export function renderStatus(
   );
   return lines.join('\n');
 }
+
+/**
+ * Merges a fresh smoke run into the existing status document: rows of the
+ * providers just tested are replaced (or appended), every other row and all
+ * text after the table (codes note, hand-written observations) are kept. A
+ * run of one provider therefore never deletes what other runs recorded.
+ */
+export function mergeStatus(
+  existing: string | undefined,
+  fresh: string,
+  date: string,
+): string {
+  if (!existing?.includes('| Provider |')) return fresh;
+  const rowProvider = (line: string): string | undefined =>
+    /^\| ([a-z0-9-]+) \|/u.exec(line)?.[1];
+  const isRow = (line: string): boolean =>
+    rowProvider(line) !== undefined && rowProvider(line) !== 'Provider';
+  const freshRows = fresh.split('\n').filter(isRow);
+  const tested = freshRows.map((row) => rowProvider(row)!);
+  const lines = existing.split('\n');
+  const tableStart = lines.findIndex((line) => line.startsWith('| Provider |'));
+  let tableEnd = tableStart + 2; // header + separator
+  while (tableEnd < lines.length && lines[tableEnd].startsWith('|'))
+    tableEnd += 1;
+  const kept = lines.slice(tableStart + 2, tableEnd);
+  const rows = [
+    ...kept.map(
+      (row) =>
+        freshRows.find((f) => rowProvider(f) === rowProvider(row)) ?? row,
+    ),
+    ...freshRows.filter(
+      (f) => !kept.some((row) => rowProvider(row) === rowProvider(f)),
+    ),
+  ];
+  const note = `Rows updated ${date}: ${tested.join(', ') || 'none'}. Other rows keep the result of their own earlier run (see git history).`;
+  const intro = lines
+    .slice(0, tableStart)
+    .filter((line) => !line.startsWith('Rows updated '));
+  // Keep the intro paragraph; put the update note right above the table.
+  return [
+    ...intro.slice(0, -1),
+    note,
+    '',
+    ...lines.slice(tableStart, tableStart + 2),
+    ...rows,
+    ...lines.slice(tableEnd),
+  ].join('\n');
+}
