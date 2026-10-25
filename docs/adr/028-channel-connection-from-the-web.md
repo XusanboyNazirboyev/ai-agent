@@ -1,9 +1,9 @@
 # ADR 028: Connecting a messenger channel from the web UI (proposal)
 
 - **Status:** Accepted for Telegram (owner decisions D-A: encrypted in the database, scope S1-S4, 2026-10-25). Instagram is a documented plan only (see Instagram below).
-  - **Implemented here** (`feat/channel-secret-store`, for `main`): S1 secret store and S2 per-account Telegram credentials.
-  - **Present only on `web/design-pages`, not implemented here:** S3 (connect / enable / disable / test / disconnect API, channel list with capabilities) and S4 (Channels page wizard). They are recorded under "As built on `web/design-pages`" below and must be ported, reviewed and tested before they count as implemented on `main`.
-- **Date:** 2026-10-25 (status and sections reconciled with the `web/design-pages` text on 2026-10-26)
+  - **Implemented on `main`:** S1 secret store, S2 per-account Telegram credentials, and S3 (connect / enable / disable / test / disconnect API, channel list with capabilities), the last through `feat/web-api` with DEF-009 to DEF-011 fixed there.
+  - **Implemented in `feat/web-design-pages`:** S4, the Channels page with the connect wizard. It counts as implemented on `main` only when that branch is merged.
+- **Date:** 2026-10-25 (status and sections reconciled with the `web/design-pages` text on 2026-10-26; S3/S4 status updated 2026-10-27)
 
 ## Context
 - Today one Telegram bot is served per process. `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` and `TELEGRAM_CHANNEL_ACCOUNT_ID` come from the environment; `TelegramWebhookService`, `TelegramSender` and `telegram-bot-api` read them directly. The webhook is registered by the `telegram:live register` script.
@@ -22,8 +22,8 @@
 4. **UI** (Channels page): a wizard Token → Verify (shows the bot's name) → Webhook → Test → Enable. The token field is write-only; after saving it is never shown, not even partly. Status comes from the test checklist, not from a stored flag.
 5. **Gates:** the assistant mode rules (the `agent:mode` command; ADR 027 is only proposed) are unchanged; a freshly connected account is OFF. Telegram calls are tested with an injected transport; a real-Telegram check is a separate, explicitly authorized step and is reported as not run until then.
 
-## As built on `web/design-pages` (differences from the proposal; S3/S4 reference, not on this branch)
-Recorded on `web/design-pages` (S3 `389f4de`, `3e48d49`; S4 `30ca64a`) and kept here unchanged as the reference for porting S3/S4:
+## As built (differences from the proposal; S3 on `main`, S4 in `feat/web-design-pages`)
+Recorded when S3 (`389f4de`, `3e48d49`) and S4 (`30ca64a`) were written on `web/design-pages`:
 - Webhook registration moved from *connect* to *enable*: a connected but disabled bot has no webhook, so Telegram does not deliver updates that would be refused. Order: connect (validate with `getMe`, store token and a generated webhook secret, account DISABLED, assistant OFF) → enable (`setWebhook`, then ACTIVE) → disable (`deleteWebhook`, DISABLED, assistant OFF) → disconnect (also deletes the stored secrets; the account row stays because conversations belong to it).
 - Reconnecting the same bot (same Telegram bot id) in the same tenant replaces the token and keeps the webhook secret; the same bot in another tenant is refused with `ALREADY_CONNECTED` (no hint about who owns it).
 - `ChannelAccount.displayName` (the bot's @username) was added (additive migration). `GET /api/v1/channels` returns `capabilities` (is `SECRETS_MASTER_KEY` set, is `PUBLIC_BASE_URL` set) and a `webhookUrl`; never a secret.

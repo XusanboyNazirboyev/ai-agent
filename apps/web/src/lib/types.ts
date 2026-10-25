@@ -117,6 +117,9 @@ export interface ChannelAccount {
   status: 'ACTIVE' | 'DISABLED';
   agentMode: AgentMode;
   modeRefusals: Partial<Record<AgentMode, ModeRefusal>>;
+  displayName: string | null;
+  credentialSource: 'ui' | 'environment' | 'none';
+  webhookUrl: string | null;
   isTestAccount: boolean;
   credentialsConfigured: boolean;
   operatorGroupConfigured: boolean;
@@ -134,4 +137,23 @@ export interface ContactItem {
   lastConversationId: string | null;
   lastActivityAt: string | null;
   createdAt: string;
+}
+
+export interface ChannelList {
+  items: ChannelAccount[];
+  capabilities: { secretsConfigured: boolean; publicUrlConfigured: boolean };
+}
+
+export interface TelegramTest {
+  tokenValid: boolean;
+  botUsername: string | null;
+  status: 'ACTIVE' | 'DISABLED';
+  webhook: {
+    registered: boolean;
+    matchesExpected: boolean | null;
+    pendingUpdates: number;
+    lastError: string | null;
+    lastErrorAt: string | null;
+  } | null;
+  operatorGroupConfigured: boolean;
 }

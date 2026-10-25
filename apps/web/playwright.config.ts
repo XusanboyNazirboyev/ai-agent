@@ -33,7 +33,18 @@ const PROXY_SECRET =
   process.env.E2E_PROXY_SECRET ??
   (process.env.E2E_PROXY_SECRET = randomBytes(24).toString('hex'));
 
+/** Encrypts the bot tokens saved by the channel-connection e2e; thrown away with the run. */
+const SECRETS_KEY =
+  process.env.E2E_SECRETS_KEY ??
+  (process.env.E2E_SECRETS_KEY = randomBytes(32).toString('base64'));
+
+/** The fake api.telegram.org of the e2e (started by e2e/channels-connect.spec.ts). */
+export const FAKE_TELEGRAM_PORT = 4020;
+
 export const E2E_ENV = {
+  SECRETS_MASTER_KEY: SECRETS_KEY,
+  PUBLIC_BASE_URL: 'https://e2e.example.test',
+  TELEGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
   WEB_PROXY_SECRET: PROXY_SECRET,
   ENV_FILE: resolve(import.meta.dirname, 'e2e/empty.env'),
   NODE_ENV: 'development',

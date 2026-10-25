@@ -189,6 +189,15 @@ describe('source uses the catalog', () => {
       'KNOWLEDGE_DISABLED',
       'EMBEDDING_FAILED',
       'FAQ_LIMIT',
+      'INVALID_TOKEN',
+      'ALREADY_CONNECTED',
+      'NOT_CONNECTED',
+      'SECRETS_NOT_CONFIGURED',
+      'PUBLIC_URL_NOT_CONFIGURED',
+      'TELEGRAM_UNREACHABLE',
+      'TELEGRAM_REJECTED',
+      'INVALID_CHAT_ID',
+      'WEBHOOK_NOT_REMOVED',
       'UNKNOWN',
     ])
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);
