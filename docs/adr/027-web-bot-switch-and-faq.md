@@ -1,4 +1,4 @@
-# ADR 026: Web AI bot switch and FAQ knowledge page
+# ADR 027: Web AI bot switch and FAQ knowledge page
 
 - **Status:** Accepted (branch `web/design-pages`)
 - **Date:** 2026-10-25

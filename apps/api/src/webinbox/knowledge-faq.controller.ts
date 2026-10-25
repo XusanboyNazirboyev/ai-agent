@@ -42,7 +42,7 @@ const Faq = z.object({
     .pipe(z.string().min(1).max(FAQ_ANSWER_MAX)),
   language: z.enum(['uz', 'ru', 'en']).nullish(),
   regulated: z.boolean().default(false),
-  /** The text is sent to the embedding provider (see ADR 026). */
+  /** The text is sent to the embedding provider (see ADR 027). */
   confirmProviderMayReadText: z.literal(true),
 });
 
