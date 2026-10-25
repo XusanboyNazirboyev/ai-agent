@@ -346,6 +346,24 @@ describe('report and cost estimate', () => {
       }),
     );
     expect(markdown).toContain('Invented hard facts');
+    // Reporting only: retail is a separate line and a separate column.
+    expect(markdown).toContain(
+      '**Retail: not runnable (pack missing)** — 1 scenario x language units',
+    );
+    expect(markdown).toContain(
+      '| Metric | Overall | Verdict (overall) | Excluding retail | Verdict (excluding retail) |',
+    );
+    const report = buildReport({
+      label: 'x',
+      agentModel: 'x',
+      customer: 'scripted',
+      runsPerScenario: 2,
+      runs,
+      simulatorCostUsd: 0,
+    });
+    expect(report.overall.values.goalCompletion).toBe(0.5);
+    expect(report.overallExcludingRetail.values.goalCompletion).toBe(1);
+    expect(report.overallExcludingRetail.notRunnable).toBe(0);
     expect(markdown).toContain('not_runnable: no retail pack');
   });
 

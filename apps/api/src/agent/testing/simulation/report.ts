@@ -23,6 +23,10 @@ export interface SimulationReport {
   readonly customer: 'scripted' | 'llm';
   readonly runsPerScenario: number;
   readonly overall: GroupMetrics;
+  /** Same metrics without retail, which has no v1 pack (reporting only; thresholds unchanged). */
+  readonly overallExcludingRetail: GroupMetrics;
+  /** Scenario x language units that could not run because their pack is missing. */
+  readonly packMissingUnits: number;
   readonly byPack: Record<string, GroupMetrics>;
   readonly byPackLanguage: Record<string, GroupMetrics>;
   readonly runs: readonly Omit<RunResult, 'transcript'>[];
@@ -128,6 +132,14 @@ export function buildReport(options: {
   simulatorCostUsd: number;
 }): SimulationReport {
   const overall = aggregate(options.runs);
+  const overallExcludingRetail = aggregate(
+    options.runs.filter((r) => r.pack !== 'retail'),
+  );
+  const packMissingUnits = new Set(
+    options.runs
+      .filter((r) => r.status === 'not_runnable')
+      .map((r) => `${r.scenarioId}/${r.language}`),
+  ).size;
   return {
     generatedAt: new Date().toISOString(),
     label: options.label,
@@ -135,6 +147,8 @@ export function buildReport(options: {
     customer: options.customer,
     runsPerScenario: options.runsPerScenario,
     overall,
+    overallExcludingRetail,
+    packMissingUnits,
     byPack: groupBy(options.runs, (r) => r.pack),
     byPackLanguage: groupBy(options.runs, (r) => `${r.pack}/${r.language}`),
     runs: options.runs.map(({ transcript: _t, ...rest }) => rest),
@@ -196,12 +210,14 @@ export function renderMarkdown(report: SimulationReport): string {
     `Runs ${o.runs} (completed ${o.completed}, errors ${o.errors}, not runnable ${o.notRunnable}, **provider failures ${o.providerFailures}** — runs where the model provider failed and v1 handed over with LLM_UNAVAILABLE; they measure the provider, not the agent); scenario x language units ${o.scenarioUnits}, passed in every run ${o.unitsPassed}.`,
     `Cost: agent $${report.costUsd.agent.toFixed(4)}, simulator $${report.costUsd.simulator.toFixed(4)}.`,
     '',
-    '| Metric | Overall | Verdict vs frozen bar |',
-    '|---|---|---|',
+    `**Retail: not runnable (pack missing)** — ${report.packMissingUnits} scenario x language units. They count as failed in "Overall"; "Excluding retail" leaves them out. Thresholds are unchanged (reporting only).`,
+    '',
+    '| Metric | Overall | Verdict (overall) | Excluding retail | Verdict (excluding retail) |',
+    '|---|---|---|---|---|',
   );
   for (const t of THRESHOLDS)
     lines.push(
-      `| ${t.label} | ${fmt(t.metric, o.values[t.metric])} | ${verdict(t.metric, o.values[t.metric])} |`,
+      `| ${t.label} | ${fmt(t.metric, o.values[t.metric])} | ${verdict(t.metric, o.values[t.metric])} | ${fmt(t.metric, report.overallExcludingRetail.values[t.metric])} | ${verdict(t.metric, report.overallExcludingRetail.values[t.metric])} |`,
     );
   lines.push(
     '',
