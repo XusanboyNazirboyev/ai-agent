@@ -250,7 +250,7 @@
   "knowledge.search": "Savollarni qidirish",
   "knowledge.empty": "Hozircha savollar yo‘q. Birinchisini qo‘shing.",
   "knowledge.emptyFiltered": "Hech narsa topilmadi.",
-  "knowledge.notConfigured": "Bu serverda bilimlar qidiruvi sozlanmagan, shuning uchun savollarni hozircha saqlab bo‘lmaydi. Administratordan yoqishni so‘rang.",
+  "knowledge.notConfigured": "Bu serverda bilimlar qidiruvi sozlanmagan, shuning uchun savol va hujjatlarni hozircha saqlab bo‘lmaydi. Administrator: server sozlamalarida KNOWLEDGE_EMBEDDINGS ni belgilang (lokal sinov uchun hashing, haqiqiy ish uchun gemini yoki openai-compatible) va API ni qayta ishga tushiring.",
   "knowledge.readOnly": "Savollarni faqat egasi yoki administrator o‘zgartira oladi.",
   "knowledge.question": "Savol",
   "knowledge.answer": "Javob",
