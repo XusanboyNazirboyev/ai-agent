@@ -51,6 +51,14 @@ Simulation harness gates every publish; Operator copilot and analytics read the 
 ```
 **Principle unchanged:** code decides what happens (D4); the LLM extracts, chooses among code-offered options and phrases. Facts come only from tools (D1/D5). Everything is versioned and testable. No new infrastructure: PostgreSQL, Redis/BullMQ and the existing `LlmProvider` are enough.
 
+## Evidence from slice 1 (2026-10-25): compose replies from fact placeholders filled by code
+In the free-model v1 baseline (40 English runs, see [evidence](../evidence/slice1-v1-baseline.md)), **15 of 40 runs ended in a guardrail handover**.
+- Mechanism: the model typed prices, numbers and availability itself instead of citing facts, and the guardrail blocked every such draft.
+- Violations: `FACT_NOT_LIVE` 14, `UNSOURCED_NUMBER` 13, `UNSOURCED_AVAILABILITY` 6, `UNSOURCED_CURRENCY` 4.
+- Outcome: no invented fact reached a customer, but those conversations ended at the first failed draft.
+
+This supports step 5 (Compose): the model chooses **which** fact slots to use and phrases the sentence; **code renders every value**. Prices, dates, seats and availability come from tool results through placeholders. A draft that still contains a raw number should be repaired by code (replace it with the matching fact or drop it) before it falls back to a handover. The quality bar's "invented facts = 0" stays blocking.
+
 ## Dimensions
 Each entry gives options, then the recommendation (★), the **smallest valuable slice** (SVS) and what is out of scope.
 
