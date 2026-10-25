@@ -136,6 +136,17 @@ describe('source uses the catalog', () => {
         'UNCERTAIN',
       ],
       locale: ['en', 'ru', 'uz-Latn'],
+      importProblem: [
+        'EMPTY_FILE',
+        'TOO_BIG',
+        'BAD_FORMAT',
+        'MISSING_COLUMNS',
+        'MISSING_TEXT',
+        'QUESTION_TOO_SHORT',
+        'QUESTION_TOO_LONG',
+        'ANSWER_TOO_LONG',
+        'TOO_MANY',
+      ],
       nav: [
         'inbox',
         'leads',

@@ -7,6 +7,7 @@ import { api, errorKey } from '@/lib/api';
 import type { FaqItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { FaqDialog, type FaqDraft } from './faq-dialog';
+import { FaqImportDialog } from './faq-import-dialog';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
@@ -31,6 +32,7 @@ export function KnowledgePage(): ReactNode {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<FaqItem | 'new' | null>(null);
   const [deleting, setDeleting] = useState<FaqItem | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const query = useQuery({
     queryKey: ['faq'],
@@ -132,6 +134,16 @@ export function KnowledgePage(): ReactNode {
             >
               {t('knowledge.count', { count: all.length })}
             </span>
+          ) : null}
+          {canChange ? (
+            <Button
+              icon="book"
+              disabled={!configured}
+              data-testid="faq-import"
+              onClick={() => setImporting(true)}
+            >
+              {t('knowledge.import')}
+            </Button>
           ) : null}
           {canChange ? (
             <Button
@@ -257,6 +269,11 @@ export function KnowledgePage(): ReactNode {
         error={save.error}
         onSave={(draft) => save.mutate(draft)}
         onCancel={() => setEditing(null)}
+      />
+      <FaqImportDialog
+        open={importing}
+        limits={query.data?.limits ?? { question: 200, answer: 600 }}
+        onClose={() => setImporting(false)}
       />
       <ConfirmDialog
         open={deleting !== null}

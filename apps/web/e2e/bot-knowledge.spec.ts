@@ -116,3 +116,81 @@ test.describe('Knowledge page', () => {
     await admin.context.close();
   });
 });
+
+test.describe('FAQ file import', () => {
+  test('a CSV file is imported, a second upload updates instead of duplicating, bad rows are reported', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const stamp = Date.now();
+    const q1 = `Import one ${stamp}?`;
+    const q2 = `Import two ${stamp}?`;
+    const csv = (answer: string): Buffer =>
+      Buffer.from(
+        `question,answer,language\n"${q1}","${answer}",en\n"${q2}","Second, with a comma.",ru\nx,too short question,\n`,
+      );
+    const admin = await newSession(browser, f.a.operators.admin.email);
+    await admin.page.goto('/knowledge');
+    await admin.page.getByTestId('faq-import').click();
+    await admin.page.getByTestId('faq-import-file').setInputFiles({
+      name: 'faq.csv',
+      mimeType: 'text/csv',
+      buffer: csv('First answer.'),
+    });
+    await expect(admin.page.getByTestId('faq-import-summary')).toContainText(
+      '2 questions are ready to import',
+    );
+    await expect(admin.page.getByTestId('faq-import-summary')).toContainText(
+      'Row 3',
+    );
+    await expect(admin.page.getByTestId('faq-import-start')).toBeDisabled();
+    await admin.page.getByTestId('faq-import-consent').check();
+    await admin.page.getByTestId('faq-import-start').click();
+    await expect(admin.page.getByTestId('faq-import-result')).toContainText(
+      '2 new, 0 updated',
+    );
+
+    await admin.page.getByTestId('faq-import-file').setInputFiles({
+      name: 'faq.csv',
+      mimeType: 'text/csv',
+      buffer: csv('Changed answer.'),
+    });
+    await admin.page.getByTestId('faq-import-consent').check();
+    await admin.page.getByTestId('faq-import-start').click();
+    await expect(admin.page.getByTestId('faq-import-result')).toContainText(
+      '0 new, 2 updated',
+    );
+    await admin.page.getByTestId('faq-import-close').click();
+    const items = admin.page
+      .getByTestId('faq-item')
+      .filter({ hasText: String(stamp) });
+    await expect(items).toHaveCount(2);
+    await expect(items.first()).toContainText(
+      /Changed answer\.|Second, with a comma\./u,
+    );
+    // Clean up so the shared tenant keeps its size.
+    for (let i = 0; i < 2; i += 1) {
+      await items.first().getByTestId('faq-delete').click();
+      await admin.page.getByTestId('confirm-accept').click();
+      await expect(items).toHaveCount(1 - i);
+    }
+    await admin.context.close();
+  });
+
+  test('the import dialog fits a 320px screen', async ({ browser }) => {
+    const f = fixtures();
+    const admin = await newSession(browser, f.a.operators.admin.email, {
+      viewport: { width: 320, height: 640 },
+    });
+    await admin.page.goto('/knowledge');
+    await admin.page.getByTestId('faq-import').click();
+    await admin.page.getByTestId('faq-import-file').setInputFiles({
+      name: 'bad.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('foo,bar\n1,2\n'),
+    });
+    await expect(admin.page.getByTestId('faq-import-summary')).toBeVisible();
+    expect(await findOverflow(admin.page)).toEqual([]);
+    await admin.context.close();
+  });
+});

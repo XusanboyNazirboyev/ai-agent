@@ -11,4 +11,4 @@
 
 ## Not done
 - No UI to connect a channel, set tokens or choose the model/embedding provider (needs a secrets design). Retrieval at answer time still depends on pack configuration and a trusted embedder (ADR 019); the page does not change that and does not test retrieval quality.
-- Bulk import / file upload of knowledge, and per-conversation assistant switch, are not built.
+- A per-conversation assistant switch is not built. File import of FAQ was added later (see PROGRESS).
