@@ -30,6 +30,12 @@ for _ in $(seq 1 45); do
 done
 [ -n "${TELEGRAM_TEST_PUBLIC_URL:-}" ] || { echo "tunnel did not start"; exit 1; }
 export TELEGRAM_TEST_PUBLIC_URL
-pnpm --silent telegram:live register || exit 1
+# A fresh quick-tunnel hostname can take a few seconds to resolve for Telegram.
+registered=0
+for _ in $(seq 1 10); do
+  if pnpm --silent telegram:live register; then registered=1; break; fi
+  sleep 4
+done
+[ "$registered" = 1 ] || exit 1
 echo "READY. Logs in $LOGDIR. Press Ctrl+C to stop."
 wait
