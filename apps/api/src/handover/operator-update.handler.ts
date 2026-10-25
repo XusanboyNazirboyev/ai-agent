@@ -28,6 +28,8 @@ export type OperatorUpdate =
 export interface OperatorChannel {
   readonly tenantId: string;
   readonly operatorChatId: string;
+  /** The bot's channel account (replies go out through that bot). */
+  readonly channelAccountId?: string;
 }
 
 const ACTION =
@@ -69,11 +71,19 @@ export class OperatorUpdateHandler {
     if (update.kind === 'callback') {
       const match = ACTION.exec(update.data);
       if (!match) {
-        await this.safeAck(update.callbackId, t.illegal);
+        await this.safeAck(
+          update.callbackId,
+          t.illegal,
+          channel.channelAccountId,
+        );
         return;
       }
       if (!operator) {
-        await this.safeAck(update.callbackId, t.forbidden);
+        await this.safeAck(
+          update.callbackId,
+          t.forbidden,
+          channel.channelAccountId,
+        );
         return;
       }
       const [, action, handoverId] = match;
@@ -89,12 +99,21 @@ export class OperatorUpdateHandler {
           : action === 'r'
             ? await this.handovers.returnToBot(base)
             : await this.handovers.close(base);
-      await this.safeAck(update.callbackId, this.describe(result, t));
+      await this.safeAck(
+        update.callbackId,
+        this.describe(result, t),
+        channel.channelAccountId,
+      );
       if (result.status === 'OK') {
         // The handover's own chat: the button message is the card.
         await this.safe(() =>
           this.notifier.updateButtons(
-            { operatorChatId: channel.operatorChatId },
+            {
+              operatorChatId: channel.operatorChatId,
+              ...(channel.channelAccountId
+                ? { channelAccountId: channel.channelAccountId }
+                : {}),
+            },
             update.messageId,
             action === 't'
               ? handoverButtons(
@@ -114,7 +133,12 @@ export class OperatorUpdateHandler {
     if (!operator) {
       await this.safe(() =>
         this.notifier.postThreaded(
-          { operatorChatId: channel.operatorChatId },
+          {
+            operatorChatId: channel.operatorChatId,
+            ...(channel.channelAccountId
+              ? { channelAccountId: channel.channelAccountId }
+              : {}),
+          },
           update.messageId,
           t.forbidden,
         ),
@@ -157,7 +181,12 @@ export class OperatorUpdateHandler {
     }
     await this.safe(() =>
       this.notifier.postThreaded(
-        { operatorChatId: channel.operatorChatId },
+        {
+          operatorChatId: channel.operatorChatId,
+          ...(channel.channelAccountId
+            ? { channelAccountId: channel.channelAccountId }
+            : {}),
+        },
         update.messageId,
         this.describe(result, t, !command),
       ),
@@ -183,8 +212,14 @@ export class OperatorUpdateHandler {
     }
   }
 
-  private async safeAck(callbackId: string, text: string): Promise<void> {
-    await this.safe(() => this.notifier.acknowledge(callbackId, text));
+  private async safeAck(
+    callbackId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<void> {
+    await this.safe(() =>
+      this.notifier.acknowledge(callbackId, text, channelAccountId),
+    );
   }
 
   /** Notifier errors must not fail the webhook: the command already ran. */
