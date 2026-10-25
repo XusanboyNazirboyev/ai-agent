@@ -74,8 +74,8 @@ Start these now, in parallel with design. Lead times are *unverified* unless sta
 |---|---|---|---|---|
 | 1 | Telegram production bot (BotFather) + domain with HTTPS for the webhook | Telegram live | Create bot, choose name, keep token in the secret store | Same day |
 | 2 | Decide whether to support **Telegram Business** connected-bot mode; check the Premium requirement on a test account | Telegram for SMBs that answer from a personal/business account | Test with one SMB owner account | Days |
-| 3 | **Meta Business portfolio + Business Verification** (legal entity documents, domain, phone) | Instagram, Messenger, WhatsApp beyond own accounts | **Started by the owner (2026-10-25)** | Days to weeks (*unverified*) |
-| 4 | Meta developer app with Instagram + Messenger use cases; see [App Review prerequisites](#meta-app-review-prerequisites) | **App Review → Advanced Access** for `instagram_business_manage_messages`, `pages_messaging` | Prepare now; **submit only when the Instagram adapter demo works** (decision 4) | Weeks (*unverified*) |
+| 3 | **Meta Business portfolio + Business Verification** (legal entity documents, domain, phone) | Instagram, Messenger, WhatsApp beyond own accounts | **Not started:** the owner has no company documents yet (2026-10-25). Meta's developer page lists no documents. A help-centre page title refers to documents for incorporated or registered entities; requirements for individuals are *unverified* | Days to weeks (*unverified*) |
+| 4 | Meta developer app with Instagram + Messenger use cases; see [App Review prerequisites](#meta-app-review-prerequisites) | **App Review → Advanced Access** for `instagram_business_manage_messages`, `pages_messaging` | Prepare now. The demo runs under Standard Access (app-role users only). **Submit only after a verified legal entity exists** (decision 4, amended) | Weeks (*unverified*) |
 | 5 | Instagram professional account(s) of the pilot tenant | Instagram slice | Pilot tenant converts account | Same day |
 | 6 | WhatsApp: confirm the §4.7 "AI Providers" reading against Meta's official text, or in writing from Meta or a BSP; then Tech Provider + Embedded Signup v4; WABA + number per tenant | WhatsApp (slice C3, last) | Written confirmation first | Weeks (*unverified*) |
 | 7 | Consent texts and privacy notice per locale (also ADR 022 D-5) | All channels, actions | Owner/legal | — |
@@ -123,3 +123,16 @@ Changing settings after submission can trigger re-review.
 5. Data deletion working.
 
 This needs slice C1, the privacy policy and the data-deletion endpoint first.
+
+## Messaging costs
+Checked 2026-10-25 on official Meta pages.
+- **Messenger Platform:** *"The Messenger Platform is free to use."* ([overview](https://developers.facebook.com/documentation/business-messaging/messenger-platform/overview)). Marketing Messages on Messenger is a separate paid product: *"Meta charges the sending business directly for each marketing message"* ([marketing messages](https://developers.facebook.com/documentation/business-messaging/messenger-platform/marketing-messages-on-messenger)). No per-message rate found (*unverified*).
+- **Instagram messaging API:** no cost statement found on the [Instagram Platform overview](https://developers.facebook.com/docs/instagram-platform/overview/). It is probably free like Messenger, but that is *unverified* (inferred, not stated).
+- **WhatsApp Cloud API** ([pricing](https://developers.facebook.com/docs/whatsapp/pricing/), [2026 updates](https://developers.facebook.com/docs/whatsapp/pricing/updates-to-pricing/)):
+  - Per **delivered business-to-user message** since 2025-07-01. Customer messages to the business are never charged.
+  - Uzbekistan (`+998`) is in the **Rest of Asia Pacific** bucket.
+  - USD rate card effective 2026-10-01, per message: **marketing $0.0842, utility $0.0113, authentication $0.0113, service $0.0113** (service beyond the free tier).
+  - Free: 1,000 service messages per number per month, and everything inside a Click-to-WhatsApp free-entry window (up to 7 days).
+  - **Since 2026-10-01**, service messages beyond 1,000/month and utility messages inside the customer-service window are charged.
+  - No hosting fee is listed, but there is no explicit "no charge" sentence (*unverified*).
+- **Standard vs Advanced Access (Instagram):** see decision 4 in ADR 026. Standard Access sends only to people with a role on the app. Serving the public, or accounts we do not own, needs Advanced Access (App Review + Business Verification) ([IG overview](https://developers.facebook.com/docs/instagram-platform/overview/)).
