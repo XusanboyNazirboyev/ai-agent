@@ -13,6 +13,7 @@ import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
 import { EventEmitter } from 'node:events';
 import { AuthController } from './auth.controller.js';
 import { ChannelsController } from './channels.controller.js';
+import { ContactsController } from './contacts.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
@@ -1223,3 +1224,63 @@ describe('FAQ knowledge', () => {
     ).toEqual([]);
   });
 });
+
+describe('contacts list', () => {
+  it('lists only the own tenant, hides erased contacts and internals, searches and pages', async () => {
+    const a = await world();
+    const b = await world();
+    for (let i = 0; i < 3; i += 1)
+      await db.contact.create({
+        data: {
+          tenantId: a.tenantId,
+          channelAccountId: a.accountId,
+          providerUserId: `extra-${i}-${randomUUID()}`,
+          name: `Zed ${i}`,
+          phone: `+99890000000${i}`,
+        },
+      });
+    await db.contact.create({
+      data: {
+        tenantId: a.tenantId,
+        channelAccountId: a.accountId,
+        providerUserId: `gone-${randomUUID()}`,
+        name: 'Zed erased',
+        deletedAt: new Date(),
+      },
+    });
+    const s = await signIn(a);
+    const controller = new ContactsController(prisma);
+    const request = { principal: s.principal } as never;
+    const first = await controller.list(request, { limit: '2' });
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await controller.list(request, {
+      limit: '2',
+      cursor: first.nextCursor!,
+    });
+    const ids = [...first.items, ...second.items].map((item) => item.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const all = await controller.list(request, { limit: '50' });
+    expect(all.items).toHaveLength(4);
+    expect(all.items.map((item) => item.name)).not.toContain('Zed erased');
+    expect(JSON.stringify(all)).not.toContain('providerUserId');
+    expect(all.items.find((item) => item.id === w(a))?.conversationCount).toBe(
+      1,
+    );
+    const found = await controller.list(request, { q: 'zed 1' });
+    expect(found.items.map((item) => item.name)).toEqual(['Zed 1']);
+    const byPhone = await controller.list(request, { q: '900000002' });
+    expect(byPhone.items.map((item) => item.name)).toEqual(['Zed 2']);
+    const other = await controller.list(
+      { principal: (await signIn(b)).principal } as never,
+      { q: 'Zed' },
+    );
+    expect(other.items).toEqual([]);
+    await expect(
+      controller.list(request, { cursor: 'not-a-uuid' }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_QUERY' } });
+  });
+});
+
+/** The fixture contact of a world. */
+const w = (world_: World): string => world_.contactId;
