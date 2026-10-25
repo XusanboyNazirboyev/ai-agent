@@ -272,5 +272,21 @@
   "errors.MODE_REFUSED": "Bu rejim hozir ruxsat etilmagan.",
   "errors.KNOWLEDGE_DISABLED": "Bu serverda bilimlar qidiruvi sozlanmagan.",
   "errors.EMBEDDING_FAILED": "Embedding xizmati javob bermadi. Keyinroq urinib ko‘ring.",
-  "errors.FAQ_LIMIT": "Savollar chegarasiga yetildi."
+  "errors.FAQ_LIMIT": "Savollar chegarasiga yetildi.",
+  "nav.contacts": "Kontaktlar",
+  "nav.more": "Yana",
+  "contacts.intro": "Sizga yozgan hamma odam va ularning oxirgi suhbati.",
+  "contacts.search": "Ism yoki telefon bo‘yicha qidirish",
+  "contacts.empty": "Hozircha kontaktlar yo‘q.",
+  "contacts.emptyFiltered": "So‘rov bo‘yicha kontakt topilmadi.",
+  "contacts.conversations": "{count, plural, one {# ta suhbat} other {# ta suhbat}}",
+  "contacts.lastActive": "Oxirgi faollik: {date}",
+  "contacts.never": "Hozircha suhbat yo‘q",
+  "contacts.open": "Suhbatni ochish",
+  "contacts.optedOut": "Xabarlardan voz kechgan",
+  "more.intro": "Yordamchi, bilimlar, kanallar va sozlamalaringiz.",
+  "more.desc.bot": "Yordamchini yoqish yoki o‘chirish.",
+  "more.desc.knowledge": "Yordamchi keltira oladigan savol va javoblar.",
+  "more.desc.channels": "Ulangan messenjer hisoblari.",
+  "more.desc.settings": "Hisob, bildirishnomalar va mavzu."
 }

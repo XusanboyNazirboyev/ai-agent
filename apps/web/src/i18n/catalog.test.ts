@@ -136,7 +136,17 @@ describe('source uses the catalog', () => {
         'UNCERTAIN',
       ],
       locale: ['en', 'ru', 'uz-Latn'],
-      nav: ['inbox', 'leads', 'bot', 'knowledge', 'channels', 'settings'],
+      nav: [
+        'inbox',
+        'leads',
+        'contacts',
+        'bot',
+        'knowledge',
+        'channels',
+        'settings',
+        'more',
+      ],
+      'more.desc': ['bot', 'knowledge', 'channels', 'settings'],
       botMode: ['OFF', 'SHADOW', 'LIVE'],
       botModeDesc: ['OFF', 'SHADOW', 'LIVE'],
       botRefusal: [

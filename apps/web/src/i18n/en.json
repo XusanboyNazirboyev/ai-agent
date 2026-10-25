@@ -272,5 +272,21 @@
   "errors.MODE_REFUSED": "That mode is not allowed right now.",
   "errors.KNOWLEDGE_DISABLED": "Knowledge search is not set up on this server.",
   "errors.EMBEDDING_FAILED": "The embedding service did not answer. Try again later.",
-  "errors.FAQ_LIMIT": "The limit of questions is reached."
+  "errors.FAQ_LIMIT": "The limit of questions is reached.",
+  "nav.contacts": "Contacts",
+  "nav.more": "More",
+  "contacts.intro": "Everyone who has written to you, with their latest conversation.",
+  "contacts.search": "Search by name or phone",
+  "contacts.empty": "No contacts yet.",
+  "contacts.emptyFiltered": "No contact matches your search.",
+  "contacts.conversations": "{count, plural, one {# conversation} other {# conversations}}",
+  "contacts.lastActive": "Last active {date}",
+  "contacts.never": "No conversations yet",
+  "contacts.open": "Open conversation",
+  "contacts.optedOut": "Opted out of messages",
+  "more.intro": "Assistant, knowledge, channels and your preferences.",
+  "more.desc.bot": "Switch the assistant on or off.",
+  "more.desc.knowledge": "Questions and answers the assistant can quote.",
+  "more.desc.channels": "Connected messenger accounts.",
+  "more.desc.settings": "Account, notifications and theme."
 }
