@@ -7,6 +7,7 @@ import {
   TelegramApiError,
   type TelegramFetch,
 } from '../channels/telegram/telegram-sender.js';
+import { TelegramCredentials } from '../channels/telegram/telegram-credentials.js';
 
 /**
  * Thin Bot API client for operator-group traffic. Methods and fields follow
@@ -30,6 +31,7 @@ export class TelegramBotApi {
   constructor(
     config: ConfigService<AppEnvironment, true>,
     @Optional() @Inject(TELEGRAM_FETCH) request?: TelegramFetch,
+    @Optional() private readonly credentials?: TelegramCredentials,
   ) {
     this.token = config.get('TELEGRAM_BOT_TOKEN', { infer: true });
     this.request = request ?? fetch;
@@ -42,13 +44,18 @@ export class TelegramBotApi {
   private async call(
     method: string,
     params: Record<string, unknown>,
+    channelAccountId?: string,
   ): Promise<unknown> {
-    if (!this.token) throw new Error('Telegram bot is not configured');
+    const token =
+      channelAccountId && this.credentials
+        ? await this.credentials.tokenFor(channelAccountId)
+        : this.token;
+    if (!token) throw new Error('Telegram bot is not configured');
     let response: Response;
     let body: unknown;
     try {
       response = await this.request(
-        `https://api.telegram.org/bot${this.token}/${method}`,
+        `https://api.telegram.org/bot${token}/${method}`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -85,24 +92,30 @@ export class TelegramBotApi {
     text: string;
     replyToMessageId?: string;
     buttons?: readonly (readonly InlineButton[])[];
+    /** The account whose bot posts; without it the environment bot is used. */
+    channelAccountId?: string;
   }): Promise<{ messageId: string }> {
     if (options.text.length === 0 || options.text.length > 4_096)
       throw new RangeError('Telegram text must contain 1 to 4096 characters');
-    const result = (await this.call('sendMessage', {
-      chat_id: options.chatId,
-      text: options.text,
-      ...(options.replyToMessageId
-        ? {
-            reply_parameters: {
-              message_id: Number(options.replyToMessageId),
-              allow_sending_without_reply: true,
-            },
-          }
-        : {}),
-      ...(options.buttons
-        ? { reply_markup: inlineKeyboard(options.buttons) }
-        : {}),
-    })) as { message_id?: unknown } | null;
+    const result = (await this.call(
+      'sendMessage',
+      {
+        chat_id: options.chatId,
+        text: options.text,
+        ...(options.replyToMessageId
+          ? {
+              reply_parameters: {
+                message_id: Number(options.replyToMessageId),
+                allow_sending_without_reply: true,
+              },
+            }
+          : {}),
+        ...(options.buttons
+          ? { reply_markup: inlineKeyboard(options.buttons) }
+          : {}),
+      },
+      options.channelAccountId,
+    )) as { message_id?: unknown } | null;
     if (!result || typeof result.message_id !== 'number')
       throw new TelegramAmbiguousSendError();
     return { messageId: String(result.message_id) };
@@ -111,23 +124,33 @@ export class TelegramBotApi {
   async answerCallbackQuery(
     callbackQueryId: string,
     text: string,
+    channelAccountId?: string,
   ): Promise<void> {
-    await this.call('answerCallbackQuery', {
-      callback_query_id: callbackQueryId,
-      text: text.slice(0, 200),
-    });
+    await this.call(
+      'answerCallbackQuery',
+      {
+        callback_query_id: callbackQueryId,
+        text: text.slice(0, 200),
+      },
+      channelAccountId,
+    );
   }
 
   async editReplyMarkup(
     chatId: string,
     messageId: string,
     buttons: readonly (readonly InlineButton[])[],
+    channelAccountId?: string,
   ): Promise<void> {
-    await this.call('editMessageReplyMarkup', {
-      chat_id: chatId,
-      message_id: Number(messageId),
-      reply_markup: inlineKeyboard(buttons),
-    });
+    await this.call(
+      'editMessageReplyMarkup',
+      {
+        chat_id: chatId,
+        message_id: Number(messageId),
+        reply_markup: inlineKeyboard(buttons),
+      },
+      channelAccountId,
+    );
   }
 }
 

@@ -21,6 +21,9 @@ export class TelegramGroupNotifier implements OperatorNotifier {
       chatId: target.operatorChatId,
       text: card.text,
       buttons: card.buttons,
+      ...(target.channelAccountId
+        ? { channelAccountId: target.channelAccountId }
+        : {}),
     });
   }
 
@@ -33,6 +36,9 @@ export class TelegramGroupNotifier implements OperatorNotifier {
       chatId: target.operatorChatId,
       text,
       replyToMessageId,
+      ...(target.channelAccountId
+        ? { channelAccountId: target.channelAccountId }
+        : {}),
     });
   }
 
@@ -41,10 +47,19 @@ export class TelegramGroupNotifier implements OperatorNotifier {
     messageId: string,
     buttons: readonly (readonly InlineButton[])[],
   ): Promise<void> {
-    return this.api.editReplyMarkup(target.operatorChatId, messageId, buttons);
+    return this.api.editReplyMarkup(
+      target.operatorChatId,
+      messageId,
+      buttons,
+      target.channelAccountId,
+    );
   }
 
-  acknowledge(callbackId: string, text: string): Promise<void> {
-    return this.api.answerCallbackQuery(callbackId, text);
+  acknowledge(
+    callbackId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<void> {
+    return this.api.answerCallbackQuery(callbackId, text, channelAccountId);
   }
 }
