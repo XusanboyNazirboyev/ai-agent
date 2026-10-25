@@ -392,13 +392,20 @@ describe('connecting a Telegram bot from the web', () => {
   });
 
   it('the channels list shows the saved credentials as "ui" without any value', async () => {
-    const { bots, controller, config } = setup();
+    const { bots, controller, config, store } = setup();
     const t = await tenant();
     bots.set(TOKEN(RUN + 777), { id: RUN + 777, username: 'list_bot' });
     await controller.connect(t.request, { botToken: TOKEN(RUN + 777) });
-    const list = await new ChannelsController(prisma, config).list(t.request);
+    const list = await new ChannelsController(prisma, config, store).list(
+      t.request,
+    );
+    expect(list.capabilities).toEqual({
+      secretsConfigured: true,
+      publicUrlConfigured: true,
+    });
     expect(list.items).toHaveLength(1);
     expect(list.items[0]).toMatchObject({
+      webhookUrl: `https://bot.example.test/webhooks/telegram/${list.items[0].id}`,
       displayName: '@list_bot',
       credentialSource: 'ui',
       credentialsConfigured: true,

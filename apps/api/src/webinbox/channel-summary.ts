@@ -25,6 +25,8 @@ export interface ChannelAccountSummary {
   isTestAccount: boolean;
   credentialSource: CredentialSource;
   credentialsConfigured: boolean;
+  /** Where Telegram delivers updates for this account; null until the server knows its public URL. */
+  webhookUrl: string | null;
   operatorGroupConfigured: boolean;
   createdAt: Date;
 }
@@ -73,6 +75,7 @@ export function summarizeChannel(
   row: ChannelRow,
   policy: AgentModePolicy,
   source: CredentialSource,
+  publicBaseUrl?: string,
 ): ChannelAccountSummary {
   const modeRefusals: ChannelAccountSummary['modeRefusals'] = {};
   for (const mode of MODES) {
@@ -89,6 +92,10 @@ export function summarizeChannel(
     isTestAccount: row.isTestAccount,
     credentialSource: source,
     credentialsConfigured: source !== 'none',
+    webhookUrl:
+      row.channelType === 'telegram' && publicBaseUrl
+        ? `${publicBaseUrl.replace(/\/+$/u, '')}/webhooks/telegram/${row.id}`
+        : null,
     operatorGroupConfigured: Boolean(row.operatorChatId),
     createdAt: row.createdAt,
   };

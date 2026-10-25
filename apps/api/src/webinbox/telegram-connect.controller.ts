@@ -161,6 +161,7 @@ export class TelegramConnectController {
       row,
       policyFrom(this.config),
       credentialSource(row, new Set(saved.map((s) => s.purpose)), this.config),
+      this.config.get('PUBLIC_BASE_URL', { infer: true }),
     );
   }
 

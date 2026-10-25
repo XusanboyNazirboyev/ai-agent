@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { modeRefusalCode, type AgentModePolicy } from '../agent/agent-mode.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { ChannelSecretStore } from '../secrets/channel-secret-store.js';
 import {
   credentialSource,
   policyFrom,
@@ -38,6 +39,7 @@ export class ChannelsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly secrets: ChannelSecretStore,
   ) {}
 
   private policy(): AgentModePolicy {
@@ -70,15 +72,26 @@ export class ChannelsController {
           ),
           this.config,
         ),
+        this.config.get('PUBLIC_BASE_URL', { infer: true }),
       ),
     );
   }
 
   @Get()
-  async list(
-    @Req() request: InboxRequest,
-  ): Promise<{ items: ChannelAccountSummary[] }> {
-    return { items: await this.summaries(request.principal!.tenantId) };
+  async list(@Req() request: InboxRequest): Promise<{
+    items: ChannelAccountSummary[];
+    /** What this server can do for connecting channels (settings, not values). */
+    capabilities: { secretsConfigured: boolean; publicUrlConfigured: boolean };
+  }> {
+    return {
+      items: await this.summaries(request.principal!.tenantId),
+      capabilities: {
+        secretsConfigured: this.secrets.configured,
+        publicUrlConfigured: Boolean(
+          this.config.get('PUBLIC_BASE_URL', { infer: true }),
+        ),
+      },
+    };
   }
 
   @Put(':id/agent-mode')
