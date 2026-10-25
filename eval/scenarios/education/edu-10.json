@@ -1,0 +1,59 @@
+{
+  "id": "edu-10",
+  "pack": "education",
+  "title": "Two children, two courses",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find English courses for two children.",
+    "ru": "Find English courses for two children.",
+    "en": "Find English courses for two children."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Ikki farzandim uchun ingliz tili kursi kerak"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Нужен английский для двоих детей"
+      }
+    ],
+    "en": [
+      {
+        "say": "I need English courses for my two kids"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-english-001",
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Recommends without inventing a family discount"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "id": "edu-28",
+  "pack": "education",
+  "title": "Stalled conversation",
+  "category": "stuck",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "high",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You are undecided and answer every question vaguely.",
+    "ru": "You are undecided and answer every question vaguely.",
+    "en": "You are undecided and answer every question vaguely."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Kurs"
+      },
+      {
+        "say": "bilmadim"
+      },
+      {
+        "say": "hmm"
+      },
+      {
+        "say": "bilmadim"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Курс"
+      },
+      {
+        "say": "не знаю"
+      },
+      {
+        "say": "хм"
+      },
+      {
+        "say": "не знаю"
+      }
+    ],
+    "en": [
+      {
+        "say": "Course"
+      },
+      {
+        "say": "don't know"
+      },
+      {
+        "say": "hmm"
+      },
+      {
+        "say": "don't know"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "STUCK"
+  },
+  "judge": [
+    "Changes strategy, then offers a person"
+  ]
+}

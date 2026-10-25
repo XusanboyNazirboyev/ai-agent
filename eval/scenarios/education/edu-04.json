@@ -1,0 +1,59 @@
+{
+  "id": "edu-04",
+  "pack": "education",
+  "title": "Schedule preference",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find a morning General English group.",
+    "ru": "Find a morning General English group.",
+    "en": "Find a morning General English group."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Umumiy ingliz tili kursi bormi? Ertalab bo'lsa"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Есть общий английский? Желательно утром"
+      }
+    ],
+    "en": [
+      {
+        "say": "Do you have General English? Mornings preferably"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-english-001"
+    ],
+    "noHandover": true
+  },
+  "judge": [
+    "Shows the morning group with its schedule"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "id": "retail-06",
+  "pack": "retail",
+  "title": "Order intent",
+  "category": "lead",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Order a product.",
+    "ru": "Order a product.",
+    "en": "Order a product."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Shu krossovkani olmoqchiman"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Хочу заказать эти кроссовки"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      }
+    ],
+    "en": [
+      {
+        "say": "I want to order these sneakers"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "lead"
+  },
+  "judge": [
+    "Captures the lead"
+  ]
+}

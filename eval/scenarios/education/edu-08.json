@@ -1,0 +1,79 @@
+{
+  "id": "edu-08",
+  "pack": "education",
+  "title": "Clearing a constraint",
+  "category": "correction",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You first give a budget of 100 USD, then say the budget does not matter.",
+    "ru": "You first give a budget of 100 USD, then say the budget does not matter.",
+    "en": "You first give a budget of 100 USD, then say the budget does not matter."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS, ertalab, budjetim 100 dollar"
+      },
+      {
+        "say": "budjet muhim emas"
+      },
+      {
+        "say": "mayli, kechqurun ham bo'ladi"
+      }
+    ],
+    "ru": [
+      {
+        "say": "IELTS, утром, бюджет 100 долларов"
+      },
+      {
+        "say": "бюджет не важен"
+      },
+      {
+        "say": "ладно, можно и вечером"
+      }
+    ],
+    "en": [
+      {
+        "say": "IELTS, mornings, my budget is 100 dollars"
+      },
+      {
+        "say": "budget doesn't matter"
+      },
+      {
+        "say": "ok, evenings are fine too"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ],
+    "finalSlots": {
+      "budget": null
+    }
+  },
+  "judge": [
+    "Drops the budget limit after the customer removes it"
+  ]
+}

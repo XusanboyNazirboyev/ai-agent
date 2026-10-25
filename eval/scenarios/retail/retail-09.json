@@ -1,0 +1,58 @@
+{
+  "id": "retail-09",
+  "pack": "retail",
+  "title": "Return / complaint",
+  "category": "complaint",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Complain about a wrong order.",
+    "ru": "Complain about a wrong order.",
+    "en": "Complain about a wrong order."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Buyurtma noto'g'ri keldi, qaytarmoqchiman!"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Заказ пришёл не тот, хочу вернуть!"
+      }
+    ],
+    "en": [
+      {
+        "say": "The order is wrong, I want to return it!"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "COMPLAINT"
+  },
+  "judge": [
+    "Hands over"
+  ]
+}

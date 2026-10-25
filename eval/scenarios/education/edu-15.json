@@ -1,0 +1,56 @@
+{
+  "id": "edu-15",
+  "pack": "education",
+  "title": "Trust objection",
+  "category": "objection",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You want a guaranteed IELTS score.",
+    "ru": "You want a guaranteed IELTS score.",
+    "en": "You want a guaranteed IELTS score."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS dan 7 ball olishimga kafolat berasizmi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Вы гарантируете 7 баллов на IELTS?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Do you guarantee a 7 on IELTS?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "answer",
+    "noHandover": true
+  },
+  "judge": [
+    "Does not promise a result"
+  ]
+}

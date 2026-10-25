@@ -1,0 +1,55 @@
+{
+  "id": "edu-11",
+  "pack": "education",
+  "title": "No matching course",
+  "category": "alternatives",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Look for SAT preparation; accept a related English course.",
+    "ru": "Look for SAT preparation; accept a related English course.",
+    "en": "Look for SAT preparation; accept a related English course."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "SAT tayyorlov kursi bormi?"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Есть подготовка к SAT?"
+      }
+    ],
+    "en": [
+      {
+        "say": "Do you have SAT preparation?"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives"
+  },
+  "judge": [
+    "Says SAT is not offered and suggests the nearest alternative"
+  ]
+}

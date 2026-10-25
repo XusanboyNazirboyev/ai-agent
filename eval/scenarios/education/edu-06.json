@@ -1,0 +1,59 @@
+{
+  "id": "edu-06",
+  "pack": "education",
+  "title": "Level unknown",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find an English course although you do not know your level.",
+    "ru": "Find an English course although you do not know your level.",
+    "en": "Find an English course although you do not know your level."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Ingliz tili o'rganmoqchiman, darajamni bilmayman"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Хочу учить английский, не знаю свой уровень"
+      }
+    ],
+    "en": [
+      {
+        "say": "I want to learn English but I don't know my level"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-english-001",
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Does not invent a placement test that is not in the knowledge base"
+  ]
+}

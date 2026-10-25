@@ -1,0 +1,70 @@
+{
+  "id": "tour-06",
+  "pack": "travel",
+  "title": "Correction of the month",
+  "category": "correction",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You first say July, then correct to June.",
+    "ru": "You first say July, then correct to June.",
+    "en": "You first say July, then correct to June."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Antalya iyulda"
+      },
+      {
+        "say": "yo'q, iyunda"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Анталия в июле"
+      },
+      {
+        "say": "нет, в июне"
+      }
+    ],
+    "en": [
+      {
+        "say": "Antalya in July"
+      },
+      {
+        "say": "no, in June"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "tour-antalya-001"
+    ],
+    "finalSlots": {
+      "travelMonth": "june"
+    }
+  },
+  "judge": [
+    "Uses the corrected month"
+  ]
+}

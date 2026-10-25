@@ -1,0 +1,87 @@
+{
+  "id": "edu-19",
+  "pack": "education",
+  "title": "Booking with confirmation",
+  "category": "action_confirm",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Sign up for the IELTS evening group; give your name and phone when asked; confirm.",
+    "uz-Cyrl": "Sign up for the IELTS evening group; give your name and phone when asked; confirm.",
+    "ru": "Sign up for the IELTS evening group; give your name and phone when asked; confirm.",
+    "en": "Sign up for the IELTS evening group; give your name and phone when asked; confirm."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS kechqurungi guruhga yozilmoqchiman"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "ha"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "IELTS кечқурунги гуруҳга ёзилмоқчиман"
+      },
+      {
+        "say": "Азиза Каримова, +998901234567"
+      },
+      {
+        "say": "ҳа"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Хочу записаться на вечернюю группу IELTS"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "да"
+      }
+    ],
+    "en": [
+      {
+        "say": "I want to sign up for the IELTS evening group"
+      },
+      {
+        "say": "Aziza Karimova, +998901234567"
+      },
+      {
+        "say": "yes"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": true,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "lead"
+  },
+  "judge": [
+    "Shows what will be sent and asks for explicit confirmation"
+  ]
+}

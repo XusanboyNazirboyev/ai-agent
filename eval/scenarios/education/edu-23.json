@@ -1,0 +1,64 @@
+{
+  "id": "edu-23",
+  "pack": "education",
+  "title": "Angry customer",
+  "category": "complaint",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "chatty",
+    "patience": "low",
+    "typos": true
+  },
+  "goal": {
+    "uz-Latn": "You are angry: you paid and nobody answers.",
+    "uz-Cyrl": "You are angry: you paid and nobody answers.",
+    "ru": "You are angry: you paid and nobody answers.",
+    "en": "You are angry: you paid and nobody answers."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Kecha to'lov qildim, hech kim javob bermayapti! Bu nima degani?!"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "Кеча тўлов қилдим, ҳеч ким жавоб бермаяпти! Бу нима дегани?!"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Я вчера оплатил, никто не отвечает! Что за безобразие?!"
+      }
+    ],
+    "en": [
+      {
+        "say": "I paid yesterday and nobody answers! This is outrageous!"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "handover",
+    "handoverReason": "COMPLAINT"
+  },
+  "judge": [
+    "Acknowledges and hands over without arguing"
+  ]
+}

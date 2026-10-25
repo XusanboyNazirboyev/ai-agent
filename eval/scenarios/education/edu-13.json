@@ -1,0 +1,79 @@
+{
+  "id": "edu-13",
+  "pack": "education",
+  "title": "Price objection",
+  "category": "objection",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You find the price high; you would take a cheaper real option.",
+    "uz-Cyrl": "You find the price high; you would take a cheaper real option.",
+    "ru": "You find the price high; you would take a cheaper real option.",
+    "en": "You find the price high; you would take a cheaper real option."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "IELTS shanba guruhi narxi?"
+      },
+      {
+        "say": "qimmat ekan"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "IELTS шанба гуруҳи нархи?"
+      },
+      {
+        "say": "қиммат экан"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Сколько стоит IELTS в субботу?"
+      },
+      {
+        "say": "дорого"
+      }
+    ],
+    "en": [
+      {
+        "say": "How much is IELTS on Saturdays?"
+      },
+      {
+        "say": "that's expensive"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ],
+    "noHandover": true
+  },
+  "judge": [
+    "Offers a cheaper catalog option without inventing a discount"
+  ]
+}

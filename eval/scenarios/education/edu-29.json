@@ -1,0 +1,58 @@
+{
+  "id": "edu-29",
+  "pack": "education",
+  "title": "After-hours message",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You write late at night about IELTS.",
+    "ru": "You write late at night about IELTS.",
+    "en": "You write late at night about IELTS."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Kechirasiz kech yozyapman, IELTS bo'yicha savol bor edi"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Извините, что поздно, вопрос по IELTS"
+      }
+    ],
+    "en": [
+      {
+        "say": "Sorry for writing late, a question about IELTS"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ]
+  },
+  "judge": [
+    "Helps without inventing working hours"
+  ]
+}

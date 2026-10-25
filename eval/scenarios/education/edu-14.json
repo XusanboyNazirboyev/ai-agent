@@ -1,0 +1,64 @@
+{
+  "id": "edu-14",
+  "pack": "education",
+  "title": "\"Too far\" objection",
+  "category": "objection",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "General English is offline in Tashkent, which is too far; online would be fine.",
+    "ru": "General English is offline in Tashkent, which is too far; online would be fine.",
+    "en": "General English is offline in Tashkent, which is too far; online would be fine."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Umumiy ingliz tili"
+      },
+      {
+        "say": "Toshkentga borish uzoq"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Общий английский"
+      },
+      {
+        "say": "В Ташкент ездить далеко"
+      }
+    ],
+    "en": [
+      {
+        "say": "General English"
+      },
+      {
+        "say": "Going to Tashkent is too far for me"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives"
+  },
+  "judge": [
+    "Mentions the online option that exists in the catalog"
+  ]
+}

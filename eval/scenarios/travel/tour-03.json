@@ -1,0 +1,55 @@
+{
+  "id": "tour-03",
+  "pack": "travel",
+  "title": "Sold-out date",
+  "category": "alternatives",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You want Antalya in July; accept the nearest alternative.",
+    "ru": "You want Antalya in July; accept the nearest alternative.",
+    "en": "You want Antalya in July; accept the nearest alternative."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Iyulda Antalyaga"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Анталия в июле"
+      }
+    ],
+    "en": [
+      {
+        "say": "Antalya in July"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "alternatives"
+  },
+  "judge": [
+    "Says July is sold out and offers alternatives"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "id": "retail-04",
+  "pack": "retail",
+  "title": "Price objection",
+  "category": "objection",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find it expensive.",
+    "ru": "Find it expensive.",
+    "en": "Find it expensive."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Shops online.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Shops online."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Bu sumka qancha?"
+      },
+      {
+        "say": "qimmat"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Сколько стоит эта сумка?"
+      },
+      {
+        "say": "дорого"
+      }
+    ],
+    "en": [
+      {
+        "say": "How much is this bag?"
+      },
+      {
+        "say": "too expensive"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": [
+      "retail_pack"
+    ]
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend"
+  },
+  "judge": [
+    "Offers cheaper catalog items only"
+  ]
+}

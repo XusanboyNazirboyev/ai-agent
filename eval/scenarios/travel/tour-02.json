@@ -1,0 +1,58 @@
+{
+  "id": "tour-02",
+  "pack": "travel",
+  "title": "Budget constrained",
+  "category": "search",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Find a June trip within 500 USD per person.",
+    "ru": "Find a June trip within 500 USD per person.",
+    "en": "Find a June trip within 500 USD per person."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Travels with family.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Travels with family."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Iyunda biror joyga, budjet kishi boshiga 500 dollar"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Куда-нибудь в июне, бюджет 500 долларов на человека"
+      }
+    ],
+    "en": [
+      {
+        "say": "Somewhere in June, budget 500 dollars per person"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "tour-istanbul-001"
+    ]
+  },
+  "judge": [
+    "Respects the budget using catalog prices"
+  ]
+}

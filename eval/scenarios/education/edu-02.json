@@ -1,0 +1,79 @@
+{
+  "id": "edu-02",
+  "pack": "education",
+  "title": "Vague start",
+  "category": "clarify",
+  "languages": [
+    "uz-Latn",
+    "uz-Cyrl",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "You want to study something but only say IELTS when asked what.",
+    "uz-Cyrl": "You want to study something but only say IELTS when asked what.",
+    "ru": "You want to study something but only say IELTS when asked what.",
+    "en": "You want to study something but only say IELTS when asked what."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "uz-Cyrl": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Salom, o'qimoqchiman"
+      },
+      {
+        "say": "IELTS"
+      }
+    ],
+    "uz-Cyrl": [
+      {
+        "say": "Салом, ўқимоқчиман"
+      },
+      {
+        "say": "IELTS"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Здравствуйте, хочу учиться"
+      },
+      {
+        "say": "IELTS"
+      }
+    ],
+    "en": [
+      {
+        "say": "Hello, I want to study"
+      },
+      {
+        "say": "IELTS"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-ielts-001"
+    ],
+    "noHandover": true
+  },
+  "judge": [
+    "Asks one clarifying question before recommending"
+  ]
+}

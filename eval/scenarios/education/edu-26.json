@@ -1,0 +1,58 @@
+{
+  "id": "edu-26",
+  "pack": "education",
+  "title": "Mixed Uzbek/Russian",
+  "category": "code_switch",
+  "languages": [
+    "uz-Latn",
+    "ru",
+    "en"
+  ],
+  "persona": {
+    "style": "brief",
+    "patience": "normal",
+    "typos": false
+  },
+  "goal": {
+    "uz-Latn": "Write mixing languages (mostly the one you are told to use); want morning English.",
+    "ru": "Write mixing languages (mostly the one you are told to use); want morning English.",
+    "en": "Write mixing languages (mostly the one you are told to use); want morning English."
+  },
+  "facts": {
+    "uz-Latn": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "ru": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings.",
+    "en": "Name Aziza Karimova. Phone +998901234567. Lives in Tashkent. Prefers evenings."
+  },
+  "script": {
+    "uz-Latn": [
+      {
+        "say": "Salom, mне нужен английский, ertalab bo'lsa"
+      }
+    ],
+    "ru": [
+      {
+        "say": "Здравствуйте, ingliz tili kerak, утром если можно"
+      }
+    ],
+    "en": [
+      {
+        "say": "Hello, menga General English kerak, mornings please"
+      }
+    ]
+  },
+  "setup": {
+    "actionsEnabled": false,
+    "contact": {},
+    "requires": []
+  },
+  "maxTurns": 8,
+  "expect": {
+    "outcome": "recommend",
+    "shownItems": [
+      "edu-english-001"
+    ]
+  },
+  "judge": [
+    "Replies in the dominant language of the customer"
+  ]
+}
