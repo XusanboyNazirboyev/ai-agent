@@ -255,3 +255,23 @@ test('the question form and the assistant switch have no violations', async ({
   await audit(page, 'faq import dialog');
   await context.close();
 });
+
+test('the channels page with controls and the connect dialog have no violations', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(
+    browser,
+    f.a.operators.admin.email,
+  );
+  await page.goto('/channels');
+  await expect(page.getByTestId('connect-telegram')).toBeVisible();
+  await audit(page, 'channels as admin');
+  await page.getByTestId('connect-telegram').click();
+  await expect(page.getByTestId('telegram-connect-dialog')).toBeVisible();
+  await audit(page, 'connect dialog');
+  await page.getByTestId('connect-cancel').click();
+  await page.locator('details summary').first().click();
+  await audit(page, 'instagram guide open');
+  await context.close();
+});

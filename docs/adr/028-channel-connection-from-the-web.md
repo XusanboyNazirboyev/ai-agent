@@ -1,6 +1,6 @@
 # ADR 028: Connecting a messenger channel from the web UI (proposal)
 
-- **Status:** Proposed (needs the owner decisions below before any code)
+- **Status:** Accepted for Telegram (owner decisions D-A: encrypted in the database, scope S1-S4, 2026-10-25); implemented on branch `web/design-pages`. Instagram is a documented plan only (see Instagram below).
 - **Date:** 2026-10-25
 
 ## Context
@@ -20,8 +20,19 @@
 4. **UI** (Channels page): a wizard Token → Verify (shows the bot's name) → Webhook → Test → Enable. The token field is write-only; after saving it is never shown, not even partly. Status comes from the test checklist, not from a stored flag.
 5. **Gates:** the assistant mode rules of ADR 027 are unchanged; a freshly connected account is OFF. Telegram calls are tested with an injected transport; a real-Telegram check is a separate, explicitly authorized step and is reported as not run until then.
 
+## As built (differences from the proposal)
+- Webhook registration moved from *connect* to *enable*: a connected but disabled bot has no webhook, so Telegram does not deliver updates that would be refused. Order: connect (validate with `getMe`, store token and a generated webhook secret, account DISABLED, assistant OFF) → enable (`setWebhook`, then ACTIVE) → disable (`deleteWebhook`, DISABLED, assistant OFF) → disconnect (also deletes the stored secrets; the account row stays because conversations belong to it).
+- Reconnecting the same bot (same Telegram bot id) in the same tenant replaces the token and keeps the webhook secret; the same bot in another tenant is refused with `ALREADY_CONNECTED` (no hint about who owns it).
+- `ChannelAccount.displayName` (the bot's @username) was added (additive migration). `GET /api/v1/channels` returns `capabilities` (is `SECRETS_MASTER_KEY` set, is `PUBLIC_BASE_URL` set) and a `webhookUrl`; never a secret.
+- `TELEGRAM_API_BASE_URL` points the management calls at a fake Telegram in tests; the environment schema refuses it in production.
+- A secret that cannot be decrypted counts as missing (logged without any value); the account then answers 503 on its webhook instead of failing open.
+- Rate limit: 10 management calls per minute per operator (in memory, per API process).
+
+## Instagram (plan, not built)
+From Meta's documentation (Instagram API with Instagram Login, messaging, read 2026-10-25): an Instagram **professional** account; a Meta app with permissions `instagram_business_basic` and `instagram_business_manage_messages`; **Advanced Access** (app review) when serving accounts you do not own or manage, Standard Access for your own; an Instagram User access token; webhook fields `messages`, `messaging_optins`, `messaging_postbacks`, `messaging_reactions`, `messaging_referrals`, `messaging_seen`; send with `POST graph.instagram.com/<IG_ID>/messages` (`recipient.id` = the sender's Instagram-scoped id, `message`); you can message a person only after they wrote first, within 24 hours (7 days after a Click-to-Direct ad, or a separate 7-day human-agent window); text UTF-8 up to 1000 bytes; group chats unsupported; no stated rate limits on that page. Needed for the adapter (Phase 8): webhook signature verification, token storage with expiry and refresh (the same `ChannelSecretStore`), window logic, an `instagram` channel type behind the channel adapter layer (D6). Until then the Channels page shows these steps on the Instagram card and offers no connect button. Exact token lifetime/refresh rules and App Review requirements must be re-read at implementation time.
+
 ## Needs verification before coding (rule 7)
-Exact Bot API semantics of `getMe`, `setWebhook` (`secret_token`, `allowed_updates`, `drop_pending_updates`), `getWebhookInfo`, `deleteWebhook` and their limits are to be checked against the official Telegram Bot API page and recorded with URL and date in the implementation PR. Nothing here is verified yet.
+Checked 2026-10-25 against https://core.telegram.org/bots/api: `getMe` (no parameters, returns a User), `setWebhook` (`url` https, `secret_token` 1-256 chars of A-Z a-z 0-9 _ -, sent as the header X-Telegram-Bot-Api-Secret-Token, `allowed_updates`, `drop_pending_updates`, ports 443/80/88/8443), `deleteWebhook` (`drop_pending_updates`), `getWebhookInfo` (`url`, `pending_update_count`, `last_error_date`, `last_error_message`), response envelope (`ok`, `result`, `description`, `error_code`, `parameters.retry_after`); no rate limits are stated for these calls. **Not verified:** which HTTP status Telegram returns for a wrong bot token (the code treats 401 and 404 as an invalid token), and everything against the live service: no real Telegram call was made.
 
 ## Owner decisions
 - **D-A: master key custody.** Environment variable now (acceptable for a pilot, the key must be backed up separately from the database), KMS/Vault later. Or do not store tokens at all (option B below).
