@@ -247,6 +247,32 @@ const environmentSchema = postgresEnvironmentSchema
      * receives customer questions, so an untrusted provider is limited like
      * the chat providers (test accounts / explicit owner consent).
      */
+    /**
+     * Key for encrypting channel secrets (bot tokens) in the database, 32
+     * random bytes in base64 (`openssl rand -base64 32`). Without it a bot
+     * cannot be connected from the web UI. Back it up separately from the
+     * database; losing it makes stored tokens unreadable. Rotation: put the
+     * new key here with a new SECRETS_KEY_ID and list old ones in
+     * SECRETS_PREVIOUS_KEYS as id:base64 pairs.
+     */
+    SECRETS_MASTER_KEY: z
+      .string()
+      .refine((value) => Buffer.from(value.trim(), 'base64').length === 32, {
+        message: 'must be 32 bytes, base64 encoded',
+      })
+      .optional(),
+    SECRETS_KEY_ID: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,40}$/u)
+      .optional(),
+    SECRETS_PREVIOUS_KEYS: z.string().max(2000).optional(),
+    /** https base URL of this API as Telegram sees it (webhook target). */
+    PUBLIC_BASE_URL: z
+      .url()
+      .refine((value) => value.startsWith('https://'), {
+        message: 'must be an https URL',
+      })
+      .optional(),
     KNOWLEDGE_EMBEDDINGS: z
       .enum(['off', 'gemini', 'openai-compatible', 'hashing'])
       .default('off'),
