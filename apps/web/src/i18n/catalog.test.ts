@@ -136,6 +136,19 @@ describe('source uses the catalog', () => {
         'UNCERTAIN',
       ],
       locale: ['en', 'ru', 'uz-Latn'],
+      nav: ['inbox', 'leads', 'bot', 'knowledge', 'channels', 'settings'],
+      botMode: ['OFF', 'SHADOW', 'LIVE'],
+      botModeDesc: ['OFF', 'SHADOW', 'LIVE'],
+      botRefusal: [
+        'UNTRUSTED_PROVIDER',
+        'NO_OPERATOR_NOTIFIER',
+        'UNTRUSTED_REAL_DATA',
+      ],
+      channelStatus: ['ACTIVE', 'DISABLED'],
+      agentMode: ['OFF', 'SHADOW', 'LIVE'],
+      'channels.desc': ['telegram', 'instagram', 'whatsapp', 'webchat'],
+      theme: ['system', 'light', 'dark'],
+      permission: ['granted', 'denied', 'default', 'unsupported'],
     };
     for (const [family, ids] of Object.entries(families))
       for (const id of ids)
@@ -162,6 +175,10 @@ describe('source uses the catalog', () => {
       'CSRF',
       'BAD_ORIGIN',
       'NETWORK',
+      'MODE_REFUSED',
+      'KNOWLEDGE_DISABLED',
+      'EMBEDDING_FAILED',
+      'FAQ_LIMIT',
       'UNKNOWN',
     ])
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);

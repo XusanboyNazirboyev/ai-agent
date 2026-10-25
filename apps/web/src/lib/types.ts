@@ -97,3 +97,28 @@ export interface ConversationView {
   }[];
   notes: { id: string; operatorId: string; text: string; createdAt: string }[];
 }
+
+export type AgentMode = 'OFF' | 'SHADOW' | 'LIVE';
+export type ModeRefusal =
+  'UNTRUSTED_PROVIDER' | 'NO_OPERATOR_NOTIFIER' | 'UNTRUSTED_REAL_DATA';
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  language: string | null;
+  regulated: boolean;
+  updatedAt: string;
+}
+
+export interface ChannelAccount {
+  id: string;
+  channelType: string;
+  status: 'ACTIVE' | 'DISABLED';
+  agentMode: AgentMode;
+  modeRefusals: Partial<Record<AgentMode, ModeRefusal>>;
+  isTestAccount: boolean;
+  credentialsConfigured: boolean;
+  operatorGroupConfigured: boolean;
+  createdAt: string;
+}

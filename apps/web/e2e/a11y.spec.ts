@@ -100,7 +100,7 @@ test.describe('inbox', () => {
       await expect(page.getByTestId('conversation-view')).toBeVisible();
       await audit(page, `conversation ${scheme} ${language} ${viewport.width}`);
 
-      if (viewport.width < 1024) {
+      if (viewport.width < 1280) {
         await page.getByRole('button', { name: 'Details' }).click();
         await expect(page.locator('#conversation-details')).toBeVisible();
         await audit(page, `details ${scheme} ${language} ${viewport.width}`);
@@ -137,6 +137,61 @@ test.describe('inbox', () => {
   });
 });
 
+test.describe('leads, settings and status pages', () => {
+  for (const [scheme, language, viewport] of [
+    ['light', 'en', { width: 1280, height: 800 }],
+    ['dark', 'en', { width: 1280, height: 800 }],
+    ['light', 'ru', { width: 1280, height: 800 }],
+    ['light', 'uz-Latn', { width: 375, height: 667 }],
+    ['dark', 'en', { width: 375, height: 667 }],
+  ] as const) {
+    test(`have no violations (${scheme}, ${language}, ${viewport.width}px)`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const { page, context } = await newSession(
+        browser,
+        f.a.operators.op1.email,
+        { viewport, colorScheme: scheme },
+      );
+      await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
+      await page.goto('/leads');
+      await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
+      await audit(page, `leads ${scheme} ${language} ${viewport.width}`);
+      for (const path of ['/bot', '/knowledge']) {
+        await page.goto(path);
+        await expect(page.locator('#app-main [role="region"]')).toBeVisible();
+        await audit(page, `${path} ${scheme} ${language} ${viewport.width}`);
+      }
+      await page.goto('/channels');
+      await expect(page.getByTestId('channel-account').first()).toBeVisible();
+      await audit(page, `channels ${scheme} ${language} ${viewport.width}`);
+      await page.goto('/settings');
+      await expect(page.getByRole('radiogroup')).toBeVisible();
+      await audit(page, `settings ${scheme} ${language} ${viewport.width}`);
+      await page.goto('/no-such-page');
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await audit(page, `not found ${scheme} ${language} ${viewport.width}`);
+      await context.close();
+    });
+  }
+});
+
+test('the theme choice in settings is applied and remembered', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  await page.goto('/settings');
+  await page.getByRole('radio', { name: 'Dark' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('radio', { name: 'System' }).click();
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/u);
+  await context.close();
+});
+
 test('keyboard: the scope tabs follow the arrow keys and a skip link is first', async ({
   browser,
 }) => {
@@ -164,5 +219,23 @@ test('keyboard: the scope tabs follow the arrow keys and a skip link is first', 
     'tabindex',
     '-1',
   );
+  await context.close();
+});
+
+test('the question form and the assistant switch have no violations', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(
+    browser,
+    f.a.operators.admin.email,
+  );
+  await page.goto('/bot');
+  await expect(page.getByTestId('bot-account')).toBeVisible();
+  await audit(page, 'bot page as admin');
+  await page.goto('/knowledge');
+  await page.getByTestId('faq-add').click();
+  await expect(page.getByTestId('faq-dialog')).toBeVisible();
+  await audit(page, 'faq form');
   await context.close();
 });

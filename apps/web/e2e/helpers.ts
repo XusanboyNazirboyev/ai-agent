@@ -163,3 +163,41 @@ export async function cookieHeader(context: BrowserContext): Promise<string> {
   const cookies = await context.cookies();
   return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 }
+
+/** Horizontal overflow, content spilling out of its box, anything beyond the viewport. */
+export async function findOverflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    const root = document.documentElement;
+    if (root.scrollWidth > window.innerWidth)
+      problems.push(`page scrolls sideways (${root.scrollWidth}px)`);
+    const describe = (el: Element): string =>
+      `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}[${(el.getAttribute('data-testid') ?? el.className.toString()).slice(0, 60)}] "${(el.textContent ?? '').trim().slice(0, 30)}"`;
+    for (const el of Array.from(document.body.querySelectorAll('*'))) {
+      const box = el.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.position === 'fixed') continue;
+      if (box.right > window.innerWidth + 1 || box.left < -1) {
+        // Skip children of horizontally scrolling containers.
+        let scroller = el.parentElement;
+        let inside = false;
+        while (scroller) {
+          const overflowX = getComputedStyle(scroller).overflowX;
+          if (overflowX === 'auto' || overflowX === 'scroll') inside = true;
+          scroller = scroller.parentElement;
+        }
+        if (!inside) problems.push(`outside viewport: ${describe(el)}`);
+      }
+      if (
+        style.overflowX === 'visible' &&
+        style.textOverflow !== 'ellipsis' &&
+        el.scrollWidth > el.clientWidth + 1 &&
+        el.clientWidth > 0 &&
+        !(el instanceof SVGElement)
+      )
+        problems.push(`content spills: ${describe(el)}`);
+    }
+    return problems;
+  });
+}
