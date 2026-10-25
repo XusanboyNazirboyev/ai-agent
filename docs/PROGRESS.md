@@ -3,6 +3,11 @@
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
 ## Current state (updated 2026-10-25, after the Phase 6A–7.2 and design merges into `main`)
+- **Slice 1, scenario harness + v1 baseline (2026-10-25, branch `slice1/scenario-harness`, [evidence](evidence/slice1-v1-baseline.md)):**
+  - Harness on the real v1 pipeline; 50 scenarios / 160 units; deterministic grader; frozen bar pinned to the roadmap by a test; `pnpm simulate`; v1 unchanged.
+  - Free-model dev-loop baseline (Groq gpt-oss, English, 40 units, k=1): 5 passed. 0 invented facts, 0 false claims, language 100%. Goal 12.5%; 13 runs failed at the provider and 15 ended in guardrail handovers (safe by refusal).
+  - Paid gating baseline (Haiku, k=3, 390 runs) estimated at **$0.23 to $3.46**; it needs owner approval and an Anthropic key.
+  - Findings: quoted prices are not recorded as shown offers, so v1 never follows up after a price answer; the travel pack has no high-value threshold; retail is not runnable.
 - **`phase6a/web-operator-inbox` merged into `main` (2026-10-25, merge commit `25be79b`, `--no-ff`, no force):**
   - Covers the web inbox, ADR 021 security remediation, business actions (ADR 022–024), the travel pack, the Phase 7.2 eval gate, the tezda redesign and the local superadmin (ADR 025).
   - Branch head `491e331`: CI run 40097799720, success. Merge tree identical to the branch head (`0aa445b`). New `main`: CI run 40170183486, success, including e2e on a fresh pgvector database.
