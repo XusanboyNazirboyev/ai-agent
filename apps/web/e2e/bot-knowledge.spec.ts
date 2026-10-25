@@ -194,3 +194,88 @@ test.describe('FAQ file import', () => {
     await admin.context.close();
   });
 });
+
+test.describe('Knowledge documents', () => {
+  test('a text file is uploaded, replaced by title, listed with passages and withdrawn', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const title = `Refund policy ${Date.now()}`;
+    const long = `Refunds are possible within 14 days. ${'Details of the policy. '.repeat(70)}`;
+    const admin = await newSession(browser, f.a.operators.admin.email);
+    await admin.page.goto('/knowledge');
+    await admin.page.getByTestId('knowledge-tab-documents').click();
+    await admin.page.getByTestId('document-upload').click();
+    await admin.page.getByTestId('document-file').setInputFiles({
+      name: `${title}.txt`,
+      mimeType: 'text/plain',
+      buffer: Buffer.from(long),
+    });
+    await expect(admin.page.getByTestId('document-title')).toHaveValue(title);
+    await expect(admin.page.getByTestId('document-save')).toBeDisabled();
+    await admin.page.getByTestId('document-consent').check();
+    await admin.page.getByTestId('document-save').click();
+    const item = admin.page
+      .getByTestId('document-item')
+      .filter({ hasText: title });
+    await expect(item).toContainText('Refunds are possible');
+    await expect(item).toContainText(/\d+ passages/u);
+
+    // Same title again replaces it: still one document, now one passage.
+    await admin.page.getByTestId('document-upload').click();
+    await admin.page.getByTestId('document-title').fill(title);
+    await admin.page.getByTestId('document-text').fill('Short new text.');
+    await admin.page.getByTestId('document-consent').check();
+    await admin.page.getByTestId('document-save').click();
+    await expect(item).toHaveCount(1);
+    await expect(item).toContainText('Short new text.');
+    await expect(item).toContainText('1 passage');
+
+    const operator = await newSession(browser, f.a.operators.op1.email);
+    await operator.page.goto('/knowledge');
+    await operator.page.getByTestId('knowledge-tab-documents').click();
+    await expect(
+      operator.page.getByTestId('document-item').filter({ hasText: title }),
+    ).toBeVisible();
+    await expect(operator.page.getByTestId('document-upload')).toHaveCount(0);
+    await operator.context.close();
+
+    await item.getByTestId('document-delete').click();
+    await admin.page.getByTestId('confirm-accept').click();
+    await expect(item).toHaveCount(0);
+    await admin.context.close();
+  });
+
+  test('the upload form fits a 320px screen', async ({ browser }) => {
+    const f = fixtures();
+    const admin = await newSession(browser, f.a.operators.admin.email, {
+      viewport: { width: 320, height: 640 },
+    });
+    await admin.page.goto('/knowledge');
+    await admin.page.getByTestId('knowledge-tab-documents').click();
+    await admin.page.getByTestId('document-upload').click();
+    await admin.page.getByTestId('document-title').fill('Ж'.repeat(120));
+    expect(await findOverflow(admin.page)).toEqual([]);
+    await admin.context.close();
+  });
+});
+
+test('the language switcher keeps icon, label and chevron apart', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  await page.getByLabel('Language', { exact: true }).selectOption('uz-Latn');
+  const row = page.locator('header span:has(> select)').first();
+  const boxes = await row.evaluate((element) => {
+    const rect = (node: Element): { l: number; r: number } => {
+      const box = node.getBoundingClientRect();
+      return { l: box.left, r: box.right };
+    };
+    return Array.from(element.children).map(rect);
+  });
+  expect(boxes).toHaveLength(3);
+  for (let i = 1; i < boxes.length; i += 1)
+    expect(boxes[i].l).toBeGreaterThanOrEqual(boxes[i - 1].r - 0.5);
+  await context.close();
+});

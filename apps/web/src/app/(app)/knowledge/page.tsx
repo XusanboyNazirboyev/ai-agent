@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { KnowledgePage } from '@/components/knowledge-page';
+import { KnowledgeView } from '@/components/knowledge-view';
 
 export default function Knowledge(): ReactNode {
-  return <KnowledgePage />;
+  return <KnowledgeView />;
 }
