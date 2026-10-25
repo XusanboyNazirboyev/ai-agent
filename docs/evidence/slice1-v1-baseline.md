@@ -69,4 +69,4 @@ The measured shape is short because v1 hands over early; a healthier agent produ
 - Free Groq limits (preset, *unverified*): 8,000 tokens/minute and 200,000/day. That is too small for full suites; the English run used about a third of a day's allowance.
 - Client-side throttling longer than the turn timeout turns into `LLM_UNAVAILABLE` handovers. The CLI now caps the throttle wait at 20 s, below the 60 s turn timeout.
 
-Reports and transcripts (synthetic) are in `eval/reports/sim-2026-10-25T07-42-27-674Z.*` (5-unit throttled sample, invalid: timeouts), `sim-2026-10-25T08-00-10-603Z.*` (English, 40 units) and the partial uz-Latn/ru run. `eval/reports/` is gitignored.
+**Tracked report summary:** [slice1-baseline-reports.md](slice1-baseline-reports.md). It covers aggregates and one row per run for all four runs (the invalid throttled sample, the single-unit check, the 40-unit English run and the partial uz-Latn/ru run), plus the triage counts. The raw JSON reports and synthetic transcripts were local only (`eval/reports/` is gitignored) and are not needed to read this evidence.
