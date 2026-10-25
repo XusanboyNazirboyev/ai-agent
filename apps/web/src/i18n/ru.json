@@ -272,5 +272,21 @@
   "errors.MODE_REFUSED": "Этот режим сейчас недоступен.",
   "errors.KNOWLEDGE_DISABLED": "Поиск по знаниям не настроен на этом сервере.",
   "errors.EMBEDDING_FAILED": "Сервис эмбеддингов не ответил. Повторите позже.",
-  "errors.FAQ_LIMIT": "Достигнут лимит вопросов."
+  "errors.FAQ_LIMIT": "Достигнут лимит вопросов.",
+  "nav.contacts": "Контакты",
+  "nav.more": "Ещё",
+  "contacts.intro": "Все, кто вам писал, с последним диалогом.",
+  "contacts.search": "Поиск по имени или телефону",
+  "contacts.empty": "Контактов пока нет.",
+  "contacts.emptyFiltered": "Контакты по запросу не найдены.",
+  "contacts.conversations": "{count, plural, one {# диалог} few {# диалога} many {# диалогов} other {# диалога}}",
+  "contacts.lastActive": "Последняя активность: {date}",
+  "contacts.never": "Диалогов пока нет",
+  "contacts.open": "Открыть диалог",
+  "contacts.optedOut": "Отказался от сообщений",
+  "more.intro": "Ассистент, знания, каналы и ваши настройки.",
+  "more.desc.bot": "Включить или выключить ассистента.",
+  "more.desc.knowledge": "Вопросы и ответы, которые ассистент может цитировать.",
+  "more.desc.channels": "Подключённые аккаунты мессенджеров.",
+  "more.desc.settings": "Аккаунт, уведомления и тема."
 }

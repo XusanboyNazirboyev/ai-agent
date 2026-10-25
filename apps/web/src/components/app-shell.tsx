@@ -45,17 +45,27 @@ export function useShell(): ShellValue {
   return value;
 }
 
-const NAV: {
-  key: 'inbox' | 'leads' | 'bot' | 'knowledge' | 'channels' | 'settings';
-  icon: IconName;
-}[] = [
+type NavKey =
+  | 'inbox'
+  | 'leads'
+  | 'contacts'
+  | 'bot'
+  | 'knowledge'
+  | 'channels'
+  | 'settings';
+
+const NAV: { key: NavKey; icon: IconName }[] = [
   { key: 'inbox', icon: 'inbox' },
-  { key: 'leads', icon: 'users' },
+  { key: 'leads', icon: 'target' },
+  { key: 'contacts', icon: 'users' },
   { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
   { key: 'channels', icon: 'link' },
   { key: 'settings', icon: 'sliders' },
 ];
+
+/** On phones only these fit the tab bar; the rest sit behind "More". */
+const PRIMARY: NavKey[] = ['inbox', 'leads', 'contacts'];
 
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';
@@ -166,7 +176,12 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
   ).length;
 
   const current = NAV.find((item) => pathname.startsWith(`/${item.key}`));
-  const title = current ? t(`nav.${current.key}`) : t('app.title');
+  const onMore = pathname.startsWith('/more');
+  const title = onMore
+    ? t('nav.more')
+    : current
+      ? t(`nav.${current.key}`)
+      : t('app.title');
   useEffect(() => {
     document.title = `${waitingCount > 0 ? `(${waitingCount}) ` : ''}${title} · ${t('app.brand')}`;
   }, [waitingCount, title, t]);
@@ -304,7 +319,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
               aria-label={t('nav.label')}
               className="flex shrink-0 border-t border-line bg-surface px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
             >
-              {NAV.map((item) => (
+              {NAV.filter((item) => PRIMARY.includes(item.key)).map((item) => (
                 <NavLink
                   key={item.key}
                   layout="bar"
@@ -315,6 +330,15 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                   count={item.key === 'inbox' ? waitingCount : undefined}
                 />
               ))}
+              <NavLink
+                layout="bar"
+                href="/more"
+                icon="more"
+                label={t('nav.more')}
+                active={
+                  onMore || (current ? !PRIMARY.includes(current.key) : false)
+                }
+              />
             </nav>
           )}
         </div>

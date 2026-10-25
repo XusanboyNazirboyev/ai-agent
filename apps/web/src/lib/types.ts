@@ -122,3 +122,16 @@ export interface ChannelAccount {
   operatorGroupConfigured: boolean;
   createdAt: string;
 }
+
+export interface ContactItem {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  language: string | null;
+  channelType: string;
+  marketingOptOut: boolean;
+  conversationCount: number;
+  lastConversationId: string | null;
+  lastActivityAt: string | null;
+  createdAt: string;
+}

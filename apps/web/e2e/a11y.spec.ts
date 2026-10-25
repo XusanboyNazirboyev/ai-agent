@@ -158,7 +158,7 @@ test.describe('leads, settings and status pages', () => {
       await page.goto('/leads');
       await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
       await audit(page, `leads ${scheme} ${language} ${viewport.width}`);
-      for (const path of ['/bot', '/knowledge']) {
+      for (const path of ['/contacts', '/more', '/bot', '/knowledge']) {
         await page.goto(path);
         await expect(page.locator('#app-main [role="region"]')).toBeVisible();
         await audit(page, `${path} ${scheme} ${language} ${viewport.width}`);

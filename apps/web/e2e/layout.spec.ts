@@ -75,7 +75,7 @@ test.describe('no overflow in the signed-in pages', () => {
         ).toHaveCount(0);
         expect(await findOverflow(page), `leads ${language}`).toEqual([]);
 
-        for (const path of ['/bot', '/knowledge']) {
+        for (const path of ['/contacts', '/more', '/bot', '/knowledge']) {
           await page.goto(path);
           await expect(page.locator('#app-main [role="region"]')).toBeVisible();
           expect(await findOverflow(page), `${path} ${language}`).toEqual([]);
