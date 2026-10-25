@@ -1,6 +1,6 @@
 # Agent platform v2 — as-is map and audit (Stage 0)
 
-Date: 2026-10-25. Paths are on branch `phase6a/web-operator-inbox` (`491e331`, CI green), which is **40 commits ahead of `main`**. Main lacks the web inbox, business actions, the travel pack and the Phase 7.2 eval gate. Research: [agent-patterns](../research/agent-patterns.md), [channel-rules](../research/channel-rules.md). Proposal: [ADR 026](../adr/026-agent-platform-v2.md).
+Date: 2026-10-25. Paths are on branch `phase6a/web-operator-inbox` (`491e331`, CI green), which was 40 commits ahead of `main` at the time of the audit. It was merged into `main` as `25be79b` on 2026-10-25, so these paths now exist on `main`. Research: [agent-patterns](../research/agent-patterns.md), [channel-rules](../research/channel-rules.md). Proposal: [ADR 026](../adr/026-agent-platform-v2.md).
 
 ## 1. As-is map
 - **Turn pipeline.** The path is `channels/telegram/telegram-processor.ts:117` → `TelegramAgentPipeline.run` (`telegram-agent-pipeline.ts:153`: claim → compute → commit, retried) → `AgentConversationService.compute` → `runAgentTurn` (`core/agent/agent-turn.ts:222`). Order of work:
