@@ -22,7 +22,8 @@ import { useNow } from '@/lib/use-now';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
-import { fieldClass, selectClass } from './ui/fields';
+import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 
@@ -108,7 +109,7 @@ export function ConversationList(props: {
       <div
         role="tablist"
         aria-label={t('list.scopes')}
-        className="m-3 mb-0 flex gap-1 rounded-xl bg-surface-2 p-1"
+        className="m-3 mb-0 flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
       >
         {SCOPES.map((scope, index) => {
           const active = props.scope === scope;
@@ -157,10 +158,9 @@ export function ConversationList(props: {
         <div className="flex gap-2">
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
             {t('list.filterLanguage')}
-            <select
+            <Select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className={`${selectClass} min-w-0 text-fg`}
             >
               <option value="">{t('list.any')}</option>
               {LANGUAGES.map((id) => (
@@ -168,22 +168,18 @@ export function ConversationList(props: {
                   {id}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
             {t('list.filterScore')}
-            <select
-              value={score}
-              onChange={(e) => setScore(e.target.value)}
-              className={`${selectClass} min-w-0 text-fg`}
-            >
+            <Select value={score} onChange={(e) => setScore(e.target.value)}>
               <option value="">{t('list.any')}</option>
               {SCORES.map((id) => (
                 <option key={id} value={id}>
                   {t(`score.${id}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       </div>

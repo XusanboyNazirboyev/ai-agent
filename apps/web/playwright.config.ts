@@ -47,6 +47,8 @@ export const E2E_ENV = {
   // as set by a simulated edge proxy), so a realistic limit can stay on.
   LOGIN_RATE_LIMIT_PER_MINUTE: '10',
   LLM_PROVIDER: 'mock',
+  // The offline test embedder lets the FAQ page save without any provider.
+  KNOWLEDGE_EMBEDDINGS: 'hashing',
   LLM_TRUSTED_PROVIDERS: 'mock',
   POSTGRES_HOST: pg('HOST', 'localhost'),
   POSTGRES_PORT: pg('PORT', '5432'),
