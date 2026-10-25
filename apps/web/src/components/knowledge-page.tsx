@@ -22,8 +22,8 @@ interface FaqList {
   items: FaqItem[];
 }
 
-/** The tenant's FAQ: questions with answers the assistant may quote. */
-export function KnowledgePage(): ReactNode {
+/** The FAQ tab: questions with answers the assistant may quote. */
+export function FaqPanel(): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { operator, timeZone } = useShell();
   const toast = useToast();
@@ -79,14 +79,8 @@ export function KnowledgePage(): ReactNode {
   const configured = query.data?.embeddingsConfigured ?? true;
 
   return (
-    <div
-      role="region"
-      tabIndex={0}
-      aria-label={t('nav.knowledge')}
-      className="min-h-0 flex-1 overflow-y-auto"
-    >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
-        <p className="text-sm text-muted">{t('knowledge.intro')}</p>
+    <>
+      <div className="flex flex-col gap-4">
         {query.isSuccess && !configured ? (
           <p
             role="status"
@@ -288,6 +282,6 @@ export function KnowledgePage(): ReactNode {
         }}
         onCancel={() => setDeleting(null)}
       />
-    </div>
+    </>
   );
 }

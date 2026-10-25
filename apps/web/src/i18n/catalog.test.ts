@@ -147,6 +147,7 @@ describe('source uses the catalog', () => {
         'ANSWER_TOO_LONG',
         'TOO_MANY',
       ],
+      knowledgeTab: ['faq', 'documents'],
       nav: [
         'inbox',
         'leads',
@@ -209,6 +210,8 @@ describe('source uses the catalog', () => {
       'TELEGRAM_REJECTED',
       'INVALID_CHAT_ID',
       'WEBHOOK_NOT_REMOVED',
+      'DOCUMENT_LIMIT',
+      'DOCUMENT_TOO_LARGE',
       'UNKNOWN',
     ])
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);
