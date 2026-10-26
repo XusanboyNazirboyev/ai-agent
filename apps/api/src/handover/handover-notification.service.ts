@@ -142,7 +142,10 @@ export class HandoverNotificationService {
     const text = await this.card(tenantId, handover, locale);
     try {
       const posted = await this.notifier.postCard(
-        { operatorChatId: chatId },
+        {
+          operatorChatId: chatId,
+          channelAccountId: handover.conversation.channelAccountId,
+        },
         {
           text,
           buttons: handoverButtons(
@@ -273,6 +276,7 @@ export class HandoverNotificationService {
     const account = await this.prisma.channelAccount.findFirst({
       where: { tenantId, operatorChatId: { not: null }, status: 'ACTIVE' },
       select: {
+        id: true,
         operatorChatId: true,
         tenant: { select: { defaultLocale: true } },
       },
@@ -309,7 +313,7 @@ export class HandoverNotificationService {
           )),
     ];
     await this.notifier.postCard(
-      { operatorChatId: account.operatorChatId },
+      { operatorChatId: account.operatorChatId, channelAccountId: account.id },
       { text: lines.join('\n').slice(0, 4_000), buttons: [] },
     );
   }
@@ -317,7 +321,7 @@ export class HandoverNotificationService {
   private async forward(tenantId: string, messageId: string): Promise<void> {
     const message = await this.prisma.message.findFirst({
       where: { id: messageId, tenantId, direction: 'INBOUND' },
-      select: { text: true, conversationId: true },
+      select: { text: true, conversationId: true, channelAccountId: true },
     });
     if (!message) return;
     const handover = await this.prisma.handover.findFirst({
@@ -335,7 +339,10 @@ export class HandoverNotificationService {
       throw new Error('Operator card not posted yet');
     }
     await this.notifier.postThreaded(
-      { operatorChatId: handover.operatorChatId },
+      {
+        operatorChatId: handover.operatorChatId,
+        channelAccountId: message.channelAccountId,
+      },
       handover.operatorMessageId,
       `${operatorStrings('en').customer}: ${message.text.slice(0, 1_000)}\n${refLine(handover.id)}`,
     );
@@ -355,7 +362,10 @@ export class HandoverNotificationService {
     );
     if (handover.operatorChatId) {
       await this.notifier.postThreaded(
-        { operatorChatId: handover.operatorChatId },
+        {
+          operatorChatId: handover.operatorChatId,
+          channelAccountId: handover.conversation.channelAccountId,
+        },
         handover.operatorMessageId ?? '',
         `${t.slaAlert(minutes)}\n${refLine(handover.id)}`,
       );

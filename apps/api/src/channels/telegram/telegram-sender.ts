@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../../config/environment.js';
+import { TelegramCredentials } from './telegram-credentials.js';
 
 export class TelegramApiError extends Error {
   constructor(
@@ -37,22 +38,32 @@ export class TelegramSender {
   constructor(
     config: ConfigService<AppEnvironment, true>,
     @Optional() @Inject(TELEGRAM_FETCH) request?: TelegramFetch,
+    @Optional() private readonly credentials?: TelegramCredentials,
   ) {
     this.token = config.get('TELEGRAM_BOT_TOKEN', { infer: true });
     this.request = request ?? fetch;
   }
 
-  async sendMessage(chatId: string, text: string): Promise<TelegramSendResult> {
+  /** `channelAccountId` selects that account's bot; without it the environment bot is used. */
+  async sendMessage(
+    chatId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<TelegramSendResult> {
     if (text.length === 0 || text.length > 4_096) {
       throw new RangeError('Telegram text must contain 1 to 4096 characters');
     }
-    if (!this.token) throw new Error('Telegram sender is not configured');
+    const token =
+      channelAccountId && this.credentials
+        ? await this.credentials.tokenFor(channelAccountId)
+        : this.token;
+    if (!token) throw new Error('Telegram sender is not configured');
 
     let response: Response;
     let body: unknown;
     try {
       response = await this.request(
-        `https://api.telegram.org/bot${this.token}/sendMessage`,
+        `https://api.telegram.org/bot${token}/sendMessage`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

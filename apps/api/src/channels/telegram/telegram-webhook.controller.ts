@@ -30,7 +30,7 @@ export class TelegramWebhookController {
     @Headers('x-telegram-bot-api-secret-token') secret: string | undefined,
     @Body() body: unknown,
   ): Promise<{ accepted: boolean; duplicate?: boolean; ignored?: boolean }> {
-    this.webhook.assertWebhookSecret(secret);
+    await this.webhook.assertWebhookSecret(channelAccountId, secret);
     let update: NormalizedTelegramUpdate;
     try {
       update = normalizeTelegramUpdate(body);
@@ -52,6 +52,7 @@ export class TelegramWebhookController {
             {
               tenantId: channel.tenantId,
               operatorChatId: channel.operatorChatId,
+              channelAccountId: channel.channelAccountId,
             },
             {
               kind: 'callback',
@@ -67,6 +68,7 @@ export class TelegramWebhookController {
             {
               tenantId: channel.tenantId,
               operatorChatId: channel.operatorChatId,
+              channelAccountId: channel.channelAccountId,
             },
             {
               kind: 'message',

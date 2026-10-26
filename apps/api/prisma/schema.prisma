@@ -208,6 +208,7 @@ model Tenant {
   actionProposals       ActionProposal[]
   shownOffers           ShownOffer[]
   channelAccounts ChannelAccount[]
+  channelSecrets  ChannelSecret[]
   operators       Operator[]
   contacts        Contact[]
   conversations  Conversation[]
@@ -414,12 +415,35 @@ model ChannelAccount {
   messages     Message[]
   inboundEvents InboundEvent[]
   agentTurns   AgentTurn[]
+  secrets      ChannelSecret[]
 
   @@unique([tenantId, id])
   // Provider routing resolves the tenant from this globally unique account key.
   @@unique([channelType, externalAccountId])
   @@index([tenantId, status])
   @@map("channel_accounts")
+}
+
+/// Encrypted secret of one channel account (ADR 028): bot token, webhook
+/// secret. AES-256-GCM; the associated data binds the value to tenant,
+/// account and purpose. Only ciphertext is stored; the key is never in the
+/// database. Read and written through ChannelSecretStore only.
+model ChannelSecret {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  channelAccountId String         @map("channel_account_id") @db.Uuid
+  purpose          String         @db.VarChar(40)
+  keyId            String         @map("key_id") @db.VarChar(40)
+  nonce            Bytes
+  /// Ciphertext followed by the 16-byte GCM tag.
+  ciphertext       Bytes
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount   ChannelAccount @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, channelAccountId, purpose])
+  @@map("channel_secrets")
 }
 
 model Operator {
