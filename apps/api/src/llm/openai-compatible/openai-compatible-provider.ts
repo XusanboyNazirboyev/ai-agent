@@ -78,6 +78,10 @@ export interface OpenAiCompatibleOptions {
 const ToolCallSchema = z.object({
   id: z.string().optional(),
   type: z.string().optional(),
+  // Vendor data attached to a tool call that must be echoed back unchanged
+  // (Gemini 3: `extra_content.google.thought_signature`; without it the next
+  // request is refused with HTTP 400).
+  extra_content: z.record(z.string(), z.unknown()).optional(),
   function: z.object({
     name: z.string(),
     arguments: z
@@ -233,9 +237,29 @@ type WireMessage =
         id: string;
         type: 'function';
         function: { name: string; arguments: string };
+        extra_content?: Record<string, unknown>;
       }>;
     }
   | { role: 'tool'; tool_call_id: string; content: string };
+
+/** The extra_content this provider attached to an earlier assistant message, by tool call id. */
+function extraContentOf(
+  providerContent: unknown,
+): Record<string, Record<string, unknown>> {
+  if (
+    providerContent &&
+    typeof providerContent === 'object' &&
+    'openAiCompatibleExtraContent' in providerContent
+  )
+    return (
+      (
+        providerContent as {
+          openAiCompatibleExtraContent: Record<string, Record<string, unknown>>;
+        }
+      ).openAiCompatibleExtraContent ?? {}
+    );
+  return {};
+}
 
 export class OpenAiCompatibleLlmProvider implements LlmProvider {
   readonly providerId: string;
@@ -283,6 +307,13 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
                         ? call.input
                         : JSON.stringify(call.input ?? {}),
                   },
+                  ...(extraContentOf(message.providerContent)[call.id]
+                    ? {
+                        extra_content: extraContentOf(message.providerContent)[
+                          call.id
+                        ],
+                      }
+                    : {}),
                 })),
               }
             : {}),
@@ -298,6 +329,27 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       }
     }
     return wire;
+  }
+
+  /**
+   * Opaque data the core hands back with the assistant message so the next
+   * request can repeat it (see `extra_content` above). Keyed by tool call id.
+   */
+  private echoed(
+    raw:
+      | ReadonlyArray<{ extra_content?: Record<string, unknown> }>
+      | null
+      | undefined,
+    calls: readonly LlmToolCall[],
+  ): unknown {
+    const extras: Record<string, Record<string, unknown>> = {};
+    (raw ?? []).forEach((call, index) => {
+      if (call.extra_content && calls[index])
+        extras[calls[index].id] = call.extra_content;
+    });
+    return Object.keys(extras).length > 0
+      ? { openAiCompatibleExtraContent: extras }
+      : undefined;
   }
 
   /** One HTTP exchange with bounded retries of transient failures only. */
@@ -570,7 +622,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       attempts,
       text,
       toolCalls,
-      providerContent: undefined,
+      providerContent: this.echoed(choice.message.tool_calls, toolCalls),
     };
   }
 }
