@@ -17,7 +17,22 @@ mkdir -p "$LOGDIR"
 
 [ -f dist/main.js ] || { echo "build first: pnpm build"; exit 2; }
 set -a; . ../../.env; set +a
-export LLM_PROVIDER=mock LLM_TRUSTED_PROVIDERS=mock API_HOST=127.0.0.1
+export API_HOST=127.0.0.1
+# TELEGRAM_SESSION_LLM=gemini (set in .env) is an explicit opt-in to a real model:
+# the text of the test conversation then goes to Google. Gemini stays an UNTRUSTED
+# provider here: only SHADOW on the test account (drafts are stored, nothing is
+# sent to the customer). Use test messages only.
+case "${TELEGRAM_SESSION_LLM:-mock}" in
+  gemini)
+    [ -n "${GEMINI_API_KEY:-}" ] || { echo "Missing environment variable: GEMINI_API_KEY"; exit 2; }
+    export LLM_PROVIDER=openai-compatible LLM_TRUSTED_PROVIDERS=mock \
+      LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+      LLM_API_KEY="$GEMINI_API_KEY" LLM_MODEL_FAST=gemini-3.5-flash-lite \
+      LLM_MODEL_STRONG=gemini-3.8-flash LLM_PRICING_VERSION=routing-free-2026-10-23 \
+      LLM_RATE_LIMIT_RPM=8
+    echo "LLM: Gemini (untrusted provider, SHADOW only, test messages only)" ;;
+  *) export LLM_PROVIDER=mock LLM_TRUSTED_PROVIDERS=mock ;;
+esac
 [ -n "${TELEGRAM_CHANNEL_ACCOUNT_ID:-}" ] || { echo "Missing environment variable: TELEGRAM_CHANNEL_ACCOUNT_ID"; exit 2; }
 
 node dist/main.js >"$LOGDIR/app.log" 2>&1 & register_pid $!
@@ -32,7 +47,7 @@ done
 export TELEGRAM_TEST_PUBLIC_URL
 # A fresh quick-tunnel hostname can take a few seconds to resolve for Telegram.
 registered=0
-for _ in $(seq 1 10); do
+for _ in $(seq 1 30); do
   if pnpm --silent telegram:live register; then registered=1; break; fi
   sleep 4
 done

@@ -29,3 +29,20 @@ Authorized by the owner in the session ("env da token va guruh bor, boshla"; per
 
 ## Local data created
 An Operator row (role OPERATOR, owner's Telegram user id) in the `dev-telegram-test` tenant of the local database; two handovers and their messages. Nothing else.
+
+## Second run: real model (Gemini, SHADOW, test messages only)
+Opt-in `TELEGRAM_SESSION_LLM=gemini` in `.env` (read by `telegram-session.sh`): Gemini through its OpenAI-compatible endpoint, `gemini-3.5-flash-lite` for both tiers in the calls made, `LLM_TRUSTED_PROVIDERS=mock` (Gemini is an *untrusted* provider: SHADOW on the test account only, nothing was sent to the customer chat). The text of five test messages went to Google; the README states Gemini's free tier content is "used to improve our products", and the owner's plan was not checked.
+
+| Message (test text) | Turn outcome | Draft (not sent) |
+|---|---|---|
+| `Salom` + `Kurslaringiz haqida ma'lumot bering` (arrived 7 s apart, handled as one batch; the first turn was discarded as superseded) | HANDOVER, reason STUCK | "Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi." |
+| `Narxi qancha?` | ASKED_SLOT | "Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?" |
+| `Menga operator kerak` + `Privet, у вас есть курсы на русском?` (4 s apart, one batch) | HANDOVER, reason CUSTOMER_REQUEST (the real model recognised the human request; the mock did not) | "Albatta. Xodim bilan bog'lanish haqidagi so'rovingiz saqlandi." (Uzbek, although the last text was Russian) |
+
+Measured per turn: 1 model call, about 690-730 input and 59-89 output tokens, 2.7-5.1 s; no `LLM_INVALID_REQUEST`, no rate-limit error, no failure code in 5 turns (the 2026-10-23 evaluation had both).
+
+Findings and limits:
+- STUCK on a plain greeting is an artefact of the shared test conversation: earlier no-progress turns of the mock runs count toward `STUCK_REPEAT_LIMIT`, with no time window. Worth deciding whether old turns should stop counting.
+- In SHADOW the handover outcomes are stored as drafts and **no Handover row or operator card was created** (the only handover in the window is the one opened by the script earlier). Real handovers from the model are therefore still not observed end to end.
+- The Russian question was handled in the same batch as the operator request, so Russian replies were not tested on their own; the draft language was Uzbek.
+- A greeting got a handover draft and a price question got a clarifying question, not a fact: no price or any other hard fact was shown, so provenance and the guardrail were not exercised. Five messages, one provider, one day: not a quality measurement.
