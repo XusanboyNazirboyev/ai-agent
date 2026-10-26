@@ -49,7 +49,15 @@ Worktrees: `../ai-agent-freebase` (slice 1c), `../ai-agent-eduflow` (plan), `../
 ## Groq lane baseline (k=1, slice 1c)
 - **Lane:** `groq:openai/gpt-oss-20b|openai/gpt-oss-120b`, commit `9a653e7d4c4c`, suite `38f47101a367`, k=1, 130 units (core-30 first), scripted customer, database `agentcore_slice1`.
 - **Ledger and reports:** `../ai-agent-freebase/eval/reports/baselines/groq_*/9a653e7d4c4c-38f47101a367{.jsonl,-core-30.md,-full.md}`. These are gitignored. Rebuild them with `SIM=1 pnpm baseline report`.
-- **Status at handoff:** see the final report in the session reply. The run resumes from the ledger: rerunning `SIM=1 SIM_POSTGRES_DATABASE=agentcore_slice1 SIM_LANE=groq SIM_K=1 pnpm baseline run` in `apps/api` repeats only missing and INFRA runs. Any commit on that branch changes the identity and starts a new ledger.
+- **Result (ledger 10:20–10:46 UTC):** the run stopped on the **per-day quota**: Groq 429 `rate_limit_exceeded`, day window, on `edu-30/uz-Cyrl`. Measurement only, not a gate.
+
+| Set | Expected | Attempted | Completed | INFRA | MODEL-FORMAT | AGENT pass/total | Not run | Pass rate |
+|---|---|---|---|---|---|---|---|---|
+| core-30 | 30 | 30 | 30 | 0 (0%) | 3 | 7 / 27 | 0 | 23.3% |
+| full | 130 | 108 | 107 | 1 (0.8%) | 10 (9 `json_validate_failed`, 1 `tool_use_failed`) | 30 / 97 | 22 | 28.0% (partial) |
+
+  On completed runs: 0 invented facts, 0 false success claims, language/script matched 127/131, goal reached 32/107. Agent tokens: about 301k in and 104k out, so about 108 runs fit in one free day on this lane.
+- **Resuming:** the run resumes from the ledger: rerunning `SIM=1 SIM_POSTGRES_DATABASE=agentcore_slice1 SIM_LANE=groq SIM_K=1 pnpm baseline run` in `apps/api` repeats only missing and INFRA runs. Any commit on that branch changes the identity and starts a new ledger.
 
 ## Smoke probes (2026-10-26, synthetic prompts only)
 - **Gemini** `gemini-3.5-flash-lite`: chat, tool call and json_schema all ok.
