@@ -63,3 +63,14 @@ Defects found and fixed in this run:
 3. `gemini-3.8-flash` (preset STRONG) did not answer within 25-70 s on that day; `gemini-3.6-flash` took 15 s; `gemini-3.5-flash-lite` about 1 s. The session script uses `gemini-3.5-flash-lite` for both tiers. The preset default is unchanged and unverified.
 
 Open (not changed, needs a decision): the model ignored prompt rule 2 ("call get_quote when the customer asks what they will pay") twice, and the regeneration step offers no tools, so a price question ends in a handover whenever the model skips `get_quote`. Options: (a) let the regeneration call tools with a specific hint for `FACT_NOT_LIVE`; (b) make the code fetch the quote itself for a price intent (like `search_catalog`); (c) a stronger model. The Russian question was not answered separately (the conversation was in handover at that time).
+
+## Fourth run: LIVE with Gemini after the fixes, through an ngrok static domain
+Tunnel: ngrok free static domain (`TELEGRAM_TUNNEL=ngrok`, authtoken in ngrok's own config); the registration worked on the first try, unlike the Cloudflare quick tunnels (which dropped overnight and failed DNS on most attempts). Gemini declared trusted for this run only, test account LIVE for the run and **back to SHADOW afterwards**; test messages only.
+
+| Message | Result |
+|---|---|
+| `IELTS kursi qancha turadi?` (an older message that waited at Telegram until the webhook was back) | ANSWERED in 3.5 s, 4 model calls, no guardrail violation, no regeneration, no fallback: `search_catalog` (code), `list_offers`, `get_quote` twice. Reply "IELTS Preparation: 150 US$, 180 US$." plus a question; both prices are live confirmed quotes (F10, F11) rendered by code. The two prices carry no label (which offer each belongs to). |
+| `Привет, у вас есть курсы на русском?` | ANSWERED in Russian ("Здравствуйте! … какой именно предмет … интересует?"), 3.5 s. |
+| `Menga operator kerak` | HANDOVER `CUSTOMER_REQUEST` recognised by the real model (1 call, 1.1 s); a card was delivered to the operator group (`notificationStatus=SENT`); the customer got "Albatta. Xodim bilan bog'lanish haqidagi so'rovingiz saqlandi." |
+
+What this does and does not show: the price path now works end to end with a real model (earlier failures: Gemini 3 tool signature, retry without tools, digits written by the model; the verified-quote fallback was not needed this time). It is three real turns of one provider on one day, not a quality measurement; the fictional mock catalog was used; Close, `/return`, follow-up forwarding under the card and other languages remain untested live.
