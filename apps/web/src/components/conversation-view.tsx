@@ -220,8 +220,13 @@ export function ConversationViewPane(props: {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="truncate font-semibold">{name}</h2>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span data-testid="state" data-state={state}>
+            <span
+              data-testid="state"
+              data-state={state}
+              className="max-w-full min-w-0"
+            >
               <Badge
+                className="max-w-full"
                 tone={
                   state === 'WAITING_OPERATOR'
                     ? 'warning'
@@ -235,8 +240,8 @@ export function ConversationViewPane(props: {
               </Badge>
             </span>
             {view.contact.phone ? (
-              <span className="flex items-center gap-1 text-xs text-muted">
-                <Icon name="phone" className="h-3 w-3" />
+              <span className="flex min-w-0 items-center gap-1 text-xs break-all text-muted">
+                <Icon name="phone" className="h-3 w-3 shrink-0" />
                 {view.contact.phone}
               </span>
             ) : null}
