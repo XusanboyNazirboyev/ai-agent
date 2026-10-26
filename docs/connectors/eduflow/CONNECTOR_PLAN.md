@@ -183,3 +183,11 @@ The permissions above come from the OpenAPI descriptions:
 - `teachers.view`, optional.
 
 Courses, rooms, branches and `settings/public` state roles but no permission. **To list the exact permissions the "AI Agent" role needs, read-only access to the Learnix backend source (the eduFlow folder) is required.** Its location and access have not been granted yet. Until then the list is unverified.
+
+## Owner decisions (2026-10-26; still plan only, no connector code)
+1. **Thin dedicated `EduFlowConnector` now**, implementing only the existing connector contract (`CrmConnector` and its capability flags), so that it can later be swapped for `GenericRestConnector` with an API key without touching core, packs or tools. No EduFlow-specific types cross that boundary.
+2. **All IDs normalized to strings at the mapping boundary** (G10): course, group, branch, lead and lesson IDs, whether Learnix sends a number or a string. Tests: number and string inputs map to the same string ID; the outbound DTOs convert back to the type each Learnix endpoint expects (for example a numeric `groupId` for the trial and a numeric `courseId` for a lead), as confirmed by recorded responses.
+3. **Price currency is never guessed.** It comes only from owner-declared connector config (for example `currency: "UZS"` in tenant connector config), with provenance "owner config". If it is absent, a price is shown without a currency claim; it is never inferred from locale, amount or `settings/public` unless the owner declares that as the source. Tests: no currency configured means no currency in the fact; configured means the currency carries owner-config provenance.
+4. **No claims about seats left, language of instruction or trial slots** (G3, G5, G6). A customer's trial request becomes a **lead whose note holds the preferred time**, plus a handover to an operator. No `POST /api/leads/{id}/trial` until the trial gaps are answered.
+5. **Permission names stay unverified** until the owner supplies the real Learnix permission catalog.
+6. **Writes (lead create) only on the staging server, and only after the owner's explicit approval.** Production is read-only.
