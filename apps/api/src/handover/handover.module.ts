@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TelegramCredentialsModule } from '../channels/telegram/telegram-credentials.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import {
   HandoverNotificationService,
@@ -15,7 +16,7 @@ import { TelegramBotApi } from './telegram-bot-api.js';
 import { TelegramGroupNotifier } from './telegram-group-notifier.js';
 
 @Module({
-  imports: [PersistenceModule, WebInboxModule],
+  imports: [PersistenceModule, WebInboxModule, TelegramCredentialsModule],
   controllers: [OperatorCommandsController],
   providers: [
     OperatorTokenGuard,
