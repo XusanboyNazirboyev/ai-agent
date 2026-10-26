@@ -1,7 +1,7 @@
 # ADR 027: Web AI bot switch and FAQ knowledge page
 
-- **Status:** Accepted (branch `web/design-pages`)
-- **Date:** 2026-10-25
+- **Status:** Proposed. The decisions below were written for, and are present only on, branch `web/design-pages`. They are **not implemented** on `main` or by the ADR 028 S1/S2 work (`feat/channel-secret-store`): there is no `PUT /api/v1/channels/:id/agent-mode`, no `GET /api/v1/channels` list, and no FAQ endpoints or page. Accepting this ADR needs an owner decision when that work is brought to `main`.
+- **Date:** 2026-10-25 (status corrected 2026-10-26)
 
 ## Decisions
 - **Assistant mode from the web.** `PUT /api/v1/channels/:id/agent-mode` sets OFF / SHADOW / LIVE for one channel account of the session's tenant. OWNER and ADMIN only; the same policy as the `agent:mode` command (`modeRefusalCode` mirrors `liveModeRefusal` / `shadowModeRefusal`), so the web cannot enable anything the command refuses (LIVE outside development without the operator notifier, untrusted provider). `GET /api/v1/channels` returns, per mode, a machine-readable refusal code that the UI translates and uses to disable the choice. Turning "On" (LIVE) needs a confirmation dialog. Every change writes an `AuditEvent` (`channel.agent_mode_changed`, from/to).
