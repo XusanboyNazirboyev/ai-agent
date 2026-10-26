@@ -10,6 +10,7 @@ import { findOverflow, fixtures, newHandover, newSession } from './helpers';
 const VIEWPORTS = [
   { width: 320, height: 640 },
   { width: 375, height: 667 },
+  { width: 700, height: 900 },
   { width: 768, height: 900 },
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
@@ -92,6 +93,41 @@ test.describe('no overflow in the signed-in pages', () => {
         await page.goto('/inbox');
         await expect(page.getByTestId('conversation-list')).toBeVisible();
       }
+      await context.close();
+    });
+  }
+
+  // Another machine's fonts are wider than this one's (the CI runner's Linux
+  // fonts are). Adding letter spacing to everything stands in for them, so the
+  // gate does not pass only because of the developer's fonts.
+  for (const width of [375, 768, 1024, 1280] as const) {
+    test(`${width}px with wider letters: inbox, conversation, leads`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const { page, context } = await newSession(
+        browser,
+        f.a.operators.op1.email,
+        { viewport: { width, height: 900 } },
+      );
+      await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('ru');
+      await page.evaluate(() => {
+        document.documentElement.style.letterSpacing = '0.07em';
+      });
+      expect(await findOverflow(page), 'inbox').toEqual([]);
+      await page
+        .getByTestId('conversation-item')
+        .filter({ hasText: longName.slice(0, 20) })
+        .first()
+        .click();
+      await expect(page.getByTestId('conversation-view')).toBeVisible();
+      expect(await findOverflow(page), 'conversation').toEqual([]);
+      await page.goto('/leads');
+      await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
+      await page.evaluate(() => {
+        document.documentElement.style.letterSpacing = '0.07em';
+      });
+      expect(await findOverflow(page), 'leads').toEqual([]);
       await context.close();
     });
   }
