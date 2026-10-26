@@ -22,7 +22,7 @@ export LLM_PROVIDER=mock LLM_TRUSTED_PROVIDERS=mock API_HOST=127.0.0.1
 
 node dist/main.js >"$LOGDIR/app.log" 2>&1 & register_pid $!
 pnpm --silent telegram:proxy >"$LOGDIR/proxy.log" 2>&1 & register_pid $!
-cloudflared tunnel --no-autoupdate --url http://127.0.0.1:4100 >"$LOGDIR/tunnel.log" 2>&1 & register_pid $!
+cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:4100 >"$LOGDIR/tunnel.log" 2>&1 & register_pid $!
 
 for _ in $(seq 1 45); do
   TELEGRAM_TEST_PUBLIC_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGDIR/tunnel.log" | head -1)
