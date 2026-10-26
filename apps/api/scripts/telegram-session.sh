@@ -47,12 +47,24 @@ esac
 
 node dist/main.js >"$LOGDIR/app.log" 2>&1 & register_pid $!
 pnpm --silent telegram:proxy >"$LOGDIR/proxy.log" 2>&1 & register_pid $!
-cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:4100 >"$LOGDIR/tunnel.log" 2>&1 & register_pid $!
-
-for _ in $(seq 1 45); do
-  TELEGRAM_TEST_PUBLIC_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGDIR/tunnel.log" | head -1)
-  [ -n "$TELEGRAM_TEST_PUBLIC_URL" ] && break; sleep 1
-done
+# TELEGRAM_TUNNEL=ngrok (+ NGROK_DOMAIN, the free static domain; the authtoken is in
+# ngrok's own config, never here) gives a stable address. The default is a
+# Cloudflare quick tunnel, which has no uptime guarantee.
+if [ "${TELEGRAM_TUNNEL:-cloudflared}" = ngrok ]; then
+  [ -n "${NGROK_DOMAIN:-}" ] || { echo "Missing environment variable: NGROK_DOMAIN"; exit 2; }
+  ngrok http 4100 --url "https://${NGROK_DOMAIN}" --log stdout >"$LOGDIR/tunnel.log" 2>&1 & register_pid $!
+  TELEGRAM_TEST_PUBLIC_URL="https://${NGROK_DOMAIN}"
+  for _ in $(seq 1 30); do
+    grep -q "started tunnel\|ERR_NGROK\|authentication failed" "$LOGDIR/tunnel.log" && break; sleep 1
+  done
+  grep -q "ERR_NGROK\|authentication failed" "$LOGDIR/tunnel.log" && { echo "ngrok did not start (see the tunnel log, not printed)"; exit 1; }
+else
+  cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:4100 >"$LOGDIR/tunnel.log" 2>&1 & register_pid $!
+  for _ in $(seq 1 45); do
+    TELEGRAM_TEST_PUBLIC_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGDIR/tunnel.log" | head -1)
+    [ -n "$TELEGRAM_TEST_PUBLIC_URL" ] && break; sleep 1
+  done
+fi
 [ -n "${TELEGRAM_TEST_PUBLIC_URL:-}" ] || { echo "tunnel did not start"; exit 1; }
 export TELEGRAM_TEST_PUBLIC_URL
 # A fresh quick-tunnel hostname can take a few seconds to resolve for Telegram.
