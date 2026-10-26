@@ -4,6 +4,8 @@ import { TelegramManagement } from '../channels/telegram/telegram-management.js'
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AuthController } from './auth.controller.js';
+import { AnalyticsController } from './analytics.controller.js';
+import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
 import { EventsController } from './events.controller.js';
@@ -27,8 +29,10 @@ import { SessionService } from './session.service.js';
     TelegramConnectController,
     KnowledgeFaqController,
     ContactsController,
+    AnalyticsController,
   ],
   providers: [
+    AnalyticsService,
     TelegramManagement,
     SessionService,
     SessionGuard,
