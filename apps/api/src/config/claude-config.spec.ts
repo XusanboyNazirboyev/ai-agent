@@ -90,4 +90,15 @@ describe('.claude project configuration', () => {
     }
     expect(agents).toMatch(/`mechanical` \(haiku\)/u);
   });
+
+  it('AGENTS.md is the canonical instructions file and CLAUDE.md only imports it', () => {
+    expect(existsSync(resolve(root, 'AGENTS.md')), 'AGENTS.md').toBe(true);
+    const agents = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
+    const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
+    expect(claude).toMatch(/^@AGENTS\.md\s*$/mu);
+    // The import is the whole point: no second copy of the instructions.
+    const heading = agents.split('\n').find((line) => line.startsWith('# '));
+    expect(heading).toBeDefined();
+    expect(claude).not.toContain(heading);
+  });
 });
