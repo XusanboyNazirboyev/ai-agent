@@ -92,6 +92,26 @@ export function shadowModeRefusal(
   );
 }
 
+/**
+ * Machine-readable reason a mode may not be enabled (for UIs that translate
+ * it), or undefined when it may. Mirrors liveModeRefusal / shadowModeRefusal.
+ */
+export type ModeRefusalCode =
+  'UNTRUSTED_PROVIDER' | 'NO_OPERATOR_NOTIFIER' | 'UNTRUSTED_REAL_DATA';
+
+export function modeRefusalCode(
+  mode: AgentModeValue,
+  policy: AgentModePolicy,
+  account: AgentModeAccount,
+): ModeRefusalCode | undefined {
+  if (mode === 'OFF') return undefined;
+  if (mode === 'LIVE') {
+    if (!policy.providerTrusted) return 'UNTRUSTED_PROVIDER';
+    return liveModeRefusal(policy) ? 'NO_OPERATOR_NOTIFIER' : undefined;
+  }
+  return shadowModeRefusal(policy, account) ? 'UNTRUSTED_REAL_DATA' : undefined;
+}
+
 /** Throws AgentModeRefusedError when `mode` may not be enabled. */
 export function assertAgentModeAllowed(
   mode: AgentModeValue,

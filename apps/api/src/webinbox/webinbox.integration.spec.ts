@@ -12,6 +12,10 @@ import { OperatorTokenGuard } from '../handover/operator-auth.js';
 import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
 import { EventEmitter } from 'node:events';
 import { AuthController } from './auth.controller.js';
+import { ChannelsController } from './channels.controller.js';
+import { KnowledgeFaqController } from './knowledge-faq.controller.js';
+import { KnowledgeService } from '../knowledge/knowledge.service.js';
+import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
 import { EventsController, openStreams } from './events.controller.js';
 import { InboxEventBus, type BusEvent } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
@@ -61,7 +65,9 @@ interface World {
   contactId: string;
 }
 
-async function world(role: 'OPERATOR' | 'VIEWER' = 'OPERATOR'): Promise<World> {
+async function world(
+  role: 'OPERATOR' | 'VIEWER' | 'ADMIN' = 'OPERATOR',
+): Promise<World> {
   const suffix = randomUUID();
   const tenant = await db.tenant.create({
     data: {
@@ -983,5 +989,237 @@ describe('event stream resource accounting', () => {
     for (const response of [...streams, again]) response.emit('close');
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     bus.onModuleDestroy();
+  });
+});
+
+describe('channels list', () => {
+  it('shows only the own tenant accounts and never a key, credential or chat id', async () => {
+    const a = await world();
+    const b = await world();
+    await db.channelAccount.update({
+      where: { id: a.accountId },
+      data: {
+        credentialRef: 'env:SECRET_TOKEN_NAME',
+        webhookSecretRef: 'env:SECRET_HOOK_NAME',
+        operatorChatId: '-100123',
+      },
+    });
+    const s = await signIn(a);
+    const result = await channelsController().list({
+      principal: s.principal,
+    } as never);
+    expect(result.items.map((item) => item.id)).toEqual([a.accountId]);
+    expect(result.items[0]).toMatchObject({
+      channelType: 'telegram',
+      status: 'ACTIVE',
+      credentialsConfigured: true,
+      operatorGroupConfigured: true,
+    });
+    const text = JSON.stringify(result);
+    for (const secret of ['SECRET_TOKEN_NAME', 'SECRET_HOOK_NAME', '-100123'])
+      expect(text).not.toContain(secret);
+    expect(text).not.toContain(b.accountId);
+  });
+});
+
+function channelsController(
+  overrides: Record<string, unknown> = {},
+): ChannelsController {
+  const settings: Record<string, unknown> = {
+    NODE_ENV: 'development',
+    LLM_PROVIDER: 'mock',
+    LLM_TRUSTED_PROVIDERS: ['mock'],
+    LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+    ...overrides,
+  };
+  return new ChannelsController(prisma, {
+    get: (key: string) => settings[key],
+  } as never);
+}
+
+describe('assistant mode', () => {
+  it('only an owner or admin may change it; the change is checked, scoped and audited', async () => {
+    const op = await world('OPERATOR');
+    const admin = await world('ADMIN');
+    const other = await world('ADMIN');
+    const asOp = await signIn(op);
+    const asAdmin = await signIn(admin);
+    const controller = channelsController();
+    await expect(
+      controller.setMode({ principal: asOp.principal } as never, op.accountId, {
+        mode: 'SHADOW',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    await expect(
+      controller.setMode(
+        { principal: asAdmin.principal } as never,
+        other.accountId,
+        { mode: 'SHADOW' },
+      ),
+    ).rejects.toMatchObject({ response: { code: 'NOT_FOUND' } });
+    await expect(
+      controller.setMode(
+        { principal: asAdmin.principal } as never,
+        admin.accountId,
+        { mode: 'ON' },
+      ),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    const changed = await controller.setMode(
+      { principal: asAdmin.principal } as never,
+      admin.accountId,
+      { mode: 'LIVE' },
+    );
+    expect(changed.agentMode).toBe('LIVE');
+    const row = await db.channelAccount.findUniqueOrThrow({
+      where: { id: admin.accountId },
+    });
+    expect(row.agentMode).toBe('LIVE');
+    const audit = await db.auditEvent.findMany({
+      where: { tenantId: admin.tenantId, action: 'channel.agent_mode_changed' },
+    });
+    expect(audit).toHaveLength(1);
+    expect(audit[0].safeInputSummary).toEqual({ from: 'OFF', to: 'LIVE' });
+    expect(
+      (
+        await db.channelAccount.findUniqueOrThrow({
+          where: { id: other.accountId },
+        })
+      ).agentMode,
+    ).toBe('OFF');
+  });
+
+  it('refuses a mode the policy forbids and says why, in the list too', async () => {
+    const w = await world('ADMIN');
+    const s = await signIn(w);
+    const production = channelsController({ NODE_ENV: 'production' });
+    await expect(
+      production.setMode({ principal: s.principal } as never, w.accountId, {
+        mode: 'LIVE',
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'MODE_REFUSED', reason: 'NO_OPERATOR_NOTIFIER' },
+    });
+    const untrusted = channelsController({
+      LLM_PROVIDER: 'gemini',
+      LLM_TRUSTED_PROVIDERS: ['mock'],
+    });
+    const listed = await untrusted.list({ principal: s.principal } as never);
+    expect(listed.items[0].modeRefusals).toEqual({
+      LIVE: 'UNTRUSTED_PROVIDER',
+      SHADOW: 'UNTRUSTED_REAL_DATA',
+    });
+    expect(
+      (
+        await db.channelAccount.findUniqueOrThrow({
+          where: { id: w.accountId },
+        })
+      ).agentMode,
+    ).toBe('OFF');
+    // Turning the assistant off is always allowed.
+    const off = await untrusted.setMode(
+      { principal: s.principal } as never,
+      w.accountId,
+      { mode: 'OFF' },
+    );
+    expect(off.agentMode).toBe('OFF');
+  });
+});
+
+describe('FAQ knowledge', () => {
+  const faqController = (enabled = true): KnowledgeFaqController =>
+    new KnowledgeFaqController(
+      prisma,
+      new KnowledgeService(prisma),
+      enabled ? new HashingEmbeddingProvider() : undefined,
+    );
+  const entry = {
+    question: '  How   long is the   course? ',
+    answer: 'Three months,\n  two evenings a week.',
+    language: 'en' as const,
+    regulated: false,
+    confirmProviderMayReadText: true as const,
+  };
+
+  it('creates, reads back exactly, updates and withdraws an entry, per tenant, with audit', async () => {
+    const a = await world('ADMIN');
+    const b = await world('ADMIN');
+    const sa = await signIn(a);
+    const sb = await signIn(b);
+    const controller = faqController();
+    const { id } = await controller.create(
+      { principal: sa.principal } as never,
+      entry,
+    );
+    let listed = await controller.list({ principal: sa.principal } as never);
+    expect(listed.embeddingsConfigured).toBe(true);
+    expect(listed.items).toMatchObject([
+      {
+        id,
+        question: 'How long is the course?',
+        answer: 'Three months, two evenings a week.',
+        language: 'en',
+        regulated: false,
+      },
+    ]);
+    expect(
+      (await controller.list({ principal: sb.principal } as never)).items,
+    ).toEqual([]);
+    await expect(
+      controller.update({ principal: sb.principal } as never, id, entry),
+    ).rejects.toMatchObject({ response: { code: 'NOT_FOUND' } });
+    await controller.update({ principal: sa.principal } as never, id, {
+      ...entry,
+      answer: 'Four months.',
+    });
+    listed = await controller.list({ principal: sa.principal } as never);
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0].answer).toBe('Four months.');
+    await controller.remove({ principal: sa.principal } as never, id);
+    expect(
+      (await controller.list({ principal: sa.principal } as never)).items,
+    ).toEqual([]);
+    const actions = (
+      await db.auditEvent.findMany({
+        where: { tenantId: a.tenantId },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map((row) => row.action);
+    expect(actions).toEqual([
+      'knowledge.faq_created',
+      'knowledge.faq_updated',
+      'knowledge.faq_deleted',
+    ]);
+  });
+
+  it('refuses writers without the role, missing consent, oversize text and a missing embedder', async () => {
+    const op = await world('OPERATOR');
+    const admin = await world('ADMIN');
+    const asOp = await signIn(op);
+    const asAdmin = await signIn(admin);
+    const controller = faqController();
+    await expect(
+      controller.create({ principal: asOp.principal } as never, entry),
+    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    // Operators may read.
+    await expect(
+      controller.list({ principal: asOp.principal } as never),
+    ).resolves.toMatchObject({ items: [] });
+    for (const bad of [
+      { ...entry, confirmProviderMayReadText: false },
+      { ...entry, answer: 'x'.repeat(601) },
+      { ...entry, question: 'ab' },
+    ])
+      await expect(
+        controller.create({ principal: asAdmin.principal } as never, bad),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    await expect(
+      faqController(false).create(
+        { principal: asAdmin.principal } as never,
+        entry,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
+    expect(
+      (await controller.list({ principal: asAdmin.principal } as never)).items,
+    ).toEqual([]);
   });
 });
