@@ -64,6 +64,11 @@ export function postgresPoolOptions(config: PostgresEnvironment): PoolConfig {
         : config.POSTGRES_SSL_MODE === 'verify-full'
           ? { rejectUnauthorized: true }
           : { rejectUnauthorized: false },
+    // DEF-007: @prisma/adapter-pg sends DateTime values as UTC wall-clock
+    // strings without an offset, which PostgreSQL reads in the session
+    // TimeZone. Pinning the session to UTC stores the true instant whatever
+    // the server default (the dev server runs Asia/Tashkent).
+    options: '-c TimeZone=UTC',
     max: 10,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,

@@ -338,4 +338,11 @@ describe('validateEnvironment', () => {
       ).ssl,
     ).toMatchObject({ rejectUnauthorized: false });
   });
+
+  it('pins every session to UTC so stored instants match the JS clock (DEF-007)', () => {
+    expect(
+      postgresPoolOptions(parsePostgresEnvironment(postgresEnvironment))
+        .options,
+    ).toBe('-c TimeZone=UTC');
+  });
 });
