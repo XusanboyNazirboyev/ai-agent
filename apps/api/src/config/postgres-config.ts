@@ -51,7 +51,15 @@ export function postgresConnectionUrl(config: PostgresEnvironment): string {
   return url.toString();
 }
 
-export function postgresPoolOptions(config: PostgresEnvironment): PoolConfig {
+/** Session setting every pool connection starts with (DEF-007). */
+export const UTC_SESSION_OPTION = '-c TimeZone=UTC';
+
+export function postgresPoolOptions(
+  config: PostgresEnvironment,
+  // node-postgres reads PGOPTIONS only when `options` is unset; keep it and
+  // put the UTC pin last so it wins over any TimeZone given there.
+  inheritedOptions: string | undefined = process.env.PGOPTIONS,
+): PoolConfig {
   return {
     host: config.POSTGRES_HOST,
     port: config.POSTGRES_PORT,
@@ -68,7 +76,9 @@ export function postgresPoolOptions(config: PostgresEnvironment): PoolConfig {
     // strings without an offset, which PostgreSQL reads in the session
     // TimeZone. Pinning the session to UTC stores the true instant whatever
     // the server default (the dev server runs Asia/Tashkent).
-    options: '-c TimeZone=UTC',
+    options: [inheritedOptions?.trim(), UTC_SESSION_OPTION]
+      .filter(Boolean)
+      .join(' '),
     max: 10,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,

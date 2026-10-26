@@ -3,6 +3,7 @@
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
 ## Current state (updated 2026-10-25, after the Phase 6A–7.2 and design merges into `main`)
+- **DEF-007 fix (2026-10-26, branch `fix/def-007-timestamp-offset`, not merged, [evidence](evidence/def-007-timestamp-offset.md)):** `@prisma/adapter-pg` writes offset-less timestamps, so a non-UTC session (dev: Asia/Tashkent) stored instants 5 h early. Pool sessions are now pinned to UTC, and the API refuses to start when the session is not UTC. Existing local rows are still 5 h early (no data correction yet: owner decision).
 - **Slice 1, scenario harness + v1 baseline (2026-10-25, branch `slice1/scenario-harness`, [evidence](evidence/slice1-v1-baseline.md)):**
   - Harness on the real v1 pipeline; 50 scenarios / 160 units; deterministic grader; frozen bar pinned to the roadmap by a test; `pnpm simulate`; v1 unchanged.
   - Free-model dev-loop baseline (Groq gpt-oss, English, 40 units, k=1): 5 passed. 0 invented facts, 0 false claims, language 100%. Goal 12.5%; 13 runs failed at the provider and 15 ended in guardrail handovers (safe by refusal).

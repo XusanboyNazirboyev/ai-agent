@@ -2,7 +2,7 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
-import { createPostgresAdapter } from './postgres-adapter.js';
+import { assertUtcSession, createPostgresAdapter } from './postgres-adapter.js';
 
 @Injectable()
 export class PrismaService
@@ -24,6 +24,7 @@ export class PrismaService
 
   async onModuleInit(): Promise<void> {
     await this.$connect();
+    await assertUtcSession(this);
   }
 
   async onModuleDestroy(): Promise<void> {
