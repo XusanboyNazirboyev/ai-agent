@@ -70,6 +70,7 @@ import {
   type SlotState,
 } from './slots.js';
 import { AgentTools, type ToolOutcome, type ToolTraceEntry } from './tools.js';
+import { verifiedQuoteDraft } from './verified-answer.js';
 
 /**
  * One customer turn (AGENTS.md §7). Code makes every decision:
@@ -758,6 +759,16 @@ export async function runAgentTurn(
         violations: first,
         regenerated,
       });
+    }
+  }
+  if (!checked.rendered) {
+    // The model could not word an acceptable reply, but a live confirmed quote
+    // may exist: answer with just that verified fact, written by code and
+    // checked by the same gates. Without one the turn is a handover.
+    const verified = verifiedQuoteDraft(facts.list());
+    if (verified !== undefined) {
+      const safe = guard(verified);
+      if (safe.rendered) checked = safe;
     }
   }
   if (!checked.rendered) {
