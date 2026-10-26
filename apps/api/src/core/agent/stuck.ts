@@ -19,6 +19,37 @@ export interface StuckPolicy {
 
 export const DEFAULT_STUCK_POLICY: StuckPolicy = { repeatLimit: 2 };
 
+/** Minutes of silence after which an earlier turn no longer counts as part of the same dialogue. */
+export const DEFAULT_STUCK_WINDOW_MINUTES = 30;
+
+/**
+ * "Without progress" only makes sense inside one dialogue. Of the earlier
+ * turns (`newestFirst`, with their completion times) this keeps the newest
+ * unbroken run that is still part of the dialogue happening now: every gap
+ * (the newest turn to `now`, and between neighbouring turns) is at most
+ * `windowMs`, and no turn is at or before `notBefore` (for example the end of
+ * a human handover). Anything older belongs to an earlier visit and must not
+ * make a fresh greeting look like a repeated question. Returned oldest first.
+ */
+export function selectEpisode<T extends { readonly completedAt: Date | null }>(
+  newestFirst: readonly T[],
+  now: Date,
+  windowMs: number,
+  notBefore?: Date,
+): T[] {
+  const episode: T[] = [];
+  let later = now.getTime();
+  for (const turn of newestFirst) {
+    const at = turn.completedAt?.getTime();
+    if (at === undefined) break;
+    if (later - at > windowMs) break;
+    if (notBefore && at <= notBefore.getTime()) break;
+    episode.push(turn);
+    later = at;
+  }
+  return episode.reverse();
+}
+
 export type StuckReason = 'SAME_QUESTION_REPEATED' | 'SAME_MESSAGE_REPEATED';
 
 export interface CurrentTurnSignal {
