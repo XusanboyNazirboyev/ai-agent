@@ -115,3 +115,71 @@ The HTTP client accepts **only** these method + path templates; anything else th
 4. Language/level/format fields on courses or groups? (G5)
 5. `GET /api/leads?search=`: which fields does it match (phone? normalized?), and can a lead carry an external reference? (G8)
 6. The branch id(s) to use per tenant.
+
+## Addendum 2026-10-26 (plan only)
+Re-read from the saved contract. The owner's source file is unchanged (sha256 `b752c598…`). The Learnix server holds test data only and is the **staging** target. Swagger is not exposed there, so this file is the contract.
+
+### Schema inspection: Course, Group, Lead
+`components.schemas` (70 schemas) has **no `Course`, `Group` or `Lead` response schema**, and the list/get endpoints document their 200 responses with no body (G1). The only shapes are the request DTOs:
+
+| DTO | Fields (`*` = required) |
+|---|---|
+| `CreateCourseDto` | `name*`, `description`, `price*` (number), `durationMonth*`, `durationHours*`, `status` (ACTIVE/INACTIVE) |
+| `CreateGroupDto` | `name*`, `courseId*` (**string**), `description`, `teacherId`, `studentIds`, `startDate*`, `maxStudent*`, `schedules*` (`ScheduleItemDto`: `weekDay*`, `startTime*`, `endTime`, `roomId`), `branchId` (number) |
+| `CreateLeadDto` | `firstName*`, `lastName`, `phone*`, `parentPhone`, `source` (TELEGRAM, INSTAGRAM, …), `sourceDetail`, `courseId` (**number**), `assignedToId`, `nextContactAt`, `note`, `branchId` (number) |
+| `ScheduleTrialDto` | `groupId*` (**number**), `trialAt*` |
+
+Lists take `page` and `limit` (not offset or cursor), plus filters (`status`, `search`, `courseId` on groups). Every operation documents the `x-branch-id` header.
+
+| Need | Contract | Status |
+|---|---|---|
+| Price | `course.price`: a number with no currency, per course, not per group | G2: currency from `settings/public` (to confirm), basis unknown |
+| Seats / capacity | `group.maxStudent` only; no enrolled count | G3: **seats left unknown**, so availability is not shown |
+| Start date | `group.startDate` plus weekly `schedules` | Usable, if the response matches the DTO (G1) |
+| Language / level / format | none | G5: education-pack slots cannot be matched |
+| Trial slots | none; trial = `POST /api/leads/{id}/trial {groupId, trialAt}` | G6: free times would have to be derived from lessons or schedules |
+| **G10 (new): ID types** | `courseId` is a string on groups but a number on leads; `groupId` and `branchId` are numbers | Confirm the real ID type from recorded responses before mapping |
+
+### Capability flags (first slice)
+| Flag | Value | Why |
+|---|---|---|
+| `sync` | true | `GET /api/courses` and `GET /api/groups` (paged) |
+| `search` | true | `search` query parameter on courses and groups (matching rules to confirm) |
+| `liveQuote` | **false** | No quote endpoint; only a listed course price |
+| `availability` | **false** | No seats-left value (G3) |
+| `createLead` | true on **staging only after write approval**; false on production | `POST /api/leads` (`leads.manage`, G7) |
+| `updateLead`, `createBooking`, `webhooks` | false | Not in scope; trial booking (`createBooking`) comes later, after G6 |
+
+Consequence: with `liveQuote` and `availability` false, the display gate (ADR 013) accepts listed facts. So the `FACT_NOT_LIVE` failure that dominates the Groq baseline on the mock connector does not arise for EduFlow. It still needs a currency for any price (G2), and it must never show seats.
+
+### GenericRestConnector or a bespoke connector
+`GenericRestConnector` on `main` supports `none`/`bearer`/`apiKey`/`basic` authentication, `offset`/`cursor`/`none` pagination and a `dataPath`. Learnix needs three things it lacks:
+1. **Cookie session authentication**: `POST /api/auth/login`, then httpOnly cookies, then `POST /api/auth/refresh` with the refresh-token cookie, and re-login on expiry.
+2. **Page-based pagination** (`page` + `limit`, with totals in `meta`).
+3. **A fixed `x-branch-id` header** on every call.
+
+`{success, data: {items, meta}}` fits `dataPath: data.items`.
+
+**Recommendation: a thin bespoke `EduFlowConnector`** in `connectors/eduflow/` (not in `core/`), reusing the existing `http-client`, SSRF protection, DNS pinning, resilience, field mapping and write idempotency from `generic-rest/`.
+- The session cookie jar and refresh rotation are stateful and specific to Learnix; adding them to the shared generic connector would widen a security-sensitive component for one CRM.
+- If Learnix issues an **API key with scopes** (question 1), switch to `GenericRestConnector`, plus two small generic additions (page pagination and fixed headers) that also help other CRMs.
+- Owner decision.
+
+### Conformance and contract tests (CI = recorded fixtures only)
+- **Fixtures:** recorded once from staging with an authorized test account. Names and phones are scrubbed; no student, parent or payment fields are kept. They are served by a local fake HTTP server, with no network in CI.
+- **Existing suite:** `connectors/testing/conformance.ts` against the fake server, covering sync, search, lead create and errors.
+- **Allow-list:** every non-allow-listed method and path throws *before* a request is made. A table test covers each forbidden prefix: students, payments, parents, users, audit, exports, reports and the rest of the never-called list.
+- **Session:** login sets cookies; an expired access token triggers refresh and one retry; a failed refresh triggers one re-login, then `CONNECTOR_AUTH`. Credentials never reach logs or errors.
+- **Transport:** `x-branch-id` is on every request; HTTPS is required except for `localhost`; `EDUFLOW_BASE_URL` comes from configuration only.
+- **Mapping:** course to `CatalogItem` and group to `Offer` (start date, schedule text, no seat facts); prices refused without a currency; the ID types from G10.
+- **Lead:** duplicate check by normalized phone, then create once; a retry after a lost response does not duplicate (G8, ADR 023 operation records).
+- **Response hygiene:** fields not on the whitelist are dropped, which a fixture containing extra sensitive fields proves.
+
+### Permission catalog: pending source access
+The permissions above come from the OpenAPI descriptions:
+- `groups.view` covers groups and lessons;
+- `leads.view`;
+- `leads.manage`, for create and trial;
+- `teachers.view`, optional.
+
+Courses, rooms, branches and `settings/public` state roles but no permission. **To list the exact permissions the "AI Agent" role needs, read-only access to the Learnix backend source (the eduFlow folder) is required.** Its location and access have not been granted yet. Until then the list is unverified.
