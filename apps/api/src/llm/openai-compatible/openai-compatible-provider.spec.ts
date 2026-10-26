@@ -308,6 +308,74 @@ describe('OpenAI-compatible adapter: response mapping', () => {
     expect(result.usage.estimated).toBeUndefined();
   });
 
+  it("echoes a tool call's vendor extra_content on the next request (Gemini 3 thought signature)", async () => {
+    const signature = { google: { thought_signature: 'sig-from-the-model' } };
+    const { llm, requests } = provider([
+      {
+        body: completion(
+          {
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_sig',
+                type: 'function',
+                extra_content: signature,
+                function: {
+                  name: 'list_offers',
+                  arguments: '{"itemId":"m:1"}',
+                },
+              },
+              {
+                id: 'call_plain',
+                type: 'function',
+                function: {
+                  name: 'list_offers',
+                  arguments: '{"itemId":"m:2"}',
+                },
+              },
+            ],
+          },
+          'tool_calls',
+        ),
+      },
+      { body: completion({ content: 'done' }, 'stop') },
+    ]);
+    const first = await llm.generateWithTools(toolRequest);
+    expect(first.providerContent).toEqual({
+      openAiCompatibleExtraContent: { call_sig: signature },
+    });
+    await llm.generateWithTools({
+      ...toolRequest,
+      messages: [
+        ...toolRequest.messages,
+        {
+          role: 'assistant' as const,
+          text: '',
+          toolCalls: first.toolCalls,
+          providerContent: first.providerContent,
+        },
+        {
+          role: 'tool_results' as const,
+          results: [
+            { toolCallId: 'call_sig', content: '{}', isError: false },
+            { toolCallId: 'call_plain', content: '{}', isError: false },
+          ],
+        },
+      ],
+    });
+    const sent = requests[1].body.messages as Array<{
+      role: string;
+      tool_calls?: Array<{ id: string; extra_content?: unknown }>;
+    }>;
+    const calls = sent.find((m) => m.role === 'assistant')!.tool_calls!;
+    expect(calls.find((c) => c.id === 'call_sig')?.extra_content).toEqual(
+      signature,
+    );
+    expect(calls.find((c) => c.id === 'call_plain')).not.toHaveProperty(
+      'extra_content',
+    );
+  });
+
   it('keeps malformed tool arguments as a string so core validation rejects them', async () => {
     const { llm } = provider([
       {
