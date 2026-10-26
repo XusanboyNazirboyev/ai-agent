@@ -28,9 +28,19 @@ case "${TELEGRAM_SESSION_LLM:-mock}" in
     export LLM_PROVIDER=openai-compatible LLM_TRUSTED_PROVIDERS=mock \
       LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
       LLM_API_KEY="$GEMINI_API_KEY" LLM_MODEL_FAST=gemini-3.5-flash-lite \
-      LLM_MODEL_STRONG=gemini-3.8-flash LLM_PRICING_VERSION=routing-free-2026-10-23 \
+      LLM_MODEL_STRONG=gemini-3.5-flash-lite LLM_PRICING_VERSION=routing-free-2026-10-23 \
       LLM_RATE_LIMIT_RPM=8
     echo "LLM: Gemini (untrusted provider, SHADOW only, test messages only)" ;;
+  gemini-live)
+    # The owner declared Gemini trusted for THIS test run only (test messages, test
+    # bot, test group): LIVE may then send the model's replies to the customer chat.
+    [ -n "${GEMINI_API_KEY:-}" ] || { echo "Missing environment variable: GEMINI_API_KEY"; exit 2; }
+    export LLM_PROVIDER=openai-compatible LLM_TRUSTED_PROVIDERS=openai-compatible \
+      LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+      LLM_API_KEY="$GEMINI_API_KEY" LLM_MODEL_FAST=gemini-3.5-flash-lite \
+      LLM_MODEL_STRONG=gemini-3.5-flash-lite LLM_PRICING_VERSION=routing-free-2026-10-23 \
+      LLM_RATE_LIMIT_RPM=8
+    echo "LLM: Gemini declared TRUSTED for this run (LIVE allowed; test messages only)" ;;
   *) export LLM_PROVIDER=mock LLM_TRUSTED_PROVIDERS=mock ;;
 esac
 [ -n "${TELEGRAM_CHANNEL_ACCOUNT_ID:-}" ] || { echo "Missing environment variable: TELEGRAM_CHANNEL_ACCOUNT_ID"; exit 2; }

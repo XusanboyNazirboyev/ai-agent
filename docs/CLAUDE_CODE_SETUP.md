@@ -19,7 +19,7 @@ Sources (read 2026-10-23): [Commands](https://code.claude.com/docs/en/commands),
 | `/clear` | new conversation; continue from `docs/PROGRESS.md` |
 
 ## Cost habits
-- Start each session from `AGENTS.md` + the top of `docs/PROGRESS.md`; read spec files on demand (`docs/spec/README.md`).
+- Start each session from `CLAUDE.md` + the top of `docs/PROGRESS.md`; read spec files on demand (`docs/spec/README.md`).
 - Path-scoped rules in `.claude/rules/` load only when matching files are touched.
 - Use Sonnet for building, Opus only for design/hard debugging (via the `architect` subagent), Haiku for mechanical work.
 - Cap command output (`| tail -n 60`); avoid pasting logs; at ~60% context run `/clear` after updating PROGRESS.

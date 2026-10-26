@@ -79,7 +79,7 @@ describe('.claude project configuration', () => {
   });
 
   it('project instructions and setup doc state the same ceiling', () => {
-    const agents = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
+    const agents = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
     const setup = readFileSync(
       resolve(root, 'docs/CLAUDE_CODE_SETUP.md'),
       'utf8',
