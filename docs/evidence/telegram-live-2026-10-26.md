@@ -46,3 +46,20 @@ Findings and limits:
 - In SHADOW the handover outcomes are stored as drafts and **no Handover row or operator card was created** (the only handover in the window is the one opened by the script earlier). Real handovers from the model are therefore still not observed end to end.
 - The Russian question was handled in the same batch as the operator request, so Russian replies were not tested on their own; the draft language was Uzbek.
 - A greeting got a handover draft and a price question got a clarifying question, not a fact: no price or any other hard fact was shown, so provenance and the guardrail were not exercised. Five messages, one provider, one day: not a quality measurement.
+
+## Third run: Gemini in LIVE (owner declared Gemini trusted for this run only), STUCK fix
+`TELEGRAM_SESSION_LLM=gemini-live`: `LLM_TRUSTED_PROVIDERS=openai-compatible` for the session process only, test account switched to LIVE for the run and **back to SHADOW afterwards**; `.env` default restored to the SHADOW-only `gemini` mode. Test messages only.
+
+| Message | Result |
+|---|---|
+| `Salom` (after the STUCK fix) | Real reply sent: "Assalomu alaykum! … Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?" No STUCK (earlier turns of other days no longer count). |
+| `Kurslaringiz haqida ma'lumot bering` | Clarifying question sent. |
+| `IELTS kursi qancha turadi?` with no catalog connected | Honest "no data" handover (`NO_DATA`), card delivered; nothing invented. |
+| Same question with the fictional mock catalog | 4 model calls, 6.8 s. `search_catalog` (code) and `list_offers` (model-requested) found the item; the draft used the **listed** price, the display gate refused it (`FACT_NOT_LIVE`: a price needs a live confirmed quote from `get_quote`), the single regeneration (no tools available) repeated it, so the turn ended in `GUARDRAIL` handover and the customer got "Hozir bu savolga ishonchli javob bera olmayman. Savolingiz jamoamiz uchun saqlandi." No wrong price was shown. |
+
+Defects found and fixed in this run:
+1. STUCK counted turns of any age and across human handovers (commit 7cd1534).
+2. Gemini 3 refuses a tool round whose earlier tool calls lack their `thought_signature` (HTTP 400, shown to the customer as a technical-fault notice): the adapter now echoes the vendor `extra_content` (commit 65176a8, reproduced with a direct request and a unit test).
+3. `gemini-3.8-flash` (preset STRONG) did not answer within 25-70 s on that day; `gemini-3.6-flash` took 15 s; `gemini-3.5-flash-lite` about 1 s. The session script uses `gemini-3.5-flash-lite` for both tiers. The preset default is unchanged and unverified.
+
+Open (not changed, needs a decision): the model ignored prompt rule 2 ("call get_quote when the customer asks what they will pay") twice, and the regeneration step offers no tools, so a price question ends in a handover whenever the model skips `get_quote`. Options: (a) let the regeneration call tools with a specific hint for `FACT_NOT_LIVE`; (b) make the code fetch the quote itself for a price intent (like `search_catalog`); (c) a stronger model. The Russian question was not answered separately (the conversation was in handover at that time).
