@@ -3,6 +3,7 @@ import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AuthController } from './auth.controller.js';
 import { ChannelsController } from './channels.controller.js';
+import { ContactsController } from './contacts.controller.js';
 import { EventsController } from './events.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { InboxController } from './inbox.controller.js';
@@ -21,6 +22,7 @@ import { SessionService } from './session.service.js';
     EventsController,
     ChannelsController,
     KnowledgeFaqController,
+    ContactsController,
   ],
   providers: [
     SessionService,
