@@ -956,3 +956,70 @@ describe('BullMQ end to end (shadow mode, mock model)', () => {
     }
   });
 });
+
+describe('STUCK needs a live dialogue', () => {
+  const greetings = ['Salom', 'Assalomu alaykum', 'Salom, yana men'];
+
+  async function lastOutcome(f: Fixture): Promise<string | null> {
+    const all = await turns(f);
+    return all.filter((t) => t.status === 'COMMITTED').at(-1)?.outcome ?? null;
+  }
+
+  it('fires for the same unanswered question inside one dialogue', async () => {
+    const f = await fixture({
+      mode: 'SHADOW',
+      responder: () => extraction({}),
+    });
+    for (const text of greetings)
+      await f.processor.process(await receive(f, text));
+    const last = (await turns(f))
+      .filter((t) => t.status === 'COMMITTED')
+      .at(-1);
+    expect(last).toMatchObject({
+      outcome: 'HANDOVER',
+      handoverReason: 'STUCK',
+    });
+  });
+
+  it('does not count turns of an earlier visit (a day or more ago)', async () => {
+    const f = await fixture({
+      mode: 'SHADOW',
+      responder: () => extraction({}),
+    });
+    for (const text of greetings.slice(0, 2))
+      await f.processor.process(await receive(f, text));
+    expect(await lastOutcome(f)).toBe('ASKED_SLOT');
+    await prisma.agentTurn.updateMany({
+      where: { tenantId: f.tenantId },
+      data: { completedAt: new Date(Date.now() - 26 * 3_600_000) },
+    });
+    await f.processor.process(await receive(f, greetings[2]));
+    expect(await lastOutcome(f)).toBe('ASKED_SLOT');
+  });
+
+  it('does not count turns from before a human handover ended', async () => {
+    const f = await fixture({
+      mode: 'SHADOW',
+      responder: () => extraction({}),
+    });
+    for (const text of greetings.slice(0, 2))
+      await f.processor.process(await receive(f, text));
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { tenantId: f.tenantId },
+    });
+    await prisma.handover.create({
+      data: {
+        tenantId: f.tenantId,
+        conversationId: conversation.id,
+        reasonCode: 'CUSTOMER_REQUEST',
+        idempotencyKey: `stuck-boundary:${randomUUID()}`,
+        summary: {},
+        status: 'RESOLVED',
+        resolvedAt: new Date(Date.now() + 1_000),
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await f.processor.process(await receive(f, greetings[2]));
+    expect(await lastOutcome(f)).toBe('ASKED_SLOT');
+  });
+});

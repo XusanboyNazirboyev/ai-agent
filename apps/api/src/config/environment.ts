@@ -286,6 +286,8 @@ const environmentSchema = postgresEnvironmentSchema
     FOLLOWUP_QUIET_END_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Earlier no-progress turns before the STUCK handover (spec §7.4). */
     STUCK_REPEAT_LIMIT: z.coerce.number().int().min(1).max(5).default(2),
+    /** Silence (minutes) after which earlier turns stop counting toward STUCK. */
+    STUCK_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   })
   .superRefine((environment, context) => {
     if (
