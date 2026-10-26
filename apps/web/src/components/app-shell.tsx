@@ -52,7 +52,8 @@ type NavKey =
   | 'bot'
   | 'knowledge'
   | 'channels'
-  | 'settings';
+  | 'settings'
+  | 'analytics';
 
 const NAV: { key: NavKey; icon: IconName }[] = [
   { key: 'inbox', icon: 'inbox' },
@@ -60,6 +61,7 @@ const NAV: { key: NavKey; icon: IconName }[] = [
   { key: 'contacts', icon: 'users' },
   { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
+  { key: 'analytics', icon: 'chart' },
   { key: 'channels', icon: 'link' },
   { key: 'settings', icon: 'sliders' },
 ];
@@ -220,6 +222,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     );
   }
   const operator = me.data.operator;
+  const canSeeAnalytics =
+    operator.role === 'OWNER' || operator.role === 'ADMIN';
+  const visibleNav = NAV.filter(
+    (item) => item.key !== 'analytics' || canSeeAnalytics,
+  );
   const conversationOpen = pathname.startsWith('/inbox') && params.has('c');
   const value: ShellValue = {
     operator,
@@ -244,7 +251,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
           <span className="mb-3 grid h-10 w-full place-items-center">
             <BrandMark className="h-8 w-9" />
           </span>
-          {NAV.map((item) => (
+          {visibleNav.map((item) => (
             <NavLink
               key={item.key}
               layout="rail"

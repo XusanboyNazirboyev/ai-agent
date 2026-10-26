@@ -170,3 +170,59 @@ export interface TelegramTest {
   } | null;
   operatorGroupConfigured: boolean;
 }
+
+export interface AnalyticsReport {
+  range: { from: string; to: string; timezone: string; days: number };
+  conversations: {
+    total: number;
+    byLanguage: { language: string; count: number }[];
+    daily: { day: string; count: number }[];
+  };
+  firstResponse: {
+    asked: number;
+    answered: number;
+    p50Seconds: number | null;
+    p95Seconds: number | null;
+  };
+  resolution: {
+    total: number;
+    autoResolved: number;
+    handedOver: number;
+    autoResolvedRate: number | null;
+    handoverRate: number | null;
+  };
+  handovers: {
+    total: number;
+    byReason: { reason: string; count: number }[];
+    daily: { day: string; count: number }[];
+    takeOverP50Seconds: number | null;
+    slaAlerted: number;
+  };
+  leads: {
+    total: number;
+    byScore: { score: string; count: number }[];
+    captureRate: number | null;
+    crmFailed: number;
+    crmPending: number;
+  };
+  guardrail: {
+    turns: number;
+    blockedTurns: number;
+    blockRate: number | null;
+    guardrailHandovers: number;
+  };
+  latency: { turns: number; p50Ms: number | null; p95Ms: number | null };
+  cost: {
+    conversationsWithTurns: number;
+    totalUsd: number;
+    perConversationUsd: number | null;
+    inputTokens: number;
+    outputTokens: number;
+  };
+  tools: { calls: number; errors: number; errorRate: number | null };
+  languageDetection: {
+    messages: number;
+    averageConfidence: number | null;
+    lowConfidence: number;
+  };
+}

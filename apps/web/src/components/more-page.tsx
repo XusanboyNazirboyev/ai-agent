@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
+import { useShell } from './app-shell';
 import { Icon, type IconName } from './ui/icons';
 
 const ITEMS: {
-  key: 'bot' | 'knowledge' | 'channels' | 'settings';
+  key: 'analytics' | 'bot' | 'knowledge' | 'channels' | 'settings';
   icon: IconName;
 }[] = [
+  { key: 'analytics', icon: 'chart' },
   { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
   { key: 'channels', icon: 'link' },
@@ -18,6 +20,13 @@ const ITEMS: {
 /** The tab bar's overflow: the sections that do not fit on a phone. */
 export function MorePage(): ReactNode {
   const { t } = useI18n();
+  const { operator } = useShell();
+  const items = ITEMS.filter(
+    (item) =>
+      item.key !== 'analytics' ||
+      operator.role === 'OWNER' ||
+      operator.role === 'ADMIN',
+  );
   return (
     <div
       role="region"
@@ -28,7 +37,7 @@ export function MorePage(): ReactNode {
       <div className="mx-auto flex w-full max-w-xl flex-col gap-3 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('more.intro')}</p>
         <ul className="flex flex-col gap-2">
-          {ITEMS.map((item) => (
+          {items.map((item) => (
             <li key={item.key}>
               <Link
                 href={`/${item.key}`}

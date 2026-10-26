@@ -68,6 +68,14 @@ const PATHS = {
     </>
   ),
   chevronRight: <path d="m9 18 6-6-6-6" />,
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M7 16v-5" />
+      <path d="M12 16V8" />
+      <path d="M17 16v-9" />
+    </>
+  ),
   chevronDown: <path d="m6 9 6 6 6-6" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   logout: (
