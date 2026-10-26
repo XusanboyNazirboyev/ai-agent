@@ -36,6 +36,8 @@ export interface RunMetrics {
   readonly agentLlmCalls: number;
   /** Every handover reason opened during the run (for provider-failure triage). */
   readonly handoverReasons: readonly string[];
+  /** Per-turn failure codes (e.g. TURN_TIMEOUT), for infrastructure triage. */
+  readonly turnFailureCodes: readonly (string | null)[];
 }
 
 export interface GradeInput {
@@ -239,6 +241,7 @@ export function gradeRun(input: GradeInput): RunMetrics {
     agentOutputTokens: state.turns.reduce((sum, t) => sum + t.outputTokens, 0),
     agentLlmCalls: state.turns.reduce((sum, t) => sum + t.llmCalls, 0),
     handoverReasons: state.handoverReasons,
+    turnFailureCodes: state.turns.map((t) => t.failureCode),
   };
 }
 
