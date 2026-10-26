@@ -1,6 +1,6 @@
 # ADR 028: Connecting a messenger channel from the web UI (proposal)
 
-- **Status:** Proposed (needs the owner decisions below before any code)
+- **Status:** Accepted for Telegram (owner decisions D-A: encrypted in the database, scope S1-S4, 2026-10-25). S1 (secret store) and S2 (per-account Telegram credentials) are implemented on `feat/channel-secret-store`; S3 (connect/enable/test API) and S4 (Channels page) follow in later branches.
 - **Date:** 2026-10-25
 
 ## Context
