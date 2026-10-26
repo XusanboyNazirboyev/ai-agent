@@ -529,3 +529,52 @@ describe('agent turn: a listed price is not shown, the retry may ask for a live 
     expect(result).toMatchObject({ outcome: 'ANSWERED', regenerated: true });
   });
 });
+
+describe('agent turn: a verified quote answers when the model cannot word it', () => {
+  const listOffers: ScriptStep = {
+    kind: 'tools',
+    toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+  };
+  const getQuote: ScriptStep = {
+    kind: 'tools',
+    toolCalls: [{ name: 'get_quote', input: { offerId: WEEKDAY } }],
+  };
+
+  it('renders "title: price" from the live quote when the retry still writes the digits itself', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      getQuote,
+      // The model writes the price as digits: the guardrail refuses it.
+      { kind: 'tools', text: '{{F1}} kursi 150 dollar turadi.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({ outcome: 'ANSWERED', regenerated: true });
+    expect(result.reply.replace(/\s/gu, ' ')).toBe(
+      'IELTS Preparation: 150 US$',
+    );
+    expect(result.shownFactIds).toEqual(['F1', 'F10']);
+    expect(result.safety).toMatchObject({ status: 'BLOCKED', gate: 'DISPLAY' });
+  });
+
+  it('does not invent an answer without a live confirmed quote', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'GUARDRAIL',
+    });
+  });
+});
