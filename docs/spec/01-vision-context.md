@@ -1,7 +1,7 @@
 # MASTER PROMPT — Universal AI Sales & Support Agent Platform (working name: "AgentCore")
 
 > Audience: an AI coding agent (Claude Code, Codex, or similar) working inside this repository.
-> Place this file at the repo root as `CLAUDE.md` (Claude Code) or `AGENTS.md` (Codex and others).
+> The project instructions live in `AGENTS.md` at the repo root (canonical, read by Codex and other tools). The root `CLAUDE.md` contains only `@AGENTS.md`, so Claude Code loads the same text; never copy the instructions into both files (ADR 011, amendment 2026-10-26).
 > Version: 3 (universal / multi-vertical / multilingual / frontend + operator experience). Language of this document: English.
 
 ---

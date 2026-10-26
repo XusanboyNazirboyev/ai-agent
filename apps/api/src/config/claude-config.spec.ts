@@ -91,14 +91,13 @@ describe('.claude project configuration', () => {
     expect(agents).toMatch(/`mechanical` \(haiku\)/u);
   });
 
-  it('AGENTS.md is the canonical instructions file and CLAUDE.md only imports it', () => {
+  it('AGENTS.md is the canonical instructions file and CLAUDE.md is exactly its import', () => {
     expect(existsSync(resolve(root, 'AGENTS.md')), 'AGENTS.md').toBe(true);
-    const agents = readFileSync(resolve(root, 'AGENTS.md'), 'utf8');
-    const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8');
-    expect(claude).toMatch(/^@AGENTS\.md\s*$/mu);
-    // The import is the whole point: no second copy of the instructions.
-    const heading = agents.split('\n').find((line) => line.startsWith('# '));
-    expect(heading).toBeDefined();
-    expect(claude).not.toContain(heading);
+    const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8')
+      .replace(/\r\n/gu, '\n')
+      .trim();
+    // Nothing else may live in CLAUDE.md: no second import, no copied or
+    // divergent instructions (ADR 011, amendment 2026-10-26).
+    expect(claude).toBe('@AGENTS.md');
   });
 });
