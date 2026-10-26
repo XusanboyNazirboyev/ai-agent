@@ -120,5 +120,8 @@ export function regenerationMessage(
   violations: readonly string[],
   locale: LocalePack,
 ): string {
-  return `Your previous reply was rejected by validation (${violations.join(', ')}). Rewrite it in ${locale.promptName}, following every rule: facts only as {{F<n>}} references, no digits or currency names of your own, no discounts or guarantees.`;
+  const quoteHint = violations.includes('FACT_NOT_LIVE')
+    ? ' A listed price cannot be shown to the customer: call get_quote for the offer they are asking about and use its confirmedPriceFact, or write the reply without any price.'
+    : '';
+  return `Your previous reply was rejected by validation (${violations.join(', ')}).${quoteHint} Rewrite it in ${locale.promptName}, following every rule: facts only as {{F<n>}} references, no digits or currency names of your own, no discounts or guarantees.`;
 }
