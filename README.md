@@ -1,38 +1,107 @@
-# AgentCore
+# AgentCore (tezda)
 
-Universal AI sales and support agent platform. `AGENTS.md` is the lean project index; the full specification is in `docs/spec/` (start at `docs/spec/README.md`), and the current state is at the top of `docs/PROGRESS.md`.
+AgentCore is a multi-tenant AI sales and support agent. It answers customers in their own language and script (Uzbek in Latin and Cyrillic, Russian, English) on Telegram. Every hard fact (price, date, seats, schedule) comes from the business's CRM or database through tools, never from the model's memory. When a human is needed, it hands the conversation over to an operator. The operator inbox's user-facing brand is **tezda**.
 
-## Requirements
+Onboarding a new business is configuration, not core code: a **Domain Pack** (what is sold and which details to ask for), a **CRM Connector** (where the facts live), a **Locale Pack** (language, script, templates) and tenant settings.
 
-- Node.js 24 (or Node.js 20.19+ / 22.12+)
-- pnpm 10+
-- Docker with Compose
+`AGENTS.md` is the lean project index. The full specification is in `docs/spec/` (start at `docs/spec/README.md`), the current state is at the top of `docs/PROGRESS.md`, and design decisions are in `docs/adr/`.
 
-## Local development
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Running the tests](#running-the-tests)
+- [Demo script (5–7 minutes)](#demo-script-57-minutes)
+- [Status: what is tested and what is not](#status-what-is-tested-and-what-is-not)
+- [Secrets and customer data](#secrets-and-customer-data)
+- [Developer reference](#database-development)
 
-```sh
-cp .env.example .env
-pnpm install
-docker compose up -d
-pnpm dev
+## Architecture
+
+```mermaid
+flowchart LR
+  customer([Customer on Telegram]) -->|webhook, secret header| adapter
+
+  subgraph channels[Channel layer]
+    adapter[Telegram adapter<br/>verify, normalize, dedupe]
+    outbox[(Outbox + BullMQ<br/>per-conversation order)]
+    sender[Sender<br/>delivery states]
+  end
+
+  subgraph core[Agent core, vertical-neutral]
+    pipeline[Turn pipeline<br/>claim → compute → commit]
+    turn[runAgentTurn<br/>language, slots, tools]
+    gate[Guardrail + display gate<br/>facts only as rendered references]
+    llm[LLM provider abstraction<br/>mock / Anthropic / OpenAI-compatible / routed]
+  end
+
+  subgraph config[Per-tenant configuration]
+    packs[Domain packs<br/>education, travel]
+    locales[Locale packs<br/>uz-Latn, uz-Cyrl, ru, en]
+    connectors[CRM connectors<br/>mock, generic REST, EduFlow planned]
+  end
+
+  subgraph people[Handover]
+    handover[Handover service<br/>triggers, SLA, states]
+    notifier[Telegram operator group]
+    inbox[Web operator inbox, tezda<br/>Next.js, SSE]
+  end
+
+  db[(PostgreSQL + pgvector<br/>tenants, catalog, turns, knowledge)]
+  redis[(Redis)]
+
+  adapter --> outbox --> pipeline --> turn
+  turn <--> llm
+  turn --> gate
+  turn --> packs
+  turn --> locales
+  turn -->|tools: search, offers, quote| connectors
+  gate --> sender --> customer
+  pipeline --> handover --> notifier
+  handover --> inbox
+  inbox -->|take over / reply / return| sender
+  pipeline --- db
+  outbox --- redis
+  connectors -->|catalog sync| db
 ```
 
-The API listens on port 4000. Check `http://localhost:4000/health` for `{"status":"ok"}`.
+- **The agent core** (`apps/api/src/core/`) has nothing vertical- or CRM-specific in it. Hard facts enter a reply only as `{{F<n>}}` references that code renders from this turn's tool results, with provenance (ADR 013).
+- **Conversation states:** `BOT_ACTIVE`, `WAITING_OPERATOR`, `OPERATOR_ACTIVE`, `CLOSED`. The bot stays silent unless the conversation is `BOT_ACTIVE`.
+- **Agent mode per channel account:** `OFF`, `SHADOW` (drafts only, nothing sent) or `LIVE`.
 
-The repository is a pnpm workspace: the NestJS API is in `apps/api`, the operator inbox (Next.js, brand name tezda) is in `apps/web`, and shared contracts/configuration live in `packages/`.
+## Quick start
 
-### Run the API and the web inbox locally
+**Requirements:** Node.js 24 (or 20.19+ / 22.12+, see `.nvmrc`), pnpm 10+, and Docker with Compose. Compose provides PostgreSQL 16 with pgvector (`pgvector/pgvector:pg16`) and Redis 7.
 
-Two terminals (or, in VS Code, the task **Dev: API + Web** from `.vscode/tasks.json`, which opens one dedicated terminal each):
+```sh
+cp .env.example .env                 # names and safe defaults only; put real keys in .env.local (gitignored)
+pnpm install
+docker compose up -d                 # postgres (pgvector) + redis
+pnpm db:generate && pnpm db:migrate  # Prisma client + checked-in migrations
+pnpm db:seed                         # optional repeatable development seed (refused in production)
+```
+
+The repository is a pnpm workspace:
+- the NestJS API is in `apps/api`;
+- the operator inbox (Next.js, brand tezda) is in `apps/web`;
+- shared contracts and configuration are in `packages/`.
+
+Run the API and the web inbox in two terminals (in VS Code, the task **Dev: API + Web** in `.vscode/tasks.json` opens one terminal each):
 
 ```sh
 cd apps/api && API_HOST=127.0.0.1 pnpm start:dev   # API on 127.0.0.1:4000, rebuilds on change
 cd apps/web && pnpm dev                            # web on 127.0.0.1:3000, proxies /api to the API
 ```
 
-Open `http://127.0.0.1:3000`. The browser only talks to the web origin; `/api/*` is proxied.
+Check `http://127.0.0.1:4000/health` for `{"status":"ok"}`, then open `http://127.0.0.1:3000`. The browser only talks to the web origin; `/api/*` is proxied.
 
-### Local login (development only)
+**Environment.** Every variable is listed with an explanation in `.env.example`. The defaults run fully offline:
+- `LLM_PROVIDER=mock` is a deterministic model with no network calls;
+- the Telegram variables are unset;
+- `FOLLOWUP_ENABLED=false`;
+- `KNOWLEDGE_EMBEDDINGS=off`.
+
+Real keys (LLM providers, a Telegram test bot, `SECRETS_MASTER_KEY`) go only into `.env.local` or the shell, never into a committed file.
+
+**Local login (development only):**
 
 ```sh
 cd apps/api && pnpm dev:superadmin --demo   # once; idempotent; --reset-password to rotate
@@ -40,6 +109,124 @@ pbcopy < ~/.config/agentcore/dev-superadmin.password   # macOS: copy the passwor
 ```
 
 Login `superadmin@agentcore.local`. This is an `OWNER` of one dedicated local tenant (fake data), not a platform administrator: there is no cross-tenant role ([ADR 025](docs/adr/025-local-development-superadmin.md)). The script refuses anything but `NODE_ENV=development` on a localhost database, stores only an scrypt hash, and writes the password to a 0600 file outside the repository. With the real Telegram bot token in `.env`, do not reply from the local demo conversations: the demo channel account is fake and a reply would try to reach Telegram.
+
+## Running the tests
+
+| Command | What it checks | Needs |
+|---|---|---|
+| `pnpm lint`, `pnpm typecheck`, `pnpm format:check` | Static checks across the API, the web app and shared packages | nothing |
+| `pnpm test` / `pnpm test:unit` | API unit tests, including the deterministic eval suite with a scripted model; `test:unit` also runs the web unit tests | nothing |
+| `pnpm test:integration` | Real-PostgreSQL tests (webhook acceptance, idempotency, ordering, handover, connectors, secret store, simulation harness) | Compose Postgres; it creates and marks an isolated `agentcore_test` database and refuses any other |
+| `pnpm test:eval` | The evaluation gate: scripted eval cases and business-action lifecycle cases; mock models only, no network | Compose Postgres |
+| `pnpm test:e2e` | Playwright end-to-end tests of the inbox, including accessibility checks | a built app; CI installs Chromium |
+| `pnpm check:onboarding` | Universality gate: a commit that onboards a domain pack (trailer `Pack-Onboarding: <pack>`) must not change the core | git history |
+| `pnpm build` | Production build of every package | nothing |
+
+CI (`.github/workflows/`) runs all of the above on every push, on a fresh pgvector database, including migration drift checks.
+
+**Live and simulation runs are opt-in and never run in CI:**
+- `eval:live` calls a real model and is billable or quota-limited;
+- `simulate` runs scenarios with a free-tier model against a dedicated `agentcore_*` database.
+
+See the developer reference below.
+
+## Demo script (5–7 minutes)
+
+Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bot only if you want real traffic; everything else is local.
+
+1. **Start (1 min).** Run Quick start, `pnpm dev:superadmin --demo`, then the API and the web app. Log in at `http://127.0.0.1:3000` as `superadmin@agentcore.local`.
+2. **Operator inbox (1–2 min).** The demo seeds three fictional conversations, in Uzbek, Russian and English. Each customer asked for a person, so each conversation is `WAITING_OPERATOR` with a `CUSTOMER_REQUEST` handover.
+   - Open one, then **Take over**: the state becomes `OPERATOR_ACTIVE` and the bot stays silent.
+   - Then **Return to bot**. Status changes stream live over SSE.
+   - Do not send a reply from a demo conversation. Its channel account is fake, and a reply would try to reach Telegram.
+3. **A simulated conversation through the real pipeline (1–2 min).** This needs the Compose Postgres; it creates its own `agentcore_test`.
+
+   ```sh
+   pnpm db:test:prepare
+   pnpm --filter @agentcore/api exec vitest run --config vitest.integration.config.mts \
+     src/agent/testing/simulation/simulation.integration.spec.ts
+   ```
+
+   A scripted customer and a scripted model go through the real webhook, queue, agent turn, guardrail and handover code. The tests show:
+   - a grounded recommendation;
+   - a correct handover;
+   - a confirmed business action reaching the (fictional) CRM;
+   - the clock advancing after a quoted price. On `main` this test still pins the old "no follow-up" result; the harness wiring fix that makes the follow-up fire is on the unmerged measurement branch (DEF-001).
+4. **Shadow mode (1–2 min).** Switch a channel account to `SHADOW`:
+
+   ```sh
+   pnpm --filter @agentcore/api agent:mode <channel-account-uuid> shadow
+   ```
+
+   For a test bot, `pnpm --filter @agentcore/api telegram:account` creates a fake tenant with a SHADOW test account, and `docs/TELEGRAM_TEST_PROCEDURE.md` walks through the webhook. In SHADOW every inbound message produces a draft and a turn record in `agent_turns` (outcome, tool calls, guardrail result, cost), and **nothing is sent to the customer**.
+5. **Handover (1 min).** A request for a person, a complaint, a price negotiation, a guardrail refusal or a stuck conversation opens a typed handover (`CUSTOMER_REQUEST`, `COMPLAINT`, `NEGOTIATION`, `GUARDRAIL`, `STUCK`, …). It appears in the inbox and, with an operator group configured, as a card in Telegram with Take over / Return buttons.
+
+These steps were not re-run while writing this README. The commands are the ones CI and the project's evidence files use.
+
+## Status: what is tested and what is not
+_As of 2026-10-27, `main` at `6db8ac7`; CI run 40453706080 success._
+
+**Tested in CI (deterministic, no live model):**
+- Telegram webhook acceptance, idempotency, per-conversation ordering and delivery states.
+- The agent turn with a scripted model: slots, tools, guardrail, display gate, locale choice.
+- Handover state machine and operator actions.
+- Business-action lifecycle; connector conformance (mock, generic REST); catalog sync.
+- Encrypted channel secret store and per-account Telegram credentials.
+- The channel connect API (S3 of ADR 028, no UI yet).
+- Knowledge retrieval plumbing; follow-ups.
+- The web inbox, with end-to-end and accessibility tests.
+- The evaluation gate: scripted cases in four locales, plus lifecycle cases.
+
+**Not tested, or tested only partly:**
+- **Model quality with a real model is measured, not gated.** The free-tier Groq "before" baseline: lane `openai/gpt-oss-20b` / `openai/gpt-oss-120b`, k=1, agent commit `9a653e7`, scenario hash `38f47101a367`.
+  - It is partial (112 of 130 units attempted; the per-day quota stopped it).
+  - **30 of 111 completed runs passed.** 22 of those 30 are scenarios where handing over is the right answer; all other scenario types passed 8 of 88.
+  - The dominant failure was the display gate refusing listed prices and uncitable numbers (53 of 71 agent failures). 0 invented facts and 0 false success claims.
+  - Details: `docs/evidence/slice1c-groq-baseline-breakdown.md` and `slice1c-groq-baseline-assessment.md` on branch `docs/session-handoff-2026-10-26`.
+- **Real Telegram:** live runs were done manually in development and recorded as evidence. LIVE mode is still refused outside development until the owner decides.
+- **Locales:** all four are `beta`. There is no native-speaker review yet.
+- **Not built or tested:** voice and media; load or soak; backup and restore; production deployment.
+
+**Known defects** (`docs/DEFECTS.md`):
+- **DEF-001**, quoted price not recorded for follow-up: re-diagnosed on the unmerged measurement branch `measure/step1-1b-i`. The follow-up part was a simulation-harness wiring gap. The missing `Quote` row is a real product defect, fixed there and not merged.
+- **DEF-002:** the travel pack has no high-value threshold.
+- **DEF-003:** no retail pack.
+- **DEF-004:** fixed.
+- **DEF-005–008** come from the Telegram live runs and are recorded on branch `docs/telegram-live-evidence`. Of these, **DEF-007** (timestamps stored 5 h early under a non-UTC database session) is **fixed on `main`** (`6e138a1`).
+- **DEF-009–011:** fixed on `main` (channel connect API).
+
+**Deferred by owner decision:**
+- **A real CRM connector.** Phase 3 is partial. The EduFlow (Learnix) plan is ready, but the track resumes only when slice 1b-ii is merged or before the Phase 8 gate, whichever comes first.
+- **Meta channels** (Instagram, Messenger, WhatsApp; Phase 8).
+- **Production** (Phase 9: security review, load tests, backup drill, staging, deploy).
+
+**Phase roadmap** (`docs/spec/12-roadmap.md`, `docs/PROGRESS.md`):
+
+| Phase | Scope | Status |
+|---|---|---|
+| 0 | Foundation (monorepo, CI) | done |
+| 1 | Domain and persistence | done |
+| 2 | Telegram channel + queue | done |
+| 3 | Connector framework | partial: framework, mock and generic REST done; no real CRM connector (deferred) |
+| 4 / 4B | Agent core, packs, locales | done (locales `beta`) |
+| 5 | Handover and leads | done; LIVE outside development awaits the owner |
+| 6 / 6A | Knowledge, follow-ups; web operator inbox | done; voice deferred |
+| 7 | Evaluation and universality proof | in progress (scripted eval gate done; real-model quality measured, not gated) |
+| 8 | Meta channels | not started (deferred) |
+| 9 | Hardening and production | not started |
+| 10 | Self-serve and scale (tenant admin UI) | channel-connect API only, no UI |
+| 11 | New languages | not started |
+
+Agent platform v2 (ADR 026) proceeds in slices. The next is slice 1b (ADR 029, citable offer details), with a measurement ladder on the same scenario hash.
+
+## Secrets and customer data
+
+- `.env` and `.env.*` are gitignored. Only `.env.example` is tracked, and it holds names and safe placeholders.
+- **History check (2026-10-27):** all 216 commits on every branch were scanned, using git history search because no secret scanner is installed. The only env-like file ever committed is `.env.example`. No key-shaped string appears in any added line: Groq, Anthropic, OpenAI-style, Google API key, Telegram bot token, GitHub, Slack, AWS, private-key blocks, 32-byte base64 keys. None of the local `.env` secret values appears anywhere in history.
+- Channel bot tokens are stored encrypted (AES-256-GCM, `SECRETS_MASTER_KEY`, ADR 028). Responses, logs and audit rows never contain them.
+- Free-tier LLM providers may use submitted content, so they get synthetic data only. Real customer data goes only to providers listed in `LLM_TRUSTED_PROVIDERS`.
+
+## Developer reference
 
 ## Database development
 
