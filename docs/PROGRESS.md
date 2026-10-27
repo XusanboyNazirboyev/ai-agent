@@ -3,6 +3,7 @@
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
 ## Current state (updated 2026-10-25, after the Phase 6A–7.2 and design merges into `main`)
+- **Phase 3 partial: no real CRM connector, deferred by owner decision 2026-10-27; resume when slice 1b-ii is merged or before the Phase 8 gate, whichever is first.** The EduFlow (Learnix) plan, with owner-verified permission findings, is in [CONNECTOR_PLAN.md](connectors/eduflow/CONNECTOR_PLAN.md) (docs only, no connector code).
 - **Slice 1, scenario harness + v1 baseline (2026-10-25, branch `slice1/scenario-harness`, [evidence](evidence/slice1-v1-baseline.md)):**
   - Harness on the real v1 pipeline; 50 scenarios / 160 units; deterministic grader; frozen bar pinned to the roadmap by a test; `pnpm simulate`; v1 unchanged.
   - Free-model dev-loop baseline (Groq gpt-oss, English, 40 units, k=1): 5 passed. 0 invented facts, 0 false claims, language 100%. Goal 12.5%; 13 runs failed at the provider and 15 ended in guardrail handovers (safe by refusal).

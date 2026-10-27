@@ -191,3 +191,15 @@ Courses, rooms, branches and `settings/public` state roles but no permission. **
 4. **No claims about seats left, language of instruction or trial slots** (G3, G5, G6). A customer's trial request becomes a **lead whose note holds the preferred time**, plus a handover to an operator. No `POST /api/leads/{id}/trial` until the trial gaps are answered.
 5. **Permission names stay unverified** until the owner supplies the real Learnix permission catalog.
 6. **Writes (lead create) only on the staging server, and only after the owner's explicit approval.** Production is read-only.
+
+## Owner decision 2026-10-27: track deferred; verified permission findings
+**The EduFlow connector track is deferred.** No connector code, and no requests for Learnix credentials or roles. The plan stays as the reference. Phase 3 stays partial until the track resumes: when slice 1b-ii is merged or before the Phase 8 gate, whichever comes first.
+
+**Permission findings, verified by the owner on 2026-10-27** (supersedes "unverified" in decision 5 above; this session did not read the Learnix source itself):
+- **"AI Agent" role** = `groups.view`, `leads.view`, `leads.manage`. Nothing else.
+- **Fail-open default:** an ADMIN user **without** a staff role is not restricted by permissions. So the integration user must always have the restricted role attached, and a missing role must never be read as "least privilege".
+- **Startup permission self-check:** when the connector starts, it verifies that its principal has exactly the expected permissions. If it has more or fewer, it refuses to run (status `UNAVAILABLE`, no calls) and logs the difference without any secret.
+- **The code allow-list stays authoritative.** The connector's method-and-path allow-list and the never-called list apply whatever the server grants. Server permissions are defence in depth, not the control.
+- **Duplicate check returns only `{ exists, internalId }`.** The lead lookup result is reduced to those two fields before it leaves the connector. No name, phone, notes or other lead data reaches the agent, the logs or the turn record.
+
+**Meanwhile:** the simulation's mock connector gets an EduFlow-shaped profile (string IDs, currency only from owner config, no live quote or availability, no seats, language or trial slots), so slice 1b and the measurement ladder run under realistic constraints. Owner instruction 2026-10-27; implemented on the slice 1b-i branch.
