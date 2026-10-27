@@ -1,6 +1,6 @@
 # ADR 029: Citable offer details, blocked-draft diagnostics and structured auto-link
 
-- **Status:** Approved by the owner on 2026-10-27 to be written before code. This text is for owner review. **Not implemented.** It amends [ADR 013](013-stage-c-safety-gates.md) (pre-live safety gates) for the guardrail's number rule only; the display gate is unchanged.
+- **Status:** **Accepted** by the owner on 2026-10-27, with additions 9 and 10 below. Decision 1 (1b-i) is implemented on the measurement-only branch `measure/step1-1b-i` (not merged). Decisions 2–10 (1b-ii, 1b-iii) are **not implemented**. It amends [ADR 013](013-stage-c-safety-gates.md) (pre-live safety gates) for the guardrail's number rule only; the display gate is unchanged.
 - **Date:** 2026-10-27
 - **Inputs:**
   - the "before" baseline, Groq lane k=1 on `9a653e7`, scenario hash `38f47101a367`: [breakdown](../evidence/slice1c-groq-baseline-breakdown.md) and [assessment](../evidence/slice1c-groq-baseline-assessment.md) on `docs/session-handoff-2026-10-26`;
@@ -50,6 +50,18 @@
    - Equal digits can carry a different meaning: "5 people" would match `nights = 5`.
    - **Limitation:** for structured forms, the unit word, currency or time format is the only guard against meaning drift. A number can match a fact of the right shape and still be put in a wrong sentence (for example the right date presented as the wrong group's start). Auto-link checks form and value, not sentence meaning. Fact references are still the preferred path, and the prompt keeps asking for them.
 8. **Numbered-list markers are allowed.** Only at line start, only the pattern `^\d+[.)]\s`. Such a marker is not treated as an unsourced number. Any other digit on the line follows the rules above.
+9. **Price-format normalization tests (owner addition, 2026-10-27).** Before a typed price is compared with a fact's rendering, thousands separators normalize to the same value, whether written with:
+   - a plain space ("1 500 000 so'm");
+   - a no-break space (U+00A0);
+   - a narrow no-break space (U+202F), which ICU emits for some locales;
+   - a thin space (U+2009);
+   - no separator at all.
+
+   Tests cover each separator in uz-Latn, uz-Cyrl, ru and en renderings, with and without a decimal part. A grouping that does not match the locale's rendering of the same fact (for example "15 00 000") does not link.
+10. **An eval scenario for the "right value, wrong sentence" limitation (owner addition, 2026-10-27).** One scenario has two offers, each with its own start date. A correct reply states each date with its own group.
+    - The deterministic grader checks that the reply pairs each linked date fact with the offer it belongs to, which needs the auto-link record of fact IDs and their position in the reply.
+    - A draft that attaches group A's date to group B is scored as a meaning error, even though every number links to a real fact.
+    - The scenario measures how often the limitation in decision 7 occurs. It is reported, not gated, until the judge is calibrated (ADR 026).
 
 ## Consequences
 - The "after" baseline can measure exactly which numbers are blocked and why (decision 1). That needs a schema change (diagnostics storage) and a purge job.

@@ -147,7 +147,9 @@ Plan:
 - **Connector fixtures:** EduFlow recorded fixtures map to the 2.6 facts with string IDs; with and without owner-config currency.
 - **Eval:** the scripted eval and lifecycle suites with no regressions; existing case expectations unchanged except where the old output depended on removed raw values (each listed in the PR).
 
-Auto-link tests (1b-iii, per ADR 029):
+Auto-link tests (1b-iii, per ADR 029, accepted 2026-10-27 with additions 9 and 10):
+- **price-format normalization (decision 9):** "1 500 000", "1\u00a0500\u00a0000", "1\u202f500\u202f000", "1\u2009500\u2009000" and "1500000" with the locale's currency all link to the same price fact; "15 00 000" does not;
+- **"right value, wrong sentence" (decision 10):** one eval scenario with two offers and two start dates. The grader scores a reply that pairs a date with the wrong group as a meaning error (reported, not gated);
 - **links:** "02.11.2026" or "2 noyabr" against a `date` fact; "18:00–20:00" against a `weeklySchedule` slot; "150 USD" as the locale renders it, when the gate accepts the price; "7 nights" / "7 ночей" / "7 kecha" against `quantity{7, night}`;
 - **stays blocked:** a bare "7"; **"5 people" when the only matching fact is `nights = 5` (the owner's case)**; a unit word that differs from the fact's unit; a price without a currency; a time matching two facts;
 - **list markers:** "1. …" at line start is allowed; "1." in the middle of a line or "1)" without a following space is blocked.
@@ -161,6 +163,12 @@ Same lane (Groq `gpt-oss-20b` / `gpt-oss-120b`), same scenario hash `38f47101a36
 | 1 | baseline agent + **1b-i harness production wiring** + 1b-i diagnostics (records only, no reply change) | core-30 | harness wiring (shown offers, leads); diagnostics give the first real classified token counts |
 | 2 | step 1 + `fix/agent-code-fixes` (guardrail retry keeps tools; verified-quote fallback) | core-30 | the live-quote retry and fallback |
 | 3 | after slice 1b (1b-ii, 1b-iii) | full suite | citable offer details and auto-link |
+| later | EduFlow-shaped simulation profile (`SIM_CONNECTOR_PROFILE=eduflow`, `SIM_OWNER_CURRENCY=UZS`, synthetic; the real currency is owner config later; level and format kept for now) | core-30 first | realistic connector constraints, own ledger (`…-eduflow-UZS.jsonl`) |
+
+Owner decisions 2026-10-27:
+- Steps 1, 1a and 2 run on the **plain mock**; the EduFlow profile (commit D, `283b71f`) is a separate later step.
+- Tags `measure/step1-de31ebf` and `measure/step1a-44afcf9` were created after typecheck and unit tests passed for each commit in a temporary worktree (59 files, 1402 passed, 7 skipped). They are never deleted.
+- No step starts until the owner says "start"; each stops on the per-day quota.
 
 Ledgers are never mixed: the harness refuses a file with another commit or scenario hash, and each step's commit is recorded with its report. If DEF-001's product fix (6.3) is needed, it is its own variable (section 6.4).
 
