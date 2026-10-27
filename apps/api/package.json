@@ -35,6 +35,8 @@
     "operator:token": "tsx scripts/operator-token.ts",
     "dev:superadmin": "tsx scripts/dev-superadmin.ts",
     "simulate": "tsx scripts/simulate.ts",
+    "baseline": "tsx scripts/baseline.ts",
+    "provider:probe": "tsx scripts/provider-probe.ts",
     "knowledge:ingest": "tsx scripts/knowledge-ingest.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
     "crm:operations": "tsx scripts/crm-operations.ts"

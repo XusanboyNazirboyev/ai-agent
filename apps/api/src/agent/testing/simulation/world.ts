@@ -111,6 +111,7 @@ export interface WorldState {
     outcome: string | null;
     locale: string | null;
     handoverReason: string | null;
+    failureCode: string | null;
     latencyMs: number | null;
     llmCalls: number;
     inputTokens: number;
@@ -414,6 +415,7 @@ export class SimulationWorld {
         outcome: t.outcome,
         locale: t.locale,
         handoverReason: t.handoverReason,
+        failureCode: t.failureCode,
         latencyMs: t.latencyMs,
         llmCalls: t.llmCalls,
         inputTokens: t.inputTokens,
