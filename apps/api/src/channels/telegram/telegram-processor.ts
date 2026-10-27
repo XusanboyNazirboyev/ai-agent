@@ -277,6 +277,7 @@ export class TelegramProcessor {
         id: true,
         text: true,
         providerChatId: true,
+        channelAccountId: true,
         deliveryState: true,
       },
     });
@@ -303,6 +304,7 @@ export class TelegramProcessor {
       const result = await this.sender.sendMessage(
         message.providerChatId,
         message.text,
+        message.channelAccountId,
       );
       await this.prisma.message.updateMany({
         where: {

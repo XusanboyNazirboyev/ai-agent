@@ -338,4 +338,21 @@ describe('validateEnvironment', () => {
       ).ssl,
     ).toMatchObject({ rejectUnauthorized: false });
   });
+
+  it('pins every session to UTC so stored instants match the JS clock (DEF-007)', () => {
+    const config = parsePostgresEnvironment(postgresEnvironment);
+    expect(postgresPoolOptions(config, undefined).options).toBe(
+      '-c TimeZone=UTC',
+    );
+    // PGOPTIONS is kept (node-postgres would otherwise drop it) and the UTC
+    // pin comes last, so it wins over a TimeZone given there.
+    expect(
+      postgresPoolOptions(
+        config,
+        ' -c statement_timeout=5000 -c TimeZone=Asia/Tashkent ',
+      ).options,
+    ).toBe(
+      '-c statement_timeout=5000 -c TimeZone=Asia/Tashkent -c TimeZone=UTC',
+    );
+  });
 });

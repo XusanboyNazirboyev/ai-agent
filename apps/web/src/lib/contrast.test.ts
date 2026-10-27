@@ -21,7 +21,17 @@ const darkBlock = css.slice(
   css.indexOf('@media (prefers-color-scheme: dark)'),
   css.indexOf('@theme inline'),
 );
+const explicitDarkBlock = css.slice(
+  css.indexOf(":root[data-theme='dark']"),
+  css.indexOf(":root[data-theme='light']"),
+);
 const dark = { ...light, ...parse(darkBlock) };
+
+describe('theme override', () => {
+  it('the explicit dark theme has exactly the tokens of the system dark theme', () => {
+    expect(parse(explicitDarkBlock)).toEqual(parse(darkBlock));
+  });
+});
 
 function luminance(hex: string): number {
   const channel = (offset: number): number => {

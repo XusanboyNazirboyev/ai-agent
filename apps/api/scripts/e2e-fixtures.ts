@@ -104,12 +104,13 @@ async function tenant(label: string): Promise<{
     },
   });
   const operators: Record<string, { id: string; email: string }> = {};
-  const roles: [string, 'OPERATOR' | 'VIEWER'][] =
+  const roles: [string, 'OPERATOR' | 'VIEWER' | 'ADMIN'][] =
     label === 'a'
       ? [
           ['op1', 'OPERATOR'],
           ['op2', 'OPERATOR'],
           ['viewer', 'VIEWER'],
+          ['admin', 'ADMIN'],
         ]
       : [['op1', 'OPERATOR']];
   for (const [key, role] of roles) {

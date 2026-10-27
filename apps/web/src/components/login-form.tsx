@@ -41,9 +41,23 @@ export function LoginForm(): ReactNode {
         className="hidden flex-col justify-between bg-linear-to-br from-[#0b2f8f] via-primary to-[#2d68f2] p-12 text-white lg:flex"
       >
         <BrandLogo name={t('app.brand')} inverse className="text-3xl" />
-        <p className="max-w-md text-3xl leading-snug font-semibold">
-          {t('login.tagline')}
-        </p>
+        <div className="flex max-w-md flex-col gap-8">
+          <p className="text-4xl leading-tight font-semibold">
+            {t('login.tagline')}
+          </p>
+          <ul className="flex flex-col gap-4">
+            {['login.point1', 'login.point2', 'login.point3'].map((key) => (
+              <li key={key} className="flex items-start gap-3">
+                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white/20">
+                  <Icon name="check" className="h-4 w-4" />
+                </span>
+                <span className="text-base text-on-primary-muted">
+                  {t(key)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
         <p className="text-sm text-on-primary-muted">
           {t('login.taglineHint')}
         </p>

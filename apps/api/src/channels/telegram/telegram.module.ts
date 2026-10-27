@@ -4,6 +4,7 @@ import { HandoverModule } from '../../handover/handover.module.js';
 import { LeadsModule } from '../../leads/leads.module.js';
 import { ActionsModule } from '../../actions/actions.module.js';
 import { PersistenceModule } from '../../persistence/persistence.module.js';
+import { TelegramCredentialsModule } from './telegram-credentials.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import { TelegramProcessor } from './telegram-processor.js';
 import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
@@ -18,6 +19,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     HandoverModule,
     LeadsModule,
     ActionsModule,
+    TelegramCredentialsModule,
   ],
   controllers: [TelegramWebhookController],
   providers: [

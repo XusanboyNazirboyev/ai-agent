@@ -9,6 +9,8 @@ import type { InlineButton } from './telegram-bot-api.js';
 export interface NotifierTarget {
   /** Where operators are reached (Telegram group chat id for the first one). */
   readonly operatorChatId: string;
+  /** The channel account (bot) that reaches them; the environment bot when absent. */
+  readonly channelAccountId?: string;
 }
 
 export interface PostedCard {
@@ -35,5 +37,9 @@ export interface OperatorNotifier {
     buttons: readonly (readonly InlineButton[])[],
   ): Promise<void>;
   /** Acknowledges an operator button press. */
-  acknowledge(callbackId: string, text: string): Promise<void>;
+  acknowledge(
+    callbackId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<void>;
 }

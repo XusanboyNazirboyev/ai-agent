@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Optional,
   HttpException,
   HttpStatus,
   ServiceUnavailableException,
@@ -13,6 +14,9 @@ import { isOptOutMessage } from '../../core/followup/optout.js';
 import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import type { NormalizedTelegramText } from './telegram-normalizer.js';
+import { TelegramCredentials } from './telegram-credentials.js';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 const OPT_OUT_PACKS = INITIAL_LOCALE_PACKS;
 
@@ -23,12 +27,24 @@ export class TelegramWebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+    @Optional() credentials?: TelegramCredentials,
+  ) {
+    this.credentials =
+      credentials ?? new TelegramCredentials(prisma, config, undefined);
+  }
 
-  assertWebhookSecret(candidate: string | undefined): void {
-    const configured = this.config.get('TELEGRAM_WEBHOOK_SECRET', {
-      infer: true,
-    });
+  private readonly credentials: TelegramCredentials;
+
+  /**
+   * The secret that Telegram sends with every update of this account's
+   * webhook. An account without one (unknown, not connected) answers the same
+   * 503 as an unconfigured server, so the route reveals nothing.
+   */
+  async assertWebhookSecret(
+    routeAccountId: string,
+    candidate: string | undefined,
+  ): Promise<void> {
+    const configured = await this.credentials.webhookSecretFor(routeAccountId);
     if (!configured) {
       throw new ServiceUnavailableException(
         'Telegram webhook is not configured',
@@ -44,21 +60,20 @@ export class TelegramWebhookService {
     }
   }
 
-  /** The configured channel and its operator group, if the route matches. */
-  async operatorChannel(
-    routeAccountId: string,
-  ): Promise<{ tenantId: string; operatorChatId: string | null }> {
-    const configured = this.config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', {
-      infer: true,
-    });
-    if (!configured || routeAccountId !== configured) {
+  /** The routed channel and its operator group, if the account is active. */
+  async operatorChannel(routeAccountId: string): Promise<{
+    tenantId: string;
+    operatorChatId: string | null;
+    channelAccountId: string;
+  }> {
+    if (!UUID.test(routeAccountId)) {
       throw new ServiceUnavailableException(
         'Telegram channel is not configured',
       );
     }
     const channel = await this.prisma.channelAccount.findFirst({
       where: {
-        id: configured,
+        id: routeAccountId,
         channelType: 'telegram',
         status: 'ACTIVE',
         tenant: { status: 'ACTIVE' },
@@ -66,21 +81,16 @@ export class TelegramWebhookService {
       select: { tenantId: true, operatorChatId: true },
     });
     if (!channel) {
-      throw new ServiceUnavailableException(
-        'Configured Telegram channel is unavailable',
-      );
+      throw new ServiceUnavailableException('Telegram channel is unavailable');
     }
-    return channel;
+    return { ...channel, channelAccountId: routeAccountId };
   }
 
   async accept(
     routeAccountId: string,
     update: NormalizedTelegramText,
   ): Promise<WebhookAcceptance> {
-    const configuredAccountId = this.config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', {
-      infer: true,
-    });
-    if (!configuredAccountId || routeAccountId !== configuredAccountId) {
+    if (!UUID.test(routeAccountId)) {
       throw new ServiceUnavailableException(
         'Telegram channel is not configured',
       );
@@ -90,7 +100,7 @@ export class TelegramWebhookService {
       return await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
           where: {
-            id: configuredAccountId,
+            id: routeAccountId,
             channelType: 'telegram',
             status: 'ACTIVE',
             tenant: { status: 'ACTIVE' },
