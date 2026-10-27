@@ -1,6 +1,6 @@
 # Bitrix24 lead-sink connector: plan (not approved, no code)
 
-- **Status:** plan only, written 2026-10-27. Nothing is implemented. Code starts only after the owner approves this plan.
+- **Status:** approved by the owner on 2026-10-27 with the decisions below. It is implemented on branch `feat/bitrix24-lead-sink` (not merged; session 2 merges after the owner's review).
 - **Owner decision (2026-10-27):** the EduFlow connector is cancelled for now; its plan stays as docs in `docs/connectors/eduflow/`. The first real connector is Bitrix24 cloud as a **lead sink**, through an inbound webhook. amoCRM comes later.
 - **Time box:** about 3 hours to be CI-green, reviewed and demonstrated. Otherwise the submission goes without it, and the README lists it as deferred (that line is already on `docs/submission-readme`).
 
@@ -186,12 +186,55 @@ crm.item.fields              (read; configuration check: is originId filterable?
 
 If step 4 cannot run (no portal yet), the connector is not claimed as demonstrated.
 
-## Owner decisions needed before code
+## Owner decisions (2026-10-27, approved)
 
-1. Duplicate policy (recommended: comment on the existing lead; with a contact match, create the lead linked to the contact).
-2. Mock `createLead: false` config flag (recommended) vs a core `leadSink` setting.
-3. `sourceId` value for these leads (default `OTHER`).
-4. Confirm that slots stay in the comment text in v1 (no `UF_*` field map).
+1. **Duplicate:** an existing lead gets the conversation summary as a timeline comment, and its fields are never overwritten. A contact match creates a new lead linked to the contact (`contactId`).
+2. **Lead routing:** the mock connector has a config flag `createLead: false`. See follow-up 1.
+3. **Lead source:** `sourceId` is `OTHER`, and "Telegram" appears in the title ("Telegram: <name>") and the comment text.
+4. **Slots** go in the comment text for v1. Custom-field (`UF_*`) mapping comes later.
+
+## Contract probe (2026-10-27, owner's test portal, synthetic data)
+
+- **Script:** `apps/api/scripts/bitrix24-probe.ts`, using only allow-listed methods.
+- **Requests:** 9, plus one read for the no-match shape. They created two `tezda-probe` leads and one comment.
+- **Never printed or stored:** the webhook URL and the portal host.
+
+| Unverified point | Result |
+|---|---|
+| Filter leads by `originatorId` + `originId` | **Works.** Exactly the created lead; an absent key returns 0 items. So `writeIdempotency` is **`lookup`** |
+| `valueType: MOBILE` for a phone in `fm` | **Accepted**, stored as given |
+| Lead title length | A 300-character title is **silently cut to 255**. The connector caps it at 255 itself |
+| Markup in a timeline comment | Stored as given. Whether it **renders** needs a look in the portal UI (probe lead "Telegram: probe lead (synthetic)", comment 6). The connector replaces `[ ] < >` with look-alikes regardless |
+| Portal domain suffix | `bitrix24.com` (no hard-coded suffix list; the URL shape and SSRF checks are enforced) |
+
+- **Also recorded:**
+  - the CRM mode is `1` (classic, with leads);
+  - `crm.duplicate.findbycomm` returns IDs only (`{"LEAD":[2]}`), and **an empty list `[]` when nothing matches**;
+  - `crm.item.add` echoes `fm` with an entry ID;
+  - each response's `time` block carries `operating_reset_at`.
+
+## Demo (2026-10-27)
+
+`SIM_POSTGRES_DATABASE=agentcore_bitrix24_demo pnpm --filter @agentcore/api exec tsx scripts/bitrix24-demo.ts`:
+
+1. A scripted customer asks for a person (scenario `edu-22`), going through the real v1 pipeline with a scripted model, so a lead is recorded.
+2. The tenant keeps the mock catalog (`createLead: false`) and gets the `bitrix24` connector.
+3. The real `LeadSyncService` creates Bitrix24 lead 6: "Telegram: Demo Synthetic A", source `OTHER`, `originId` = the operation key. The operation is `SUCCEEDED` in `lookup` mode.
+4. A second sync returns `SKIPPED`, with no second lead.
+5. A second conversation with the same synthetic phone takes the duplicate path: a comment on lead 6, and no new lead.
+
+## Known limitations
+
+- **Duplicate path and retries.** The summary is added to an existing lead without stamping our key on it. If that write's outcome were uncertain and retried, the lookup cannot find it, so a second identical comment is possible. A comment has low harm; lead fields are never changed.
+- **A failed comment after the lead was created** is logged (code only), not retried. The lead exists, and repeating the create could only add comments.
+- **No email:** `LeadInput.contact` has no email field.
+- **Variable name.** The owner's `.env` currently names the webhook `BITRIX24_WEBHOOK_URL`. The probe and demo scripts copy it in-process. The connector config can only reference the `CONNECTOR_SECRET_` namespace, so renaming it to `CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL` lets the API use it directly.
+
+## Follow-ups (not in this branch)
+
+1. **A first-class lead-sink setting in the core:** separate roles for catalog source and lead sink, per tenant, instead of "the oldest active connector that can create leads". **Needs an ADR.** The mock `createLead: false` flag is the stopgap.
+2. **A code-computed "derived price" fact:** quantity × a confirmed unit price, with provenance (both source facts, the quantity's origin, the rule). Group totals then no longer need the model to do arithmetic. Seen in the ladder evidence: "12 человек ≈ 14400 USD" was blocked as `UNSOURCED_NUMBER` (`docs/evidence/ladder-step1-1a.md`).
+3. Custom-field (`UF_*`) mapping for slots; amoCRM (OAuth2 with rotating refresh tokens).
 
 ## Not in scope
 
