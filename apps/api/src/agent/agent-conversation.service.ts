@@ -11,6 +11,10 @@ import {
   type TenantConnectorKey,
 } from '@agentcore/shared';
 import type { AppEnvironment } from '../config/environment.js';
+import {
+  DEFAULT_STUCK_WINDOW_MINUTES,
+  selectEpisode,
+} from '../core/agent/stuck.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import {
@@ -265,34 +269,45 @@ export class AgentConversationService implements OnModuleInit {
     // phone request: stored per-turn signals, never raw customer text.
     const stuckLimit =
       this.config.get('STUCK_REPEAT_LIMIT', { infer: true }) ?? 2;
-    const [priorTurns, contactRow, phoneAsked] = await Promise.all([
-      this.prisma.agentTurn.findMany({
-        where: { tenantId, conversationId, status: 'COMMITTED' },
-        orderBy: { completedAt: 'desc' },
-        take: stuckLimit,
-        select: {
-          outcome: true,
-          askedSlot: true,
-          slotsFilled: true,
-          textFingerprint: true,
-        },
-      }),
-      this.prisma.contact.findFirst({
-        where: { tenantId, id: conversation.contactId },
-        select: { phone: true, name: true },
-      }),
-      this.prisma.message.findFirst({
-        where: {
-          tenantId,
-          conversationId,
-          direction: 'OUTBOUND',
-          OR: INITIAL_LOCALE_PACKS.map((pack) => ({
-            text: { contains: pack.templates.phoneRequest },
-          })),
-        },
-        select: { id: true },
-      }),
-    ]);
+    const stuckWindowMs =
+      (this.config.get('STUCK_WINDOW_MINUTES', { infer: true }) ??
+        DEFAULT_STUCK_WINDOW_MINUTES) * 60_000;
+    const [priorTurns, lastHandover, contactRow, phoneAsked] =
+      await Promise.all([
+        this.prisma.agentTurn.findMany({
+          where: { tenantId, conversationId, status: 'COMMITTED' },
+          orderBy: { completedAt: 'desc' },
+          take: stuckLimit,
+          select: {
+            outcome: true,
+            askedSlot: true,
+            slotsFilled: true,
+            textFingerprint: true,
+            completedAt: true,
+          },
+        }),
+        // A human handover ends the dialogue the bot had before it.
+        this.prisma.handover.findFirst({
+          where: { tenantId, conversationId },
+          orderBy: { openedAt: 'desc' },
+          select: { openedAt: true, resolvedAt: true },
+        }),
+        this.prisma.contact.findFirst({
+          where: { tenantId, id: conversation.contactId },
+          select: { phone: true, name: true },
+        }),
+        this.prisma.message.findFirst({
+          where: {
+            tenantId,
+            conversationId,
+            direction: 'OUTBOUND',
+            OR: INITIAL_LOCALE_PACKS.map((pack) => ({
+              text: { contains: pack.templates.phoneRequest },
+            })),
+          },
+          select: { id: true },
+        }),
+      ]);
 
     // Retrieval sends the customer's question to the embedding provider, so
     // it follows the chat data-protection rule: a trusted provider, a test
@@ -336,9 +351,14 @@ export class AgentConversationService implements OnModuleInit {
     const input: AgentTurnInput = {
       ...(action ? { action } : {}),
       progress: {
-        priorTurns: priorTurns
-          .reverse()
-          .map((turn) => ({ ...turn, outcome: turn.outcome ?? 'UNKNOWN' })),
+        priorTurns: selectEpisode(
+          priorTurns,
+          new Date(),
+          stuckWindowMs,
+          lastHandover
+            ? (lastHandover.resolvedAt ?? lastHandover.openedAt)
+            : undefined,
+        ).map((turn) => ({ ...turn, outcome: turn.outcome ?? 'UNKNOWN' })),
         stuck: { repeatLimit: stuckLimit },
       },
       contact: {

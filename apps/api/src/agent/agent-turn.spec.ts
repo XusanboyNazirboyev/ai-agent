@@ -454,3 +454,127 @@ describe('agent turn: safety', () => {
     ).toHaveLength(1);
   });
 });
+
+describe('agent turn: a listed price is not shown, the retry may ask for a live quote', () => {
+  const listOffers: ScriptStep = {
+    kind: 'tools',
+    toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+  };
+
+  it('retries with tools and a specific hint, then answers with the confirmed quote', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      // F2 is the listed (not live) price: the display gate refuses it.
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      {
+        kind: 'tools',
+        toolCalls: [{ name: 'get_quote', input: { offerId: WEEKDAY } }],
+      },
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F10}}.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({ outcome: 'ANSWERED', regenerated: true });
+    expect(result.reply.replace(/\s/gu, ' ')).toBe(
+      'IELTS Preparation kursi narxi: 150 US$.',
+    );
+    const retry = provider.calls[3];
+    expect(
+      retry.type === 'tools' && retry.request.tools.map((t) => t.name),
+    ).toContain('get_quote');
+    // The request keeps a reference to the growing message list, so look for the hint anywhere in it.
+    expect(JSON.stringify(retry.request.messages)).toContain(
+      'call get_quote for the offer',
+    );
+    expect(
+      result.tools.filter((t) => t.origin === 'model').map((t) => t.name),
+    ).toEqual(['list_offers', 'get_quote']);
+  });
+
+  it('still hands over when the retry keeps the listed price, and shows no price', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'GUARDRAIL',
+    });
+    expect(result.reply).not.toMatch(/\d{2,}/u);
+  });
+
+  it('accepts a retry that drops the price instead of quoting', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      {
+        kind: 'tools',
+        text: '{{F1}} kursi mavjud. Narxni operator tasdiqlaydi.',
+      },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({ outcome: 'ANSWERED', regenerated: true });
+  });
+});
+
+describe('agent turn: a verified quote answers when the model cannot word it', () => {
+  const listOffers: ScriptStep = {
+    kind: 'tools',
+    toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+  };
+  const getQuote: ScriptStep = {
+    kind: 'tools',
+    toolCalls: [{ name: 'get_quote', input: { offerId: WEEKDAY } }],
+  };
+
+  it('renders "title: price" from the live quote when the retry still writes the digits itself', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      getQuote,
+      // The model writes the price as digits: the guardrail refuses it.
+      { kind: 'tools', text: '{{F1}} kursi 150 dollar turadi.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({ outcome: 'ANSWERED', regenerated: true });
+    expect(result.reply.replace(/\s/gu, ' ')).toBe(
+      'IELTS Preparation: 150 US$',
+    );
+    expect(result.shownFactIds).toEqual(['F1', 'F10']);
+    expect(result.safety).toMatchObject({ status: 'BLOCKED', gate: 'DISPLAY' });
+  });
+
+  it('does not invent an answer without a live confirmed quote', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      listOffers,
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+      { kind: 'tools', text: '{{F1}} kursi narxi: {{F2}}.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+    });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'GUARDRAIL',
+    });
+  });
+});

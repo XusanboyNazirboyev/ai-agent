@@ -70,6 +70,7 @@ import {
   type SlotState,
 } from './slots.js';
 import { AgentTools, type ToolOutcome, type ToolTraceEntry } from './tools.js';
+import { verifiedQuoteDraft } from './verified-answer.js';
 
 /**
  * One customer turn (AGENTS.md §7). Code makes every decision:
@@ -700,19 +701,46 @@ export async function runAgentTurn(
     regenerated = true;
     const first = checked.violations;
     try {
-      const retry = await llm.withTools({
-        tier: 'STRONG',
-        purpose: 'respond',
-        system: responseSystemPrompt(pack, locale()),
-        messages: [
-          ...draft.messages,
-          { role: 'user', text: regenerationMessage(first, locale()) },
-        ],
-        tools: [],
-        maxOutputTokens: deps.maxOutputTokens.respond,
-      });
+      const correction: LlmMessage[] = [
+        ...draft.messages,
+        { role: 'user', text: regenerationMessage(first, locale()) },
+      ];
+      let retryText: string | undefined;
+      if (first.includes('FACT_NOT_LIVE') && tools) {
+        // A price that is not live needs a tool call (get_quote), so this retry
+        // keeps the tools; the same rounds, budget and guardrail apply.
+        const again = await respond(deps, tools, {
+          system: responseSystemPrompt(pack, locale()),
+          messages: correction,
+        });
+        if (again.kind === 'budget')
+          return handover(
+            budgetHandoverReason(llm.budget.snapshot.stopReason),
+            {
+              violations: first,
+              regenerated,
+            },
+          );
+        if (again.kind === 'error')
+          return handover('LLM_UNAVAILABLE', {
+            llmFailure: again.code,
+            violations: first,
+            regenerated,
+          });
+        if (again.kind === 'draft') retryText = again.text;
+      } else {
+        const retry = await llm.withTools({
+          tier: 'STRONG',
+          purpose: 'respond',
+          system: responseSystemPrompt(pack, locale()),
+          messages: correction,
+          tools: [],
+          maxOutputTokens: deps.maxOutputTokens.respond,
+        });
+        if (retry.stopReason === 'end') retryText = retry.text;
+      }
       checked =
-        retry.stopReason === 'end' ? guard(retry.text) : { violations: first };
+        retryText !== undefined ? guard(retryText) : { violations: first };
       if (checked.violations.length > 0)
         checked = {
           violations: [...new Set([...first, ...checked.violations])],
@@ -731,6 +759,16 @@ export async function runAgentTurn(
         violations: first,
         regenerated,
       });
+    }
+  }
+  if (!checked.rendered) {
+    // The model could not word an acceptable reply, but a live confirmed quote
+    // may exist: answer with just that verified fact, written by code and
+    // checked by the same gates. Without one the turn is a handover.
+    const verified = verifiedQuoteDraft(facts.list());
+    if (verified !== undefined) {
+      const safe = guard(verified);
+      if (safe.rendered) checked = safe;
     }
   }
   if (!checked.rendered) {
@@ -804,9 +842,14 @@ export async function runAgentTurn(
 async function respond(
   deps: AgentDependencies,
   tools: AgentTools,
-  prompt: { system: string; user: string },
+  prompt: { system: string } & (
+    | { user: string; messages?: undefined }
+    | { messages: readonly LlmMessage[]; user?: undefined }
+  ),
 ): Promise<Draft> {
-  const messages: LlmMessage[] = [{ role: 'user', text: prompt.user }];
+  const messages: LlmMessage[] = prompt.messages
+    ? [...prompt.messages]
+    : [{ role: 'user', text: prompt.user }];
   try {
     for (;;) {
       const result = await deps.llm.withTools({
