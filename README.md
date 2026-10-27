@@ -185,7 +185,7 @@ Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bo
 - Not checked: real Telegram traffic, the operator-group card (step 5), and the Mermaid diagram rendering.
 
 ## Status: what is tested and what is not
-_As of 2026-10-27, `main` at `b5f68a2`; CI run 40456128724 success._
+_As of 2026-10-27, `main` at `7e287c1` (CI run 40481962249); the last fully green `main` before it was `b5f68a2` (CI run 40456128724)._
 
 **Tested in CI (deterministic, no live model):**
 - Telegram webhook acceptance, idempotency, per-conversation ordering and delivery states.
@@ -203,7 +203,7 @@ _As of 2026-10-27, `main` at `b5f68a2`; CI run 40456128724 success._
   - It is partial (112 of 130 units attempted; the per-day quota stopped it).
   - **30 of 111 completed runs passed.** 22 of those 30 are scenarios where handing over is the right answer; all other scenario types passed 8 of 88.
   - The dominant failure was the display gate refusing listed prices and uncitable numbers (53 of 71 agent failures). 0 invented facts and 0 false success claims.
-  - Details: `docs/evidence/slice1c-groq-baseline-breakdown.md` and `slice1c-groq-baseline-assessment.md` on branch `docs/session-handoff-2026-10-26`.
+  - Details: [breakdown](docs/evidence/slice1c-groq-baseline-breakdown.md) and [assessment](docs/evidence/slice1c-groq-baseline-assessment.md).
 - **Measurement ladder, core-30 units (same lane, k=1, scenario hash `38f47101a367`, mock connector; measurement-only commits, not merged):**
 
   | Step | Agent commit | Change | Passed |
@@ -229,7 +229,8 @@ _As of 2026-10-27, `main` at `b5f68a2`; CI run 40456128724 success._
 - **DEF-009–011:** fixed on `main` (channel connect API).
 
 **Deferred by owner decision:**
-- **A real CRM connector.** Phase 3 is partial. The EduFlow (Learnix) plan is ready, but the track resumes only when slice 1b-ii is merged or before the Phase 8 gate, whichever comes first.
+- **A real CRM connector.** Phase 3 is partial. The EduFlow (Learnix) connector is cancelled for now (owner, 2026-10-27); its plan stays on `main` as docs (`docs/connectors/eduflow/`).
+- **CRM connectors for Bitrix24 (inbound webhook) and amoCRM (OAuth2 with rotating refresh tokens)** as lead/contact sinks (catalog capability off; offer facts need another source), after the Phase 3 connector decision.
 - **Meta channels** (Instagram, Messenger, WhatsApp; Phase 8).
 - **Production** (Phase 9: security review, load tests, backup drill, staging, deploy).
 
