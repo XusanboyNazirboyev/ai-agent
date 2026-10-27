@@ -1,6 +1,6 @@
 # DEF-007: stored timestamps 5 h off under a non-UTC session (2026-10-26)
 
-**Status:** reproduced and fixed on `fix/def-007-timestamp-offset`, a branch off main `a19c486` that is not merged. The DEF-007 row itself lives on `docs/telegram-live-evidence`. When the two branches meet, update that row to "Fixed on `fix/def-007-timestamp-offset`".
+**Status:** reproduced and fixed on `fix/def-007-timestamp-offset` and merged into `main` via `6e138a1` (CI run 40323730114, success). The defect is recorded as DEF-007 in `docs/DEFECTS.md` (status FIXED).
 
 ## Reproduction against the true instant
 - `agentcore_slice1` (slice 1c Groq baseline): `extract(epoch from max(tenants.created_at))` = `1792993565`. The last ledger record from the JS clock is `1793011585`. That is 18 020 s, about 5 h.
