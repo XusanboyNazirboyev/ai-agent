@@ -75,6 +75,28 @@ describe('baseline ledger (amendment 1)', () => {
     const a = BaselineLedger.open(dir, lane, 'a'.repeat(40), 'b'.repeat(64));
     const b = BaselineLedger.open(dir, lane, 'c'.repeat(40), 'b'.repeat(64));
     const c = BaselineLedger.open(dir, lane, 'a'.repeat(40), 'd'.repeat(64));
+    const d = BaselineLedger.open(
+      dir,
+      lane,
+      'a'.repeat(40),
+      'b'.repeat(64),
+      'eduflow-nocurrency',
+    );
+    expect(d.file).not.toBe(a.file);
+    expect(d.header.profile).toBe('eduflow-nocurrency');
+    writeFileSync(
+      d.file,
+      `${JSON.stringify({ type: 'header', lane, commit: 'a'.repeat(40), suiteHash: 'b'.repeat(64), createdAt: 'x' })}\n`,
+    );
+    expect(() =>
+      BaselineLedger.open(
+        dir,
+        lane,
+        'a'.repeat(40),
+        'b'.repeat(64),
+        'eduflow-nocurrency',
+      ),
+    ).toThrow(/refusing to mix/u);
     expect(new Set([a.file, b.file, c.file]).size).toBe(3);
     writeFileSync(
       a.file,

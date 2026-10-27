@@ -32,6 +32,7 @@ import { ShownOffersService } from '../../../leads/shown-offers.service.js';
 import type { PrismaService } from '../../../persistence/prisma.service.js';
 import { EVAL_PACKS } from '../eval-runner.js';
 import type { Scenario, SimLanguage } from './scenario.js';
+import { eduflowCapabilities, eduflowOffer } from './eduflow-shape.js';
 
 /** Mock catalog per runnable pack (retail has no v1 pack yet: slice 3b). */
 export const SOURCE: Record<'education' | 'travel', string> = {
@@ -74,24 +75,49 @@ export function simulationSettings(
   };
 }
 
-/** Fictional CRM: catalog reads from the mock, lead writes always succeed. */
-function crmFor(tenantId: string, source: string): CrmConnector {
+/**
+ * Fictional CRM: catalog reads from the mock, lead writes always succeed.
+ * `SIM_CONNECTOR_PROFILE=eduflow` makes it EduFlow-shaped (see
+ * eduflow-shape.ts); `SIM_OWNER_CURRENCY` is the owner-declared currency.
+ */
+export function simulationConnector(
+  tenantId: string,
+  source: string,
+  settings: Record<string, unknown> = {},
+): CrmConnector {
   const reads = new MockConnector(
     { tenantId, connectorKey: 'mock' },
     { sourceSystem: source, items: allFixtures(source) },
   );
+  const eduflow = settings.SIM_CONNECTOR_PROFILE === 'eduflow';
+  const currency =
+    typeof settings.SIM_OWNER_CURRENCY === 'string'
+      ? settings.SIM_OWNER_CURRENCY
+      : undefined;
   const leads = new Map<string, string>();
   return {
     connectorKey: 'mock',
     context: reads.context,
     sourceSystem: reads.sourceSystem,
-    capabilities: reads.capabilities,
+    capabilities: eduflow
+      ? eduflowCapabilities(reads.capabilities)
+      : reads.capabilities,
     writeIdempotency: 'native',
     searchItems: (query) => reads.searchItems(query),
     getItem: (id) => reads.getItem(id),
-    getOffers: (id) => reads.getOffers(id),
-    checkAvailability: (id, request) => reads.checkAvailability(id, request),
-    getQuote: (id, request) => reads.getQuote(id, request),
+    getOffers: async (id) =>
+      eduflow
+        ? (await reads.getOffers(id)).map((offer) =>
+            eduflowOffer(offer, currency),
+          )
+        : reads.getOffers(id),
+    ...(eduflow
+      ? {}
+      : {
+          checkAvailability: (id: string, request: never) =>
+            reads.checkAvailability(id, request),
+          getQuote: (id: string, request: never) => reads.getQuote(id, request),
+        }),
     createLead: (_input, context) => {
       const key = context?.idempotencyKey ?? randomUUID();
       const id = leads.get(key) ?? `sim-lead-${leads.size + 1}`;
@@ -222,7 +248,7 @@ export class SimulationWorld {
         isTestAccount: true,
       },
     });
-    const crm = crmFor(tenant.id, source);
+    const crm = simulationConnector(tenant.id, source, options.settings);
     const loader = { create: () => crm } as unknown as TenantConnectorLoader;
     const handovers = new HandoverService(prisma);
     const actions = new ActionService(prisma, loader, handovers, config);

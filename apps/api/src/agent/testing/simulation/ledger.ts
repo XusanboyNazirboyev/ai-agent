@@ -38,6 +38,8 @@ export interface LedgerHeader {
   readonly lane: Lane;
   readonly commit: string;
   readonly suiteHash: string;
+  /** Simulated connector profile; absent = the default mock. */
+  readonly profile?: string;
   readonly createdAt: string;
 }
 
@@ -96,17 +98,22 @@ export class BaselineLedger {
     private readonly runs: LedgerRun[],
   ) {}
 
-  /** The file a (lane, commit, suite) identity lives in. */
+  /**
+   * The file a (lane, commit, suite, connector profile) identity lives in.
+   * The default mock keeps the original name, so earlier ledgers stay valid.
+   */
   static fileFor(
     root: string,
     lane: Lane,
     commit: string,
     suite: string,
+    profile = 'mock',
   ): string {
+    const suffix = profile === 'mock' ? '' : `-${profile}`;
     return join(
       root,
       laneSlug(lane),
-      `${commit.slice(0, 12)}-${suite.slice(0, 12)}.jsonl`,
+      `${commit.slice(0, 12)}-${suite.slice(0, 12)}${suffix}.jsonl`,
     );
   }
 
@@ -119,13 +126,15 @@ export class BaselineLedger {
     lane: Lane,
     commit: string,
     suite: string,
+    profile = 'mock',
   ): BaselineLedger {
-    const file = BaselineLedger.fileFor(root, lane, commit, suite);
+    const file = BaselineLedger.fileFor(root, lane, commit, suite, profile);
     const header: LedgerHeader = {
       type: 'header',
       lane,
       commit,
       suiteHash: suite,
+      ...(profile === 'mock' ? {} : { profile }),
       createdAt: new Date().toISOString(),
     };
     if (!existsSync(file)) {
@@ -139,10 +148,11 @@ export class BaselineLedger {
       stored.type !== 'header' ||
       laneId(stored.lane) !== laneId(lane) ||
       stored.commit !== commit ||
-      stored.suiteHash !== suite
+      stored.suiteHash !== suite ||
+      (stored.profile ?? 'mock') !== profile
     )
       throw new Error(
-        `ledger ${file} belongs to another lane/commit/scenario set; refusing to mix results`,
+        `ledger ${file} belongs to another lane/commit/scenario set/profile; refusing to mix results`,
       );
     const runs = lines.slice(1).map((line) => JSON.parse(line) as LedgerRun);
     return new BaselineLedger(file, stored, runs);

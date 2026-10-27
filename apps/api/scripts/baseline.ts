@@ -111,7 +111,22 @@ async function main(): Promise<void> {
   const k = Number(env.SIM_K ?? '1');
   if (!Number.isInteger(k) || k < 1 || k > 3)
     throw new Error('SIM_K must be 1, 2 or 3.');
-  const ledger = BaselineLedger.open(ledgerRoot, lane, commit, suite);
+  // The simulated connector profile is part of the result identity: runs
+  // under different profiles never share a ledger (SIM_CONNECTOR_PROFILE,
+  // SIM_OWNER_CURRENCY; see eduflow-shape.ts).
+  const profileName = env.SIM_CONNECTOR_PROFILE ?? 'mock';
+  if (profileName !== 'mock' && profileName !== 'eduflow')
+    throw new Error('SIM_CONNECTOR_PROFILE must be mock or eduflow.');
+  const ownerCurrency = env.SIM_OWNER_CURRENCY;
+  if (ownerCurrency !== undefined && !/^[A-Z]{3}$/u.test(ownerCurrency))
+    throw new Error('SIM_OWNER_CURRENCY must be a 3-letter currency code.');
+  if (ownerCurrency && profileName !== 'eduflow')
+    throw new Error('SIM_OWNER_CURRENCY applies only to the eduflow profile.');
+  const profile =
+    profileName === 'eduflow'
+      ? `eduflow-${ownerCurrency ?? 'nocurrency'}`
+      : 'mock';
+  const ledger = BaselineLedger.open(ledgerRoot, lane, commit, suite, profile);
   const provenance = (
     subsetUnits: readonly string[],
     name: 'core-30' | 'full',
@@ -182,13 +197,15 @@ async function main(): Promise<void> {
   });
   const pending = ledger.pending(units, k);
   process.stdout.write(
-    `Baseline lane ${laneId(lane)} | commit ${commit.slice(0, 12)} | suite ${suite.slice(0, 12)} | ${pending.length} runs pending of ${units.length * k} | MEASUREMENT ONLY\n`,
+    `Baseline lane ${laneId(lane)} | commit ${commit.slice(0, 12)} | suite ${suite.slice(0, 12)} | profile ${profile} | ${pending.length} runs pending of ${units.length * k} | MEASUREMENT ONLY\n`,
   );
   const db = new PrismaClient({
     adapter: createPostgresAdapter({ ...env, POSTGRES_DATABASE: database }),
   });
   const settings = simulationSettings({
     LLM_PRICING_VERSION: 'routing-free-2026-10-23',
+    SIM_CONNECTOR_PROFILE: profileName,
+    ...(ownerCurrency ? { SIM_OWNER_CURRENCY: ownerCurrency } : {}),
   });
   try {
     for (const { unitId, k: index } of pending) {

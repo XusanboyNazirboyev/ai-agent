@@ -98,6 +98,7 @@ export function renderLaneReport(
     '',
     `- Lane: provider \`${provenance.header.lane.provider}\`, fast \`${provenance.header.lane.fast}\`, strong \`${provenance.header.lane.strong}\``,
     `- Agent commit \`${provenance.header.commit}\`; scenario-set sha256 \`${provenance.header.suiteHash}\``,
+    `- Simulated connector profile: \`${provenance.header.profile ?? 'mock'}\``,
     `- Units: ${subset}; k = ${provenance.k}; pricing ${provenance.pricingVersion}`,
     `- Pacing limits from: ${provenance.limitsSources.join('; ')}`,
     `- Generated ${provenance.generatedAt}; ledger started ${provenance.header.createdAt}`,
