@@ -185,7 +185,7 @@ Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bo
 - Not checked: real Telegram traffic, the operator-group card (step 5), and the Mermaid diagram rendering.
 
 ## Status: what is tested and what is not
-_As of 2026-10-27, `main` at `7e287c1` (CI run 40481962249); the last fully green `main` before it was `b5f68a2` (CI run 40456128724)._
+_As of 2026-10-27: this branch includes `main` at `438f148`; the latest `main` with a completed green CI run is `7e287c1` (CI run 40481962249)._
 
 **Tested in CI (deterministic, no live model):**
 - Telegram webhook acceptance, idempotency, per-conversation ordering and delivery states.
@@ -215,7 +215,7 @@ _As of 2026-10-27, `main` at `7e287c1` (CI run 40481962249); the last fully gree
   - **k=1, within noise.** One unit flipped back and forth with no relevant change, so the differences are not attributed to either change.
   - 0 invented facts and 0 false success claims in all three.
   - Blocked-draft diagnostics: 96–98% of the numbers the guardrail blocked had been shown to the model in a tool result. They were copied, not invented.
-  - Details: `docs/evidence/ladder-step1-1a.md` on branch `docs/slice1b-offer-facts-plan`.
+  - Details: [ladder evidence](docs/evidence/ladder-step1-1a.md).
 - **Real Telegram:** live runs were done manually in development and recorded as evidence. LIVE mode is still refused outside development until the owner decides.
 - **Locales:** all four are `beta`. There is no native-speaker review yet.
 - **Not built or tested:** voice and media; load or soak; backup and restore; production deployment.
