@@ -91,7 +91,22 @@ cd apps/api && API_HOST=127.0.0.1 pnpm start:dev   # API on 127.0.0.1:4000, rebu
 cd apps/web && pnpm dev                            # web on 127.0.0.1:3000, proxies /api to the API
 ```
 
-Check `http://127.0.0.1:4000/health` for `{"status":"ok"}`, then open `http://127.0.0.1:3000`. The browser only talks to the web origin; `/api/*` is proxied.
+Check `http://127.0.0.1:4000/health` for `{"status":"ok"}`, then open **`http://localhost:3000`**. The browser only talks to the web origin; `/api/*` is proxied.
+
+Open exactly an origin listed in `WEB_ORIGINS` (default `http://localhost:3000`). The API refuses state-changing requests from any other origin with `BAD_ORIGIN`, and `127.0.0.1` is a different origin from `localhost`: with `http://127.0.0.1:3000` you can log in, but Take over is refused.
+
+**Ports.** All are variables, so the stack can run beside other local servers:
+
+| What | Variable | Default |
+|---|---|---|
+| API | `PORT` in `.env` | 4000 |
+| Web | `PORT` in the web's shell, plus `API_URL` (the API address) | 3000, `http://127.0.0.1:4000` |
+| Allowed browser origin | `WEB_ORIGINS` in `.env` | `http://localhost:3000` |
+| Compose PostgreSQL host port | `POSTGRES_PORT` in `.env` (the API connects to the same value) | 5432 |
+| Test database port | `TEST_POSTGRES_PORT` in `.env`: change it together with `POSTGRES_PORT`, or the tests reach another PostgreSQL | 5432 |
+| Compose Redis host port | `REDIS_PORT` in `.env`, together with `REDIS_URL` | 6379 |
+
+For example, with port 4000 already taken: in `.env` set `PORT=4100`, `WEB_ORIGINS=http://localhost:3100` (and, if 5432 and 6379 are busy too, `POSTGRES_PORT=55432`, `TEST_POSTGRES_PORT=55432`, `REDIS_PORT=56379`, `REDIS_URL=redis://localhost:56379`), then start the web with `PORT=3100 API_URL=http://127.0.0.1:4100 pnpm dev` and open `http://localhost:3100`. The e2e tests use their own fixed ports (web 3010, API 4010, fake Telegram 4020).
 
 **Environment.** Every variable is listed with an explanation in `.env.example`. The defaults run fully offline:
 - `LLM_PROVIDER=mock` is a deterministic model with no network calls;
@@ -108,7 +123,7 @@ cd apps/api && pnpm dev:superadmin --demo   # once; idempotent; --reset-password
 pbcopy < ~/.config/agentcore/dev-superadmin.password   # macOS: copy the password, it is never printed
 ```
 
-Login `superadmin@agentcore.local`. This is an `OWNER` of one dedicated local tenant (fake data), not a platform administrator: there is no cross-tenant role ([ADR 025](docs/adr/025-local-development-superadmin.md)). The script refuses anything but `NODE_ENV=development` on a localhost database, stores only an scrypt hash, and writes the password to a 0600 file outside the repository. With the real Telegram bot token in `.env`, do not reply from the local demo conversations: the demo channel account is fake and a reply would try to reach Telegram.
+Login `superadmin@agentcore.local`. **Local development only; change it in any real environment.** The same applies to the Compose database login `agentcore` / `agentcore` in `.env.example`. A second checkout on the same machine overwrites the password file; give it its own directory with `AGENTCORE_DEV_SECRETS_DIR`. This is an `OWNER` of one dedicated local tenant (fake data), not a platform administrator: there is no cross-tenant role ([ADR 025](docs/adr/025-local-development-superadmin.md)). The script refuses anything but `NODE_ENV=development` on a localhost database, stores only an scrypt hash, and writes the password to a 0600 file outside the repository. With the real Telegram bot token in `.env`, do not reply from the local demo conversations: the demo channel account is fake and a reply would try to reach Telegram.
 
 ## Running the tests
 
@@ -116,7 +131,7 @@ Login `superadmin@agentcore.local`. This is an `OWNER` of one dedicated local te
 |---|---|---|
 | `pnpm lint`, `pnpm typecheck`, `pnpm format:check` | Static checks across the API, the web app and shared packages | nothing |
 | `pnpm test` / `pnpm test:unit` | API unit tests, including the deterministic eval suite with a scripted model; `test:unit` also runs the web unit tests | nothing |
-| `pnpm test:integration` | Real-PostgreSQL tests (webhook acceptance, idempotency, ordering, handover, connectors, secret store, simulation harness) | Compose Postgres; it creates and marks an isolated `agentcore_test` database and refuses any other |
+| `pnpm test:integration` | Real-PostgreSQL tests (webhook acceptance, idempotency, ordering, handover, connectors, secret store, simulation harness) | Compose Postgres. Run `pnpm db:test:seed` first (as CI does): one persistence test expects the seeded demo tenants. It creates and marks an isolated `agentcore_test` database and refuses any other |
 | `pnpm test:eval` | The evaluation gate: scripted eval cases and business-action lifecycle cases; mock models only, no network | Compose Postgres |
 | `pnpm test:e2e` | Playwright end-to-end tests of the inbox, including accessibility checks | a built app; CI installs Chromium |
 | `pnpm check:onboarding` | Universality gate: a commit that onboards a domain pack (trailer `Pack-Onboarding: <pack>`) must not change the core | git history |
@@ -134,7 +149,7 @@ See the developer reference below.
 
 Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bot only if you want real traffic; everything else is local.
 
-1. **Start (1 min).** Run Quick start, `pnpm dev:superadmin --demo`, then the API and the web app. Log in at `http://127.0.0.1:3000` as `superadmin@agentcore.local`.
+1. **Start (1 min).** Run Quick start, `pnpm dev:superadmin --demo`, then the API and the web app. Log in at `http://localhost:3000` (the `WEB_ORIGINS` origin, see Quick start) as `superadmin@agentcore.local`.
 2. **Operator inbox (1–2 min).** The demo seeds three fictional conversations, in Uzbek, Russian and English. Each customer asked for a person, so each conversation is `WAITING_OPERATOR` with a `CUSTOMER_REQUEST` handover.
    - Open one, then **Take over**: the state becomes `OPERATOR_ACTIVE` and the bot stays silent.
    - Then **Return to bot**. Status changes stream live over SSE.
@@ -158,13 +173,19 @@ Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bo
    pnpm --filter @agentcore/api agent:mode <channel-account-uuid> shadow
    ```
 
-   For a test bot, `pnpm --filter @agentcore/api telegram:account` creates a fake tenant with a SHADOW test account, and `docs/TELEGRAM_TEST_PROCEDURE.md` walks through the webhook. In SHADOW every inbound message produces a draft and a turn record in `agent_turns` (outcome, tool calls, guardrail result, cost), and **nothing is sent to the customer**.
+   For a test bot, `TELEGRAM_TEST_OPERATOR_CHAT_ID=<operator group id> pnpm --filter @agentcore/api telegram:account` (the variable is required) creates a fake tenant with a SHADOW test account, and `docs/TELEGRAM_TEST_PROCEDURE.md` walks through the webhook. In SHADOW every inbound message produces a draft and a turn record in `agent_turns` (outcome, tool calls, guardrail result, cost), and **nothing is sent to the customer**.
 5. **Handover (1 min).** A request for a person, a complaint, a price negotiation, a guardrail refusal or a stuck conversation opens a typed handover (`CUSTOMER_REQUEST`, `COMPLAINT`, `NEGOTIATION`, `GUARDRAIL`, `STUCK`, …). It appears in the inbox and, with an operator group configured, as a card in Telegram with Take over / Return buttons.
 
-These steps were not re-run while writing this README. The commands are the ones CI and the project's evidence files use.
+**Checked on 2026-10-27 in a fresh clone** (macOS, Node 26 instead of 24, Compose on host ports 55432/56379, API on 4100, web on 3100):
+- Quick start: install, Compose up (healthy), 20 migrations, seed.
+- Local login through the web origin; the three demo conversations, all `WAITING_OPERATOR`.
+- Take over (`OPERATOR_ACTIVE`), then Return to bot (`BOT_ACTIVE`), done through the web proxy's API, not by clicking in a browser.
+- Step 3's simulation spec; step 4's test account, `SHADOW`, and LIVE refused outside development.
+- Every command in the test table passed. Three of them first needed the fixes now in this README and branch: seed before `test:integration`, a test that read `LLM_PROVIDER` from `.env`, and `next-env.d.ts` excluded from `format:check`.
+- Not checked: real Telegram traffic, the operator-group card (step 5), and the Mermaid diagram rendering.
 
 ## Status: what is tested and what is not
-_As of 2026-10-27, `main` at `6db8ac7`; CI run 40453706080 success._
+_As of 2026-10-27, `main` at `b5f68a2`; CI run 40456128724 success._
 
 **Tested in CI (deterministic, no live model):**
 - Telegram webhook acceptance, idempotency, per-conversation ordering and delivery states.
@@ -172,7 +193,7 @@ _As of 2026-10-27, `main` at `6db8ac7`; CI run 40453706080 success._
 - Handover state machine and operator actions.
 - Business-action lifecycle; connector conformance (mock, generic REST); catalog sync.
 - Encrypted channel secret store and per-account Telegram credentials.
-- The channel connect API (S3 of ADR 028, no UI yet).
+- The channel connect API and the Channels page that uses it (ADR 028 S3–S4), against a fake Telegram in e2e.
 - Knowledge retrieval plumbing; follow-ups.
 - The web inbox, with end-to-end and accessibility tests.
 - The evaluation gate: scripted cases in four locales, plus lifecycle cases.
@@ -222,7 +243,7 @@ Agent platform v2 (ADR 026) proceeds in slices. The next is slice 1b (ADR 029, c
 ## Secrets and customer data
 
 - `.env` and `.env.*` are gitignored. Only `.env.example` is tracked, and it holds names and safe placeholders.
-- **History check (2026-10-27):** all 216 commits on every branch were scanned, using git history search because no secret scanner is installed. The only env-like file ever committed is `.env.example`. No key-shaped string appears in any added line: Groq, Anthropic, OpenAI-style, Google API key, Telegram bot token, GitHub, Slack, AWS, private-key blocks, 32-byte base64 keys. None of the local `.env` secret values appears anywhere in history.
+- **History check (2026-10-27):** this was a **git history search, not a gitleaks scan** (no secret scanner such as gitleaks, trufflehog or detect-secrets was installed). All 216 commits on every branch were searched with key-shape patterns. The only env-like file ever committed is `.env.example`. No key-shaped string appears in any added line: Groq, Anthropic, OpenAI-style, Google API key, Telegram bot token, GitHub, Slack, AWS, private-key blocks, 32-byte base64 keys. None of the local `.env` secret values appears anywhere in history.
 - Channel bot tokens are stored encrypted (AES-256-GCM, `SECRETS_MASTER_KEY`, ADR 028). Responses, logs and audit rows never contain them.
 - Free-tier LLM providers may use submitted content, so they get synthetic data only. Real customer data goes only to providers listed in `LLM_TRUSTED_PROVIDERS`.
 
