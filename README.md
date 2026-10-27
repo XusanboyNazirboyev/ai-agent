@@ -176,7 +176,7 @@ Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bo
    For a test bot, `TELEGRAM_TEST_OPERATOR_CHAT_ID=<operator group id> pnpm --filter @agentcore/api telegram:account` (the variable is required) creates a fake tenant with a SHADOW test account, and `docs/TELEGRAM_TEST_PROCEDURE.md` walks through the webhook. In SHADOW every inbound message produces a draft and a turn record in `agent_turns` (outcome, tool calls, guardrail result, cost), and **nothing is sent to the customer**.
 5. **Handover (1 min).** A request for a person, a complaint, a price negotiation, a guardrail refusal or a stuck conversation opens a typed handover (`CUSTOMER_REQUEST`, `COMPLAINT`, `NEGOTIATION`, `GUARDRAIL`, `STUCK`, …). It appears in the inbox and, with an operator group configured, as a card in Telegram with Take over / Return buttons.
 
-**Checked on 2026-10-27 in a fresh clone** (macOS, Node 26 instead of 24, Compose on host ports 55432/56379, API on 4100, web on 3100):
+**Checked on 2026-10-27 in a fresh clone** (macOS, Compose on host ports 55432/56379, API on 4100, web on 3100). The clone ran on **Node 26.7.0** (pnpm 10.33.3), outside the supported engines, so pnpm warned. **CI runs Node 24** (`.github/workflows`, `node-version: 24`), so Node 24 results come from CI, not from this run:
 - Quick start: install, Compose up (healthy), 20 migrations, seed.
 - Local login through the web origin; the three demo conversations, all `WAITING_OPERATOR`.
 - Take over (`OPERATOR_ACTIVE`), then Return to bot (`BOT_ACTIVE`), done through the web proxy's API, not by clicking in a browser.
@@ -204,6 +204,18 @@ _As of 2026-10-27, `main` at `b5f68a2`; CI run 40456128724 success._
   - **30 of 111 completed runs passed.** 22 of those 30 are scenarios where handing over is the right answer; all other scenario types passed 8 of 88.
   - The dominant failure was the display gate refusing listed prices and uncitable numbers (53 of 71 agent failures). 0 invented facts and 0 false success claims.
   - Details: `docs/evidence/slice1c-groq-baseline-breakdown.md` and `slice1c-groq-baseline-assessment.md` on branch `docs/session-handoff-2026-10-26`.
+- **Measurement ladder, core-30 units (same lane, k=1, scenario hash `38f47101a367`, mock connector; measurement-only commits, not merged):**
+
+  | Step | Agent commit | Change | Passed |
+  |---|---|---|---|
+  | Before | `9a653e7` | — | 7/30 |
+  | 1 | `de31ebf` (tag `measure/step1-de31ebf`) | harness wiring + blocked-draft diagnostics | 8/30 |
+  | 1a | `44afcf9` (tag `measure/step1a-44afcf9`) | DEF-001 product fix | 11/30 |
+
+  - **k=1, within noise.** One unit flipped back and forth with no relevant change, so the differences are not attributed to either change.
+  - 0 invented facts and 0 false success claims in all three.
+  - Blocked-draft diagnostics: 96–98% of the numbers the guardrail blocked had been shown to the model in a tool result. They were copied, not invented.
+  - Details: `docs/evidence/ladder-step1-1a.md` on branch `docs/slice1b-offer-facts-plan`.
 - **Real Telegram:** live runs were done manually in development and recorded as evidence. LIVE mode is still refused outside development until the owner decides.
 - **Locales:** all four are `beta`. There is no native-speaker review yet.
 - **Not built or tested:** voice and media; load or soak; backup and restore; production deployment.
