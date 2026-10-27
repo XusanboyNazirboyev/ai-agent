@@ -238,7 +238,7 @@ Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm format:check` before s
 
 ## Telegram text-channel development
 
-Phase 2 accepts one configured Telegram bot per API process. Create an active `telegram` `ChannelAccount`, then set its UUID as `TELEGRAM_CHANNEL_ACCOUNT_ID` together with `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`; configuration is all-or-none. The webhook path is `POST /webhooks/telegram/<channel-account-uuid>`. The application authenticates `X-Telegram-Bot-Api-Secret-Token`, validates text updates, persists the event, inbound message, and outbox job in one PostgreSQL transaction, then acknowledges. `TELEGRAM_RATE_LIMIT_PER_MINUTE` defaults to 120 per account. Do not put token or secret values in source control or logs.
+A Telegram bot is connected per channel account ([ADR 028](docs/adr/028-channel-connection-from-the-web.md)). An OWNER or ADMIN connects it from the web Channels page (`POST /api/v1/channels/telegram` with the bot token), which needs `SECRETS_MASTER_KEY`; the token and webhook secret are stored encrypted in the channel secret store and never returned. The older environment trio (`TELEGRAM_CHANNEL_ACCOUNT_ID`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, all-or-none) still works as a fallback for the one account it names; stored secrets win over it. The webhook path is `POST /webhooks/telegram/<channel-account-uuid>`. The application authenticates `X-Telegram-Bot-Api-Secret-Token`, validates text updates, persists the event, inbound message, and outbox job in one PostgreSQL transaction, then acknowledges. `TELEGRAM_RATE_LIMIT_PER_MINUTE` defaults to 120 per account. Do not put token or secret values in source control or logs.
 
 For local webhook development, expose the API through an HTTPS tunnel and configure Telegram's official `setWebhook` method with that URL and the same `secret_token`. Telegram sends the secret in `X-Telegram-Bot-Api-Secret-Token`; set `allowed_updates` to `message`. The API does not call `setWebhook` automatically. Unsupported non-text updates are acknowledged and ignored. Inbound text bursts are grouped for a 2 second window and serialized with a PostgreSQL advisory lock per conversation. The sender records `SENT`, `FAILED`, or `UNKNOWN`; a lost response can leave delivery ambiguous, so the system does not blindly resend that message.
 
@@ -277,7 +277,7 @@ These presets are documentation, not built-in behavior. The provider facts and t
 LLM_PROVIDER=openai-compatible
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 LLM_API_KEY=<Gemini API key, in .env.local only>
-LLM_MODEL_FAST=gemini-3.1-flash-lite
+LLM_MODEL_FAST=gemini-3.5-flash-lite     # the preset in provider-presets.ts; the live Telegram runs used it
 LLM_MODEL_STRONG=gemini-3.8-flash
 LLM_PRICING_VERSION=gemini-free-2026-10-23
 # Copy your account's free-tier limits from AI Studio (they are not published in the docs):
@@ -313,6 +313,6 @@ pnpm --filter @agentcore/api agent:mode <channel-account-uuid> shadow
 ```
 
 - `SHADOW` runs the agent on every inbound batch and stores the draft reply and a turn record in `agent_turns`: tokens, estimated and actual cost, latency, PII-redacted tool calls, guardrail results and outcome. Nothing is sent to the customer, and no handover is opened. This is the mode for a first real-channel trial.
-- `LIVE` sends replies and opens durable handovers. It is refused unless an operator handover notifier is configured, and that notifier does not exist until Phase 5. Until then LIVE works only with `NODE_ENV=development` on a local test bot. Elsewhere the `agent:mode` script refuses it, the API refuses to start while the configured Telegram account is LIVE, and any LIVE row is processed as SHADOW. In LIVE every handover is stored with `notification_status = PENDING`, and the bot stays silent while the conversation waits for an operator. Its notice only says that the message was recorded.
+- `LIVE` sends replies and opens durable handovers. Phase 5 is on `main`: the `OperatorNotifier` and the Telegram operator-group notifier deliver handover cards to operators ([ADR 018](docs/adr/018-phase5-handover-leads.md)). LIVE is still refused outside development until the owner decides after a real-Telegram check (see `docs/PROGRESS.md`); the gate `OPERATOR_HANDOVER_NOTIFIER_AVAILABLE` in `apps/api/src/agent/agent-mode.ts` stays `false`, and its refusal message still names the pre-Phase-5 reason. So LIVE works only with `NODE_ENV=development` on a local test bot. Elsewhere the `agent:mode` script refuses it, the API refuses to start while the env-configured Telegram account is LIVE, and any LIVE row is processed as SHADOW. While a conversation waits for an operator, the bot stays silent.
 
 Each turn runs as claim → compute → commit (ADR 009). Only the short claim and commit steps use a transaction. The model and tools run without a database transaction, lock or held connection. A newer customer message during compute replaces the reply with one for the merged messages. An operator takeover discards it. A crashed worker's turn is retried as a new attempt, and each attempt's cost is recorded once.
