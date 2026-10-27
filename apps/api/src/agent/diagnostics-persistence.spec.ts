@@ -9,6 +9,7 @@ import type { PrismaService } from '../persistence/prisma.service.js';
 import type { ComputedTurn } from './agent-conversation.service.js';
 import { DiagnosticsPurgeService } from './diagnostics-purge.service.js';
 import { extraction, runTurn } from './testing/agent-harness.js';
+import { countBlockedNumberClasses } from './testing/simulation/grader.js';
 
 async function blockedTurn(diagnostics: boolean): Promise<ComputedTurn> {
   const { result, usage } = await runTurn({
@@ -74,5 +75,21 @@ describe('diagnostics persistence (ADR 029)', () => {
         data: { diagnostics: Prisma.DbNull, diagnosticsExpiresAt: null },
       },
     ]);
+  });
+
+  it('counts flagged-number classes per run for the baseline ledger', () => {
+    expect(
+      countBlockedNumberClasses([
+        { diagnostics: null },
+        {
+          diagnostics: {
+            blockedDrafts: [
+              { tokens: [{ class: 'time' }, { class: 'price' }] },
+              { tokens: [{ class: 'time' }] },
+            ],
+          },
+        },
+      ]),
+    ).toEqual({ time: 2, price: 1 });
   });
 });

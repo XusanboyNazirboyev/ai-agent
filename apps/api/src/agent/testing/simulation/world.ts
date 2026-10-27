@@ -26,6 +26,9 @@ import type { LlmProvider } from '../../../core/llm/llm-provider.js';
 import { FollowUpService } from '../../../followup/follow-up.service.js';
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { HandoverService } from '../../../handover/handover.service.js';
+import { LeadSyncService } from '../../../leads/lead-sync.service.js';
+import { LeadService } from '../../../leads/lead.service.js';
+import { ShownOffersService } from '../../../leads/shown-offers.service.js';
 import type { PrismaService } from '../../../persistence/prisma.service.js';
 import { EVAL_PACKS } from '../eval-runner.js';
 import type { Scenario, SimLanguage } from './scenario.js';
@@ -115,6 +118,8 @@ export interface WorldState {
     locale: string | null;
     handoverReason: string | null;
     failureCode: string | null;
+    /** Blocked-draft diagnostics stored on the turn (ADR 029), if any. */
+    diagnostics: unknown;
     latencyMs: number | null;
     llmCalls: number;
     inputTokens: number;
@@ -232,6 +237,11 @@ export class SimulationWorld {
       undefined,
       actions,
     );
+    // The processor's collaborators as TelegramModule wires them (LeadsModule:
+    // shown offers, lead scoring, CRM lead sync), so delivered replies record
+    // shown offers and rescore leads exactly as in production. The handover
+    // notifier stays absent: the world never delivers handover.* events.
+    const leads = new LeadService(prisma);
     const pipeline = new TelegramAgentPipeline(
       prisma,
       agent,
@@ -243,7 +253,7 @@ export class SimulationWorld {
         allowRealCustomerData: false,
       },
       handovers,
-      undefined,
+      leads,
       actions,
     );
     const sender = {
@@ -254,9 +264,9 @@ export class SimulationWorld {
       sender,
       pipeline,
       undefined,
-      undefined,
-      undefined,
-      undefined,
+      new ShownOffersService(prisma),
+      leads,
+      new LeadSyncService(prisma, loader),
       actions,
     );
     const webhook = new TelegramWebhookService(prisma, {
@@ -419,6 +429,7 @@ export class SimulationWorld {
         locale: t.locale,
         handoverReason: t.handoverReason,
         failureCode: t.failureCode,
+        diagnostics: t.diagnostics,
         latencyMs: t.latencyMs,
         llmCalls: t.llmCalls,
         inputTokens: t.inputTokens,

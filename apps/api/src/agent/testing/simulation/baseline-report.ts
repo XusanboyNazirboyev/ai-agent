@@ -120,6 +120,18 @@ export function renderLaneReport(
     '',
     `Completed runs: invented facts ${sum((r) => r.inventedFacts ?? 0)}, false success claims ${sum((r) => r.falseSuccessClaims ?? 0)}, language/script ${sum((r) => r.languageMatched ?? 0)}/${sum((r) => r.languageChecked ?? 0)}, goal reached ${runs.filter((r) => r.goalCompleted).length}/${runs.length}.`,
   ];
+  const blocked = new Map<string, number>();
+  for (const r of runs)
+    for (const [kind, n] of Object.entries(r.blockedNumberClasses ?? {}))
+      blocked.set(kind, (blocked.get(kind) ?? 0) + n);
+  if (blocked.size)
+    lines.push(
+      '',
+      `Blocked-draft numbers by class (ADR 029 diagnostics): ${[...blocked]
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `${k} ${v}`)
+        .join(', ')}.`,
+    );
   const infra = [...latest.values()].filter(
     (r) => r.class === 'INFRA' && units.includes(r.unitId),
   );

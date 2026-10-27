@@ -60,6 +60,8 @@ export interface LedgerRun {
   readonly agentInputTokens?: number;
   readonly agentOutputTokens?: number;
   readonly latenciesMs?: readonly number[];
+  /** Flagged-number classes of blocked drafts (ADR 029 diagnostics). */
+  readonly blockedNumberClasses?: Readonly<Record<string, number>>;
   readonly finishedAt: string;
 }
 

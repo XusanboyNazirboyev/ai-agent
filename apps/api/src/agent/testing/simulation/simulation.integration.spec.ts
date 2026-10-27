@@ -14,7 +14,13 @@ import { EVAL_PACKS } from '../eval-runner.js';
 import { ScriptedCustomer } from './customer.js';
 import { runScenario } from './runner.js';
 import { loadScenarios, type Scenario, type SimLanguage } from './scenario.js';
-import { simulationSettings } from './world.js';
+import { SimulationWorld, simulationSettings } from './world.js';
+import { TelegramModule } from '../../../channels/telegram/telegram.module.js';
+import { LeadsModule } from '../../../leads/leads.module.js';
+import { LeadService } from '../../../leads/lead.service.js';
+import { LeadSyncService } from '../../../leads/lead-sync.service.js';
+import { ShownOffersService } from '../../../leads/shown-offers.service.js';
+import { ScriptedLlmProvider as Scripted } from '../../../core/llm/scripted-llm-provider.js';
 
 /**
  * The harness end to end through the real v1 pipeline with a scripted model
@@ -153,10 +159,12 @@ describe('simulation harness on the v1 pipeline (scripted model)', () => {
     expect(result.metrics?.falseSuccessClaims).toBe(0);
   });
 
-  // Baseline characterisation (v1 finding, not a harness limit): a price shown
-  // through a live quote records no ShownOffer/Quote row, and the follow-up
-  // policy needs one (or a warm lead), so v1 never follows up here.
-  it('advances the clock and records that v1 sends no follow-up after a quoted price', async () => {
+  // DEF-001 (slice 1b-i): with the processor wired as in production
+  // (ShownOffersService, LeadService, LeadSyncService), a delivered live-quote
+  // answer records a ShownOffer and the follow-up fires. The earlier "no
+  // follow-up" result came from the harness leaving those services out.
+  it('follows up after a quoted price, as production does (DEF-001 was a harness wiring gap)', async () => {
+    const started = new Date();
     const result = await run(byId('edu-30'), 'ru', [
       extraction(
         { subject: 'IELTS', preferredTime: 'evening' },
@@ -188,10 +196,57 @@ describe('simulation harness on the v1 pipeline (scripted model)', () => {
     ]);
     expect(result.status).toBe('completed');
     expect(result.metrics?.inventedFacts).toEqual([]);
-    expect(result.transcript).toHaveLength(2); // the answer; the wait adds nothing
+    expect(result.metrics?.falseSuccessClaims).toBe(0);
+    expect(result.transcript).toHaveLength(3); // answer, then the follow-up
     expect(result.transcript[1]?.text).toContain('150');
-    expect(result.metrics?.goalCompleted).toBe(false);
-    expect(result.passed).toBe(false);
+    expect(result.transcript[2]?.from).toBe('business');
+    expect(result.metrics?.goalCompleted).toBe(true);
+    expect(result.passed).toBe(true);
+    const shown = await db.shownOffer.findMany({
+      where: {
+        tenant: { slug: { startsWith: 'sim-edu-30-ru-' } },
+        shownAt: { gte: started },
+      },
+      select: { offerRef: true },
+    });
+    expect(shown.map((row) => row.offerRef)).toContain(
+      'mock-education:offer:ielts-group-weekday',
+    );
+  });
+
+  it('wires the processor with the collaborators production provides (no harness drift)', async () => {
+    // Production: TelegramModule imports LeadsModule, which provides these.
+    expect(Reflect.getMetadata('imports', TelegramModule)).toContain(
+      LeadsModule,
+    );
+    expect(Reflect.getMetadata('providers', LeadsModule)).toEqual(
+      expect.arrayContaining([
+        LeadService,
+        LeadSyncService,
+        ShownOffersService,
+      ]),
+    );
+    const world = await SimulationWorld.create({
+      db,
+      scenario: byId('edu-03'),
+      language: 'en',
+      provider: new Scripted([]),
+      settings: simulationSettings(),
+    });
+    try {
+      const processor = (
+        world as unknown as { processor: Record<string, unknown> }
+      ).processor;
+      expect(processor.shownOffers).toBeInstanceOf(ShownOffersService);
+      expect(processor.leads).toBeInstanceOf(LeadService);
+      expect(processor.leadSync).toBeInstanceOf(LeadSyncService);
+      expect(processor.agent).toBeDefined();
+      expect(processor.actions).toBeDefined();
+      // Not wired on purpose: the world never delivers handover.* events.
+      expect(processor.handovers).toBeUndefined();
+    } finally {
+      await world.close();
+    }
   });
 
   it('reports retail as not runnable on v1 instead of skipping it', async () => {

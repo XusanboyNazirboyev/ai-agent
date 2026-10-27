@@ -239,6 +239,7 @@ async function main(): Promise<void> {
         agentInputTokens: m?.agentInputTokens,
         agentOutputTokens: m?.agentOutputTokens,
         latenciesMs: m?.latenciesMs,
+        blockedNumberClasses: m?.blockedNumberClasses,
         finishedAt: new Date().toISOString(),
       });
       process.stdout.write(

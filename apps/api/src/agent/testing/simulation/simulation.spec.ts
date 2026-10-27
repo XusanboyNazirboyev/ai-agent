@@ -164,6 +164,7 @@ const baseState = (overrides: Partial<WorldState> = {}): WorldState => ({
       locale: 'en',
       handoverReason: null,
       failureCode: null,
+      diagnostics: null,
       latencyMs: 900,
       llmCalls: 2,
       inputTokens: 2000,

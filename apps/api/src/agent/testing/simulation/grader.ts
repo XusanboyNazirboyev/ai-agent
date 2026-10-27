@@ -38,6 +38,8 @@ export interface RunMetrics {
   readonly handoverReasons: readonly string[];
   /** Per-turn failure codes (e.g. TURN_TIMEOUT), for infrastructure triage. */
   readonly turnFailureCodes: readonly (string | null)[];
+  /** Flagged-number classes of blocked drafts, counted per run (ADR 029). */
+  readonly blockedNumberClasses: Readonly<Record<string, number>>;
 }
 
 export interface GradeInput {
@@ -242,7 +244,26 @@ export function gradeRun(input: GradeInput): RunMetrics {
     agentLlmCalls: state.turns.reduce((sum, t) => sum + t.llmCalls, 0),
     handoverReasons: state.handoverReasons,
     turnFailureCodes: state.turns.map((t) => t.failureCode),
+    blockedNumberClasses: countBlockedNumberClasses(state.turns),
   };
+}
+
+/** Counts the flagged-number classes over every stored blocked draft. */
+export function countBlockedNumberClasses(
+  turns: readonly { diagnostics: unknown }[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const turn of turns) {
+    const drafts = (
+      turn.diagnostics as {
+        blockedDrafts?: { tokens?: { class?: string }[] }[];
+      } | null
+    )?.blockedDrafts;
+    for (const draft of drafts ?? [])
+      for (const token of draft.tokens ?? [])
+        if (token.class) counts[token.class] = (counts[token.class] ?? 0) + 1;
+  }
+  return counts;
 }
 
 /** Handover reasons that mean the model provider failed, not the agent. */
