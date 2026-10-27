@@ -1,6 +1,21 @@
 # Slice 1b plan: offer details as citable facts (+ DEF-001)
 
-**Status:** plan only, for owner review (2026-10-27). No code. It amends the roadmap's slice 1b (which was DEF-001 only) and needs an ADR (029) when approved, because it adds fact kinds and changes a guardrail rule (an amendment to ADR 013). Thresholds stay frozen.
+**Status:** plan only (2026-10-27). No code. Owner decisions of 2026-10-27 are in section 0. The decisions are recorded in [ADR 029](../adr/029-citable-offer-details-and-structured-auto-link.md), written before code, and the roadmap is amended (slice 1b split into 1b-i, 1b-ii and 1b-iii). Thresholds stay frozen. **Implementation waits for the owner's approval of ADR 029 and the 1b-i plan (section 6).**
+
+## 0. Owner decisions (2026-10-27)
+1. Fix 3 (store the redacted blocked draft, each flagged number and its class, with bounded retention) is approved and goes into **1b-i, before any "after" run**.
+2. Numbered-list markers are allowed, only as the line-start pattern `^\d+[.)]\s`. ADR 029 is approved, to be written before code. The roadmap amendment is approved with the baseline evidence; thresholds are untouched.
+3. **Split:**
+   - **1b-i:** observability, harness production wiring and DEF-001;
+   - **1b-ii:** fact kinds, raw digits removed from tool results, currency source;
+   - **1b-iii:** narrow auto-link.
+4. **Auto-link covers structured forms only:** date, time or time range, price with currency, and number with a locale unit word. **Bare integers stay blocked** ("5 people" must not link to `nights = 5`). There is a test for exactly that case, and the limitation is written in ADR 029.
+5. **Measurement ladder**, one variable at a time, same lane and scenario hash, each commit its own ledger:
+   1. the harness production-wiring change on the baseline agent, core-30;
+   2. plus `fix/agent-code-fixes`, core-30;
+   3. after slice 1b, the full suite.
+
+   The `9a653e7` ledger stays the "before". No run starts until the owner says so.
 
 Measurement baseline ("before"): Groq lane k=1 on `9a653e7`, scenario hash `38f47101a367`. See [breakdown](../evidence/slice1c-groq-baseline-breakdown.md) and [assessment](../evidence/slice1c-groq-baseline-assessment.md) on `docs/session-handoff-2026-10-26`.
 
@@ -51,7 +66,15 @@ The existing `datetime`, `seats`, `availability` and `title` kinds stay as they 
   - anything else goes to `attributeText`, or is dropped when it is not on the connector's display allow-list.
 - **Still subject to the display gate:** listed price, availability and seats are **still** refused when the connector can check live (ADR 013 unchanged). The fix for those is the live re-check (fix 1, and `c78d689`/`e7daf96` on `fix/agent-code-fixes`), not this slice.
 
-### 2.4 Guardrail: numbers the model types
+### 2.4 Guardrail: numbers the model types (1b-iii; **narrowed by owner decision 4 and ADR 029**)
+**Superseding note:** auto-link applies **only to structured forms**:
+- a date in a supported format;
+- a time or time range;
+- a price with its currency;
+- a number with a locale unit word matching the fact's unit.
+
+Bare integers are never linked, and the line-start marker `^\d+[.)]\s` is allowed. The text below is the original proposal; where it is broader (for example "an integer with grouping" or "a quantity" without a unit word), ADR 029 decisions 6–8 win.
+
 The rule "the model writes no digits of its own" stays the default. One narrow, deterministic addition, **auto-link**: a digit token in the model's own text is replaced by a fact reference when all of these hold:
 1. **Exact match.** After normalization (grouping separators, decimal comma or point, `H:mm`/`HH:mm`, the locale date formats `dd.MM.yyyy`, ISO, and `d MMMM` with localized month names), the token equals a token of the **rendered** value of exactly one fact in this turn's store.
 2. **The fact itself passes the display gate:** bound to this tenant and conversation, fresh, and live where the policy requires it.
@@ -124,7 +147,71 @@ Plan:
 - **Connector fixtures:** EduFlow recorded fixtures map to the 2.6 facts with string IDs; with and without owner-config currency.
 - **Eval:** the scripted eval and lifecycle suites with no regressions; existing case expectations unchanged except where the old output depended on removed raw values (each listed in the PR).
 
-## 5. Measurement schedule (owner, 2026-10-27; nothing starts without the owner's word)
-1. After `fix/agent-code-fixes` is merged to main (by session 2): **core-30 only**. Same lane and scenario hash, k=1, new commit, new ledger.
-2. After slice 1b is merged: the **full suite**, under the same rules.
-3. Ledgers are never mixed across commits; the harness refuses a file with another commit or scenario hash. The `9a653e7` ledger stays the "before".
+Auto-link tests (1b-iii, per ADR 029):
+- **links:** "02.11.2026" or "2 noyabr" against a `date` fact; "18:00–20:00" against a `weeklySchedule` slot; "150 USD" as the locale renders it, when the gate accepts the price; "7 nights" / "7 ночей" / "7 kecha" against `quantity{7, night}`;
+- **stays blocked:** a bare "7"; **"5 people" when the only matching fact is `nights = 5` (the owner's case)**; a unit word that differs from the fact's unit; a price without a currency; a time matching two facts;
+- **list markers:** "1. …" at line start is allowed; "1." in the middle of a line or "1)" without a following space is blocked.
+
+## 5. Measurement ladder (owner, 2026-10-27; nothing starts without the owner's word)
+Same lane (Groq `gpt-oss-20b` / `gpt-oss-120b`), same scenario hash `38f47101a367`, k=1, scripted customer, each commit with its own ledger:
+
+| Step | Commit contains | Run | Variable measured |
+|---|---|---|---|
+| before | `9a653e7` | partial full suite (done) | — |
+| 1 | baseline agent + **1b-i harness production wiring** + 1b-i diagnostics (records only, no reply change) | core-30 | harness wiring (shown offers, leads); diagnostics give the first real classified token counts |
+| 2 | step 1 + `fix/agent-code-fixes` (guardrail retry keeps tools; verified-quote fallback) | core-30 | the live-quote retry and fallback |
+| 3 | after slice 1b (1b-ii, 1b-iii) | full suite | citable offer details and auto-link |
+
+Ledgers are never mixed: the harness refuses a file with another commit or scenario hash, and each step's commit is recorded with its report. If DEF-001's product fix (6.3) is needed, it is its own variable (section 6.4).
+
+## 6. Slice 1b-i plan (observability + harness production wiring + DEF-001) — for approval
+### 6.1 Blocked-draft diagnostics (ADR 029 decision 1)
+- **Where:** `core/agent/agent-turn.ts`, at the two guardrail checks (first draft and regeneration). `checkDraft` returns the flagged tokens; it computes them already and returns only the codes.
+- **Record:** `{ draftRedacted, tokens: [{ token | null, class, matchedFactId | null, matchedFactKind | null, inToolResult, inCustomerText }], stage: 'first' | 'regeneration' }`.
+  - `draftRedacted` comes from the existing `redactPii`.
+  - `token` is null for `phone_like`.
+  - `inToolResult` is computed against this turn's tool outputs, including raw attribute values (which still exist before 1b-ii).
+- **Storage:** a new nullable `agent_turns.diagnostics` jsonb column plus `diagnostics_expires_at` (additive migration). It is not added to the `guardrail` column, so the purge can null it without touching audit-relevant data.
+- **Purge:** a periodic job like the inbox-event purge, setting both fields to null when expired. The setting `AGENT_DIAGNOSTICS_RETENTION_DAYS` defaults to 14 (proposed).
+- **Exposure:** the web API and operator views never select it. A unit test checks the serializers.
+- **No behavior change:** a test runs the scripted eval and lifecycle suites with diagnostics on and off and compares reply text, outcomes and handover reasons, which must be identical.
+- **Harness:** the ledger also gets a per-run summary (counts per class, from the turns' diagnostics) so reports can show it without the raw drafts. This is a harness change, so a new ledger identity.
+
+### 6.2 Harness production wiring
+- `agent/testing/simulation/world.ts` builds `TelegramProcessor` with the real `ShownOffersService`, `LeadService` and `LeadSyncService` (leads go to the mock connector, as in production). The `HandoverNotificationService` stays a stub that records calls, because no Telegram exists in simulation.
+- A test checks that the world wires the same providers as `TelegramModule` (a list compared against the module's providers), so the harness cannot drift from production again.
+- **Effect on measurement:** follow-up and lead-score dependent scenarios (`edu-30`, follow-up category) can now behave as in production. That is the variable of ladder step 1.
+
+### 6.3 DEF-001 diagnosis (product code only if confirmed)
+1. A characterisation integration test **with production wiring**: `list_offers` then `get_quote`, delivered. Assert the `ShownOffer` row, the `Quote` row (when the offer is synced) and follow-up eligibility.
+2. If the `ShownOffer` row exists and follow-up is eligible: DEF-001 was a harness artifact. Update `DEFECTS.md` and flip the simulation characterisation test. **No product change.**
+3. If the `Quote` row is missing because of the suspected canonical-ID versus `sourceEntityId` lookup: a narrow product fix (look up by the canonical ID, or by the source ID parsed from it), a regression test, and `DEFECTS.md` updated.
+
+### 6.4 Ordering and the one-variable rule
+- Commit A: 6.1 diagnostics (no reply change, proven by test).
+- Commit B: 6.2 harness wiring.
+- Ladder step 1 runs on B.
+- Commit C: 6.3, product fix only if 6.3.3 applies. **Owner decision:** measure C as its own core-30 step (1a) before step 2, or accept it alongside step 2. Recommended: its own step, since it changes only follow-up behavior and a step costs about 30 runs.
+
+### 6.5 1b-i acceptance criteria
+- Diagnostics are stored for every blocked draft with classes. No PII digits are stored (`phone_like` keeps the class only). Retention is enforced by a test with a fixed clock. Nothing is exposed through the web API.
+- Diagnostics on and off: identical reply text, outcomes and handover reasons on the scripted eval and lifecycle suites.
+- The harness provider list equals the production providers for the processor, checked by test.
+- DEF-001 is resolved either way per 6.3, with tests.
+- Lint, typecheck, unit, integration, eval, build and e2e pass in CI, plus fresh-database migration and drift checks.
+
+### 6.6 1b-i test list
+- **Unit:**
+  - token classification (price with currency adjacent, `H:mm`, dates, quantities, list markers, phone-like);
+  - redaction of the draft;
+  - `phone_like` stores no digits;
+  - the diagnostics record shape;
+  - the serializer excludes diagnostics.
+- **Integration:**
+  - the record is written on block, and on regeneration block;
+  - the purge nulls expired records (fixed clock);
+  - diagnostics on and off parity;
+  - the world's providers equal the production ones;
+  - DEF-001 characterisation with production wiring;
+  - the `edu-30` simulation follow-up (scripted model).
+- **Harness:** the ledger summary per class; the old ledger is refused for the new commit (identity test).
