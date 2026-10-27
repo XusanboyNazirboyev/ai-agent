@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentcore}
       POSTGRES_DB: ${POSTGRES_DATABASE:-agentcore}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"   # host port; .env POSTGRES_PORT
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentcore -d agentcore"]
       interval: 5s
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"   # host port; match REDIS_URL in .env
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

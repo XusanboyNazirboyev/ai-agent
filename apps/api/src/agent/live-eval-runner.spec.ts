@@ -269,7 +269,15 @@ describe('live eval CLI guards (no network)', () => {
   const run = (env: Record<string, string>): ReturnType<typeof spawnSync> =>
     spawnSync('pnpm', ['exec', 'tsx', 'scripts/live-eval.ts'], {
       cwd: process.cwd(),
-      env: { ...process.env, ANTHROPIC_API_KEY: '', LIVE_EVAL: '', ...env },
+      // The provider is pinned so a developer's .env (LLM_PROVIDER) cannot
+      // change which guard fires; tests that need another provider override it.
+      env: {
+        ...process.env,
+        ANTHROPIC_API_KEY: '',
+        LIVE_EVAL: '',
+        LIVE_EVAL_PROVIDER: 'anthropic',
+        ...env,
+      },
       encoding: 'utf8',
       timeout: 60_000,
     });
