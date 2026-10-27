@@ -93,6 +93,10 @@ describe('.claude project configuration', () => {
 
   it('AGENTS.md is the canonical instructions file and CLAUDE.md is exactly its import', () => {
     expect(existsSync(resolve(root, 'AGENTS.md')), 'AGENTS.md').toBe(true);
+    expect(
+      readFileSync(resolve(root, 'AGENTS.md'), 'utf8').trim().length,
+      'AGENTS.md is empty',
+    ).toBeGreaterThan(0);
     const claude = readFileSync(resolve(root, 'CLAUDE.md'), 'utf8')
       .replace(/\r\n/gu, '\n')
       .trim();

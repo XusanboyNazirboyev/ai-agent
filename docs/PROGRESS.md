@@ -2,9 +2,9 @@
 
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
-## Current state (updated 2026-10-25, after the Phase 6A–7.2 and design merges into `main`)
+## Current state (updated 2026-10-27, after the Phase 6A–7.2 and design merges into `main`)
 - **DEF-007 fix (2026-10-26, branch `fix/def-007-timestamp-offset`, merged into `main` via `6e138a1`; CI on `main` run 40323730114 success, [evidence](evidence/def-007-timestamp-offset.md)):** `@prisma/adapter-pg` writes offset-less timestamps, so a non-UTC session (dev: Asia/Tashkent) stored instants 5 h early. Pool sessions are now pinned to UTC, and the API refuses to start when the session is not UTC. Existing local rows are still 5 h early (no data correction yet: owner decision).
-- **One instructions file (2026-10-26, branch `chore/agents-md`, [ADR 011 amendment](adr/011-spec-layout-and-model-policy.md)):** `AGENTS.md` stays the canonical project instructions; the root `CLAUDE.md` contains only `@AGENTS.md`. `claude-config.spec.ts` fails if `AGENTS.md` is missing or the normalized `CLAUDE.md` is anything but that import. `docs/spec/01-vision-context.md` no longer calls the two files alternatives. Not verified: a Claude Code session loading the import (only the file contents are tested).
+- **One instructions file (2026-10-26, branch `chore/agents-md`, merged into `main` via `6477d44`, [ADR 011 amendment](adr/011-spec-layout-and-model-policy.md)):** `AGENTS.md` stays the canonical project instructions; the root `CLAUDE.md` contains only `@AGENTS.md`. `claude-config.spec.ts` fails if `AGENTS.md` is missing or the normalized `CLAUDE.md` is anything but that import. `docs/spec/01-vision-context.md` no longer calls the two files alternatives. Not verified: a Claude Code session loading the import (only the file contents are tested).
 - **Slice 1, scenario harness + v1 baseline (2026-10-25, branch `slice1/scenario-harness`, [evidence](evidence/slice1-v1-baseline.md)):**
   - Harness on the real v1 pipeline; 50 scenarios / 160 units; deterministic grader; frozen bar pinned to the roadmap by a test; `pnpm simulate`; v1 unchanged.
   - Free-model dev-loop baseline (Groq gpt-oss, English, 40 units, k=1): 5 passed. 0 invented facts, 0 false claims, language 100%. Goal 12.5%; 13 runs failed at the provider and 15 ended in guardrail handovers (safe by refusal).

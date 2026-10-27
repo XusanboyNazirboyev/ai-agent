@@ -13,6 +13,8 @@
 
 **Model policy.** Ceiling Opus 5.5; never fable/best/Mythos. Project default `sonnet`. Four subagents (`mechanical` haiku, `builder` sonnet, `architect` opus read-only ≤1 call per stage, `reviewer` sonnet read-only). Builder failing a step twice escalates to architect once, then stops. Managed-settings enforcement is documented in `docs/CLAUDE_CODE_SETUP.md` for the owner to apply.
 
+**Instructions file.** `AGENTS.md` is the canonical file and `CLAUDE.md` only imports it; see the Amendment (2026-10-26) at the end of this ADR.
+
 ## Consequences
 Smaller default context; the full spec remains available on demand. Rules in `.claude/rules/` duplicate a few invariants deliberately (short, with pointers). Subagent model aliases follow the docs of 2026-10-23.
 
