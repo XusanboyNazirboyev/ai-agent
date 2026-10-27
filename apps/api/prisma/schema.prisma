@@ -397,6 +397,8 @@ model ChannelAccount {
   channelType       String              @map("channel_type") @db.VarChar(40)
   externalAccountId String              @map("external_account_id") @db.VarChar(200)
   status            ChannelAccountStatus @default(DISABLED)
+  /// Shown name of the connected account (for Telegram: the bot's @username).
+  displayName       String?             @map("display_name") @db.VarChar(200)
   credentialRef     String?             @map("credential_ref") @db.VarChar(500)
   webhookSecretRef  String?             @map("webhook_secret_ref") @db.VarChar(500)
   agentMode         AgentMode           @default(OFF) @map("agent_mode")
