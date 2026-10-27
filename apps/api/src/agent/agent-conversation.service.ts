@@ -10,7 +10,10 @@ import {
   ConversationSlotsSchema,
   type TenantConnectorKey,
 } from '@agentcore/shared';
-import type { AppEnvironment } from '../config/environment.js';
+import {
+  agentDiagnosticsEnabled,
+  type AppEnvironment,
+} from '../config/environment.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import {
@@ -81,6 +84,8 @@ export interface ComputedTurn {
   readonly packRef: string;
   /** The turn deadline fired; the result is a LLM_UNAVAILABLE handover. */
   readonly timedOut: boolean;
+  /** When stored diagnostics must be purged (only with `result.diagnostics`). */
+  readonly diagnosticsExpiresAt?: Date;
 }
 
 type TransactionClient = Prisma.TransactionClient;
@@ -374,6 +379,12 @@ export class AgentConversationService implements OnModuleInit {
           extract: Math.min(600, maxOutput),
           respond: maxOutput,
         },
+        diagnostics: agentDiagnosticsEnabled({
+          AGENT_DIAGNOSTICS: this.config.get('AGENT_DIAGNOSTICS', {
+            infer: true,
+          }),
+          NODE_ENV: this.config.get('NODE_ENV', { infer: true }),
+        }),
       }),
       timedOut,
     ]).finally(() => clearTimeout(timer));
@@ -430,6 +441,17 @@ export class AgentConversationService implements OnModuleInit {
       promptVersion: PROMPT_VERSION,
       packRef,
       timedOut: outcome === 'timeout',
+      ...(result.diagnostics
+        ? {
+            diagnosticsExpiresAt: new Date(
+              Date.now() +
+                this.config.get('AGENT_DIAGNOSTICS_RETENTION_DAYS', {
+                  infer: true,
+                }) *
+                  86_400_000,
+            ),
+          }
+        : {}),
     };
   }
 

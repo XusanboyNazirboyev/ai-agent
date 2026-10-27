@@ -370,6 +370,9 @@ model AgentTurn {
   askedSlot           String?         @map("asked_slot") @db.VarChar(100)
   slotsFilled         Int?            @map("slots_filled")
   textFingerprint     String?         @map("text_fingerprint") @db.VarChar(64)
+  /// Blocked-draft diagnostics (ADR 029): redacted, internal, purged at diagnosticsExpiresAt.
+  diagnostics         Json?           @db.JsonB
+  diagnosticsExpiresAt DateTime?      @map("diagnostics_expires_at") @db.Timestamptz(6)
   draftText           String?         @map("draft_text") @db.Text
   replyMessageId      String?         @map("reply_message_id") @db.Uuid
   handoverId          String?         @map("handover_id") @db.Uuid
@@ -388,6 +391,7 @@ model AgentTurn {
   @@unique([tenantId, idempotencyKey, attempt])
   @@index([tenantId, conversationId, status])
   @@index([status, leaseExpiresAt])
+  @@index([diagnosticsExpiresAt])
   @@map("agent_turns")
 }
 

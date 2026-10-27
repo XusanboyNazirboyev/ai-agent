@@ -817,6 +817,12 @@ export function turnMetrics(
       timedOut: computed.timedOut,
     },
     shownFactIds: [...result.shownFactIds],
+    ...(result.diagnostics && computed.diagnosticsExpiresAt
+      ? {
+          diagnostics: result.diagnostics as unknown as Prisma.InputJsonValue,
+          diagnosticsExpiresAt: computed.diagnosticsExpiresAt,
+        }
+      : {}),
     askedSlot: result.askedSlot ?? null,
     slotsFilled: Object.keys(result.slots).length,
     textFingerprint: result.textFingerprint,

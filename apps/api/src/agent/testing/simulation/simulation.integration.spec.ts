@@ -7,6 +7,8 @@ import {
 } from '../../../core/llm/scripted-llm-provider.js';
 import { PrismaClient } from '../../../generated/prisma/client.js';
 import { createPostgresAdapter } from '../../../persistence/postgres-adapter.js';
+import type { PrismaService } from '../../../persistence/prisma.service.js';
+import { DiagnosticsPurgeService } from '../../diagnostics-purge.service.js';
 import { extraction } from '../agent-harness.js';
 import { EVAL_PACKS } from '../eval-runner.js';
 import { ScriptedCustomer } from './customer.js';
@@ -80,6 +82,52 @@ describe('simulation harness on the v1 pipeline (scripted model)', () => {
     expect(result.endedBy).toBe('state_WAITING_OPERATOR');
     expect(result.metrics?.handoverCorrect).toBe(true);
     expect(result.passed).toBe(true);
+  });
+
+  it('stores redacted blocked-draft diagnostics on the turn, and the purge clears them (ADR 029)', async () => {
+    const started = new Date();
+    const result = await run(byId('edu-03'), 'en', [
+      extraction({ subject: 'IELTS' }, 'price', 'en', 'Latn', pack),
+      {
+        kind: 'tools',
+        text: 'It is 99 USD from 18:00; call +998 90 123 45 67.',
+      },
+      { kind: 'tools', text: 'It is 99 USD.' },
+    ]);
+    expect(result.metrics?.handoverReasons).toContain('GUARDRAIL');
+    const where = {
+      tenant: { slug: { startsWith: 'sim-edu-03-en-' } },
+      createdAt: { gte: started },
+      handoverReason: 'GUARDRAIL',
+    };
+    const turn = await db.agentTurn.findFirstOrThrow({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, diagnostics: true, diagnosticsExpiresAt: true },
+    });
+    const stored = JSON.stringify(turn.diagnostics);
+    expect(stored).toContain('"stage":"first"');
+    expect(stored).toContain('"stage":"regeneration"');
+    expect(stored).toContain('"class":"time"');
+    expect(stored).toContain('"class":"price"');
+    expect(stored).not.toMatch(/90 123 45 67|998901234567/u);
+    const days =
+      (turn.diagnosticsExpiresAt!.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(13.9);
+    expect(days).toBeLessThanOrEqual(14);
+
+    await new DiagnosticsPurgeService(db as unknown as PrismaService).scanDue(
+      new Date(Date.now() + 15 * 86_400_000),
+    );
+    const purged = await db.agentTurn.findUniqueOrThrow({
+      where: { id: turn.id },
+      select: { diagnostics: true, diagnosticsExpiresAt: true, outcome: true },
+    });
+    expect(purged).toEqual({
+      diagnostics: null,
+      diagnosticsExpiresAt: null,
+      outcome: 'HANDOVER',
+    });
   });
 
   it('runs a confirmed business action through to a connector-confirmed lead', async () => {

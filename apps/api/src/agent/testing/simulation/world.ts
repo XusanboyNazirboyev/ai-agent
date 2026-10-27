@@ -64,6 +64,9 @@ export function simulationSettings(
     AGENT_TURN_LEASE_MS: 90_000,
     HANDOVER_SLA_MINUTES: 10,
     FOLLOWUP_ENABLED: true,
+    // Blocked-draft diagnostics are on in simulation (ADR 029); records only.
+    AGENT_DIAGNOSTICS: 'on',
+    AGENT_DIAGNOSTICS_RETENTION_DAYS: 14,
     ...overrides,
   };
 }

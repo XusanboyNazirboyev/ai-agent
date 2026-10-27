@@ -312,8 +312,31 @@ const environmentSchema = postgresEnvironmentSchema
     FOLLOWUP_QUIET_END_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Earlier no-progress turns before the STUCK handover (spec §7.4). */
     STUCK_REPEAT_LIMIT: z.coerce.number().int().min(1).max(5).default(2),
+    /**
+     * Blocked-draft diagnostics (ADR 029): the redacted draft and its flagged
+     * numbers are stored on the turn for a bounded time. Unset = on in
+     * development only; refused in production until a privacy/legal review.
+     */
+    AGENT_DIAGNOSTICS: z.enum(['on', 'off']).optional(),
+    AGENT_DIAGNOSTICS_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(90)
+      .default(14),
   })
   .superRefine((environment, context) => {
+    if (
+      environment.AGENT_DIAGNOSTICS === 'on' &&
+      environment.NODE_ENV === 'production'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['AGENT_DIAGNOSTICS'],
+        message:
+          'AGENT_DIAGNOSTICS is refused in production until a privacy/legal review (ADR 029)',
+      });
+    }
     if (
       environment.LLM_PROVIDER === 'anthropic' &&
       !environment.ANTHROPIC_API_KEY
@@ -507,6 +530,17 @@ const environmentSchema = postgresEnvironmentSchema
   });
 
 export type AppEnvironment = z.infer<typeof environmentSchema>;
+
+/** Effective blocked-draft diagnostics switch (ADR 029): unset = development only. */
+export function agentDiagnosticsEnabled(
+  environment: Pick<AppEnvironment, 'AGENT_DIAGNOSTICS' | 'NODE_ENV'>,
+): boolean {
+  return (
+    (environment.AGENT_DIAGNOSTICS ??
+      (environment.NODE_ENV === 'development' ? 'on' : 'off')) === 'on' &&
+    environment.NODE_ENV !== 'production'
+  );
+}
 
 export function validateEnvironment(
   environment: Record<string, unknown>,

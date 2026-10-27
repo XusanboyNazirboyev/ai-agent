@@ -40,6 +40,8 @@ export interface GuardrailResult {
   readonly rendered?: string;
   /** Fact ids referenced by the accepted draft (present with `rendered`). */
   readonly references?: readonly string[];
+  /** Number tokens behind UNSOURCED_NUMBER (diagnostics only, ADR 029). */
+  readonly unsourcedNumbers?: readonly string[];
 }
 
 const MAX_REPLY_CHARS = 1_500;
@@ -93,9 +95,12 @@ export function checkDraft(
     unifyApostrophes(value),
   );
 
+  const unsourcedNumbers: string[] = [];
   for (const number of own.match(/\d+(?:[.,:]\d+)*/gu) ?? []) {
-    if (!echoes.some((source) => source.includes(number)))
+    if (!echoes.some((source) => source.includes(number))) {
       violations.add('UNSOURCED_NUMBER');
+      unsourcedNumbers.push(number);
+    }
   }
   if (CURRENCY.test(own)) violations.add('UNSOURCED_CURRENCY');
   const lower = own.toLowerCase();
@@ -147,7 +152,11 @@ export function checkDraft(
     violations.add('LANGUAGE_MISMATCH');
   }
 
-  if (violations.size > 0) return { violations: [...violations] };
+  if (violations.size > 0)
+    return {
+      violations: [...violations],
+      ...(unsourcedNumbers.length ? { unsourcedNumbers } : {}),
+    };
   return {
     violations: [],
     references: [...new Set(references)],

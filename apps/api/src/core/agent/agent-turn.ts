@@ -70,6 +70,11 @@ import {
   type SlotState,
 } from './slots.js';
 import { AgentTools, type ToolOutcome, type ToolTraceEntry } from './tools.js';
+import {
+  diagnoseBlockedDraft,
+  type BlockedDraftDiagnostic,
+  type TurnDiagnostics,
+} from './diagnostics.js';
 
 /**
  * One customer turn (AGENTS.md §7). Code makes every decision:
@@ -138,6 +143,8 @@ export interface AgentDependencies {
   /** Overrides to the connector-derived display policy (ADR 013). */
   readonly displayPolicy?: Partial<DisplayPolicy>;
   readonly languagePolicy?: LanguagePolicy;
+  /** Record blocked drafts for diagnostics (ADR 029); never changes the reply. */
+  readonly diagnostics?: boolean;
   /** Retrieval over textual knowledge; absent = knowledge_search is not offered. */
   readonly knowledge?: KnowledgeSearch;
 }
@@ -186,6 +193,8 @@ export interface AgentTurnResult {
   readonly llmFailure?: string;
   /** What the commit step must do with business-action proposals. */
   readonly action?: ActionDecision;
+  /** Blocked drafts, when diagnostics are enabled (internal, ADR 029). */
+  readonly diagnostics?: TurnDiagnostics;
 }
 
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
@@ -277,6 +286,7 @@ export async function runAgentTurn(
   // proposal: what the customer confirms is always what they were shown last.
   let supersede: ActionDecision | undefined;
   const fingerprint = textFingerprint(normalizeForMatching(input.customerText));
+  const blockedDrafts: BlockedDraftDiagnostic[] = [];
   const build = (
     reply: string,
     outcome: TurnOutcome,
@@ -299,6 +309,9 @@ export async function runAgentTurn(
     textFingerprint: fingerprint,
     shownFactIds: [],
     ...(supersede ? { action: supersede } : {}),
+    ...(blockedDrafts.length
+      ? { diagnostics: { blockedDrafts: [...blockedDrafts] } }
+      : {}),
     ...extra,
   });
   const finish = (
@@ -693,7 +706,39 @@ export async function runAgentTurn(
         ),
       },
     });
+  const customerTexts = [
+    input.customerText,
+    ...input.history.filter((h) => h.role === 'customer').map((h) => h.text),
+  ];
+  const diagnose = (
+    stage: BlockedDraftDiagnostic['stage'],
+    text: string,
+    result: ReturnType<typeof checkDraft>,
+  ): void => {
+    if (!deps.diagnostics || result.violations.length === 0) return;
+    blockedDrafts.push(
+      diagnoseBlockedDraft({
+        stage,
+        draft: text,
+        violations: result.violations,
+        unsourcedNumbers: result.unsourcedNumbers ?? [],
+        facts: facts.list(),
+        render: (fact) =>
+          facts.render(fact.id, locale(), input.timeZone, now()),
+        toolTexts: [
+          search.ok ? search.summary : '',
+          ...draft.messages.flatMap((message) =>
+            message.role === 'tool_results'
+              ? message.results.map((result) => result.content)
+              : [],
+          ),
+        ],
+        customerTexts,
+      }),
+    );
+  };
   let checked = guard(draft.text);
+  diagnose('first', draft.text, checked);
   const firstViolations = checked.violations;
   let regenerated = false;
   if (checked.violations.length > 0) {
@@ -713,6 +758,8 @@ export async function runAgentTurn(
       });
       checked =
         retry.stopReason === 'end' ? guard(retry.text) : { violations: first };
+      if (retry.stopReason === 'end')
+        diagnose('regeneration', retry.text, checked);
       if (checked.violations.length > 0)
         checked = {
           violations: [...new Set([...first, ...checked.violations])],

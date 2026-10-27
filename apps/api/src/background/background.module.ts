@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DiagnosticsPurgeService } from '../agent/diagnostics-purge.service.js';
 import { FollowUpService } from '../followup/follow-up.service.js';
 import {
   HandoverRuntime,
@@ -16,8 +17,8 @@ import { InboxEventsService } from '../webinbox/inbox-events.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 
 /**
- * The periodic scans of the API process: SLA alerts, CRM lead retries and
- * follow-ups. One interval, one overlap guard (HandoverRuntime); each scan is
+ * The periodic scans of the API process: SLA alerts, CRM lead retries,
+ * follow-ups and the diagnostics purge (ADR 029). One interval, one overlap guard (HandoverRuntime); each scan is
  * idempotent, so several API processes may run it.
  */
 @Module({
@@ -31,6 +32,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
   providers: [
     FollowUpService,
     DigestService,
+    DiagnosticsPurgeService,
     {
       provide: SCHEDULED_SCANS,
       inject: [
@@ -39,6 +41,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         DigestService,
         InboxEventsService,
         ActionService,
+        DiagnosticsPurgeService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -46,7 +49,15 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         digest: DigestService,
         inbox: InboxEventsService,
         actions: ActionService,
-      ): ScheduledScan[] => [lead, followUp, digest, inbox, actions],
+        diagnostics: DiagnosticsPurgeService,
+      ): ScheduledScan[] => [
+        lead,
+        followUp,
+        digest,
+        inbox,
+        actions,
+        diagnostics,
+      ],
     },
     HandoverRuntime,
   ],
