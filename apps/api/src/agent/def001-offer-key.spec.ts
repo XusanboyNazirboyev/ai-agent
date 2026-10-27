@@ -13,10 +13,10 @@ import {
  * the offer under its source id (`catalog-sync.store.ts`: `sourceEntityId:
  * offer.sourceEntityId`). The lookup misses, so no `Quote` row is written for
  * a synced offer (the ShownOffer row and follow-ups are unaffected).
- * Characterisation: this test pins today's mismatch until it is fixed.
+ * Fixed in 1b-i commit C: facts also carry `offerSourceEntityId`.
  */
 describe('DEF-001: shown-offer lookup key vs the synced offer key', () => {
-  it('a live quote fact names the canonical offer id, not the synced source id', async () => {
+  it('a live quote fact carries both the canonical offer id and the synced source id', async () => {
     const connector = educationConnector();
     const offers = await connector.getOffers!('mock-education:edu-ielts-001');
     const weekday = offers.find((offer) =>
@@ -43,12 +43,17 @@ describe('DEF-001: shown-offer lookup key vs the synced offer key', () => {
     const quote = result.facts.find(
       (fact) => fact.value.kind === 'price' && fact.value.confirmedQuote,
     )!;
-    // What ShownOffersService.recordDelivered uses as the lookup key ...
+    // The canonical id stays the evidence binding ...
     expect(quote.provenance.offerId).toBe(
       'mock-education:offer:ielts-group-weekday',
     );
-    // ... and what catalog sync stores as offers.source_entity_id.
+    // ... and the fact also names the key catalog sync stores, which
+    // ShownOffersService now uses to find the synced offer (fixed).
     expect(weekday.sourceEntityId).toBe('ielts-group-weekday');
-    expect(quote.provenance.offerId).not.toBe(weekday.sourceEntityId);
+    expect(quote.provenance.offerSourceEntityId).toBe(weekday.sourceEntityId);
+    const listed = result.facts.find(
+      (fact) => fact.value.kind === 'price' && !fact.value.confirmedQuote,
+    )!;
+    expect(listed.provenance.offerSourceEntityId).toBe(weekday.sourceEntityId);
   });
 });

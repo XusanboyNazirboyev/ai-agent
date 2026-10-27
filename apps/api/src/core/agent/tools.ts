@@ -253,6 +253,8 @@ function supported(connector: CrmConnector, name: AgentToolName): boolean {
 export class AgentTools {
   private readonly knownItems = new Set<string>();
   private readonly knownOffers = new Set<string>();
+  /** Canonical offer id -> the offer's source id (how catalog sync keys it). */
+  private readonly offerSources = new Map<string, string>();
   private readonly seenCalls = new Set<string>();
   readonly trace: ToolTraceEntry[] = [];
 
@@ -276,7 +278,11 @@ export class AgentTools {
     sourceEntityId: string,
     sourceSystem: string,
     validUntil?: string,
-    binding: { offerId?: string; live?: boolean } = {},
+    binding: {
+      offerId?: string;
+      live?: boolean;
+      offerSourceEntityId?: string;
+    } = {},
   ): FactProvenance {
     return {
       tool,
@@ -289,6 +295,13 @@ export class AgentTools {
       conversationId: this.context.scope.conversationId,
       ...binding,
     };
+  }
+
+  private offerSourceBinding(offerId: string): {
+    offerSourceEntityId?: string;
+  } {
+    const source = this.offerSources.get(offerId);
+    return source ? { offerSourceEntityId: source } : {};
   }
 
   private isStale(validUntil: string | undefined): boolean {
@@ -322,6 +335,7 @@ export class AgentTools {
     return promptSafeJson({
       offers: offers.map((offer) => {
         this.knownOffers.add(offer.id);
+        this.offerSources.set(offer.id, offer.sourceEntityId);
         // An expired offer yields no facts: its price, seats and dates are
         // not current and must be re-checked live before anyone sees them.
         if (this.isStale(offer.validUntil)) {
@@ -337,7 +351,11 @@ export class AgentTools {
           offer.sourceEntityId,
           offer.sourceSystem,
           offer.validUntil,
-          { offerId: offer.id, live: false },
+          {
+            offerId: offer.id,
+            live: false,
+            offerSourceEntityId: offer.sourceEntityId,
+          },
         );
         return {
           offerId: offer.id,
@@ -393,7 +411,11 @@ export class AgentTools {
       availability.offerId,
       sourceSystem,
       availability.validUntil,
-      { offerId: availability.offerId, live: true },
+      {
+        offerId: availability.offerId,
+        live: true,
+        ...this.offerSourceBinding(availability.offerId),
+      },
     );
     return promptSafeJson({
       offerId: availability.offerId,
@@ -420,7 +442,11 @@ export class AgentTools {
       quote.sourceEntityId,
       quote.sourceSystem,
       quote.validUntil,
-      { offerId: quote.offerId, live: true },
+      {
+        offerId: quote.offerId,
+        live: true,
+        ...this.offerSourceBinding(quote.offerId),
+      },
     );
     return promptSafeJson({
       offerId: quote.offerId,

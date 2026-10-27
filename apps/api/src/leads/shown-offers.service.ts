@@ -13,6 +13,7 @@ interface StoredFact {
   provenance: {
     sourceSystem: string;
     sourceEntityId: string;
+    offerSourceEntityId?: string;
     retrievedAt: string;
     validUntil?: string;
     offerId?: string;
@@ -66,12 +67,17 @@ export class ShownOffersService {
         (fact) =>
           fact.value.kind === 'price' && fact.value.confirmedQuote === true,
       );
+      // Catalog sync keys offers by their source id; facts carry the
+      // canonical id in `offerId` and the source id beside it (DEF-001).
+      const syncedKey =
+        group.find((fact) => fact.provenance.offerSourceEntityId)?.provenance
+          .offerSourceEntityId ?? offerRef;
       const offer = offerRef.startsWith('item:')
         ? null
         : await this.prisma.offer.findFirst({
             where: {
               tenantId,
-              sourceEntityId: offerRef,
+              sourceEntityId: syncedKey,
               sourceSystem:
                 quote?.provenance.sourceSystem ??
                 group[0].provenance.sourceSystem,

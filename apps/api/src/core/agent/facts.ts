@@ -54,6 +54,11 @@ export interface FactProvenance {
   readonly offerId?: string;
   /** True only for a fresh get_quote / check_availability result. */
   readonly live?: boolean;
+  /**
+   * The offer's id in its source system, which is how catalog sync stores it
+   * (`offerId` is the connector's canonical id). Stamped by code (DEF-001).
+   */
+  readonly offerSourceEntityId?: string;
 }
 
 export interface Fact {

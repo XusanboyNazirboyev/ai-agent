@@ -841,6 +841,8 @@ describe('offers shown and quotes', () => {
       facts: unknown[];
       shown: string[];
       sync?: boolean;
+      /** Offer key as stored by catalog sync (default: the canonical id). */
+      syncKey?: string;
     },
   ): Promise<string> {
     if (options.sync) {
@@ -861,7 +863,7 @@ describe('offers shown and quotes', () => {
           tenantId: w.tenantId,
           itemId: item.id,
           sourceSystem: 'mock-education',
-          sourceEntityId: OFFER_REF,
+          sourceEntityId: options.syncKey ?? OFFER_REF,
           syncedAt: new Date(),
           sourceHash: 'h',
         },
@@ -963,6 +965,24 @@ describe('offers shown and quotes', () => {
     expect(quote.amount.toString()).toBe('150');
     expect(quote.validUntil?.toISOString()).toBe('2026-10-24T09:30:00.000Z');
     expect(quote.snapshot).toMatchObject({ id: 'F10' });
+    expect(await db.quote.count({ where: { tenantId: w.tenantId } })).toBe(1);
+  });
+
+  it('records the Quote for an offer keyed as catalog sync keys it (source id, DEF-001)', async () => {
+    const w = await world();
+    const service = new ShownOffersService(prisma);
+    const messageId = await delivered(w, {
+      facts: [quoteFact({ offerSourceEntityId: 'ielts-group-weekday' })],
+      shown: ['F10'],
+      sync: true,
+      syncKey: 'ielts-group-weekday',
+    });
+    expect(await service.recordDelivered(w.tenantId, messageId)).toBe(1);
+    const shown = await db.shownOffer.findFirstOrThrow({
+      where: { messageId },
+    });
+    expect(shown).toMatchObject({ quoteRecorded: true, quoteSkipReason: null });
+    expect(shown.offerId).not.toBeNull();
     expect(await db.quote.count({ where: { tenantId: w.tenantId } })).toBe(1);
   });
 
