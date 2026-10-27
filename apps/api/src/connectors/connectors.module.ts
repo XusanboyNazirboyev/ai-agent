@@ -6,6 +6,7 @@ import { OutboundUrlPolicy } from './generic-rest/ssrf-protection.js';
 import type { SecretResolver } from './interfaces/secret-resolver.js';
 import { ConnectorRegistry } from './registry/connector-registry.js';
 import {
+  bitrix24ConnectorRegistration,
   genericRestConnectorRegistration,
   mockConnectorRegistration,
 } from './registry/registrations.js';
@@ -28,6 +29,7 @@ export function createConnectorRegistry(
           : OutboundUrlPolicy.STRICT,
     }),
   );
+  registry.register(bitrix24ConnectorRegistration());
   // The mock serves fictional catalog data and prices; it must never be
   // selectable for real customers.
   if (environment.NODE_ENV !== 'production') {
