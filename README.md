@@ -72,7 +72,7 @@ flowchart LR
 **Requirements:** Node.js 24 (or 20.19+ / 22.12+, see `.nvmrc`), pnpm 10+, and Docker with Compose. Compose provides PostgreSQL 16 with pgvector (`pgvector/pgvector:pg16`) and Redis 7.
 
 ```sh
-cp .env.example .env                 # names and safe defaults only; put real keys in .env.local (gitignored)
+cp .env.example .env                 # names and safe defaults; .env is gitignored, so real keys can go here
 pnpm install
 docker compose up -d                 # postgres (pgvector) + redis
 pnpm db:generate && pnpm db:migrate  # Prisma client + checked-in migrations
@@ -114,7 +114,7 @@ For example, with port 4000 already taken: in `.env` set `PORT=4100`, `WEB_ORIGI
 - `FOLLOWUP_ENABLED=false`;
 - `KNOWLEDGE_EMBEDDINGS=off`.
 
-Real keys (LLM providers, a Telegram test bot, `SECRETS_MASTER_KEY`) go only into `.env.local` or the shell, never into a committed file.
+Real keys (LLM providers, a Telegram test bot, `SECRETS_MASTER_KEY`) go only into `.env` (gitignored) or the shell, never into a committed file. The API reads only the root `.env` (or the file named by `ENV_FILE`) plus the shell; `.env.local` is read only by `pnpm llm:smoke` and `eval:live`.
 
 **Local login (development only):**
 
@@ -225,7 +225,7 @@ _As of 2026-10-27: this branch includes `main` at `438f148`; the latest `main` w
 - **DEF-002:** the travel pack has no high-value threshold.
 - **DEF-003:** no retail pack.
 - **DEF-004:** fixed.
-- **DEF-005–008** come from the Telegram live runs and are recorded on branch `docs/telegram-live-evidence`. Of these, **DEF-007** (timestamps stored 5 h early under a non-UTC database session) is **fixed on `main`** (`6e138a1`).
+- **DEF-005–008** come from the Telegram live runs ([evidence](docs/evidence/telegram-live-2026-10-26.md)). Of these, **DEF-007** (timestamps stored 5 h early under a non-UTC database session) is **fixed on `main`** (`6e138a1`).
 - **DEF-009–011:** fixed on `main` (channel connect API).
 
 **Deferred by owner decision:**
@@ -310,7 +310,7 @@ These presets are documentation, not built-in behavior. The provider facts and t
 # Gemini API free tier via its OpenAI-compatible endpoint (beta per Google).
 LLM_PROVIDER=openai-compatible
 LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-LLM_API_KEY=<Gemini API key, in .env.local only>
+LLM_API_KEY=<Gemini API key, in .env or the shell only>
 LLM_MODEL_FAST=gemini-3.5-flash-lite     # the preset in provider-presets.ts; the live Telegram runs used it
 LLM_MODEL_STRONG=gemini-3.8-flash
 LLM_PRICING_VERSION=gemini-free-2026-10-23
