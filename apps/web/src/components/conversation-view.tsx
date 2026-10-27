@@ -25,7 +25,8 @@ import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
-import { selectClass, textareaClass } from './ui/fields';
+import { textareaClass } from './ui/fields';
+import { Select } from './ui/select';
 import { Icon, type IconName } from './ui/icons';
 import { Section } from './ui/section';
 import { useToast } from './ui/toast';
@@ -219,8 +220,13 @@ export function ConversationViewPane(props: {
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="truncate font-semibold">{name}</h2>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span data-testid="state" data-state={state}>
+            <span
+              data-testid="state"
+              data-state={state}
+              className="max-w-full min-w-0"
+            >
               <Badge
+                className="max-w-full"
                 tone={
                   state === 'WAITING_OPERATOR'
                     ? 'warning'
@@ -234,8 +240,8 @@ export function ConversationViewPane(props: {
               </Badge>
             </span>
             {view.contact.phone ? (
-              <span className="flex items-center gap-1 text-xs text-muted">
-                <Icon name="phone" className="h-3 w-3" />
+              <span className="flex min-w-0 items-center gap-1 text-xs break-all text-muted">
+                <Icon name="phone" className="h-3 w-3 shrink-0" />
                 {view.contact.phone}
               </span>
             ) : null}
@@ -245,7 +251,7 @@ export function ConversationViewPane(props: {
           size="sm"
           variant={showDetails ? 'primary' : 'secondary'}
           icon="panel"
-          className="shrink-0 lg:hidden"
+          className="shrink-0 xl:hidden"
           aria-expanded={showDetails}
           aria-controls="conversation-details"
           onClick={() => setShowDetails(!showDetails)}
@@ -269,7 +275,7 @@ export function ConversationViewPane(props: {
 
       <div className="flex min-h-0 flex-1">
         <div
-          className={`${showDetails ? 'hidden lg:flex' : 'flex'} min-w-0 flex-1 flex-col`}
+          className={`${showDetails ? 'hidden xl:flex' : 'flex'} min-w-0 flex-1 flex-col`}
         >
           <section
             ref={timelineRef}
@@ -395,7 +401,7 @@ export function ConversationViewPane(props: {
             {canAct ? (
               <form onSubmit={send} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <select
+                  <Select
                     aria-label={t('action.canned')}
                     value=""
                     onChange={(e) =>
@@ -405,7 +411,7 @@ export function ConversationViewPane(props: {
                           `${prev}${prev ? '\n' : ''}${t(`canned.${e.target.value}`)}`,
                       )
                     }
-                    className={`${selectClass} max-w-full`}
+                    className="max-w-full"
                   >
                     <option value="">{t('action.cannedNone')}</option>
                     {CANNED.map((id) => (
@@ -413,7 +419,7 @@ export function ConversationViewPane(props: {
                         {t(`canned.${id}`)}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
@@ -476,7 +482,7 @@ export function ConversationViewPane(props: {
         <aside
           id="conversation-details"
           aria-label={t('view.details')}
-          className={`${showDetails ? 'flex' : 'hidden lg:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 lg:w-80`}
+          className={`${showDetails ? 'flex' : 'hidden xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
         >
           <Section title={t('view.handover')} icon="headset">
             {view.handover ? (
@@ -521,7 +527,7 @@ export function ConversationViewPane(props: {
                 </p>
                 <label className="flex flex-col gap-1 text-xs text-muted">
                   {t('view.leadStatus')}
-                  <select
+                  <Select
                     value={view.lead.status}
                     disabled={!operating || busy || !handoverId}
                     onChange={(e) =>
@@ -530,14 +536,13 @@ export function ConversationViewPane(props: {
                         body: { status: e.target.value },
                       })
                     }
-                    className={`${selectClass} text-fg`}
                   >
                     {LEAD_STATUSES.map((status) => (
                       <option key={status} value={status}>
                         {t(`leadStatus.${status}`)}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               </>
             ) : (
