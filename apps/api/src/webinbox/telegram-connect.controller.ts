@@ -30,6 +30,7 @@ import {
   ChannelSecretStore,
   SecretsNotConfiguredError,
 } from '../secrets/channel-secret-store.js';
+import { SecretDecryptionError } from '../secrets/secret-cipher.js';
 import {
   credentialSource,
   policyFrom,
@@ -61,6 +62,9 @@ const REFUSAL: Record<string, { status: number; i18nKey: string }> = {
   },
   TELEGRAM_UNREACHABLE: { status: 502, i18nKey: 'errors.telegramUnreachable' },
   TELEGRAM_REJECTED: { status: 502, i18nKey: 'errors.telegramRejected' },
+  // Disconnect could not remove the webhook at Telegram; the saved token is
+  // kept so that the operator can try again.
+  WEBHOOK_NOT_REMOVED: { status: 502, i18nKey: 'errors.webhookNotRemoved' },
   RATE_LIMITED: { status: 429, i18nKey: 'errors.rateLimited' },
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
 };
@@ -304,29 +308,72 @@ export class TelegramConnectController {
     return this.summary(who.tenantId, id);
   }
 
-  /** Removes the webhook (best effort) and switches the account and its assistant off. */
-  private async stop(who: { tenantId: string }, id: string): Promise<void> {
-    if (this.secrets.configured) {
-      try {
-        const token = await this.secrets.get(
-          { tenantId: who.tenantId, channelAccountId: id },
-          'bot_token',
-        );
-        if (token) await this.management.deleteWebhook(token);
-      } catch {
-        // Telegram unreachable or the secret unreadable: the account is
-        // disabled below anyway, so its webhook is refused until it expires.
-        this.logger.warn(
-          JSON.stringify({ event: 'telegram.webhook_not_removed', id }),
-        );
-      }
+  /**
+   * Removes the webhook at Telegram with the saved bot token.
+   * - `removed`: Telegram confirmed.
+   * - `nothing_to_remove`: no bot token is saved.
+   * - `token_unusable`: the token cannot be used any more (Telegram no longer
+   *   accepts it, or the stored value cannot be decrypted), so there is
+   *   nothing more this server can do for the webhook.
+   * Any other Telegram failure is thrown.
+   */
+  private async removeWebhook(
+    who: { tenantId: string },
+    id: string,
+  ): Promise<'removed' | 'nothing_to_remove' | 'token_unusable'> {
+    if (!this.secrets.configured) return 'token_unusable';
+    let token: string | undefined;
+    try {
+      token = await this.secrets.get(
+        { tenantId: who.tenantId, channelAccountId: id },
+        'bot_token',
+      );
+    } catch (error) {
+      if (error instanceof SecretDecryptionError) return 'token_unusable';
+      throw error;
     }
+    if (!token) return 'nothing_to_remove';
+    try {
+      await this.management.deleteWebhook(token);
+      return 'removed';
+    } catch (error) {
+      if (
+        error instanceof TelegramManagementError &&
+        error.code === 'INVALID_TOKEN'
+      )
+        return 'token_unusable';
+      throw error;
+    }
+  }
+
+  private async switchOff(id: string): Promise<void> {
     await this.prisma.channelAccount.update({
       where: { id },
       data: { status: 'DISABLED', agentMode: 'OFF' },
     });
   }
 
+  /** Removes the webhook (best effort) and switches the account and its assistant off. */
+  private async stop(who: { tenantId: string }, id: string): Promise<void> {
+    try {
+      await this.removeWebhook(who, id);
+    } catch {
+      // Telegram unreachable: the account is disabled below anyway, so its
+      // webhook is refused until it expires. The saved token stays, so the
+      // webhook can still be removed later.
+      this.logger.warn(
+        JSON.stringify({ event: 'telegram.webhook_not_removed', id }),
+      );
+    }
+    await this.switchOff(id);
+  }
+
+  /**
+   * The webhook is removed first and the saved secrets are deleted only when
+   * that worked (or there was nothing to remove). When Telegram cannot be
+   * reached the account is switched off, the secrets stay and the operator
+   * gets WEBHOOK_NOT_REMOVED: calling this again retries.
+   */
   @Delete(':id')
   @HttpCode(204)
   async disconnect(
@@ -335,13 +382,30 @@ export class TelegramConnectController {
   ): Promise<void> {
     const who = this.admit(request);
     await this.account(who.tenantId, id);
-    await this.stop(who, id);
+    let webhook: string;
+    try {
+      webhook = await this.removeWebhook(who, id);
+    } catch (error) {
+      await this.switchOff(id);
+      const reason =
+        error instanceof TelegramManagementError ? error.code : 'ERROR';
+      await this.audit(who, 'channel.telegram_disconnect_pending', id, {
+        reason,
+      });
+      this.logger.warn(
+        JSON.stringify({ event: 'telegram.disconnect_pending', id, reason }),
+      );
+      if (error instanceof TelegramManagementError)
+        throw refuse('WEBHOOK_NOT_REMOVED');
+      throw error;
+    }
+    await this.switchOff(id);
     // The account row stays (its conversations belong to it); only its secrets go.
     await this.secrets.deleteAll({
       tenantId: who.tenantId,
       channelAccountId: id,
     });
-    await this.audit(who, 'channel.telegram_disconnected', id);
+    await this.audit(who, 'channel.telegram_disconnected', id, { webhook });
   }
 
   @Post(':id/test')

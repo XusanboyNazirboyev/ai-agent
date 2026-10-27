@@ -1,6 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { Logger } from '@nestjs/common';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { TelegramCredentials } from '../channels/telegram/telegram-credentials.js';
@@ -42,6 +43,8 @@ interface FakeTelegram {
   calls: Call[];
   webhooks: Map<string, string>;
   failNextWebhook: () => void;
+  /** Makes every later call of a method fail: a network error that names the token, or an HTTP 500. */
+  fail: (method: string, kind: 'network' | 'rejected' | null) => void;
 }
 
 function fakeTelegram(
@@ -50,6 +53,7 @@ function fakeTelegram(
   const calls: Call[] = [];
   let failWebhook = false;
   const webhooks = new Map<string, string>();
+  const failing = new Map<string, 'network' | 'rejected'>();
   const request = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const match = /\/bot([^/]+)\/(\w+)$/u.exec(String(input))!;
     const [, token, method] = match;
@@ -58,6 +62,16 @@ function fakeTelegram(
       unknown
     >;
     calls.push({ method, token, params });
+    const failure = failing.get(method);
+    if (failure === 'network')
+      // A real network error can name the URL, and the URL carries the token.
+      return Promise.reject(
+        new Error(`connect ECONNREFUSED ${String(input)} token=${token}`),
+      );
+    if (failure === 'rejected')
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: false }), { status: 500 }),
+      );
     const bot = valid.get(token);
     const reply = (status: number, body: unknown): Promise<Response> =>
       Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -99,6 +113,10 @@ function fakeTelegram(
     webhooks,
     failNextWebhook: (): void => {
       failWebhook = true;
+    },
+    fail: (method, kind): void => {
+      if (kind) failing.set(method, kind);
+      else failing.delete(method);
     },
   };
 }
@@ -411,5 +429,216 @@ describe('connecting a Telegram bot from the web', () => {
       credentialsConfigured: true,
     });
     expect(JSON.stringify(list)).not.toContain('AAH-test');
+  });
+
+  it('tenant B cannot enable, test, disconnect or change the operator group of tenant A (DEF-009)', async () => {
+    const { bots, telegram, controller, store } = setup();
+    const a = await tenant();
+    const b = await tenant();
+    bots.set(TOKEN(RUN + 801), { id: RUN + 801, username: 'a_bot' });
+    const { id } = await controller.connect(a.request, {
+      botToken: TOKEN(RUN + 801),
+    });
+    await controller.operatorGroup(a.request, id, { chatId: '-100555' });
+    await controller.enable(a.request, id);
+    const callsBefore = telegram.calls.length;
+
+    const attempts: Array<[string, () => Promise<unknown>]> = [
+      ['enable', (): Promise<unknown> => controller.enable(b.request, id)],
+      ['test', (): Promise<unknown> => controller.test(b.request, id)],
+      [
+        'disconnect',
+        (): Promise<unknown> => controller.disconnect(b.request, id),
+      ],
+      [
+        'operator-group',
+        (): Promise<unknown> =>
+          controller.operatorGroup(b.request, id, { chatId: '-100999' }),
+      ],
+    ];
+    for (const [name, attempt] of attempts)
+      await expect(attempt(), name).rejects.toMatchObject({
+        response: { code: 'NOT_FOUND' },
+      });
+
+    // Nothing reached Telegram and nothing of A's changed.
+    expect(telegram.calls).toHaveLength(callsBefore);
+    const row = await db.channelAccount.findUniqueOrThrow({ where: { id } });
+    expect(row).toMatchObject({ status: 'ACTIVE', operatorChatId: '-100555' });
+    const owner = { tenantId: a.tenantId, channelAccountId: id };
+    expect(await store.exists(owner, 'bot_token')).toBe(true);
+    expect(await store.exists(owner, 'webhook_secret')).toBe(true);
+    expect(telegram.webhooks.size).toBe(1);
+    expect(
+      await db.auditEvent.count({
+        where: { tenantId: b.tenantId, entityId: id },
+      }),
+    ).toBe(0);
+  });
+
+  it('the bot token stays out of log lines, responses and error messages when Telegram fails (DEF-010)', async () => {
+    const logged: string[] = [];
+    const spies = (['log', 'warn', 'error', 'debug', 'verbose'] as const).map(
+      (level) =>
+        vi.spyOn(Logger.prototype, level).mockImplementation((...args) => {
+          logged.push(args.map((a) => String(a)).join(' '));
+        }),
+    );
+    try {
+      const { bots, telegram, controller } = setup();
+      const t = await tenant();
+      bots.set(TOKEN(RUN + 811), { id: RUN + 811, username: 'leak_bot' });
+      const seen: unknown[] = [];
+      const run = async (attempt: () => Promise<unknown>): Promise<void> => {
+        try {
+          seen.push(await attempt());
+        } catch (error) {
+          seen.push(error);
+        }
+      };
+
+      telegram.fail('getMe', 'network');
+      await run(() =>
+        controller.connect(t.request, { botToken: TOKEN(RUN + 811) }),
+      );
+      telegram.fail('getMe', null);
+      const { id } = await controller.connect(t.request, {
+        botToken: TOKEN(RUN + 811),
+      });
+      telegram.fail('setWebhook', 'network');
+      await run(() => controller.enable(t.request, id));
+      telegram.fail('setWebhook', 'rejected');
+      await run(() => controller.enable(t.request, id));
+      telegram.fail('setWebhook', null);
+      telegram.fail('getMe', 'network');
+      await run(() => controller.test(t.request, id));
+      telegram.fail('getMe', null);
+      telegram.fail('deleteWebhook', 'network');
+      await run(() => controller.disable(t.request, id));
+      await run(() => controller.disconnect(t.request, id));
+
+      // The checks above must have exercised real failures and real log lines.
+      expect(seen.filter((x) => x instanceof Error).length).toBeGreaterThan(3);
+      expect(logged.some((l) => l.includes('telegram.'))).toBe(true);
+      const everything = [
+        ...logged,
+        ...seen.map((x) =>
+          x instanceof Error
+            ? `${x.message}\n${x.stack ?? ''}\n${JSON.stringify(
+                (x as { getResponse?: () => unknown }).getResponse?.() ?? null,
+              )}`
+            : JSON.stringify(x),
+        ),
+      ].join('\n');
+      expect(everything).not.toContain('AAH-test_token');
+      expect(everything).not.toContain(String(RUN + 811));
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  it('disconnect of an ACTIVE account removes the webhook and the secrets in one call (DEF-011)', async () => {
+    const { bots, telegram, controller, store } = setup();
+    const t = await tenant();
+    bots.set(TOKEN(RUN + 821), { id: RUN + 821, username: 'active_bot' });
+    const { id } = await controller.connect(t.request, {
+      botToken: TOKEN(RUN + 821),
+    });
+    await controller.enable(t.request, id);
+    await db.channelAccount.update({
+      where: { id },
+      data: { agentMode: 'SHADOW' },
+    });
+    expect(telegram.webhooks.size).toBe(1);
+
+    await controller.disconnect(t.request, id);
+
+    expect(telegram.webhooks.size).toBe(0);
+    expect(telegram.calls.some((c) => c.method === 'deleteWebhook')).toBe(true);
+    const owner = { tenantId: t.tenantId, channelAccountId: id };
+    expect(await store.exists(owner, 'bot_token')).toBe(false);
+    expect(await store.exists(owner, 'webhook_secret')).toBe(false);
+    expect(
+      await db.channelAccount.findUniqueOrThrow({ where: { id } }),
+    ).toMatchObject({ status: 'DISABLED', agentMode: 'OFF' });
+  });
+
+  it('keeps the secrets and says so when Telegram cannot remove the webhook; a retry finishes it (DEF-011)', async () => {
+    const { bots, telegram, controller, store } = setup();
+    const t = await tenant();
+    bots.set(TOKEN(RUN + 831), { id: RUN + 831, username: 'retry_bot' });
+    const { id } = await controller.connect(t.request, {
+      botToken: TOKEN(RUN + 831),
+    });
+    await controller.enable(t.request, id);
+    await db.channelAccount.update({
+      where: { id },
+      data: { agentMode: 'SHADOW' },
+    });
+    const owner = { tenantId: t.tenantId, channelAccountId: id };
+
+    for (const kind of ['network', 'rejected'] as const) {
+      telegram.fail('deleteWebhook', kind);
+      await expect(
+        controller.disconnect(t.request, id),
+        kind,
+      ).rejects.toMatchObject({
+        response: { code: 'WEBHOOK_NOT_REMOVED' },
+        status: 502,
+      });
+      // Recoverable: still connected (secrets kept), switched off, webhook still registered.
+      expect(await store.exists(owner, 'bot_token')).toBe(true);
+      expect(await store.exists(owner, 'webhook_secret')).toBe(true);
+      expect(
+        await db.channelAccount.findUniqueOrThrow({ where: { id } }),
+      ).toMatchObject({ status: 'DISABLED', agentMode: 'OFF' });
+      expect(telegram.webhooks.size).toBe(1);
+    }
+    const pending = await db.auditEvent.findMany({
+      where: {
+        tenantId: t.tenantId,
+        action: 'channel.telegram_disconnect_pending',
+      },
+    });
+    expect(pending).toHaveLength(2);
+    expect(
+      await db.auditEvent.count({
+        where: {
+          tenantId: t.tenantId,
+          action: 'channel.telegram_disconnected',
+        },
+      }),
+    ).toBe(0);
+
+    telegram.fail('deleteWebhook', null);
+    await controller.disconnect(t.request, id);
+    expect(telegram.webhooks.size).toBe(0);
+    expect(await store.exists(owner, 'bot_token')).toBe(false);
+    expect(await store.exists(owner, 'webhook_secret')).toBe(false);
+    expect(
+      await db.auditEvent.count({
+        where: {
+          tenantId: t.tenantId,
+          action: 'channel.telegram_disconnected',
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it('disconnects even when Telegram no longer accepts the token (revoked)', async () => {
+    const { bots, controller, store } = setup();
+    const t = await tenant();
+    bots.set(TOKEN(RUN + 841), { id: RUN + 841, username: 'revoked_bot' });
+    const { id } = await controller.connect(t.request, {
+      botToken: TOKEN(RUN + 841),
+    });
+    bots.delete(TOKEN(RUN + 841));
+    await controller.disconnect(t.request, id);
+    const owner = { tenantId: t.tenantId, channelAccountId: id };
+    expect(await store.exists(owner, 'bot_token')).toBe(false);
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: { tenantId: t.tenantId, action: 'channel.telegram_disconnected' },
+    });
+    expect(audit.safeInputSummary).toMatchObject({ webhook: 'token_unusable' });
   });
 });
