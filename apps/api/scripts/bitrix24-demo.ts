@@ -12,8 +12,9 @@
  *    syncs it again (no second CRM lead), then a second conversation with the
  *    same synthetic phone takes the duplicate path (comment on that lead).
  *
- * The webhook URL is read from CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL (or
- * BITRIX24_WEBHOOK_URL, copied in-process) and is never printed.
+ * The webhook URL is read from CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL, falling
+ * back to the older name BITRIX24_WEBHOOK_URL (copied in-process); it is never
+ * printed.
  */
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';

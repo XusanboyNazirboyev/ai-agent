@@ -10,7 +10,8 @@
  *   pnpm --filter @agentcore/api exec tsx scripts/bitrix24-probe.ts <out-dir>
  *
  * Only allow-listed methods (Bitrix24Client). The webhook URL is read from
- * CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL (or BITRIX24_WEBHOOK_URL) and is never
+ * CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL (falling back to the older name
+ * BITRIX24_WEBHOOK_URL) and is never
  * printed or written; raw responses go to <out-dir> (outside the repository)
  * for scrubbing into CI fixtures.
  */

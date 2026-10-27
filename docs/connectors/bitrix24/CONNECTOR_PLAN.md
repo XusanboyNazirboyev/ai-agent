@@ -225,10 +225,12 @@ If step 4 cannot run (no portal yet), the connector is not claimed as demonstrat
 
 ## Known limitations
 
+Tracked as DEF-012 to DEF-016 in `docs/DEFECTS.md`.
+
 - **Duplicate path and retries.** The summary is added to an existing lead without stamping our key on it. If that write's outcome were uncertain and retried, the lookup cannot find it, so a second identical comment is possible. A comment has low harm; lead fields are never changed.
 - **A failed comment after the lead was created** is logged (code only), not retried. The lead exists, and repeating the create could only add comments.
 - **No email:** `LeadInput.contact` has no email field.
-- **Variable name.** The owner's `.env` currently names the webhook `BITRIX24_WEBHOOK_URL`. The probe and demo scripts copy it in-process. The connector config can only reference the `CONNECTOR_SECRET_` namespace, so renaming it to `CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL` lets the API use it directly.
+- **Variable name.** The probe and demo scripts read `CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL` first and fall back to the older `BITRIX24_WEBHOOK_URL`. The API's connector config can only reference the `CONNECTOR_SECRET_` namespace, so the owner can rename the variable in `.env` without breaking the scripts.
 
 ## Follow-ups (not in this branch)
 
