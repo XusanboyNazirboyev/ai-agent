@@ -388,7 +388,10 @@ export function plainText(text: string, max: number): string {
     .replace(/</gu, '‹')
     .replace(/>/gu, '›')
     .trim();
-  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+  // Counted in code points, so a cut never splits a surrogate pair (an
+  // emoji); Bitrix24 limits are in characters (field-length-limits).
+  const chars = Array.from(clean);
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : clean;
 }
 
 function leadFields(

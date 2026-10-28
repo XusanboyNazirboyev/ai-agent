@@ -249,6 +249,14 @@ describe('Bitrix24 lead mapping', () => {
     ).not.toMatch(/[[\]<>]/u);
   });
 
+  it('never splits an emoji when it cuts at the length limit', () => {
+    const title = plainText(`${'x'.repeat(253)}😀😀yy`, TITLE_MAX);
+    expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/u);
+    expect(title).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u);
+    expect(Array.from(title)).toHaveLength(TITLE_MAX);
+    expect(title.endsWith('😀…')).toBe(true);
+  });
+
   it('normalizes phones and drops what is not a phone', () => {
     expect(normalizePhone('+998 (90) 000-00-17')).toBe('+998900000017');
     expect(normalizePhone('00998900000017')).toBe('+998900000017');
