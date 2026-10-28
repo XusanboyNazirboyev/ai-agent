@@ -1,4 +1,7 @@
-import { RestHttpClient } from '../generic-rest/http-client.js';
+import {
+  RestHttpClient,
+  type RestHttpClientOptions,
+} from '../generic-rest/http-client.js';
 import {
   ConnectorConfigurationError,
   ConnectorError,
@@ -129,8 +132,20 @@ function notAllowed(method: string): ConnectorError {
   });
 }
 
-/** Default transport: the hardened connector HTTP client, errors re-wrapped. */
-export function restTransport(http = new RestHttpClient()): Bitrix24Transport {
+/**
+ * Default transport: the hardened connector HTTP client, errors re-wrapped.
+ * Redirects are never followed (maxRedirects 0): a same-origin 307/308
+ * would replay the POST body to another path, i.e. another method, past the
+ * allow-list. A redirect is refused as BITRIX24_REDIRECT_REFUSED.
+ * `options` is for tests (DNS, loopback exemptions); maxRedirects is fixed.
+ */
+export function restTransport(
+  options: Omit<RestHttpClientOptions, 'maxRedirects'> = {},
+  http: Pick<RestHttpClient, 'send'> = new RestHttpClient({
+    ...options,
+    maxRedirects: 0,
+  }),
+): Bitrix24Transport {
   return async (url, body) => {
     try {
       const response = await http.send({
@@ -152,6 +167,18 @@ export function restTransport(http = new RestHttpClient()): Bitrix24Transport {
 
 /** Same category, code and write semantics; no message or cause from below. */
 function scrubbed(error: unknown): ConnectorError {
+  if (
+    isConnectorError(error) &&
+    error.code === 'CONNECTOR_TOO_MANY_REDIRECTS'
+  ) {
+    // The portal answered with a redirect instead of handling the call.
+    return new ConnectorConfigurationError({
+      message: 'Bitrix24 answered with a redirect; redirects are not followed',
+      code: 'BITRIX24_REDIRECT_REFUSED',
+      source: SOURCE,
+      executed: 'no',
+    });
+  }
   if (!isConnectorError(error)) {
     return new ConnectorUnavailableError({
       message: 'Bitrix24 request failed',

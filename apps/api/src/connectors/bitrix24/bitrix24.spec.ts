@@ -184,11 +184,14 @@ describe('Bitrix24 secret hygiene', () => {
       retryable: true,
       executed: 'unknown',
     });
-    const transport = restTransport({
-      send: async () => {
-        throw leaky;
+    const transport = restTransport(
+      {},
+      {
+        send: async () => {
+          throw leaky;
+        },
       },
-    } as never);
+    );
     const error = (await transport(TEST_WEBHOOK_URL, {}).catch(
       (caught: unknown) => caught,
     )) as ConnectorError;
