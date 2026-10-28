@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { effectiveNotice } from '@/lib/effective-mode';
 import type { AgentMode, ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Badge, type Tone } from './ui/badge';
@@ -138,6 +139,24 @@ export function BotPage(): ReactNode {
                 </Badge>
               </span>
             </header>
+            {effectiveNotice(account) ? (
+              <div
+                role="status"
+                data-testid="bot-effective"
+                data-mode={effectiveNotice(account)}
+                className="flex items-start gap-2 rounded-xl bg-warning-soft p-3 text-sm text-warning-fg"
+              >
+                <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="flex flex-col gap-1">
+                  <span className="font-medium">
+                    {t(`botEffective.${account.effectiveMode}`)}
+                  </span>
+                  {account.effectiveReason ? (
+                    <span>{t(`botRefusal.${account.effectiveReason}`)}</span>
+                  ) : null}
+                </span>
+              </div>
+            ) : null}
             <div
               role="radiogroup"
               aria-label={t('bot.modeGroup')}
