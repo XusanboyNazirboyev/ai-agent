@@ -33,13 +33,19 @@ import {
 import { SecretDecryptionError } from '../secrets/secret-cipher.js';
 import {
   credentialSource,
+  enabledBefore,
   policyFrom,
   summarizeChannel,
+  TELEGRAM_ENABLED_ACTION,
   type ChannelAccountSummary,
 } from './channel-summary.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 
 const ConnectBody = z.object({ botToken: z.string().trim().max(200) });
+/** Absent `dropPendingUpdates`: drop on the first enable only. */
+const EnableBody = z
+  .object({ dropPendingUpdates: z.boolean().optional() })
+  .strict();
 const GroupBody = z.object({
   chatId: z
     .string()
@@ -154,18 +160,20 @@ export class TelegramConnectController {
     tenantId: string,
     id: string,
   ): Promise<ChannelAccountSummary> {
-    const [row, saved] = await Promise.all([
+    const [row, saved, enabled] = await Promise.all([
       this.prisma.channelAccount.findFirstOrThrow({ where: { id, tenantId } }),
       this.prisma.channelSecret.findMany({
         where: { tenantId, channelAccountId: id },
         select: { purpose: true },
       }),
+      enabledBefore(this.prisma, tenantId, [id]),
     ]);
     return summarizeChannel(
       row,
       policyFrom(this.config),
       credentialSource(row, new Set(saved.map((s) => s.purpose)), this.config),
       this.config.get('PUBLIC_BASE_URL', { infer: true }),
+      enabled.has(id),
     );
   }
 
@@ -265,14 +273,25 @@ export class TelegramConnectController {
     return this.summary(who.tenantId, id);
   }
 
+  /**
+   * Registers the webhook. `dropPendingUpdates` (default: true on the first
+   * enable of this account, false after) discards what Telegram queued
+   * while no webhook was set, so old messages are not answered all at once.
+   */
   @Post(':id/enable')
   async enable(
     @Req() request: InboxRequest,
     @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown = {},
   ): Promise<ChannelAccountSummary> {
     const who = this.admit(request);
+    const parsed = EnableBody.safeParse(body ?? {});
+    if (!parsed.success) throw refuse('INVALID_BODY');
     this.requireSecrets();
     await this.account(who.tenantId, id);
+    const before = await enabledBefore(this.prisma, who.tenantId, [id]);
+    const firstEnable = !before.has(id);
+    const dropPendingUpdates = parsed.data.dropPendingUpdates ?? firstEnable;
     const owner = { tenantId: who.tenantId, channelAccountId: id };
     const [token, secret] = await Promise.all([
       this.secrets.get(owner, 'bot_token'),
@@ -286,13 +305,17 @@ export class TelegramConnectController {
         token,
         `${base.replace(/\/+$/u, '')}/webhooks/telegram/${id}`,
         secret,
+        { dropPendingUpdates },
       ),
     );
     await this.prisma.channelAccount.update({
       where: { id },
       data: { status: 'ACTIVE' },
     });
-    await this.audit(who, 'channel.telegram_enabled', id);
+    await this.audit(who, TELEGRAM_ENABLED_ACTION, id, {
+      dropPendingUpdates,
+      firstEnable,
+    });
     return this.summary(who.tenantId, id);
   }
 

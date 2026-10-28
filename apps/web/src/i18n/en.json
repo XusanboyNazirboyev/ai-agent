@@ -292,6 +292,8 @@
   "channels.connectTelegram": "Connect Telegram",
   "channels.connect": "Connect",
   "channels.enable": "Enable",
+  "channels.dropPending": "Skip messages sent while the bot was off",
+  "channels.dropPendingHint": "Telegram keeps messages that arrived while no webhook was set. If they are skipped, the assistant does not answer old messages all at once. On by default for the first enable.",
   "channels.disable": "Disable",
   "channels.check": "Check connection",
   "channels.replaceToken": "Replace token",

@@ -292,6 +292,8 @@
   "channels.connectTelegram": "Подключить Telegram",
   "channels.connect": "Подключить",
   "channels.enable": "Включить",
+  "channels.dropPending": "Пропустить сообщения, отправленные, пока бот был выключен",
+  "channels.dropPendingHint": "Telegram хранит сообщения, пришедшие, пока вебхук не был установлен. Если их пропустить, ассистент не ответит на старые сообщения разом. Для первого включения включено по умолчанию.",
   "channels.disable": "Выключить",
   "channels.check": "Проверить подключение",
   "channels.replaceToken": "Заменить токен",

@@ -8,6 +8,7 @@ const BOT_ID = 7_000_000_000 + Math.floor(Math.random() * 1e8);
 const TOKEN = `${BOT_ID}:AAH-e2e_token_value_${'x'.repeat(20)}`;
 const USERNAME = `e2e_bot_${BOT_ID}`;
 let webhook = '';
+let dropPending: unknown;
 let server: http.Server;
 
 test.beforeAll(async () => {
@@ -36,6 +37,7 @@ test.beforeAll(async () => {
           });
         case 'setWebhook':
           webhook = String(params.url);
+          dropPending = params.drop_pending_updates;
           return reply(200, { ok: true, result: true });
         case 'deleteWebhook':
           webhook = '';
@@ -93,6 +95,8 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
     'https://e2e.example.test/webhooks/telegram/',
   );
   expect(webhook).toContain('/webhooks/telegram/');
+  // The first enable skips what Telegram queued while no webhook was set.
+  expect(dropPending).toBe(true);
   expect(await page.content()).not.toContain(TOKEN);
 
   await card.getByTestId('account-test').click();
@@ -131,6 +135,13 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
   await card.getByTestId('account-disable').click();
   await expect(card).toContainText('Disabled');
   expect(webhook).toBe('');
+  // A later enable keeps queued messages unless the admin ticks the box.
+  await expect(card.getByTestId('account-drop-pending')).not.toBeChecked();
+  await card.getByTestId('account-enable').click();
+  await expect(card).toContainText('Active');
+  expect(dropPending).toBe(false);
+  await card.getByTestId('account-disable').click();
+  await expect(card).toContainText('Disabled');
   await card.getByTestId('account-disconnect').click();
   await card.getByTestId('confirm-accept').click();
   await expect(card).toContainText('No bot credentials');

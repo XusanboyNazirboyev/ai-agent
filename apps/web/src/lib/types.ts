@@ -123,6 +123,8 @@ export interface ChannelAccount {
   isTestAccount: boolean;
   credentialsConfigured: boolean;
   operatorGroupConfigured: boolean;
+  /** Enabled from the web before; the first enable drops queued updates. */
+  everEnabled: boolean;
   createdAt: string;
 }
 
