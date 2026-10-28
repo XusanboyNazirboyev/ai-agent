@@ -63,8 +63,9 @@ crm.settings.mode.get        (read; configuration check)
 crm.duplicate.findbycomm     (read; type PHONE only)
 crm.item.add                 (write; entityTypeId 1 only)
 crm.timeline.comment.add     (write; ENTITY_TYPE "lead" only)
-crm.item.list                (read; only if the idempotency lookup below is verified)
-crm.item.fields              (read; configuration check: is originId filterable? unverified)
+crm.item.list                (read; idempotency lookup by originId, stage of matching leads)
+crm.item.fields              (read; used by the contract probe only)
+crm.timeline.comment.list    (read; ENTITY_TYPE "lead" only: the retry marker check)
 ```
 
 - The single request function takes a method name from a `const` tuple.
@@ -188,7 +189,7 @@ If step 4 cannot run (no portal yet), the connector is not claimed as demonstrat
 
 ## Owner decisions (2026-10-27, approved)
 
-1. **Duplicate:** an existing lead gets the conversation summary as a timeline comment, and its fields are never overwritten. A contact match creates a new lead linked to the contact (`contactId`).
+1. **Duplicate:** an existing lead gets the conversation summary as a timeline comment, and its fields are never overwritten. Refined after the merger's review (2026-10-28): only a lead still in progress (`stageSemanticId` P) qualifies; a converted (S) or junk (F) lead does not, and a new lead is created. A contact match creates a new lead linked to the contact (`contactId`).
 2. **Lead routing:** the mock connector has a config flag `createLead: false`. See follow-up 1.
 3. **Lead source:** `sourceId` is `OTHER`, and "Telegram" appears in the title ("Telegram: <name>") and the comment text.
 4. **Slots** go in the comment text for v1. Custom-field (`UF_*`) mapping comes later.
@@ -223,9 +224,25 @@ If step 4 cannot run (no portal yet), the connector is not claimed as demonstrat
 4. A second sync returns `SKIPPED`, with no second lead.
 5. A second conversation with the same synthetic phone takes the duplicate path: a comment on lead 6, and no new lead.
 
+## Merger review fixes (2026-10-28)
+
+| Finding | Fix | Test |
+|---|---|---|
+| Redirects could replay the POST past the allow-list | `maxRedirects: 0`; a redirect is `BITRIX24_REDIRECT_REFUSED` (not executed) | `bitrix24-transport.spec.ts` "refuses a 307 to another method and sends no second request" |
+| A retried existing-lead write commented again | the key ends the comment (`tezda ref: <key>`); the latest comments are read first (`crm.timeline.comment.list`) | "a retried write on the existing-lead path adds exactly one comment" |
+| The probe's output guard missed `./x` and `../x` | `isInsideDirectory`: resolve, then `path.relative` by segment | `src/dev/path-guards.spec.ts` |
+| The demo picked the newest lead of any tenant | `runScenario` returns its tenant; `findDemoLead` is scoped by it | `testing/demo-lead.spec.ts` |
+| a) the lookup trusted `items[0]` | the selected `originatorId`/`originId` must match exactly ([crm-item-list](https://apidocs.bitrix24.com/api-reference/crm/universal/crm-item-list.html) does not define plain-key matching) | "does not trust the first listed item" |
+| b) string ids in duplicates were dropped | digit strings count ([crm-duplicate-find-by-comm](https://apidocs.bitrix24.com/api-reference/crm/duplicates/crm-duplicate-find-by-comm.html) documents integers) | "treats numeric-string ids … as a match" |
+| c) a converted/junk lead absorbed inquiries | only `stageSemanticId` P ([object-fields](https://apidocs.bitrix24.com/api-reference/crm/universal/object-fields.html)) | "does not let a closed lead (stage S/F) absorb a new inquiry" |
+| d) the 429 reset time was shared | per method ([limits](https://apidocs.bitrix24.com/limits.html): operating time per method) | "uses only the blocked method's own reset time after a 429" |
+| e) a cut at 255 could split an emoji | count and cut by code point ([field-length-limits](https://apidocs.bitrix24.com/api-reference/crm/field-length-limits.html): limits in characters) | "never splits an emoji when it cuts at the length limit" |
+
+What stays unverified is DEF-017.
+
 ## Known limitations
 
-Tracked as DEF-012 to DEF-016 in `docs/DEFECTS.md`.
+Tracked as DEF-012 to DEF-017 in `docs/DEFECTS.md` (DEF-012 fixed 2026-10-28).
 
 - **Duplicate path and retries.** The summary is added to an existing lead without stamping our key on it. If that write's outcome were uncertain and retried, the lookup cannot find it, so a second identical comment is possible. A comment has low harm; lead fields are never changed.
 - **A failed comment after the lead was created** is logged (code only), not retried. The lead exists, and repeating the create could only add comments.

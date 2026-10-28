@@ -289,10 +289,10 @@ AgentCore can send its leads to a Bitrix24 cloud portal. The connector creates l
 
 What it does:
 - It checks the customer's phone for duplicates in code; only record IDs leave the CRM.
-  - An existing lead gets the conversation summary as a timeline comment, and its fields are not changed.
+  - An existing lead that is still in progress gets the conversation summary as a timeline comment, and its fields are not changed. A converted or junk lead does not; a new lead is created.
   - A matching contact gets a new lead linked to it.
 - It refuses to write when the CRM runs in simple mode (no leads).
-- It calls only six allow-listed methods.
+- It calls only seven allow-listed methods and never follows a redirect.
 
 Optional checks against the test portal (they make real calls; the URL is never printed):
 - `pnpm --filter @agentcore/api exec tsx scripts/bitrix24-probe.ts <dir outside the repo>`
