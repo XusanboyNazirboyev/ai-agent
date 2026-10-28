@@ -25,13 +25,18 @@ import {
   type Bitrix24Method,
 } from '../src/connectors/bitrix24/bitrix24-client.js';
 import { isConnectorError } from '../src/connectors/interfaces/errors.js';
+import { assertOutsideRepository } from '../src/dev/path-guards.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 
 async function main(): Promise<void> {
-  const out = process.argv[2];
-  if (!out || out.startsWith(resolve(process.cwd(), '../..')))
-    throw new Error('Pass an output directory outside the repository.');
+  if (!process.argv[2]) throw new Error('Pass an output directory.');
+  // Resolved first, then compared by path segment (./x, ../x and absolute
+  // paths alike); anything inside the repository is refused.
+  const out = assertOutsideRepository(
+    process.argv[2],
+    resolve(process.cwd(), '../..'),
+  );
   mkdirSync(out, { recursive: true });
   const webhookUrl =
     process.env.CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL ||
