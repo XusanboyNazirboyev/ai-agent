@@ -216,7 +216,8 @@ export class Bitrix24Client {
   private queue: Promise<unknown> = Promise.resolve();
   /** Per method: no call before this time (429 OPERATION_TIME_LIMIT). */
   private readonly suspendedUntil = new Map<string, number>();
-  private operatingResetAt: number | undefined;
+  /** Per method, from its last successful response (time.operating_reset_at). */
+  private readonly operatingResetAt = new Map<string, number>();
 
   constructor(options: Bitrix24ClientOptions) {
     this.base = parseWebhookUrl(options.webhookUrl);
@@ -277,9 +278,12 @@ export class Bitrix24Client {
         });
       }
       if (response.status === 429 || code === 'OPERATION_TIME_LIMIT') {
+        // Operating time is counted per method (limits page), so only this
+        // method's own reset time applies; unknown: one bucket (60 s).
+        const resetAt = this.operatingResetAt.get(method);
         const resetMs =
-          this.operatingResetAt !== undefined
-            ? Math.max(1_000, this.operatingResetAt * 1_000 - this.now())
+          resetAt !== undefined
+            ? Math.max(1_000, resetAt * 1_000 - this.now())
             : 60_000;
         this.suspendedUntil.set(method, this.now() + resetMs);
         throw timeLimited(method, resetMs);
@@ -287,7 +291,7 @@ export class Bitrix24Client {
       if (response.status >= 200 && response.status < 300 && !code) {
         const time = body.time as Bitrix24Response['time'];
         if (typeof time?.operating_reset_at === 'number')
-          this.operatingResetAt = time.operating_reset_at;
+          this.operatingResetAt.set(method, time.operating_reset_at);
         return { result: body.result, time };
       }
       throw apiError(method, response.status, code);

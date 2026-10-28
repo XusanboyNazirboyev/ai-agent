@@ -466,7 +466,14 @@ describe('Bitrix24 limits and backoff', () => {
       sleep: async (): Promise<void> => undefined,
       now: (): number => now,
     });
-    await client.call('crm.settings.mode.get'); // operating_reset_at = 1_793_000_000
+    portal.queue('crm.item.list', {
+      status: 200,
+      body: {
+        result: { items: [] },
+        time: { operating_reset_at: 1_793_000_000 },
+      },
+    });
+    await client.call('crm.item.list', { entityTypeId: 1 });
     portal.queue('crm.item.list', { status: 429, body: OPERATION_TIME_LIMIT });
     await expect(
       client.call('crm.item.list', { entityTypeId: 1 }),
@@ -485,6 +492,27 @@ describe('Bitrix24 limits and backoff', () => {
     await expect(
       client.call('crm.item.list', { entityTypeId: 1 }),
     ).resolves.toBeDefined();
+  });
+
+  it("uses only the blocked method's own reset time after a 429", async () => {
+    const portal = new FakePortal();
+    const now = 1_793_000_000_000 - 30_000;
+    const client = new Bitrix24Client({
+      webhookUrl: TEST_WEBHOOK_URL,
+      transport: portal.transport,
+      minIntervalMs: 0,
+      sleep: async (): Promise<void> => undefined,
+      now: (): number => now,
+    });
+    // Another method's reset time (mode.get) must not decide this one.
+    await client.call('crm.settings.mode.get');
+    portal.queue('crm.item.add', { status: 429, body: OPERATION_TIME_LIMIT });
+    await expect(
+      client.call('crm.item.add', { entityTypeId: 1, fields: {} }),
+    ).rejects.toMatchObject({
+      code: 'BITRIX24_OPERATION_TIME_LIMIT',
+      retryAfterMs: 60_000,
+    });
   });
 
   it('paces requests to the minimum interval, one at a time', async () => {
