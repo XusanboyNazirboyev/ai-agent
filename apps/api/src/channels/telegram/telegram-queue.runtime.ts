@@ -149,6 +149,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
               'crm.lead.sync',
               'action.execute',
               'digest.morning',
+              'alert.operator',
             ],
           },
           status: 'PENDING',
