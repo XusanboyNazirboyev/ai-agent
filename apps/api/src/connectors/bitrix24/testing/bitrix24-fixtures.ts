@@ -47,12 +47,14 @@ export function itemAddResponse(
   };
 }
 
-/** RECORDED crm.item.list with select ['id']. */
-export function itemListResponse(ids: readonly number[]): {
-  result: { items: Array<{ id: number }> };
+/** RECORDED crm.item.list: the selected fields of each matching item. */
+export function itemListResponse(
+  items: ReadonlyArray<Record<string, unknown>>,
+): {
+  result: { items: Array<Record<string, unknown>> };
   total: number;
 } {
-  return { result: { items: ids.map((id) => ({ id })) }, total: ids.length };
+  return { result: { items: [...items] }, total: items.length };
 }
 
 /** RECORDED crm.duplicate.findbycomm: IDs per entity type only. */

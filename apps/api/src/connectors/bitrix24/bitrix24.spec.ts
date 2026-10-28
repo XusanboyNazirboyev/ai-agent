@@ -341,9 +341,26 @@ describe('Bitrix24 idempotency (lookup by originId)', () => {
     );
     expect(portal.callsOf('crm.item.list').at(-1)?.params).toEqual({
       entityTypeId: 1,
-      select: ['id'],
+      select: ['id', 'originatorId', 'originId'],
       filter: { originatorId: 'tezda', originId: 'lead:t:key00001' },
     });
+  });
+
+  it('does not trust the first listed item: the key must match exactly', async () => {
+    const portal = new FakePortal();
+    portal.queue('crm.item.list', {
+      status: 200,
+      body: {
+        result: {
+          items: [
+            { id: 9, originatorId: 'tezda', originId: 'lead:t:other001' },
+          ],
+        },
+      },
+    });
+    await expect(
+      connectorFor(portal).findLeadByIdempotencyKey('lead:t:key00001'),
+    ).resolves.toBeUndefined();
   });
 
   it('reports a write whose outcome is unknown as uncertain', async () => {

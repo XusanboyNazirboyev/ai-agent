@@ -61,14 +61,22 @@ export class FakePortal {
       }
       case 'crm.item.list': {
         const filter = (params.filter ?? {}) as Record<string, unknown>;
-        const ids = this.leads
+        const select = (params.select ?? ['id']) as string[];
+        const items = this.leads
           .filter((lead) =>
             Object.entries(filter).every(
               ([key, value]) => lead.fields[key] === value,
             ),
           )
-          .map((lead) => lead.id);
-        return itemListResponse(ids);
+          .map((lead) =>
+            Object.fromEntries(
+              select.map((field) => [
+                field,
+                field === 'id' ? lead.id : (lead.fields[field] ?? null),
+              ]),
+            ),
+          );
+        return itemListResponse(items);
       }
       case 'crm.duplicate.findbycomm': {
         const phone = (params.values as string[])[0] ?? '';

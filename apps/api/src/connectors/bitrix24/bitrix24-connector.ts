@@ -187,14 +187,23 @@ export class Bitrix24Connector implements CrmConnector {
   ): Promise<{ crmLeadId: string } | undefined> {
     const { result } = await this.client.call('crm.item.list', {
       entityTypeId: LEAD_ENTITY_TYPE_ID,
-      select: ['id'],
+      select: ['id', 'originatorId', 'originId'],
       filter: {
         originatorId: BITRIX24_ORIGINATOR_ID,
         originId: idempotencyKey,
       },
     });
-    const items = (result as { items?: Array<{ id?: unknown }> } | undefined)
-      ?.items;
+    const items = (
+      result as
+        | {
+            items?: Array<{
+              id?: unknown;
+              originatorId?: unknown;
+              originId?: unknown;
+            }>;
+          }
+        | undefined
+    )?.items;
     if (!Array.isArray(items)) {
       throw new ConnectorInvalidResponseError({
         message: 'Bitrix24 crm.item.list returned no item list',
@@ -202,7 +211,13 @@ export class Bitrix24Connector implements CrmConnector {
         source: this.connectorKey,
       });
     }
-    const id = items[0]?.id;
+    // The docs do not define what a plain filter key matches, so the key is
+    // checked again here; only an exact match counts.
+    const id = items.find(
+      (item) =>
+        item.originatorId === BITRIX24_ORIGINATOR_ID &&
+        item.originId === idempotencyKey,
+    )?.id;
     return id === undefined ? undefined : { crmLeadId: String(id) };
   }
 
