@@ -16,6 +16,7 @@ All official Bitrix24 REST documentation, read 2026-10-27:
 | Lead fields | https://apidocs.bitrix24.com/api-reference/crm/leads/crm-lead-fields.html |
 | Duplicate search | https://apidocs.bitrix24.com/api-reference/crm/duplicates/crm-duplicate-find-by-comm.html |
 | Timeline comment | https://apidocs.bitrix24.com/api-reference/crm/timeline/comments/crm-timeline-comment-add.html |
+| List timeline comments (retry marker check; read 2026-10-27) | https://apidocs.bitrix24.com/api-reference/crm/timeline/comments/crm-timeline-comment-list.html |
 | CRM mode | https://apidocs.bitrix24.com/api-reference/crm/crm-settings-mode-get.html |
 | Inbound webhooks | https://apidocs.bitrix24.com/local-integrations/local-webhooks.html |
 | Limits | https://apidocs.bitrix24.com/limits.html |
