@@ -185,7 +185,7 @@ Offline: mock model, no Telegram, no keys. Steps 3 and 4 need a Telegram test bo
 - Not checked: real Telegram traffic, the operator-group card (step 5), and the Mermaid diagram rendering.
 
 ## Status: what is tested and what is not
-_As of 2026-10-27: this branch includes `main` at `438f148`; the latest `main` with a completed green CI run is `7e287c1` (CI run 40481962249)._
+_As of 2026-10-27: the submission baseline is tag `v0.1-submission` on `main` at `eaac730` (CI run 40487182297, green)._
 
 **Tested in CI (deterministic, no live model):**
 - Telegram webhook acceptance, idempotency, per-conversation ordering and delivery states.

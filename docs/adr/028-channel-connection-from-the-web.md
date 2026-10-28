@@ -2,7 +2,7 @@
 
 - **Status:** Accepted for Telegram (owner decisions D-A: encrypted in the database, scope S1-S4, 2026-10-25). Instagram is a documented plan only (see Instagram below).
   - **Implemented on `main`:** S1 secret store, S2 per-account Telegram credentials, and S3 (connect / enable / disable / test / disconnect API, channel list with capabilities), the last through `feat/web-api` with DEF-009 to DEF-011 fixed there.
-  - **Implemented in `feat/web-design-pages`:** S4, the Channels page with the connect wizard. It counts as implemented on `main` only when that branch is merged.
+  - **Implemented on `main` too:** S4, the Channels page with the connect wizard, through `feat/web-design-pages` (`b5f68a2`).
 - **Date:** 2026-10-25 (status and sections reconciled with the `web/design-pages` text on 2026-10-26; S3/S4 status updated 2026-10-27)
 
 ## Context
@@ -22,7 +22,7 @@
 4. **UI** (Channels page): a wizard Token → Verify (shows the bot's name) → Webhook → Test → Enable. The token field is write-only; after saving it is never shown, not even partly. Status comes from the test checklist, not from a stored flag.
 5. **Gates:** the assistant mode rules (the `agent:mode` command; ADR 027 is only proposed) are unchanged; a freshly connected account is OFF. Telegram calls are tested with an injected transport; a real-Telegram check is a separate, explicitly authorized step and is reported as not run until then.
 
-## As built (differences from the proposal; S3 on `main`, S4 in `feat/web-design-pages`)
+## As built (differences from the proposal; S3 and S4 on `main`)
 Recorded when S3 (`389f4de`, `3e48d49`) and S4 (`30ca64a`) were written on `web/design-pages`:
 - Webhook registration moved from *connect* to *enable*: a connected but disabled bot has no webhook, so Telegram does not deliver updates that would be refused. Order: connect (validate with `getMe`, store token and a generated webhook secret, account DISABLED, assistant OFF) → enable (`setWebhook`, then ACTIVE) → disable (`deleteWebhook`, DISABLED, assistant OFF) → disconnect (also deletes the stored secrets; the account row stays because conversations belong to it).
 - Reconnecting the same bot (same Telegram bot id) in the same tenant replaces the token and keeps the webhook secret; the same bot in another tenant is refused with `ALREADY_CONNECTED` (no hint about who owns it).
