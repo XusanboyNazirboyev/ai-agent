@@ -1147,6 +1147,37 @@ describe('assistant mode', () => {
     );
     expect(off.agentMode).toBe('OFF');
   });
+
+  it('lists what a stored LIVE really runs as: SHADOW on a test account, HOLD on a real one', async () => {
+    const w = await world('ADMIN');
+    const s = await signIn(w);
+    await db.channelAccount.update({
+      where: { id: w.accountId },
+      data: { agentMode: 'LIVE' },
+    });
+    const untrusted = channelsController({
+      LLM_PROVIDER: 'gemini',
+      LLM_TRUSTED_PROVIDERS: ['mock'],
+    });
+    const [real] = (await untrusted.list({ principal: s.principal } as never))
+      .items;
+    expect(real).toMatchObject({
+      agentMode: 'LIVE',
+      effectiveMode: 'HOLD',
+      effectiveReason: 'UNTRUSTED_PROVIDER',
+    });
+    await db.channelAccount.update({
+      where: { id: w.accountId },
+      data: { isTestAccount: true },
+    });
+    const [test] = (await untrusted.list({ principal: s.principal } as never))
+      .items;
+    expect(test).toMatchObject({
+      agentMode: 'LIVE',
+      effectiveMode: 'SHADOW',
+      effectiveReason: 'UNTRUSTED_PROVIDER',
+    });
+  });
 });
 
 describe('FAQ import', () => {

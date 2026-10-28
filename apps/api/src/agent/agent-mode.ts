@@ -16,6 +16,9 @@
  *   reply to real customers.
  */
 
+import type { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
+
 export type AgentModeValue = 'OFF' | 'SHADOW' | 'LIVE';
 export type EffectiveAgentMode = AgentModeValue | 'HOLD';
 
@@ -52,6 +55,23 @@ export function agentModePolicy(settings: {
     ),
     allowRealCustomerData: settings.LLM_ALLOW_REAL_CUSTOMER_DATA,
   };
+}
+
+/**
+ * The policy from configuration. The pipeline, the startup check and the
+ * channel summary (AI bot page) all build it here, so they cannot disagree.
+ */
+export function agentModePolicyFrom(
+  config: ConfigService<AppEnvironment, true>,
+): AgentModePolicy {
+  const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
+    config.get(key, { infer: true });
+  return agentModePolicy({
+    NODE_ENV: get('NODE_ENV'),
+    LLM_PROVIDER: get('LLM_PROVIDER'),
+    LLM_TRUSTED_PROVIDERS: get('LLM_TRUSTED_PROVIDERS'),
+    LLM_ALLOW_REAL_CUSTOMER_DATA: get('LLM_ALLOW_REAL_CUSTOMER_DATA'),
+  });
 }
 
 export class AgentModeRefusedError extends Error {
