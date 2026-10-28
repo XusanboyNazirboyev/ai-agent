@@ -302,6 +302,18 @@ describe('Bitrix24 duplicate check (by phone, in code)', () => {
     expect(portal.callsOf('crm.item.add')).toHaveLength(0);
   });
 
+  it('treats numeric-string ids in the duplicates response as a match', async () => {
+    const portal = new FakePortal();
+    portal.queue('crm.duplicate.findbycomm', {
+      status: 200,
+      body: { result: { LEAD: ['7'] } },
+    });
+    const result = await connectorFor(portal).createLead(lead());
+    expect(result).toEqual({ crmLeadId: '7' });
+    expect(portal.callsOf('crm.item.add')).toHaveLength(0);
+    expect(portal.comments.map((c) => c.leadId)).toEqual([7]);
+  });
+
   it('links a new lead to a matching contact', async () => {
     const portal = new FakePortal();
     portal.contactsByPhone.set('+998900000017', 4);

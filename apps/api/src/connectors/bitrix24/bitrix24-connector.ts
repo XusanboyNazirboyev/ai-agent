@@ -305,9 +305,15 @@ function parseDuplicates(result: unknown): DuplicateIds {
   const out: DuplicateIds = {};
   for (const type of ['LEAD', 'CONTACT', 'COMPANY'] as const) {
     const ids = (result as Record<string, unknown>)[type];
+    // The docs show integer IDs; a numeric string is accepted too, because
+    // dropping it would read as "no match" and create a duplicate lead.
     if (Array.isArray(ids))
-      out[type] = ids.filter(
-        (id): id is number => typeof id === 'number' && Number.isInteger(id),
+      out[type] = ids.flatMap((id) =>
+        typeof id === 'number' && Number.isInteger(id) && id > 0
+          ? [id]
+          : typeof id === 'string' && /^[1-9]\d{0,18}$/u.test(id)
+            ? [Number(id)]
+            : [],
       );
   }
   return out;
