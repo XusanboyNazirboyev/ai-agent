@@ -21,6 +21,8 @@ export interface RunResult {
   readonly transcript: readonly TranscriptEntry[];
   readonly simulatorUsage: SimulatedCustomer['usage'];
   readonly clockShifts: number;
+  /** The tenant this run created (absent when it failed before that). */
+  readonly tenantId?: string;
 }
 
 /**
@@ -111,6 +113,7 @@ export async function runScenario(options: {
     return {
       ...base,
       status: 'completed',
+      tenantId: world.tenantId,
       endedBy,
       customerTurns: customerTexts.length,
       passed: runPasses(metrics),
@@ -123,6 +126,7 @@ export async function runScenario(options: {
     return {
       ...base,
       status: 'error',
+      ...(world ? { tenantId: world.tenantId } : {}),
       reason:
         error instanceof Error ? error.message.slice(0, 300) : 'unknown error',
       customerTurns: customerTexts.length,

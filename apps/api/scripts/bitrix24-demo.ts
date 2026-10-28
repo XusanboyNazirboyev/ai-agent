@@ -29,6 +29,7 @@ import { runScenario } from '../src/agent/testing/simulation/runner.js';
 import { loadScenarios } from '../src/agent/testing/simulation/scenario.js';
 import { simulationSettings } from '../src/agent/testing/simulation/world.js';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { findDemoLead } from '../src/connectors/bitrix24/testing/demo-lead.js';
 import { LeadSyncService } from '../src/leads/lead-sync.service.js';
 import { createPostgresAdapter } from '../src/persistence/postgres-adapter.js';
 import type { PrismaService } from '../src/persistence/prisma.service.js';
@@ -46,7 +47,6 @@ async function conversation(
   tenantId: string;
   leadId: string;
 }> {
-  const started = new Date();
   const scenario = loadScenarios(resolve(root, 'eval/scenarios')).find(
     (s) => s.id === 'edu-22',
   )!;
@@ -61,11 +61,8 @@ async function conversation(
     customer: new ScriptedCustomer(scenario, 'en'),
     settings: simulationSettings({}),
   });
-  const lead = await db.lead.findFirst({
-    where: { createdAt: { gte: started } },
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, tenantId: true, contactId: true },
-  });
+  // Only the tenant this run created (never "the newest lead anywhere").
+  const lead = await findDemoLead(db, result.tenantId);
   if (!lead) throw new Error(`${label}: the conversation recorded no lead`);
   console.log(
     `${label}: simulated conversation ended by ${result.endedBy}; lead recorded`,
@@ -127,7 +124,7 @@ async function main(): Promise<void> {
     ): Promise<void> => {
       const outcome = await sync.sync(tenantId, leadId);
       const lead = await db.lead.findFirst({
-        where: { id: leadId },
+        where: { id: leadId, tenantId },
         select: { crmSyncStatus: true, crmLeadId: true, lastErrorCode: true },
       });
       const ops = await db.connectorOperation.findMany({
