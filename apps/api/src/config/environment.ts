@@ -305,6 +305,38 @@ const environmentSchema = postgresEnvironmentSchema
       .enum(['true', 'false'])
       .default('false')
       .transform((value) => value === 'true'),
+    /**
+     * Phase 7.3 alerts (ADR 030): operator alerts in the tenant's Telegram
+     * operator group and platform `alert.*` log lines. Off until the owner
+     * enables them.
+     */
+    ALERTS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /** Share of LLM_TENANT_MONTHLY_BUDGET_USD that triggers the budget alert. */
+    ALERT_BUDGET_PERCENT: z.coerce.number().int().min(1).max(100).default(80),
+    /** Leads that failed CRM sync within one hour before the alert fires. */
+    ALERT_CRM_FAILURES_PER_HOUR: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(10_000)
+      .default(5),
+    /** A pending outbox event older than this is logged as a backlog. */
+    ALERT_OUTBOX_BACKLOG_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(1_440)
+      .default(10),
+    /** Failed agent turns within one hour before the platform alert is logged. */
+    ALERT_FAILED_TURNS_PER_HOUR: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100_000)
+      .default(20),
     FOLLOWUP_QUIET_START_HOUR: z.coerce
       .number()
       .int()
