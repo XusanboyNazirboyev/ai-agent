@@ -1,4 +1,5 @@
 import { MockConnectorConfigSchema } from '@agentcore/shared';
+import { Bitrix24Connector } from '../bitrix24/bitrix24-connector.js';
 import { GenericRestConnector } from '../generic-rest/generic-rest-connector.js';
 import { OutboundUrlPolicy } from '../generic-rest/ssrf-protection.js';
 import { ConnectorConfigurationError } from '../interfaces/errors.js';
@@ -8,6 +9,7 @@ import type { ConnectorRegistration } from './connector-registry.js';
 
 export const MOCK_CONNECTOR_KEY = 'mock';
 export const GENERIC_REST_CONNECTOR_KEY = 'generic-rest';
+export const BITRIX24_CONNECTOR_KEY = 'bitrix24';
 
 /** Fictional in-memory catalog for development, demos and tests. */
 export function mockConnectorRegistration(): ConnectorRegistration {
@@ -63,6 +65,30 @@ export function genericRestConnectorRegistration(options: {
       new GenericRestConnector(context, config, {
         resolveSecret: dependencies.resolveSecret,
         outboundUrlPolicy: options.outboundUrlPolicy,
+      }),
+  };
+}
+
+/**
+ * Bitrix24 cloud as a lead sink through an inbound webhook: lead creation
+ * only (docs/connectors/bitrix24/CONNECTOR_PLAN.md).
+ */
+export function bitrix24ConnectorRegistration(): ConnectorRegistration {
+  return {
+    key: BITRIX24_CONNECTOR_KEY,
+    capabilities: {
+      sync: false,
+      search: false,
+      liveQuote: false,
+      availability: false,
+      createLead: true,
+      updateLead: false,
+      createBooking: false,
+      webhooks: false,
+    },
+    factory: (context, config, dependencies) =>
+      new Bitrix24Connector(context, config, {
+        resolveSecret: dependencies.resolveSecret,
       }),
   };
 }
