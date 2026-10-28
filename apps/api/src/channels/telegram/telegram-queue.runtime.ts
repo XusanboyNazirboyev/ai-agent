@@ -12,9 +12,10 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { TelegramProcessor } from './telegram-processor.js';
 import { telegramRetryDelayMs } from './retry-policy.js';
+import { runWithLogContext } from '../../observability/log-context.js';
 import { redisOptions } from '../../queue/redis-options.js';
 
-type QueuePayload = {
+export type QueuePayload = {
   outboxId: string;
   tenantId: string;
   type: string;
@@ -22,6 +23,17 @@ type QueuePayload = {
 };
 
 const queueName = 'agentcore-telegram';
+
+/** Runs one queued event in its own log context: one trace per outbox event, the same across retries. */
+export function processQueuedEvent(
+  processor: Pick<TelegramProcessor, 'process'>,
+  data: QueuePayload,
+): ReturnType<TelegramProcessor['process']> {
+  return runWithLogContext(
+    { traceId: data.outboxId, tenantId: data.tenantId },
+    () => processor.process(data),
+  );
+}
 /** Publish attempts after which a FAILED outbox row is no longer re-queued. */
 export const OUTBOX_MAX_ATTEMPTS = 5;
 
@@ -55,7 +67,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<QueuePayload>(
       queueName,
       async (job, token) => {
-        const result = await this.processor.process(job.data);
+        const result = await processQueuedEvent(this.processor, job.data);
         if (result && token) {
           // Another worker holds the conversation's agent turn: re-check
           // later without consuming a retry attempt.
