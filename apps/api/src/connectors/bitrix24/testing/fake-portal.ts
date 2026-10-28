@@ -64,15 +64,21 @@ export class FakePortal {
         const select = (params.select ?? ['id']) as string[];
         const items = this.leads
           .filter((lead) =>
-            Object.entries(filter).every(
-              ([key, value]) => lead.fields[key] === value,
+            Object.entries(filter).every(([key, value]) =>
+              key === '@id'
+                ? (value as number[]).includes(lead.id)
+                : lead.fields[key] === value,
             ),
           )
           .map((lead) =>
             Object.fromEntries(
               select.map((field) => [
                 field,
-                field === 'id' ? lead.id : (lead.fields[field] ?? null),
+                field === 'id'
+                  ? lead.id
+                  : field === 'stageSemanticId'
+                    ? (lead.fields.stageSemanticId ?? 'P')
+                    : (lead.fields[field] ?? null),
               ]),
             ),
           );

@@ -156,7 +156,7 @@ export class Bitrix24Connector implements CrmConnector {
       }),
     );
 
-    const existingLead = duplicates?.LEAD?.[0];
+    const existingLead = await this.openLead(duplicates?.LEAD ?? []);
     if (existingLead !== undefined) {
       // The lead's fields are never changed, so the key travels in the
       // comment; a retry of this write finds it and does nothing.
@@ -219,6 +219,37 @@ export class Bitrix24Connector implements CrmConnector {
         item.originId === idempotencyKey,
     )?.id;
     return id === undefined ? undefined : { crmLeadId: String(id) };
+  }
+
+  /**
+   * The newest matching lead that is still in progress (stageSemanticId P:
+   * https://apidocs.bitrix24.com/api-reference/crm/universal/object-fields.html).
+   * A converted (S) or junk (F) lead never absorbs a new inquiry.
+   */
+  private async openLead(ids: readonly number[]): Promise<number | undefined> {
+    if (ids.length === 0) return undefined;
+    const { result } = await this.client.call('crm.item.list', {
+      entityTypeId: LEAD_ENTITY_TYPE_ID,
+      select: ['id', 'stageSemanticId'],
+      filter: { '@id': ids.slice(0, 20) },
+    });
+    const items = (
+      result as
+        | { items?: Array<{ id?: unknown; stageSemanticId?: unknown }> }
+        | undefined
+    )?.items;
+    if (!Array.isArray(items)) {
+      throw new ConnectorInvalidResponseError({
+        message: 'Bitrix24 crm.item.list returned no item list',
+        code: 'BITRIX24_INVALID_LIST',
+        source: this.connectorKey,
+      });
+    }
+    const open = items
+      .filter((item) => item.stageSemanticId === 'P')
+      .map((item) => Number(item.id))
+      .filter((id) => ids.includes(id));
+    return open.length ? Math.max(...open) : undefined;
   }
 
   private async findByPhone(phone: string): Promise<DuplicateIds> {
