@@ -52,6 +52,8 @@ export interface MockConnectorOptions extends MockConnectorConfig {
    * for every mode except `none` and `emptySearch`.
    */
   readonly failTimes?: number;
+  /** `false`: no lead creation (another connector is the lead sink). */
+  readonly createLead?: boolean;
 }
 
 /**
@@ -98,7 +100,7 @@ export class MockConnector implements CrmConnector {
       search: true,
       liveQuote: true,
       availability: true,
-      createLead: true,
+      createLead: options.createLead ?? true,
       updateLead: true,
       createBooking: true,
       webhooks: true,

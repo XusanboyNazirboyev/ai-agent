@@ -533,6 +533,30 @@ export const MockConnectorConfigSchema = z
       .enum(['none', 'timeout', 'transient', 'invalidResponse', 'emptySearch'])
       .optional(),
     failTimes: z.number().int().min(0).max(1_000).optional(),
+    /**
+     * `false` switches off lead creation, so a tenant can use the mock for
+     * its catalog and a real CRM as the lead sink (lead sync takes the first
+     * connector that can create leads). Default: on.
+     */
+    createLead: z.boolean().optional(),
+  })
+  .strict();
+
+/**
+ * Bitrix24 cloud as a lead sink through an inbound webhook
+ * (docs/connectors/bitrix24/CONNECTOR_PLAN.md). The webhook URL is a secret:
+ * only its reference is stored, e.g. `env:CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL`.
+ */
+export const Bitrix24ConnectorConfigSchema = z
+  .object({
+    webhookSecretRef: SecretRefSchema,
+    /** A SOURCE directory value of the portal (default OTHER). */
+    sourceId: z
+      .string()
+      .regex(/^[A-Za-z0-9_|-]{1,50}$/)
+      .default('OTHER'),
+    /** Start of every lead title, e.g. "Telegram". */
+    titlePrefix: z.string().trim().min(1).max(60).default('Telegram'),
   })
   .strict();
 
@@ -545,6 +569,9 @@ export type GenericRestConnectorConfig = z.infer<
   typeof GenericRestConnectorConfigSchema
 >;
 export type MockConnectorConfig = z.infer<typeof MockConnectorConfigSchema>;
+export type Bitrix24ConnectorConfig = z.infer<
+  typeof Bitrix24ConnectorConfigSchema
+>;
 
 /**
  * Configuration schema per registered connector key. A tenant connector row
@@ -553,6 +580,7 @@ export type MockConnectorConfig = z.infer<typeof MockConnectorConfigSchema>;
 export const TenantConnectorConfigSchemas = {
   'generic-rest': GenericRestConnectorConfigSchema,
   mock: MockConnectorConfigSchema,
+  bitrix24: Bitrix24ConnectorConfigSchema,
 } as const;
 
 export type TenantConnectorKey = keyof typeof TenantConnectorConfigSchemas;

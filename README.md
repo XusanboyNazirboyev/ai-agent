@@ -230,7 +230,7 @@ _As of 2026-10-27: the submission baseline is tag `v0.1-submission` on `main` at
 
 **Deferred by owner decision:**
 - **A real CRM connector.** Phase 3 is partial. The EduFlow (Learnix) connector is cancelled for now (owner, 2026-10-27); its plan stays on `main` as docs (`docs/connectors/eduflow/`).
-- **CRM connectors for Bitrix24 (inbound webhook) and amoCRM (OAuth2 with rotating refresh tokens)** as lead/contact sinks (catalog capability off; offer facts need another source), after the Phase 3 connector decision.
+- **amoCRM (OAuth2 with rotating refresh tokens)** as a lead/contact sink (catalog capability off; offer facts need another source). The Bitrix24 lead sink exists: see [Bitrix24 lead sink (optional)](#bitrix24-lead-sink-optional).
 - **Meta channels** (Instagram, Messenger, WhatsApp; Phase 8).
 - **Production** (Phase 9: security review, load tests, backup drill, staging, deploy).
 
@@ -277,6 +277,28 @@ A Telegram bot is connected per channel account ([ADR 028](docs/adr/028-channel-
 For local webhook development, expose the API through an HTTPS tunnel and configure Telegram's official `setWebhook` method with that URL and the same `secret_token`. Telegram sends the secret in `X-Telegram-Bot-Api-Secret-Token`; set `allowed_updates` to `message`. The API does not call `setWebhook` automatically. Unsupported non-text updates are acknowledged and ignored. Inbound text bursts are grouped for a 2 second window and serialized with a PostgreSQL advisory lock per conversation. The sender records `SENT`, `FAILED`, or `UNKNOWN`; a lost response can leave delivery ambiguous, so the system does not blindly resend that message.
 
 Use `pnpm test:unit` for deterministic adapter tests and `pnpm test:integration` for webhook acceptance, PostgreSQL idempotency, debounce/order, and delivery-state tests. The integration suite requires the marked isolated `agentcore_test` database. Queue runtime checks require Redis from Compose.
+
+## Bitrix24 lead sink (optional)
+
+AgentCore can send its leads to a Bitrix24 cloud portal. The connector creates leads only; it reads no catalog, prices or availability, so offer facts still come from the catalog connector (the mock catalog in development). Plan, probe results and limitations: [docs/connectors/bitrix24/CONNECTOR_PLAN.md](docs/connectors/bitrix24/CONNECTOR_PLAN.md).
+
+1. **Use a test portal with synthetic data only.**
+2. **Create an inbound (incoming) webhook** in the portal ([official guide](https://apidocs.bitrix24.com/local-integrations/local-webhooks.html)) and give it **only the CRM scope (`crm`)**. The webhook runs with the permissions of the employee who creates it.
+3. **The webhook URL is the credential:** it contains the secret code. Put it in `.env` as `CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL`, never in source control, chat, logs or tenant config. The connector config stores only the reference: `{ "webhookSecretRef": "env:CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL" }`, optionally with `sourceId` (default `OTHER`) and `titlePrefix` (default `Telegram`).
+4. **Lead routing is a stopgap.** Lead sync sends a lead to the oldest active connector that can create leads. To use the mock catalog and Bitrix24 together, set the mock's config to `createLead: false`. A proper lead-sink role in the core needs an ADR.
+
+What it does:
+- It checks the customer's phone for duplicates in code; only record IDs leave the CRM.
+  - An existing lead that is still in progress gets the conversation summary as a timeline comment, and its fields are not changed. A converted or junk lead does not; a new lead is created.
+  - A matching contact gets a new lead linked to it.
+- It refuses to write when the CRM runs in simple mode (no leads).
+- It calls only seven allow-listed methods and never follows a redirect.
+
+Optional checks against the test portal (they make real calls; the URL is never printed):
+- `pnpm --filter @agentcore/api exec tsx scripts/bitrix24-probe.ts <dir outside the repo>`
+- `SIM_POSTGRES_DATABASE=<dedicated agentcore_* db> pnpm --filter @agentcore/api exec tsx scripts/bitrix24-demo.ts`
+
+CI uses recorded, scrubbed response shapes and a fake portal; it never calls Bitrix24.
 
 ## Agent core and LLM development
 
