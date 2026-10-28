@@ -1226,6 +1226,81 @@ describe('FAQ import', () => {
       ).import(asAdmin, { entries, confirmProviderMayReadText: true }),
     ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
   });
+
+  it('keeps imports per tenant: the same question in another tenant is a separate entry and never touches the first tenant', async () => {
+    const a = await world('ADMIN');
+    const b = await world('ADMIN');
+    const asA = { principal: (await signIn(a)).principal } as never;
+    const asB = { principal: (await signIn(b)).principal } as never;
+    const c = controller();
+    const question = 'Do you have parking?';
+    expect(
+      await c.import(asA, {
+        entries: [
+          { question, answer: 'Yes, free.' },
+          { question: 'Only in tenant A?', answer: 'A only.' },
+        ],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 2, updated: 0, failed: [] });
+    const snapshot = async (): Promise<unknown> => ({
+      documents: await prisma.knowledgeDocument.findMany({
+        where: { tenantId: a.tenantId },
+        orderBy: { source: 'asc' },
+      }),
+      chunks: await prisma.knowledgeChunk.findMany({
+        where: { tenantId: a.tenantId },
+        orderBy: [{ documentId: 'asc' }, { ordinal: 'asc' }],
+        select: { id: true, documentId: true, ordinal: true, text: true },
+      }),
+    });
+    const aBefore = await snapshot();
+    const aParking = (await c.list(asA)).items.find(
+      (item) => item.question === question,
+    )!;
+
+    // B imports the same question (other case and spacing) with its own answer:
+    // a new entry for B, not an update of A's.
+    expect(
+      await c.import(asB, {
+        entries: [{ question: '  do YOU have   parking? ', answer: 'No.' }],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 1, updated: 0, failed: [] });
+    // B importing again updates only B's own entry.
+    expect(
+      await c.import(asB, {
+        entries: [{ question, answer: 'Paid now.' }],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 0, updated: 1, failed: [] });
+
+    const listedB = (await c.list(asB)).items;
+    expect(listedB).toHaveLength(1);
+    expect(listedB[0]).toMatchObject({ answer: 'Paid now.' });
+    expect(listedB[0].id).not.toBe(aParking.id);
+    const listedA = (await c.list(asA)).items;
+    expect(listedA).toHaveLength(2);
+    expect(listedA.find((item) => item.id === aParking.id)?.answer).toBe(
+      'Yes, free.',
+    );
+    // A's stored documents and chunks are byte for byte what they were.
+    expect(await snapshot()).toEqual(aBefore);
+    // B's work is audited only under B; nothing was written under A by B.
+    expect(
+      await prisma.auditEvent.count({
+        where: { tenantId: a.tenantId, actorId: b.operatorId },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.auditEvent.count({
+        where: {
+          tenantId: b.tenantId,
+          action: { startsWith: 'knowledge.faq_' },
+        },
+      }),
+    ).toBe(2);
+  });
 });
 
 describe('FAQ knowledge', () => {
