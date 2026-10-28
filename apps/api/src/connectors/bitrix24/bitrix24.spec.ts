@@ -97,6 +97,7 @@ describe('Bitrix24 method allow-list', () => {
       ['crm.item.list', { entityTypeId: 3 }],
       ['crm.item.fields', {}],
       ['crm.timeline.comment.add', { fields: { ENTITY_TYPE: 'deal' } }],
+      ['crm.timeline.comment.list', { filter: { ENTITY_TYPE: 'deal' } }],
       ['crm.duplicate.findbycomm', { type: 'EMAIL', values: [] }],
     ] as const) {
       expect(() => assertAllowed(method, params)).toThrow(ConnectorError);
@@ -104,7 +105,7 @@ describe('Bitrix24 method allow-list', () => {
     expect(() =>
       assertAllowed('crm.item.add', { entityTypeId: LEAD_ENTITY_TYPE_ID }),
     ).not.toThrow();
-    expect(BITRIX24_METHODS).toHaveLength(6);
+    expect(BITRIX24_METHODS).toHaveLength(7);
   });
 });
 
@@ -228,7 +229,7 @@ describe('Bitrix24 lead mapping', () => {
     expect(portal.comments).toEqual([
       {
         leadId: portal.leads[0]?.id,
-        text: 'Telegram conversation (tezda)\nAsked about the IELTS evening group.\n\nCollected details:\ncourse: IELTS\nschedule: evening',
+        text: 'Telegram conversation (tezda)\nAsked about the IELTS evening group.\n\nCollected details:\ncourse: IELTS\nschedule: evening\n\ntezda ref: lead:tenant-1:abc12345',
       },
     ]);
   });
@@ -279,6 +280,26 @@ describe('Bitrix24 duplicate check (by phone, in code)', () => {
       expect.stringContaining('IELTS evening'),
       expect.stringContaining('Came back later.'),
     ]);
+  });
+
+  it('a retried write on the existing-lead path adds exactly one comment', async () => {
+    const portal = new FakePortal();
+    // The portal already has a lead with this phone (from another conversation).
+    portal.leads.push({
+      id: 7,
+      fields: { fm: [{ typeId: 'PHONE', value: '+998900000017' }] },
+    });
+    const connector = connectorFor(portal);
+    const context = { idempotencyKey: 'createLead:lead:retry0001' };
+    const first = await connector.createLead(lead(), context);
+    const retry = await connector.createLead(lead(), context);
+    expect(first).toEqual({ crmLeadId: '7' });
+    expect(retry).toEqual(first);
+    expect(portal.comments).toHaveLength(1);
+    expect(portal.comments[0]?.text).toContain(
+      'tezda ref: createLead:lead:retry0001',
+    );
+    expect(portal.callsOf('crm.item.add')).toHaveLength(0);
   });
 
   it('links a new lead to a matching contact', async () => {

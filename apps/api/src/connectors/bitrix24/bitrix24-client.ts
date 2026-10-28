@@ -34,6 +34,7 @@ export const BITRIX24_METHODS = [
   'crm.item.list',
   'crm.item.fields',
   'crm.timeline.comment.add',
+  'crm.timeline.comment.list',
 ] as const;
 
 export type Bitrix24Method = (typeof BITRIX24_METHODS)[number];
@@ -112,6 +113,11 @@ export function assertAllowed(method: string, params: unknown): void {
     case 'crm.timeline.comment.add': {
       const fields = (p.fields ?? {}) as Record<string, unknown>;
       if (fields.ENTITY_TYPE !== 'lead') throw notAllowed(method);
+      break;
+    }
+    case 'crm.timeline.comment.list': {
+      const filter = (p.filter ?? {}) as Record<string, unknown>;
+      if (filter.ENTITY_TYPE !== 'lead') throw notAllowed(method);
       break;
     }
     case 'crm.duplicate.findbycomm':

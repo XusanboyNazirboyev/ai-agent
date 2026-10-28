@@ -158,7 +158,10 @@ export class Bitrix24Connector implements CrmConnector {
 
     const existingLead = duplicates?.LEAD?.[0];
     if (existingLead !== undefined) {
-      await this.comment(existingLead, lead);
+      // The lead's fields are never changed, so the key travels in the
+      // comment; a retry of this write finds it and does nothing.
+      if (!context || !(await this.hasMarker(existingLead, context)))
+        await this.comment(existingLead, lead, context);
       return { crmLeadId: String(existingLead) };
     }
     const contactId = duplicates?.CONTACT?.[0];
@@ -175,7 +178,7 @@ export class Bitrix24Connector implements CrmConnector {
         executed: 'unknown',
       });
     }
-    await this.comment(id, lead);
+    await this.comment(id, lead, context);
     return { crmLeadId: String(id) };
   }
 
@@ -215,16 +218,46 @@ export class Bitrix24Connector implements CrmConnector {
    * The summary as a timeline comment. A failure is logged, not thrown: the
    * lead exists, and repeating the create would only add another comment.
    */
+  /**
+   * Whether one of the lead's latest comments (first page, newest first)
+   * carries this write's key. A failed read throws: "could not determine"
+   * must not turn into a second comment.
+   */
+  private async hasMarker(
+    leadId: number,
+    context: WriteContext,
+  ): Promise<boolean> {
+    const { result } = await this.client.call('crm.timeline.comment.list', {
+      filter: { ENTITY_ID: leadId, ENTITY_TYPE: 'lead' },
+      select: ['ID', 'COMMENT'],
+      order: { ID: 'DESC' },
+    });
+    if (!Array.isArray(result)) {
+      throw new ConnectorInvalidResponseError({
+        message: 'Bitrix24 crm.timeline.comment.list returned no list',
+        code: 'BITRIX24_INVALID_COMMENT_LIST',
+        source: this.connectorKey,
+      });
+    }
+    const marker = refLine(context.idempotencyKey);
+    return result.some(
+      (comment: { COMMENT?: unknown }) =>
+        typeof comment.COMMENT === 'string' &&
+        comment.COMMENT.split('\n').includes(marker),
+    );
+  }
+
   private async comment(
     leadId: number | string,
     lead: LeadInput,
+    context?: WriteContext,
   ): Promise<void> {
     try {
       await this.client.call('crm.timeline.comment.add', {
         fields: {
           ENTITY_ID: Number(leadId),
           ENTITY_TYPE: 'lead',
-          COMMENT: commentText(lead),
+          COMMENT: commentText(lead, context?.idempotencyKey),
         },
       });
     } catch (error: unknown) {
@@ -339,8 +372,13 @@ function leadFields(
   };
 }
 
-/** Summary plus the collected slots (v1: no custom-field mapping). */
-export function commentText(lead: LeadInput): string {
+/** The last line of a comment: the write's idempotency key (header-safe). */
+export function refLine(idempotencyKey: string): string {
+  return `tezda ref: ${idempotencyKey}`;
+}
+
+/** Summary plus collected slots (v1: no custom-field mapping), then the key. */
+export function commentText(lead: LeadInput, idempotencyKey?: string): string {
   const slots = Object.entries(lead.slots)
     .filter(
       ([, value]) => value !== undefined && value !== null && value !== '',
@@ -354,5 +392,7 @@ export function commentText(lead: LeadInput): string {
     lead.summary,
     ...(slots.length ? ['', 'Collected details:', ...slots] : []),
   ].join('\n');
-  return plainText(text, COMMENT_MAX);
+  if (!idempotencyKey) return plainText(text, COMMENT_MAX);
+  // The key (at most 200 characters) is kept even when the text is capped.
+  return `${plainText(text, COMMENT_MAX - 240)}\n\n${refLine(idempotencyKey)}`;
 }

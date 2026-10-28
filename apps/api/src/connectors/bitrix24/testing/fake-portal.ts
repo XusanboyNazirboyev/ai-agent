@@ -96,6 +96,17 @@ export class FakePortal {
         });
         return COMMENT_ADDED;
       }
+      case 'crm.timeline.comment.list': {
+        const filter = (params.filter ?? {}) as Record<string, unknown>;
+        // DOCS shape (crm.timeline.comment.list): a list of comments; newest first.
+        return {
+          result: this.comments
+            .map((comment, index) => ({ ID: index + 1, ...comment }))
+            .filter((comment) => comment.leadId === Number(filter.ENTITY_ID))
+            .reverse()
+            .map(({ ID, text }) => ({ ID, COMMENT: text })),
+        };
+      }
       default:
         return { error: 'ERROR_METHOD_NOT_FOUND' };
     }
