@@ -9,7 +9,7 @@ import {
 } from '../../agent/agent-conversation.service.js';
 import {
   AGENT_MODE_POLICY,
-  agentModePolicy,
+  agentModePolicyFrom,
   effectiveAgentMode,
   type AgentModePolicy,
   type AgentModeValue,
@@ -114,19 +114,7 @@ export class TelegramAgentPipeline {
   ) {
     this.handoverService = handovers ?? new HandoverService(prisma);
     this.leadService = leads ?? new LeadService(prisma);
-    this.policy =
-      policy ??
-      agentModePolicy({
-        NODE_ENV: this.config.get('NODE_ENV', { infer: true }),
-        LLM_PROVIDER: this.config.get('LLM_PROVIDER', { infer: true }),
-        LLM_TRUSTED_PROVIDERS: this.config.get('LLM_TRUSTED_PROVIDERS', {
-          infer: true,
-        }),
-        LLM_ALLOW_REAL_CUSTOMER_DATA: this.config.get(
-          'LLM_ALLOW_REAL_CUSTOMER_DATA',
-          { infer: true },
-        ),
-      });
+    this.policy = policy ?? agentModePolicyFrom(this.config);
   }
 
   /** The channel account's configured agent mode for a conversation. */

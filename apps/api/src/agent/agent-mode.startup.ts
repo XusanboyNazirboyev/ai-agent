@@ -2,7 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { agentModePolicy, assertAgentModeAllowed } from './agent-mode.js';
+import { agentModePolicyFrom, assertAgentModeAllowed } from './agent-mode.js';
 
 /**
  * Refuses to start while the channel account this process serves
@@ -22,12 +22,7 @@ export class AgentModeStartupCheck implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
       this.config.get(key, { infer: true });
-    const policy = agentModePolicy({
-      NODE_ENV: get('NODE_ENV'),
-      LLM_PROVIDER: get('LLM_PROVIDER'),
-      LLM_TRUSTED_PROVIDERS: get('LLM_TRUSTED_PROVIDERS'),
-      LLM_ALLOW_REAL_CUSTOMER_DATA: get('LLM_ALLOW_REAL_CUSTOMER_DATA'),
-    });
+    const policy = agentModePolicyFrom(this.config);
     if (!policy.providerTrusted) {
       this.logger.warn(
         JSON.stringify({

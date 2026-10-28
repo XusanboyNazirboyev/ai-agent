@@ -1,6 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
 import {
-  agentModePolicy,
   effectiveAgentModeWithReason,
   modeRefusalCode,
   type AgentModePolicy,
@@ -51,18 +50,8 @@ export interface ChannelRow {
   createdAt: Date;
 }
 
-export function policyFrom(
-  config: ConfigService<AppEnvironment, true>,
-): AgentModePolicy {
-  const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
-    config.get(key, { infer: true });
-  return agentModePolicy({
-    NODE_ENV: get('NODE_ENV'),
-    LLM_PROVIDER: get('LLM_PROVIDER'),
-    LLM_TRUSTED_PROVIDERS: get('LLM_TRUSTED_PROVIDERS'),
-    LLM_ALLOW_REAL_CUSTOMER_DATA: get('LLM_ALLOW_REAL_CUSTOMER_DATA'),
-  });
-}
+/** The one policy source (agent-mode.ts), under the name the controllers use. */
+export { agentModePolicyFrom as policyFrom } from '../agent/agent-mode.js';
 
 /**
  * Credentials count as "ui" only with both secrets saved (token and webhook
