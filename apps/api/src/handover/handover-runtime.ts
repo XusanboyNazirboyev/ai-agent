@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
+import { newTraceId, runWithLogContext } from '../observability/log-context.js';
 import { HandoverSlaService } from './handover-sla.service.js';
 
 export const SCHEDULED_SCANS = Symbol('SCHEDULED_SCANS');
@@ -48,8 +49,11 @@ export class HandoverRuntime implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
-      await this.sla.scan(now);
-      for (const scan of this.scans) await scan.scanDue(now);
+      // Each pass is one trace (it covers every tenant, so no tenantId).
+      await runWithLogContext({ traceId: newTraceId() }, async () => {
+        await this.sla.scan(now);
+        for (const scan of this.scans) await scan.scanDue(now);
+      });
     } catch (error) {
       this.logger.warn(
         JSON.stringify({
