@@ -16,6 +16,7 @@ import { ChannelsController } from './channels.controller.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { ContactsController } from './contacts.controller.js';
+import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
@@ -1148,6 +1149,160 @@ describe('assistant mode', () => {
   });
 });
 
+describe('FAQ import', () => {
+  const controller = (): KnowledgeFaqController =>
+    new KnowledgeFaqController(
+      prisma,
+      new KnowledgeService(prisma),
+      new HashingEmbeddingProvider(),
+    );
+
+  it('creates, updates by question instead of duplicating, and reports bad entries one by one', async () => {
+    const w = await world('ADMIN');
+    const s = await signIn(w);
+    const request = { principal: s.principal } as never;
+    const c = controller();
+    const batch = [
+      { question: 'Where are you?', answer: 'Tashkent.', language: 'en' },
+      { question: 'Opening hours?', answer: '9 to 6.' },
+      { question: 'x', answer: 'too short question' },
+      'not an object',
+    ];
+    const first = await c.import(request, {
+      entries: batch,
+      confirmProviderMayReadText: true,
+    });
+    expect(first).toEqual({
+      created: 2,
+      updated: 0,
+      failed: [
+        { index: 2, code: 'INVALID_ENTRY' },
+        { index: 3, code: 'INVALID_ENTRY' },
+      ],
+    });
+    const again = await c.import(request, {
+      entries: [
+        { question: '  where ARE   you? ', answer: 'Samarkand now.' },
+        batch[1],
+      ],
+      confirmProviderMayReadText: true,
+    });
+    expect(again).toEqual({ created: 0, updated: 2, failed: [] });
+    const listed = await c.list(request);
+    expect(listed.items).toHaveLength(2);
+    expect(
+      listed.items.find(
+        (item) => item.question.toLowerCase() === 'where are you?',
+      )?.answer,
+    ).toBe('Samarkand now.');
+  });
+
+  it('needs the writer role, consent, a batch within the limit and an embedder', async () => {
+    const op = await world('OPERATOR');
+    const admin = await world('ADMIN');
+    const asOp = { principal: (await signIn(op)).principal } as never;
+    const asAdmin = { principal: (await signIn(admin)).principal } as never;
+    const c = controller();
+    const entries = [{ question: 'Fine question', answer: 'Fine.' }];
+    await expect(
+      c.import(asOp, { entries, confirmProviderMayReadText: true }),
+    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    for (const bad of [
+      { entries, confirmProviderMayReadText: false },
+      { entries: [], confirmProviderMayReadText: true },
+      {
+        entries: Array.from({ length: 26 }, () => entries[0]),
+        confirmProviderMayReadText: true,
+      },
+    ])
+      await expect(c.import(asAdmin, bad)).rejects.toMatchObject({
+        response: { code: 'INVALID_BODY' },
+      });
+    await expect(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        undefined,
+      ).import(asAdmin, { entries, confirmProviderMayReadText: true }),
+    ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
+  });
+
+  it('keeps imports per tenant: the same question in another tenant is a separate entry and never touches the first tenant', async () => {
+    const a = await world('ADMIN');
+    const b = await world('ADMIN');
+    const asA = { principal: (await signIn(a)).principal } as never;
+    const asB = { principal: (await signIn(b)).principal } as never;
+    const c = controller();
+    const question = 'Do you have parking?';
+    expect(
+      await c.import(asA, {
+        entries: [
+          { question, answer: 'Yes, free.' },
+          { question: 'Only in tenant A?', answer: 'A only.' },
+        ],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 2, updated: 0, failed: [] });
+    const snapshot = async (): Promise<unknown> => ({
+      documents: await prisma.knowledgeDocument.findMany({
+        where: { tenantId: a.tenantId },
+        orderBy: { source: 'asc' },
+      }),
+      chunks: await prisma.knowledgeChunk.findMany({
+        where: { tenantId: a.tenantId },
+        orderBy: [{ documentId: 'asc' }, { ordinal: 'asc' }],
+        select: { id: true, documentId: true, ordinal: true, text: true },
+      }),
+    });
+    const aBefore = await snapshot();
+    const aParking = (await c.list(asA)).items.find(
+      (item) => item.question === question,
+    )!;
+
+    // B imports the same question (other case and spacing) with its own answer:
+    // a new entry for B, not an update of A's.
+    expect(
+      await c.import(asB, {
+        entries: [{ question: '  do YOU have   parking? ', answer: 'No.' }],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 1, updated: 0, failed: [] });
+    // B importing again updates only B's own entry.
+    expect(
+      await c.import(asB, {
+        entries: [{ question, answer: 'Paid now.' }],
+        confirmProviderMayReadText: true,
+      }),
+    ).toEqual({ created: 0, updated: 1, failed: [] });
+
+    const listedB = (await c.list(asB)).items;
+    expect(listedB).toHaveLength(1);
+    expect(listedB[0]).toMatchObject({ answer: 'Paid now.' });
+    expect(listedB[0].id).not.toBe(aParking.id);
+    const listedA = (await c.list(asA)).items;
+    expect(listedA).toHaveLength(2);
+    expect(listedA.find((item) => item.id === aParking.id)?.answer).toBe(
+      'Yes, free.',
+    );
+    // A's stored documents and chunks are byte for byte what they were.
+    expect(await snapshot()).toEqual(aBefore);
+    // B's work is audited only under B; nothing was written under A by B.
+    expect(
+      await prisma.auditEvent.count({
+        where: { tenantId: a.tenantId, actorId: b.operatorId },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.auditEvent.count({
+        where: {
+          tenantId: b.tenantId,
+          action: { startsWith: 'knowledge.faq_' },
+        },
+      }),
+    ).toBe(2);
+  });
+});
+
 describe('FAQ knowledge', () => {
   const faqController = (enabled = true): KnowledgeFaqController =>
     new KnowledgeFaqController(
@@ -1306,3 +1461,113 @@ describe('contacts list', () => {
 
 /** The fixture contact of a world. */
 const w = (world_: World): string => world_.contactId;
+
+describe('knowledge documents', () => {
+  const docs = (enabled = true): KnowledgeDocumentsController =>
+    new KnowledgeDocumentsController(
+      prisma,
+      new KnowledgeService(prisma),
+      enabled ? new HashingEmbeddingProvider() : undefined,
+    );
+  const policy = {
+    title: '  Refund   policy ',
+    text: `Refunds are possible within 14 days.\n\n${'Details of the policy. '.repeat(80)}`,
+    language: 'en' as const,
+    regulated: true,
+    confirmProviderMayReadText: true as const,
+  };
+
+  it('uploads, lists with chunk counts, replaces by title, withdraws; scoped, audited; FAQ is not a document', async () => {
+    const a = await world('ADMIN');
+    const b = await world('ADMIN');
+    const sa = { principal: (await signIn(a)).principal } as never;
+    const sb = { principal: (await signIn(b)).principal } as never;
+    const c = docs();
+    const first = await c.upload(sa, policy);
+    expect(first.replaced).toBe(false);
+    expect(first.chunks).toBeGreaterThan(1);
+    // A FAQ entry in the same tenant never shows up as a document.
+    await new KnowledgeFaqController(
+      prisma,
+      new KnowledgeService(prisma),
+      new HashingEmbeddingProvider(),
+    ).create(sa, {
+      question: 'Is there a refund?',
+      answer: 'Yes.',
+      confirmProviderMayReadText: true,
+    });
+    let listed = await c.list(sa);
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0]).toMatchObject({
+      id: first.id,
+      title: 'Refund policy',
+      regulated: true,
+      origin: 'upload',
+      chunks: first.chunks,
+    });
+    expect((await c.list(sb)).items).toEqual([]);
+    const again = await c.upload(sa, {
+      ...policy,
+      title: 'refund POLICY',
+      text: 'Short new text.',
+    });
+    expect(again).toMatchObject({ id: first.id, replaced: true, chunks: 1 });
+    listed = await c.list(sa);
+    expect(listed.items).toHaveLength(1);
+    expect(listed.items[0].preview).toBe('Short new text.');
+    await expect(c.remove(sb, first.id)).rejects.toMatchObject({
+      response: { code: 'NOT_FOUND' },
+    });
+    await c.remove(sa, first.id);
+    expect((await c.list(sa)).items).toEqual([]);
+    const actions = (
+      await db.auditEvent.findMany({
+        where: { tenantId: a.tenantId, entityType: 'knowledge_document' },
+        orderBy: { createdAt: 'asc' },
+      })
+    ).map((row) => row.action);
+    expect(actions).toEqual([
+      'knowledge.document_uploaded',
+      'knowledge.document_replaced',
+      'knowledge.document_deleted',
+    ]);
+  });
+
+  it('needs the writer role, consent, sane sizes and an embedder; the FAQ cannot be deleted here', async () => {
+    const op = await world('OPERATOR');
+    const admin = await world('ADMIN');
+    const asOp = { principal: (await signIn(op)).principal } as never;
+    const asAdmin = { principal: (await signIn(admin)).principal } as never;
+    await expect(docs().upload(asOp, policy)).rejects.toMatchObject({
+      response: { code: 'FORBIDDEN' },
+    });
+    for (const bad of [
+      { ...policy, confirmProviderMayReadText: false },
+      { ...policy, title: 'x' },
+      { ...policy, text: '' },
+      { ...policy, text: 'a'.repeat(40_001) },
+      { ...policy, topic: '<script>' },
+    ])
+      await expect(docs().upload(asAdmin, bad)).rejects.toMatchObject({
+        response: { code: 'INVALID_BODY' },
+      });
+    await expect(docs(false).upload(asAdmin, policy)).rejects.toMatchObject({
+      response: { code: 'KNOWLEDGE_DISABLED' },
+    });
+    const faq = await new KnowledgeFaqController(
+      prisma,
+      new KnowledgeService(prisma),
+      new HashingEmbeddingProvider(),
+    ).create(asAdmin, {
+      question: 'Is this a document?',
+      answer: 'No.',
+      confirmProviderMayReadText: true,
+    });
+    const faqDoc = await db.knowledgeDocument.findFirstOrThrow({
+      where: { tenantId: admin.tenantId, source: `faq:${faq.id}` },
+    });
+    await expect(docs().remove(asAdmin, faqDoc.id)).rejects.toMatchObject({
+      response: { code: 'NOT_FOUND' },
+    });
+  });
+});

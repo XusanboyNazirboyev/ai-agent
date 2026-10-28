@@ -136,6 +136,18 @@ describe('source uses the catalog', () => {
         'UNCERTAIN',
       ],
       locale: ['en', 'ru', 'uz-Latn'],
+      importProblem: [
+        'EMPTY_FILE',
+        'TOO_BIG',
+        'BAD_FORMAT',
+        'MISSING_COLUMNS',
+        'MISSING_TEXT',
+        'QUESTION_TOO_SHORT',
+        'QUESTION_TOO_LONG',
+        'ANSWER_TOO_LONG',
+        'TOO_MANY',
+      ],
+      knowledgeTab: ['faq', 'documents'],
       nav: [
         'inbox',
         'leads',
@@ -198,6 +210,8 @@ describe('source uses the catalog', () => {
       'TELEGRAM_REJECTED',
       'INVALID_CHAT_ID',
       'WEBHOOK_NOT_REMOVED',
+      'DOCUMENT_LIMIT',
+      'DOCUMENT_TOO_LARGE',
       'UNKNOWN',
     ])
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);

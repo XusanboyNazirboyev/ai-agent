@@ -8,6 +8,7 @@ import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
 import { EventsController } from './events.controller.js';
 import { TelegramConnectController } from './telegram-connect.controller.js';
+import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { InboxController } from './inbox.controller.js';
 import { InboxEventBus } from './inbox-event-bus.js';
@@ -26,6 +27,7 @@ import { SessionService } from './session.service.js';
     ChannelsController,
     TelegramConnectController,
     KnowledgeFaqController,
+    KnowledgeDocumentsController,
     ContactsController,
   ],
   providers: [

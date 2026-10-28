@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   Get,
   HttpCode,
+  HttpException,
   Inject,
   NotFoundException,
   Optional,
@@ -31,7 +32,7 @@ export const FAQ_QUESTION_MAX = 200;
 export const FAQ_ANSWER_MAX = 600;
 const MAX_FAQ = 500;
 
-const Faq = z.object({
+const FaqEntry = z.object({
   question: z
     .string()
     .transform((value) => value.replace(/\s+/gu, ' ').trim())
@@ -42,9 +43,23 @@ const Faq = z.object({
     .pipe(z.string().min(1).max(FAQ_ANSWER_MAX)),
   language: z.enum(['uz', 'ru', 'en']).nullish(),
   regulated: z.boolean().default(false),
-  /** The text is sent to the embedding provider (see ADR 027). */
+});
+
+/** The text is sent to the embedding provider (see ADR 027). */
+const Faq = FaqEntry.extend({ confirmProviderMayReadText: z.literal(true) });
+
+/** Entries per import request (the default body limit is 100 kB). */
+export const FAQ_IMPORT_BATCH = 25;
+const Import = z.object({
+  entries: z.array(z.unknown()).min(1).max(FAQ_IMPORT_BATCH),
   confirmProviderMayReadText: z.literal(true),
 });
+
+export interface FaqImportResult {
+  created: number;
+  updated: number;
+  failed: { index: number; code: string }[];
+}
 
 export interface FaqItem {
   id: string;
@@ -154,6 +169,93 @@ export class KnowledgeFaqController {
     const id = randomUUID();
     await this.save(request, id, faq, 'knowledge.faq_created');
     return { id };
+  }
+
+  /**
+   * Imports a batch parsed from an uploaded file (the browser parses the file;
+   * the server never sees it). An entry whose question already exists
+   * (ignoring case and spacing) replaces that entry, so uploading the same
+   * file twice changes nothing. Entries fail one by one with a code.
+   */
+  @Post('import')
+  async import(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<FaqImportResult> {
+    this.requireWriter(request);
+    const parsed = Import.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'INVALID_BODY',
+        message: 'Invalid body',
+        i18nKey: 'errors.invalidBody',
+      });
+    if (!this.embedder)
+      throw new ServiceUnavailableException({
+        code: 'KNOWLEDGE_DISABLED',
+        message: 'Knowledge search is not configured',
+        i18nKey: 'errors.knowledgeDisabled',
+      });
+    const tenantId = request.principal!.tenantId;
+    const existing = await this.prisma.knowledgeDocument.findMany({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        source: { startsWith: FAQ_SOURCE_PREFIX },
+      },
+      select: { source: true, title: true },
+      take: MAX_FAQ,
+    });
+    const key = (question: string): string => question.toLocaleLowerCase();
+    const byQuestion = new Map(
+      existing.map((row) => [
+        key(row.title),
+        row.source.slice(FAQ_SOURCE_PREFIX.length),
+      ]),
+    );
+    let total = existing.length;
+    const result: FaqImportResult = { created: 0, updated: 0, failed: [] };
+    let providerDown = false;
+    for (const [index, raw] of parsed.data.entries.entries()) {
+      if (providerDown) {
+        result.failed.push({ index, code: 'EMBEDDING_FAILED' });
+        continue;
+      }
+      const entry = FaqEntry.safeParse(raw);
+      if (!entry.success) {
+        result.failed.push({ index, code: 'INVALID_ENTRY' });
+        continue;
+      }
+      const known = byQuestion.get(key(entry.data.question));
+      if (!known && total >= MAX_FAQ) {
+        result.failed.push({ index, code: 'FAQ_LIMIT' });
+        continue;
+      }
+      const id = known ?? randomUUID();
+      try {
+        await this.save(
+          request,
+          id,
+          { ...entry.data, confirmProviderMayReadText: true },
+          known ? 'knowledge.faq_updated' : 'knowledge.faq_created',
+        );
+      } catch (error) {
+        const code =
+          error instanceof HttpException
+            ? ((error.getResponse() as { code?: string }).code ?? 'FAILED')
+            : 'FAILED';
+        if (code === 'EMBEDDING_FAILED') providerDown = true;
+        result.failed.push({ index, code });
+        continue;
+      }
+      byQuestion.set(key(entry.data.question), id);
+      if (known) result.updated += 1;
+      else {
+        result.created += 1;
+        total += 1;
+      }
+    }
+    return result;
   }
 
   @Put(':id')

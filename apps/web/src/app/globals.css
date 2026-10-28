@@ -131,6 +131,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Safari/Firefox draw their own arrows on a select unless told otherwise. */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* The ring is drawn by the wrapping row (see ui/select.tsx). */
+  outline: none;
+}
+
 /* One visible focus treatment for every interactive element. */
 :focus-visible {
   outline: 2px solid var(--ring);

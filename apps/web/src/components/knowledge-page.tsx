@@ -7,6 +7,7 @@ import { api, errorKey } from '@/lib/api';
 import type { FaqItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { FaqDialog, type FaqDraft } from './faq-dialog';
+import { FaqImportDialog } from './faq-import-dialog';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
@@ -21,8 +22,8 @@ interface FaqList {
   items: FaqItem[];
 }
 
-/** The tenant's FAQ: questions with answers the assistant may quote. */
-export function KnowledgePage(): ReactNode {
+/** The FAQ tab: questions with answers the assistant may quote. */
+export function FaqPanel(): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { operator, timeZone } = useShell();
   const toast = useToast();
@@ -31,6 +32,7 @@ export function KnowledgePage(): ReactNode {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<FaqItem | 'new' | null>(null);
   const [deleting, setDeleting] = useState<FaqItem | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const query = useQuery({
     queryKey: ['faq'],
@@ -77,14 +79,8 @@ export function KnowledgePage(): ReactNode {
   const configured = query.data?.embeddingsConfigured ?? true;
 
   return (
-    <div
-      role="region"
-      tabIndex={0}
-      aria-label={t('nav.knowledge')}
-      className="min-h-0 flex-1 overflow-y-auto"
-    >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
-        <p className="text-sm text-muted">{t('knowledge.intro')}</p>
+    <>
+      <div className="flex flex-col gap-4">
         {query.isSuccess && !configured ? (
           <p
             role="status"
@@ -132,6 +128,16 @@ export function KnowledgePage(): ReactNode {
             >
               {t('knowledge.count', { count: all.length })}
             </span>
+          ) : null}
+          {canChange ? (
+            <Button
+              icon="book"
+              disabled={!configured}
+              data-testid="faq-import"
+              onClick={() => setImporting(true)}
+            >
+              {t('knowledge.import')}
+            </Button>
           ) : null}
           {canChange ? (
             <Button
@@ -258,6 +264,11 @@ export function KnowledgePage(): ReactNode {
         onSave={(draft) => save.mutate(draft)}
         onCancel={() => setEditing(null)}
       />
+      <FaqImportDialog
+        open={importing}
+        limits={query.data?.limits ?? { question: 200, answer: 600 }}
+        onClose={() => setImporting(false)}
+      />
       <ConfirmDialog
         open={deleting !== null}
         title={t('knowledge.deleteTitle')}
@@ -271,6 +282,6 @@ export function KnowledgePage(): ReactNode {
         }}
         onCancel={() => setDeleting(null)}
       />
-    </div>
+    </>
   );
 }

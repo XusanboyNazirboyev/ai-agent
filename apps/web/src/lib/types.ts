@@ -157,3 +157,16 @@ export interface TelegramTest {
   } | null;
   operatorGroupConfigured: boolean;
 }
+
+export interface KnowledgeDocumentItem {
+  id: string;
+  title: string;
+  language: string | null;
+  topic: string | null;
+  regulated: boolean;
+  chunks: number;
+  characters: number;
+  origin: 'upload' | 'admin';
+  preview: string;
+  updatedAt: string;
+}
