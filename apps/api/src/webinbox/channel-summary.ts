@@ -1,9 +1,11 @@
 import type { ConfigService } from '@nestjs/config';
 import {
   agentModePolicy,
+  effectiveAgentModeWithReason,
   modeRefusalCode,
   type AgentModePolicy,
   type AgentModeValue,
+  type EffectiveAgentMode,
   type ModeRefusalCode,
 } from '../agent/agent-mode.js';
 import type { AppEnvironment } from '../config/environment.js';
@@ -20,6 +22,13 @@ export interface ChannelAccountSummary {
   displayName: string | null;
   status: 'ACTIVE' | 'DISABLED';
   agentMode: AgentModeValue;
+  /**
+   * What the pipeline really does now, computed by the same function it
+   * calls. HOLD: no model call and nothing is sent, so customers get no reply.
+   */
+  effectiveMode: EffectiveAgentMode;
+  /** Why effectiveMode differs from agentMode (absent when it does not). */
+  effectiveReason?: ModeRefusalCode;
   /** Why a mode cannot be selected right now (absent: it can). */
   modeRefusals: Partial<Record<AgentModeValue, ModeRefusalCode>>;
   isTestAccount: boolean;
@@ -82,12 +91,15 @@ export function summarizeChannel(
     const code = modeRefusalCode(mode, policy, row);
     if (code) modeRefusals[mode] = code;
   }
+  const effective = effectiveAgentModeWithReason(row.agentMode, policy, row);
   return {
     id: row.id,
     channelType: row.channelType,
     displayName: row.displayName,
     status: row.status,
     agentMode: row.agentMode,
+    effectiveMode: effective.mode,
+    ...(effective.reason ? { effectiveReason: effective.reason } : {}),
     modeRefusals,
     isTestAccount: row.isTestAccount,
     credentialSource: source,
