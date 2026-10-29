@@ -98,6 +98,39 @@ const GEMINI_FREE_2026_10_23: PricingConfig = {
 };
 
 /**
+ * Gemini API Paid Tier, Standard (not Batch, Flex or Priority), through the
+ * OpenAI-compatible endpoint. Read from
+ * https://ai.google.dev/gemini-api/docs/pricing on 2026-10-29, model
+ * `gemini-3.8-flash` only: input $0.75, output $3.75 ("including thinking
+ * tokens"), context caching $0.075 per 1M tokens, each "through December
+ * 31, 2026". The page announces double prices from January 1, 2027 (input
+ * $1.50, output $7.50, caching $0.15): this version must not be used after
+ * 2026-12-31; add a new version then. No prompt-length tiers are stated.
+ * Storage ($0.50 per 1M tokens per hour) applies to explicit caches, which
+ * AgentCore does not create, so it is not modelled.
+ *
+ * Gemini publishes no cache-write price. The schema requires one, and the
+ * OpenAI-compatible adapter never reports cache-write tokens (always 0,
+ * openai-compatible-provider.ts `usageOf`), so both cache-write fields are
+ * set to the input price as a placeholder that is never billed.
+ */
+const GEMINI_PAID_2026_10_29: PricingConfig = {
+  version: 'gemini-paid-2026-10-29',
+  provider: 'google',
+  asOf: '2026-10-29',
+  sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+  models: {
+    'gemini-3.8-flash': {
+      inputPerMTok: '0.75',
+      outputPerMTok: '3.75',
+      cacheReadPerMTok: '0.075',
+      cacheWrite5mPerMTok: '0.75',
+      cacheWrite1hPerMTok: '0.75',
+    },
+  },
+};
+
+/**
  * Local inference (e.g. Ollama, https://docs.ollama.com/api/openai-compatibility,
  * checked 2026-10-23): no per-token price, any model name. Cost is 0; the
  * token caps bound usage.
@@ -147,6 +180,7 @@ const ROUTING_FREE_2026_10_23: PricingConfig = {
 export const PRICING_CATALOG = new PricingCatalog([
   ANTHROPIC_2026_10_23,
   GEMINI_FREE_2026_10_23,
+  GEMINI_PAID_2026_10_29,
   LOCAL_FREE_2026_10_23,
   ROUTING_FREE_2026_10_23,
 ]);
