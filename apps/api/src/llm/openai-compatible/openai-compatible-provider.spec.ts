@@ -740,6 +740,72 @@ describe('client-side rate limiter', () => {
   });
 });
 
+describe('paid Gemini pricing (gemini-paid-2026-10-29)', () => {
+  it('prices gemini-3.8-flash per token and stops the turn on its cost limit', async () => {
+    const paid = PRICING_CATALOG.snapshot('gemini-paid-2026-10-29');
+    // nano-USD per token: $0.75, $3.75 and $0.075 per 1M tokens.
+    expect(pricingFor(paid, 'gemini-3.8-flash')).toMatchObject({
+      free: false,
+      standard: { input: 750, output: 3_750, cacheRead: 75 },
+    });
+    expect(() => pricingFor(paid, 'gemini-3.5-flash-lite')).toThrow(
+      /No pricing/,
+    );
+    // The free catalog is unchanged.
+    expect(
+      pricingFor(
+        PRICING_CATALOG.snapshot('gemini-free-2026-10-23'),
+        'gemini-3.8-flash',
+      ).free,
+    ).toBe(true);
+
+    // Costs are priced by the model id the response reports.
+    const replies: Reply[] = Array.from({ length: 10 }, () => ({
+      body: {
+        ...completion({ content: 'still going' }),
+        model: 'gemini-3.8-flash',
+      },
+    }));
+    const { llm, requests } = provider(replies, {
+      models: { FAST: 'gemini-3.8-flash', STRONG: 'gemini-3.8-flash' },
+    });
+    const entries: LlmUsageEntry[] = [];
+    const budget = new TurnBudget(
+      {
+        ...TEST_LIMITS,
+        maxCallsPerTurn: 10,
+        // Each call reserves its worst case (~1.2M nano-USD) before it runs
+        // and then costs 123,900, so the 4th reservation passes the limit.
+        maxTurnCostNano: 1_500_000, // $0.0015
+        maxTurnTokens: 1_000_000,
+      },
+      { conversationSpentNano: 0, tenantMonthSpentNano: 0 },
+    );
+    const metered = new MeteredLlm(
+      llm,
+      paid,
+      budget,
+      { record: async (entry): Promise<void> => void entries.push(entry) },
+      { tenantId: 't', turnKey: 't' },
+    );
+    let stop: unknown;
+    for (let i = 0; i < 10 && !stop; i++) {
+      await metered
+        .withTools({ ...toolRequest, maxOutputTokens: 200 })
+        .catch((error: unknown) => {
+          stop = error;
+        });
+    }
+    // Fixture usage: 82 prompt tokens (2 cached), 17 completion tokens.
+    // 80 x 750 + 2 x 75 + 17 x 3,750 = 123,900 nano-USD per call.
+    expect(entries.every((entry) => entry.costNano === 123_900)).toBe(true);
+    expect(stop).toMatchObject({ reason: 'TURN_COST_LIMIT' });
+    expect(requests.length).toBe(entries.length);
+    expect(entries).toHaveLength(3);
+    expect(budget.snapshot.spentNano).toBe(3 * 123_900);
+  });
+});
+
 describe('zero-cost models are still bounded by tokens', () => {
   it('prices free models at 0 and stops on the turn token cap', async () => {
     const gemini = PRICING_CATALOG.snapshot('gemini-free-2026-10-23');
