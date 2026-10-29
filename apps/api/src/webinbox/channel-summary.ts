@@ -9,6 +9,7 @@ import {
   type ModeRefusalCode,
 } from '../agent/agent-mode.js';
 import type { AppEnvironment } from '../config/environment.js';
+import type { PrismaService } from '../persistence/prisma.service.js';
 
 const MODES: AgentModeValue[] = ['OFF', 'SHADOW', 'LIVE'];
 
@@ -37,7 +38,36 @@ export interface ChannelAccountSummary {
   /** Where Telegram delivers updates for this account; null until the server knows its public URL. */
   webhookUrl: string | null;
   operatorGroupConfigured: boolean;
+  /**
+   * The account was enabled from the web before (an audited enable). The
+   * first enable drops the updates Telegram queued by default; later ones
+   * keep them.
+   */
+  everEnabled: boolean;
   createdAt: Date;
+}
+
+/** Audit action of a web enable; its history decides `everEnabled`. */
+export const TELEGRAM_ENABLED_ACTION = 'channel.telegram_enabled';
+
+/** Ids among `ids` (one tenant) that were enabled from the web before. */
+export async function enabledBefore(
+  prisma: Pick<PrismaService, 'auditEvent'>,
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await prisma.auditEvent.findMany({
+    where: {
+      tenantId,
+      action: TELEGRAM_ENABLED_ACTION,
+      entityType: 'channel_account',
+      entityId: { in: [...ids] },
+    },
+    select: { entityId: true },
+    distinct: ['entityId'],
+  });
+  return new Set(rows.map((row) => row.entityId));
 }
 
 export interface ChannelRow {
@@ -85,6 +115,7 @@ export function summarizeChannel(
   policy: AgentModePolicy,
   source: CredentialSource,
   publicBaseUrl?: string,
+  everEnabled = false,
 ): ChannelAccountSummary {
   const modeRefusals: ChannelAccountSummary['modeRefusals'] = {};
   for (const mode of MODES) {
@@ -109,6 +140,7 @@ export function summarizeChannel(
         ? `${publicBaseUrl.replace(/\/+$/u, '')}/webhooks/telegram/${row.id}`
         : null,
     operatorGroupConfigured: Boolean(row.operatorChatId),
+    everEnabled,
     createdAt: row.createdAt,
   };
 }
