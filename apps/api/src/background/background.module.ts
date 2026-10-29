@@ -13,6 +13,7 @@ import { ActionsModule } from '../actions/actions.module.js';
 import { ActionService } from '../actions/action.service.js';
 import { WebInboxModule } from '../webinbox/webinbox.module.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
+import { AlertsService } from '../observability/alerts.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 
 /**
@@ -31,6 +32,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
   providers: [
     FollowUpService,
     DigestService,
+    AlertsService,
     {
       provide: SCHEDULED_SCANS,
       inject: [
@@ -39,6 +41,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         DigestService,
         InboxEventsService,
         ActionService,
+        AlertsService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -46,7 +49,8 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         digest: DigestService,
         inbox: InboxEventsService,
         actions: ActionService,
-      ): ScheduledScan[] => [lead, followUp, digest, inbox, actions],
+        alerts: AlertsService,
+      ): ScheduledScan[] => [lead, followUp, digest, inbox, actions, alerts],
     },
     HandoverRuntime,
   ],

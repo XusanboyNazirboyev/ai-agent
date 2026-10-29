@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
+import { enrichLogContext } from '../observability/log-context.js';
 import { SessionService, type InboxPrincipal } from './session.service.js';
 
 export const SESSION_COOKIE = 'ac_session';
@@ -72,6 +73,7 @@ export class SessionGuard implements CanActivate {
       )
         throw this.forbidden('CSRF');
     }
+    enrichLogContext({ tenantId: resolved.tenantId });
     request.principal = {
       tenantId: resolved.tenantId,
       operatorId: resolved.operatorId,

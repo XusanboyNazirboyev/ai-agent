@@ -107,15 +107,23 @@ export class TelegramManagement {
     };
   }
 
+  /**
+   * `dropPendingUpdates` discards the updates Telegram queued while no
+   * webhook was set (Bot API `drop_pending_updates`).
+   */
   async setWebhook(
     token: string,
     url: string,
     secretToken: string,
+    options: { readonly dropPendingUpdates: boolean } = {
+      dropPendingUpdates: false,
+    },
   ): Promise<void> {
     await this.call(token, 'setWebhook', {
       url,
       secret_token: secretToken,
       allowed_updates: ['message', 'callback_query'],
+      drop_pending_updates: options.dropPendingUpdates,
     });
   }
 

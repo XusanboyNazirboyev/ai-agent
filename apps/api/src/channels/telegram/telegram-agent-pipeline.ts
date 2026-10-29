@@ -23,6 +23,7 @@ import { LeadService } from '../../leads/lead.service.js';
 import { ActionService } from '../../actions/action.service.js';
 import { extractPhone } from '../../leads/phone.js';
 import { selectInboundBatch } from './inbound-batch.js';
+import { enrichLogContext } from '../../observability/log-context.js';
 import type {
   ProcessResult,
   TelegramQueueEvent,
@@ -146,6 +147,7 @@ export class TelegramAgentPipeline {
       readonly requestedMode: AgentModeValue;
     },
   ): Promise<ProcessResult> {
+    enrichLogContext({ conversationId: input.conversationId });
     const account = await this.accountFor(event.tenantId, input.conversationId);
     const effective = effectiveAgentMode(
       input.requestedMode,
@@ -193,6 +195,7 @@ export class TelegramAgentPipeline {
         if (error instanceof AgentConfigurationError) return;
         throw error;
       }
+      enrichLogContext({ language: computed.result.locale });
 
       const result = await this.commit(
         event.tenantId,
