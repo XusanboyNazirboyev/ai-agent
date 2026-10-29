@@ -9,6 +9,7 @@ import {
 } from '../channels/telegram/telegram-sender.js';
 import type { OperatorNotifier } from './operator-notifier.js';
 import { operatorStrings, refLine } from './operator-text.js';
+import { OPERATOR_ALERT_EVENT } from '../observability/alerts.service.js';
 import type { InlineButton } from './telegram-bot-api.js';
 
 export const OPERATOR_NOTIFIER = Symbol('OPERATOR_NOTIFIER');
@@ -38,6 +39,7 @@ const HANDOVER_EVENTS = new Set([
   'handover.forward',
   'handover.sla',
   'digest.morning',
+  OPERATOR_ALERT_EVENT,
 ]);
 
 export function isHandoverEvent(type: string): boolean {
@@ -95,6 +97,8 @@ export class HandoverNotificationService {
     } else if (event.type === 'handover.sla') {
       const id = field(event.payload, 'handoverId');
       if (id) await this.sla(event.tenantId, id);
+    } else if (event.type === OPERATOR_ALERT_EVENT) {
+      await this.alert(event.tenantId, event.payload);
     }
   }
 
@@ -315,6 +319,45 @@ export class HandoverNotificationService {
     await this.notifier.postCard(
       { operatorChatId: account.operatorChatId, channelAccountId: account.id },
       { text: lines.join('\n').slice(0, 4_000), buttons: [] },
+    );
+  }
+
+  /** An operator alert (ADR 030) as a plain message in the operator group. */
+  private async alert(
+    tenantId: string,
+    payload: Prisma.JsonValue,
+  ): Promise<void> {
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { tenantId, operatorChatId: { not: null }, status: 'ACTIVE' },
+      select: {
+        id: true,
+        operatorChatId: true,
+        tenant: { select: { defaultLocale: true } },
+      },
+    });
+    if (!account?.operatorChatId) return;
+    const t = operatorStrings(account.tenant.defaultLocale);
+    const kind = field(payload, 'kind');
+    const number = (key: string): number | undefined => {
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        const value = (payload as Record<string, Prisma.JsonValue>)[key];
+        return typeof value === 'number' ? value : undefined;
+      }
+      return undefined;
+    };
+    let text: string | undefined;
+    if (kind === 'BUDGET_NEAR_LIMIT') {
+      const percent = number('percent');
+      const month = field(payload, 'month');
+      if (percent !== undefined && month) text = t.alertBudget(percent, month);
+    } else if (kind === 'CRM_SYNC_FAILURES') {
+      const count = number('count');
+      if (count !== undefined) text = t.alertCrmFailures(count);
+    }
+    if (!text) return;
+    await this.notifier.postCard(
+      { operatorChatId: account.operatorChatId, channelAccountId: account.id },
+      { text, buttons: [] },
     );
   }
 
