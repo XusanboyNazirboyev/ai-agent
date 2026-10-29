@@ -1,5 +1,7 @@
 # Telegram test procedure (test bot and test group only)
 
+For a bot connected from the web Channels page (token in the secret store), follow [TELEGRAM_DEV_RUNBOOK.md](TELEGRAM_DEV_RUNBOOK.md) instead of the env-variable steps below.
+
 Never use a production bot, production customers or real customer data. Never paste secrets into chat or commit them; values live in the gitignored `.env.local`.
 
 ## In CI (no network)
