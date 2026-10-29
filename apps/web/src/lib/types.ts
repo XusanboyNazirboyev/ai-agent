@@ -99,6 +99,8 @@ export interface ConversationView {
 }
 
 export type AgentMode = 'OFF' | 'SHADOW' | 'LIVE';
+/** What the server really does; HOLD: no model call and nothing is sent. */
+export type EffectiveMode = AgentMode | 'HOLD';
 export type ModeRefusal =
   'UNTRUSTED_PROVIDER' | 'NO_OPERATOR_NOTIFIER' | 'UNTRUSTED_REAL_DATA';
 
@@ -116,6 +118,8 @@ export interface ChannelAccount {
   channelType: string;
   status: 'ACTIVE' | 'DISABLED';
   agentMode: AgentMode;
+  effectiveMode: EffectiveMode;
+  effectiveReason?: ModeRefusal;
   modeRefusals: Partial<Record<AgentMode, ModeRefusal>>;
   displayName: string | null;
   credentialSource: 'ui' | 'environment' | 'none';
