@@ -142,3 +142,26 @@ export function effectiveAgentMode(
   if (shadow) return { mode: 'HOLD', refusal: live ?? shadow };
   return live ? { mode: 'SHADOW', refusal: live } : { mode: 'SHADOW' };
 }
+
+/**
+ * What the pipeline will really do for `mode`, plus the machine-readable
+ * reason when it differs from the requested mode (for UIs that translate it).
+ * The mode itself always comes from effectiveAgentMode, the function the
+ * pipeline calls; only the reason code is derived here, from the same
+ * refusal helpers, so the page can never promise more than the pipeline does.
+ */
+export function effectiveAgentModeWithReason(
+  mode: AgentModeValue,
+  policy: AgentModePolicy,
+  account: AgentModeAccount,
+): { readonly mode: EffectiveAgentMode; readonly reason?: ModeRefusalCode } {
+  const applied = effectiveAgentMode(mode, policy, account).mode;
+  if (applied === mode) return { mode: applied };
+  // LIVE that does not run is explained by LIVE's own refusal; a requested
+  // SHADOW that does not run (HOLD) only has the real-customer-data reason.
+  const reason =
+    mode === 'LIVE'
+      ? modeRefusalCode('LIVE', policy, account)
+      : modeRefusalCode('SHADOW', policy, account);
+  return reason ? { mode: applied, reason } : { mode: applied };
+}

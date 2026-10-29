@@ -33,6 +33,8 @@ interface Strings {
   digestTitle: (date: string) => string;
   digestEmpty: string;
   digestWaiting: (count: number) => string;
+  alertBudget: (percent: number, month: string) => string;
+  alertCrmFailures: (count: number) => string;
 }
 
 const EN: Strings = {
@@ -63,6 +65,10 @@ const EN: Strings = {
   digestTitle: (date) => `Morning digest ${date}`,
   digestEmpty: 'No new hot or warm leads.',
   digestWaiting: (count) => `Waiting for an operator: ${count}`,
+  alertBudget: (percent, month) =>
+    `Alert: ${percent}% of the monthly AI budget is used (${month})`,
+  alertCrmFailures: (count) =>
+    `Alert: ${count} leads could not be sent to the CRM in the last hour`,
 };
 
 const RU: Strings = {
@@ -93,6 +99,10 @@ const RU: Strings = {
   digestTitle: (date) => `Утренняя сводка ${date}`,
   digestEmpty: 'Новых горячих и тёплых лидов нет.',
   digestWaiting: (count) => `Ждут оператора: ${count}`,
+  alertBudget: (percent, month) =>
+    `Внимание: использовано ${percent}% месячного бюджета ИИ (${month})`,
+  alertCrmFailures: (count) =>
+    `Внимание: ${count} лидов не удалось передать в CRM за последний час`,
 };
 
 const UZ: Strings = {
@@ -123,6 +133,10 @@ const UZ: Strings = {
   digestTitle: (date) => `Ertalabki xulosa ${date}`,
   digestEmpty: 'Yangi issiq va iliq lidlar yo\u2018q.',
   digestWaiting: (count) => `Operatorni kutayotganlar: ${count}`,
+  alertBudget: (percent, month) =>
+    `Diqqat: oylik AI byudjetining ${percent}% ishlatildi (${month})`,
+  alertCrmFailures: (count) =>
+    `Diqqat: oxirgi bir soatda ${count} ta lid CRMga yuborilmadi`,
 };
 
 export function operatorStrings(locale: string): Strings {
