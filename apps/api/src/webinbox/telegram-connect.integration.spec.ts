@@ -363,6 +363,57 @@ describe('connecting a Telegram bot from the web', () => {
     ]);
   });
 
+  it('drops pending updates on the first enable only, unless told otherwise, and audits the choice', async () => {
+    const { bots, telegram, controller } = setup();
+    const t = await tenant();
+    bots.set(TOKEN(RUN + 561), { id: RUN + 561, username: 'pending_bot' });
+    const { id } = await controller.connect(t.request, {
+      botToken: TOKEN(RUN + 561),
+    });
+    const webhookCalls = (): Record<string, unknown>[] =>
+      telegram.calls
+        .filter((c) => c.method === 'setWebhook')
+        .map((c) => c.params);
+
+    await expect(
+      controller.enable(t.request, id, { dropPendingUpdates: 'yes' }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    await expect(
+      controller.enable(t.request, id, { dropPending: true }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    expect(webhookCalls()).toHaveLength(0);
+
+    const first = await controller.enable(t.request, id);
+    expect(first.everEnabled).toBe(true);
+    await controller.disable(t.request, id);
+    await controller.enable(t.request, id);
+    await controller.disable(t.request, id);
+    await controller.enable(t.request, id, { dropPendingUpdates: true });
+    expect(webhookCalls().map((p) => p.drop_pending_updates)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+
+    const audits = await db.auditEvent.findMany({
+      where: { tenantId: t.tenantId, action: 'channel.telegram_enabled' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(audits.map((a) => a.safeInputSummary)).toEqual([
+      { dropPendingUpdates: true, firstEnable: true },
+      { dropPendingUpdates: false, firstEnable: false },
+      { dropPendingUpdates: true, firstEnable: false },
+    ]);
+
+    // Another tenant's account history does not count for this one.
+    const other = await tenant();
+    bots.set(TOKEN(RUN + 562), { id: RUN + 562, username: 'fresh_bot' });
+    const fresh = await controller.connect(other.request, {
+      botToken: TOKEN(RUN + 562),
+    });
+    expect(fresh.everEnabled).toBe(false);
+  });
+
   it('operator group id, roles, tenant scope, missing key and rate limit', async () => {
     const { bots, controller } = setup();
     const t = await tenant();

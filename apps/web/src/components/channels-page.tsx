@@ -122,17 +122,27 @@ function AccountCard(props: {
   const { account } = props;
   const [result, setResult] = useState<TelegramTest | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  // Messages sent while the bot had no webhook: skipped on a first enable
+  // unless the operator changes it; the default follows the account.
+  const [dropChoice, setDropChoice] = useState<boolean | null>(null);
+  const dropPending = dropChoice ?? !account.everEnabled;
   const manageable = props.canManage && account.credentialSource === 'ui';
 
   const act = useMutation({
-    mutationFn: (input: { path: string; method: 'POST' | 'DELETE' }) =>
+    mutationFn: (input: {
+      path: string;
+      method: 'POST' | 'DELETE';
+      body?: unknown;
+    }) =>
       api<unknown>(`/api/v1/channels/${account.id}${input.path}`, {
         method: input.method,
+        body: input.body,
       }),
     onSuccess: (data, input) => {
       if (input.path === '/test') setResult(data as TelegramTest);
       else {
         setResult(null);
+        setDropChoice(null);
         toast(
           t(
             input.path === '/enable'
@@ -230,16 +240,42 @@ function AccountCard(props: {
               {t('channels.disable')}
             </Button>
           ) : (
-            <Button
-              size="sm"
-              variant="primary"
-              data-testid="account-enable"
-              disabled={!props.capabilities.publicUrlConfigured}
-              loading={act.isPending && act.variables?.path === '/enable'}
-              onClick={() => act.mutate({ path: '/enable', method: 'POST' })}
-            >
-              {t('channels.enable')}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="primary"
+                data-testid="account-enable"
+                disabled={!props.capabilities.publicUrlConfigured}
+                loading={act.isPending && act.variables?.path === '/enable'}
+                onClick={() =>
+                  act.mutate({
+                    path: '/enable',
+                    method: 'POST',
+                    body: { dropPendingUpdates: dropPending },
+                  })
+                }
+              >
+                {t('channels.enable')}
+              </Button>
+              <label className="flex basis-full items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  data-testid="account-drop-pending"
+                  checked={dropPending}
+                  disabled={act.isPending}
+                  onChange={(e) => setDropChoice(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-medium">
+                    {t('channels.dropPending')}
+                  </span>
+                  <span className="text-muted">
+                    {t('channels.dropPendingHint')}
+                  </span>
+                </span>
+              </label>
+            </>
           )}
           <Button
             size="sm"

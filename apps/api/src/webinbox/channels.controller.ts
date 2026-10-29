@@ -19,6 +19,7 @@ import { PrismaService } from '../persistence/prisma.service.js';
 import { ChannelSecretStore } from '../secrets/channel-secret-store.js';
 import {
   credentialSource,
+  enabledBefore,
   policyFrom,
   summarizeChannel,
   type ChannelAccountSummary,
@@ -59,6 +60,11 @@ export class ChannelsController {
       }),
     ]);
     const policy = this.policy();
+    const enabled = await enabledBefore(
+      this.prisma,
+      tenantId,
+      rows.map((row) => row.id),
+    );
     return rows.map((row) =>
       summarizeChannel(
         row,
@@ -73,6 +79,7 @@ export class ChannelsController {
           this.config,
         ),
         this.config.get('PUBLIC_BASE_URL', { infer: true }),
+        enabled.has(row.id),
       ),
     );
   }
