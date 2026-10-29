@@ -188,6 +188,26 @@ describe('validateEnvironment', () => {
     expect(ollama.LLM_API_KEY).toBeUndefined();
   });
 
+  it('accepts the paid Gemini pricing only for the model it prices', () => {
+    const paid = {
+      ...postgresEnvironment,
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      LLM_API_KEY: 'test-only',
+      LLM_MODEL_FAST: 'gemini-3.8-flash',
+      LLM_MODEL_STRONG: 'gemini-3.8-flash',
+      LLM_PRICING_VERSION: 'gemini-paid-2026-10-29',
+    };
+    expect(validateEnvironment(paid)).toMatchObject({
+      LLM_PRICING_VERSION: 'gemini-paid-2026-10-29',
+      LLM_TRUSTED_PROVIDERS: ['mock'],
+      LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+    });
+    expect(() =>
+      validateEnvironment({ ...paid, LLM_MODEL_FAST: 'gemini-3.5-flash-lite' }),
+    ).toThrow(/no price in gemini-paid-2026-10-29/u);
+  });
+
   it('accepts the routed provider only with a known pricing version', () => {
     const base = { ...postgresEnvironment, LLM_PROVIDER: 'routed' };
     expect(() => validateEnvironment(base)).not.toThrow();
