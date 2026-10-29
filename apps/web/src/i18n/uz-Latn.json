@@ -294,6 +294,8 @@
   "channels.connectTelegram": "Telegram ni ulash",
   "channels.connect": "Ulash",
   "channels.enable": "Yoqish",
+  "channels.dropPending": "Bot o‘chiq paytida yuborilgan xabarlarni o‘tkazib yuborish",
+  "channels.dropPendingHint": "Telegram webhook o‘rnatilmagan paytda kelgan xabarlarni saqlaydi. Ular o‘tkazib yuborilsa, yordamchi eski xabarlarga birdaniga javob bermaydi. Birinchi yoqishda sukut bo‘yicha yoqilgan.",
   "channels.disable": "O‘chirish",
   "channels.check": "Ulanishni tekshirish",
   "channels.replaceToken": "Tokenni almashtirish",

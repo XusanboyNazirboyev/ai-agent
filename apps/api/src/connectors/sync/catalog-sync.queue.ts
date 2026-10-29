@@ -14,6 +14,10 @@ import {
   type CatalogSyncResult,
 } from './catalog-sync.service.js';
 import { CatalogSyncStore } from './catalog-sync.store.js';
+import {
+  newTraceId,
+  runWithLogContext,
+} from '../../observability/log-context.js';
 import { TenantConnectorLoader } from './tenant-connector-loader.js';
 
 export const CATALOG_SYNC_QUEUE = 'agentcore-catalog-sync';
@@ -80,7 +84,11 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
     });
     this.worker = new Worker<CatalogSyncRequest>(
       CATALOG_SYNC_QUEUE,
-      (job) => this.process(job),
+      (job) =>
+        runWithLogContext(
+          { traceId: job.id ?? newTraceId(), tenantId: job.data.tenantId },
+          () => this.process(job),
+        ),
       { connection: this.connection, concurrency: 2 },
     );
     this.worker.on('error', (error) => {
