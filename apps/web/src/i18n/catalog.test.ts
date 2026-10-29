@@ -161,6 +161,7 @@ describe('source uses the catalog', () => {
       'more.desc': ['bot', 'knowledge', 'channels', 'settings'],
       botMode: ['OFF', 'SHADOW', 'LIVE'],
       botModeDesc: ['OFF', 'SHADOW', 'LIVE'],
+      botEffective: ['SHADOW', 'HOLD'],
       botRefusal: [
         'UNTRUSTED_PROVIDER',
         'NO_OPERATOR_NOTIFIER',
