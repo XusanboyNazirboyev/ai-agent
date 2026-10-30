@@ -1,7 +1,12 @@
 import type { BudgetLimits } from '../../core/llm/budget.js';
 import type { LlmProvider } from '../../core/llm/llm-provider.js';
 import { nanoToUsd } from '../../core/llm/pricing.js';
-import { runCase, type EvalCase, type EvalOutcome } from './eval-runner.js';
+import {
+  runCase,
+  type EvalCase,
+  type EvalDiagnostics,
+  type EvalOutcome,
+} from './eval-runner.js';
 
 /**
  * Model-comparison evaluation (AGENTS.md §12). Runs the same cases against
@@ -57,6 +62,17 @@ export interface ModelReport {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly costUsd: string;
+  /** Every run case with the typed reasons it ended as it did. */
+  readonly caseResults: readonly CaseResult[];
+}
+
+export interface CaseResult {
+  readonly id: string;
+  readonly category: string;
+  readonly locale: string;
+  readonly passed: boolean;
+  readonly failures: readonly string[];
+  readonly diagnostics: EvalDiagnostics;
 }
 
 export interface EvaluationReport {
@@ -230,6 +246,14 @@ export function modelReport(run: ModelRun): ModelReport {
     inputTokens: o.reduce((sum, x) => sum + x.inputTokens, 0),
     outputTokens: o.reduce((sum, x) => sum + x.outputTokens, 0),
     costUsd: nanoToUsd(o.reduce((sum, x) => sum + x.costNano, 0)),
+    caseResults: o.map((x) => ({
+      id: x.id,
+      category: x.category,
+      locale: x.locale,
+      passed: x.passed,
+      failures: x.failures,
+      diagnostics: x.diagnostics,
+    })),
   };
 }
 
@@ -281,6 +305,18 @@ export function renderMarkdown(report: EvaluationReport): string {
     lines.push('', '| Category | Pass |', '|---|---|');
     for (const [name, r] of Object.entries(m.byCategory))
       lines.push(`| ${name} | ${pct(r)} |`);
+    const failed = m.caseResults.filter((c) => !c.passed);
+    if (failed.length > 0) {
+      lines.push(
+        '',
+        '| Failed case | Extraction | Intent | Draft | Turn outcome | Handover |',
+        '|---|---|---|---|---|---|',
+      );
+      for (const c of failed)
+        lines.push(
+          `| ${c.id} | ${c.diagnostics.extractionFailure ?? 'ok'} | ${c.diagnostics.intent ?? '-'} | ${c.diagnostics.draftFailure ?? 'ok'} | ${c.diagnostics.turnOutcome} | ${c.diagnostics.handover ?? '-'} |`,
+        );
+    }
   }
   return `${lines.join('\n')}\n`;
 }

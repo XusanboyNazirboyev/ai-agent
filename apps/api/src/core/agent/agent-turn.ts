@@ -166,6 +166,11 @@ export interface AgentTurnResult {
   readonly violations: readonly GuardrailViolation[];
   readonly regenerated: boolean;
   readonly extractionFailure?: string;
+  /**
+   * Why the reply draft could not be used and the code-rendered fallback was
+   * sent instead: the model stopped at its output limit, or wrote nothing.
+   */
+  readonly draftFailure?: 'truncated' | 'empty';
   readonly budget: BudgetSnapshot;
   readonly budgetStop?: BudgetStopReason;
   readonly tools: readonly ToolTraceEntry[];
@@ -665,7 +670,10 @@ export async function runAgentTurn(
     return handover('LLM_UNAVAILABLE', { llmFailure: draft.code });
   // Truncated or empty drafts carry nothing to guard: use the code-rendered
   // option list, which contains only connector facts.
-  if (draft.kind !== 'draft' || draft.text.trim() === '') return fallback();
+  if (draft.kind !== 'draft' || draft.text.trim() === '')
+    return fallback({
+      draftFailure: draft.kind === 'truncated' ? 'truncated' : 'empty',
+    });
 
   // 6. Guardrail, one regeneration, then a safe code-rendered fallback.
   const guard = (text: string): ReturnType<typeof checkDraft> =>

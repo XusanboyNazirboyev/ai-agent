@@ -272,12 +272,18 @@ async function main(): Promise<void> {
       maxCalls,
       maxRuntimeMs,
       mode: 'live',
-      onCase: (model, outcome) =>
+      onCase: (model, outcome) => {
+        const d = outcome.diagnostics;
         process.stdout.write(
           `${outcome.passed ? 'PASS' : 'FAIL'} ${model.model} ${outcome.id}${
             outcome.failures.length ? ` :: ${outcome.failures.join('; ')}` : ''
-          }${outcome.llmFailure ? ` [model failure: ${outcome.llmFailure}]` : ''}\n`,
-        ),
+          }${outcome.llmFailure ? ` [model failure: ${outcome.llmFailure}]` : ''}${
+            outcome.passed
+              ? ''
+              : ` {extraction=${d.extractionFailure ?? 'ok'} intent=${d.intent ?? '-'} draft=${d.draftFailure ?? 'ok'} out_tokens=${outcome.outputTokens}}`
+          }\n`,
+        );
+      },
     });
   process.stdout.write(
     `Run summary: ${calls} recorded model calls, ${spentTokens} tokens, ${Date.now() - startedAt} ms, measured cost ${spentNano} nano-USD, stopped by: ${stoppedBy ?? 'completion'}.\n`,

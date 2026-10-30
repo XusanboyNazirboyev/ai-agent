@@ -379,6 +379,24 @@ function withoutFacts(result: AgentTurnResult): string {
   return text;
 }
 
+/**
+ * Why a case ended as it did, as typed codes only (no customer text, prompt
+ * or model output). The eval report keeps this per case so a failed case can
+ * be traced to its pipeline stage instead of guessed from the pass rate.
+ */
+export interface EvalDiagnostics {
+  /** Intent the model extracted; undefined when extraction failed. */
+  readonly intent: string | undefined;
+  /** Extraction failure code (malformed, truncated, refusal, provider code). */
+  readonly extractionFailure: string | undefined;
+  /** Reply draft unusable (truncated or empty) and the fallback was sent. */
+  readonly draftFailure: 'truncated' | 'empty' | undefined;
+  readonly turnOutcome: string;
+  readonly handover: string | undefined;
+  readonly violations: readonly string[];
+  readonly regenerated: boolean;
+}
+
 export interface EvalOutcome {
   readonly id: string;
   readonly category: string;
@@ -416,6 +434,7 @@ export interface EvalOutcome {
   /** Fact-related guardrail violations caught in drafts (never shipped). */
   readonly blockedFactViolations: number;
   readonly budgetStopped: boolean;
+  readonly diagnostics: EvalDiagnostics;
 }
 
 const FACT_VIOLATIONS: ReadonlySet<string> = new Set([
@@ -620,6 +639,15 @@ export function scoreCase(
     budgetStopped:
       result.budgetStop === 'TENANT_MONTHLY_LIMIT' ||
       result.budgetStop === 'CONVERSATION_TOKEN_LIMIT',
+    diagnostics: {
+      intent: result.intent,
+      extractionFailure: result.extractionFailure,
+      draftFailure: result.draftFailure,
+      turnOutcome: result.outcome,
+      handover: result.handover,
+      violations: [...result.violations],
+      regenerated: result.regenerated,
+    },
   };
 }
 

@@ -47,6 +47,30 @@ describe('evaluation runner (scripted model only)', () => {
     expect(renderMarkdown(report)).toContain('Slot accuracy');
   });
 
+  it('keeps typed diagnostics for every case in the report and never the customer text', async () => {
+    const subset = cases.filter((c) => c.locale === 'en').slice(0, 4);
+    const { runs, spentNano } = await runEvaluation({
+      cases: subset,
+      models: [scripted('diagnosed')],
+      budgetNano: usdToNano('1'),
+      mode: 'scripted',
+    });
+    const report = buildReport({
+      mode: 'scripted',
+      runs,
+      budgetNano: usdToNano('1'),
+      spentNano,
+    });
+    const [m] = report.models;
+    expect(m.caseResults.map((c) => c.id)).toEqual(subset.map((c) => c.id));
+    for (const c of m.caseResults) {
+      expect(c.diagnostics.turnOutcome).not.toBe('');
+      expect(Array.isArray(c.diagnostics.violations)).toBe(true);
+    }
+    const serialized = JSON.stringify(report);
+    for (const c of subset) expect(serialized).not.toContain(c.input.text);
+  });
+
   it('stops before a case that would exceed the call bound, and reports why', async () => {
     const subset = cases.filter((c) => c.locale === 'en').slice(0, 12);
     const result = await runEvaluation({
