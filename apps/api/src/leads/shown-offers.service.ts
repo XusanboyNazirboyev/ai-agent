@@ -71,10 +71,12 @@ export class ShownOffersService {
         : await this.prisma.offer.findFirst({
             where: {
               tenantId,
-              sourceEntityId: offerRef,
               sourceSystem:
                 quote?.provenance.sourceSystem ??
                 group[0].provenance.sourceSystem,
+              OR: isUuid(offerRef)
+                ? [{ id: offerRef }, { sourceEntityId: offerRef }]
+                : [{ sourceEntityId: offerRef }],
             },
             select: { id: true },
           });
@@ -144,4 +146,10 @@ export class ShownOffersService {
     }
     return recorded;
   }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
