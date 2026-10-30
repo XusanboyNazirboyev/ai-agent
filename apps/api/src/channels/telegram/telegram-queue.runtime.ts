@@ -13,7 +13,7 @@ import { PrismaService } from '../../persistence/prisma.service.js';
 import { TelegramProcessor } from './telegram-processor.js';
 import { telegramRetryDelayMs } from './retry-policy.js';
 import { runWithLogContext } from '../../observability/log-context.js';
-import { redisOptions } from '../../queue/redis-options.js';
+import { bullmqPrefix, redisOptions } from '../../queue/redis-options.js';
 
 export type QueuePayload = {
   outboxId: string;
@@ -56,6 +56,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.queue = new Queue<QueuePayload>(queueName, {
+      prefix: bullmqPrefix(),
       connection: this.connection,
       defaultJobOptions: {
         attempts: OUTBOX_MAX_ATTEMPTS,
@@ -76,6 +77,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
         }
       },
       {
+        prefix: bullmqPrefix(),
         connection: this.connection,
         concurrency: 8,
         settings: {
