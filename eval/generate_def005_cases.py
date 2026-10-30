@@ -33,7 +33,6 @@ def main():
                 'locale': loc,
                 'category': 'labelled_price',
                 'description': desc,
-                'slug': slug,
                 'input': {'text': 'price question'},
                 'scripted': [],
                 'expect': {'locale': loc},
