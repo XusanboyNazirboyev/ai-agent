@@ -1039,6 +1039,93 @@ describe('offers shown and quotes', () => {
     );
   });
 
+  it('resolves a delivered offer by its canonical id (DEF-001)', async () => {
+    const w = await world();
+    const service = new ShownOffersService(prisma);
+    // Create a synced offer and capture its canonical (uuid) id.
+    const item = await db.catalogItem.create({
+      data: {
+        tenantId: w.tenantId,
+        sourceSystem: 'mock-education',
+        sourceEntityId: 'edu-ielts-001',
+        itemType: 'course',
+        title: 'IELTS Preparation',
+        normalizedTitle: 'ielts preparation',
+        syncedAt: new Date(),
+        sourceHash: 'h',
+      },
+    });
+    const offer = await db.offer.create({
+      data: {
+        tenantId: w.tenantId,
+        itemId: item.id,
+        sourceSystem: 'mock-education',
+        sourceEntityId: OFFER_REF,
+        syncedAt: new Date(),
+        sourceHash: 'h',
+      },
+    });
+    // provenance.offerId is the canonical id (as the real pipeline produces).
+    const fact = quoteFact({ offerId: offer.id });
+    const message = await db.message.create({
+      data: {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        channelAccountId: w.channelAccountId,
+        authorType: 'BOT',
+        direction: 'OUTBOUND',
+        text: 'reply',
+        sequence: 50 + Math.floor(Math.random() * 1_000_000),
+        providerChatId: 'c',
+        deliveryState: 'SENT',
+      },
+    });
+    await db.agentTurn.create({
+      data: {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        channelAccountId: w.channelAccountId,
+        idempotencyKey: `k-${randomUUID()}`,
+        attempt: 1,
+        mode: 'LIVE',
+        status: 'COMMITTED',
+        claimToken: randomUUID(),
+        leaseExpiresAt: new Date(),
+        answeredSequence: 1,
+        seenInboundSequence: 1,
+        conversationVersion: 1,
+        inboundEventIds: [],
+        correlationId: randomUUID(),
+        startedAt: new Date(),
+        replyMessageId: message.id,
+        facts: [fact] as never,
+        shownFactIds: ['F10'],
+      },
+    });
+    expect(await service.recordDelivered(w.tenantId, message.id)).toBe(1);
+    const shown = await db.shownOffer.findFirstOrThrow({
+      where: { messageId: message.id },
+    });
+    expect(shown.offerId).toBe(offer.id);
+    expect(shown.quoteRecorded).toBe(true);
+  });
+
+  it('handles an invalid (non-UUID) offer reference without crashing', async () => {
+    const w = await world();
+    const service = new ShownOffersService(prisma);
+    const messageId = await delivered(w, {
+      facts: [quoteFact({ offerId: 'not-a-uuid' })],
+      shown: ['F10'],
+      sync: false,
+    });
+    await service.recordDelivered(w.tenantId, messageId);
+    const shown = await db.shownOffer.findFirstOrThrow({
+      where: { messageId },
+    });
+    expect(shown.offerId).toBeNull();
+    expect(shown.quoteSkipReason).toBe('OFFER_NOT_SYNCED');
+  });
+
   it('raises the lead once the offer was actually delivered', async () => {
     const w = await world({ state: 'BOT_ACTIVE' });
     await db.handover.deleteMany({ where: { tenantId: w.tenantId } });
