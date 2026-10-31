@@ -298,15 +298,15 @@ describe('tenant-month reservations (PostgreSQL)', () => {
   });
 
   it('calculates the previous UTC month safely at month boundaries', () => {
-    expect(
-      previousUtcMonthStart(new Date('2026-10-31T23:59:59.999Z')),
-    ).toEqual(new Date('2026-09-01T00:00:00.000Z'));
-    expect(
-      previousUtcMonthStart(new Date('2026-03-31T23:59:59.999Z')),
-    ).toEqual(new Date('2026-02-01T00:00:00.000Z'));
-    expect(
-      previousUtcMonthStart(new Date('2027-01-31T23:59:59.999Z')),
-    ).toEqual(new Date('2026-12-01T00:00:00.000Z'));
+    expect(previousUtcMonthStart(new Date('2026-10-31T23:59:59.999Z'))).toEqual(
+      new Date('2026-09-01T00:00:00.000Z'),
+    );
+    expect(previousUtcMonthStart(new Date('2026-03-31T23:59:59.999Z'))).toEqual(
+      new Date('2026-02-01T00:00:00.000Z'),
+    );
+    expect(previousUtcMonthStart(new Date('2027-01-31T23:59:59.999Z'))).toEqual(
+      new Date('2026-12-01T00:00:00.000Z'),
+    );
   });
 
   it('does not leak across tenants or months', async () => {
