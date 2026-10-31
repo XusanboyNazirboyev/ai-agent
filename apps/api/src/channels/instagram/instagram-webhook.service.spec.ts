@@ -59,7 +59,9 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
 }
 
 describe('InstagramWebhookService', () => {
-  it('persists one tenant-scoped inbound event and outbox row atomically', async () => {
+  it(
+    'persists one tenant-scoped inbound event and outbox row atomically',
+    async () => {
     const { service, prisma, tx } = makeService();
     await expect(service.accept(event)).resolves.toBe('accepted');
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -91,20 +93,26 @@ describe('InstagramWebhookService', () => {
     );
   });
 
-  it('returns duplicate without creating a second message or outbox event', async () => {
+  it(
+    'returns duplicate without creating a second message or outbox event',
+    async () => {
     const { service, tx } = makeService({ duplicate: { id: 'already-seen' } });
     await expect(service.accept(event)).resolves.toBe('duplicate');
     expect(tx.message.create).not.toHaveBeenCalled();
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
-  it('does not accept an unconnected or inactive Instagram account', async () => {
+  it(
+    'does not accept an unconnected or inactive Instagram account',
+    async () => {
     const { service, tx } = makeService({ channel: null });
     await expect(service.accept(event)).resolves.toBe('unavailable');
     expect(tx.inboundEvent.create).not.toHaveBeenCalled();
   });
 
-  it('rejects malformed external identifiers before touching persistence', async () => {
+  it(
+    'rejects malformed external identifiers before touching persistence',
+    async () => {
     const { service, prisma } = makeService();
     await expect(
       service.accept({ ...event, customerId: 'not-numeric' }),
