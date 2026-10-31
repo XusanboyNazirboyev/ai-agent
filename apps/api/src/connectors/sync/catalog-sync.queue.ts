@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, type Job, type RedisOptions } from 'bullmq';
 import type { AppEnvironment } from '../../config/environment.js';
-import { redisOptions } from '../../queue/redis-options.js';
+import { bullmqPrefix, redisOptions } from '../../queue/redis-options.js';
 import {
   CatalogSyncService,
   type CatalogSyncRequest,
@@ -74,6 +74,7 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.queue = new Queue<CatalogSyncRequest>(CATALOG_SYNC_QUEUE, {
+      prefix: bullmqPrefix(),
       connection: this.connection,
       defaultJobOptions: {
         attempts: MAX_ATTEMPTS,
@@ -89,7 +90,7 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
           { traceId: job.id ?? newTraceId(), tenantId: job.data.tenantId },
           () => this.process(job),
         ),
-      { connection: this.connection, concurrency: 2 },
+      { prefix: bullmqPrefix(), connection: this.connection, concurrency: 2 },
     );
     this.worker.on('error', (error) => {
       this.logger.error(
