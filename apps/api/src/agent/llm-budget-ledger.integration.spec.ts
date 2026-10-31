@@ -59,6 +59,17 @@ async function tenant(): Promise<string> {
 const UNIT = 1_000;
 const CAP = 3_500; // room for exactly three reservations of UNIT
 
+/** Start of the previous UTC month; avoids end-of-month setUTCMonth overflow. */
+function previousUtcMonthStart(reference: Date): Date {
+  return new Date(
+    Date.UTC(
+      reference.getUTCFullYear(),
+      reference.getUTCMonth() - 1,
+      1,
+    ),
+  );
+}
+
 function reserve(
   ledger: LlmBudgetLedger,
   tenantId: string,
@@ -290,15 +301,28 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     expect(await workerA.tenantMonthExposureNano(tenantId)).toBe(UNIT);
   });
 
+  it('calculates the previous UTC month safely at month boundaries', () => {
+    expect(
+      previousUtcMonthStart(new Date('2026-10-31T23:59:59.999Z')),
+    ).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+    expect(
+      previousUtcMonthStart(new Date('2026-03-31T23:59:59.999Z')),
+    ).toEqual(new Date('2026-02-01T00:00:00.000Z'));
+    expect(
+      previousUtcMonthStart(new Date('2027-01-31T23:59:59.999Z')),
+    ).toEqual(new Date('2026-12-01T00:00:00.000Z'));
+  });
+
   it('does not leak across tenants or months', async () => {
     const one = await tenant();
     const two = await tenant();
     for (let i = 0; i < 3; i++) await reserve(workerA, one, `x:${i}`);
     expect((await reserve(workerA, one, 'x:3')).granted).toBe(false);
     expect((await reserve(workerA, two, 'y:0')).granted).toBe(true);
-    // Last month's reservations do not count this month.
-    const lastMonth = new Date();
-    lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+    // Last month's reservations do not count this month. Normalize to
+    // day 1 before changing months so dates such as October 31 cannot
+    // overflow into the current month (September has only 30 days).
+    const lastMonth = previousUtcMonthStart(new Date());
     const old = new LlmBudgetLedger(
       clientA as unknown as PrismaService,
     ).configure({ clock: () => lastMonth, ttlMs: 10 * 60_000 });
