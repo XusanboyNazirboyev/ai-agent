@@ -6,7 +6,10 @@ import { StructuredLogger } from './observability/structured-logger.js';
 import { traceRequests } from './observability/trace-requests.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+    rawBody: true,
+  });
   const config = app.get(ConfigService<AppEnvironment, true>);
   const logger = new StructuredLogger(config.get('LOG_LEVEL', { infer: true }));
 
