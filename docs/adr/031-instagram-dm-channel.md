@@ -1,6 +1,6 @@
 # ADR 031: Instagram direct messages as a channel adapter
 
-Status: Proposed (2026-10-31). Slice 1 (pure core) is implemented; the NestJS wiring is not.
+Status: Proposed (2026-10-31). Slice 1 (pure core) and slice 2a (GET verification handshake plus raw-body capture) are implemented on `feat/instagram-dm-webhook`; POST intake is not wired.
 
 ## Decision
 Instagram is a channel adapter beside Telegram (D6). The LLM provider stays separate (D15): one key serves every channel. Slice 1 is pure, dependency-free code in `apps/api/src/channels/instagram/`:
@@ -18,6 +18,11 @@ Instagram is a channel adapter beside Telegram (D6). The LLM provider stays sepa
 - Attachment payload shape, the `timestamp` unit, and App Review and Business Verification lead times are unverified.
 - Real customers need Advanced Access (App Review + Business Verification). The owner has no company documents yet, so until then only accounts with a role in the Meta app can be tested.
 
+## Implementation status
+- Slice 2a: NestJS `GET /webhooks/instagram` verifies `hub.mode`, `hub.verify_token`, and `hub.challenge`, failing closed when the token is missing or wrong. `NestFactory` preserves raw request bodies for the next POST/signature slice. Meta app secret and verify token are optional environment settings; no secrets are committed.
+- The GET handshake does not imply inbound POST works. POST has no route yet, and messages are not queued or answered.
+
 ## Next slices
-1. Webhook controller (raw-body capture, signature, 200 fast, queue by `mid`), per-tenant app secret in the secret store, sender with the window gate, channel account type, effective-mode parity. Needs the database, so it is verified in CI.
-2. Fake Meta server for end-to-end tests; comments (private replies, 7-day rule) as a separate decision.
+1. POST webhook: verify `X-Hub-Signature-256` against `rawBody` before parsing; resolve the active Instagram channel; durably store each event with `mid` idempotency and queue it through the existing agent pipeline. Do not acknowledge success before durable acceptance.
+2. Add encrypted secret-purpose handling and an Instagram sender with the messaging-window gate, channel-mode parity, and channel-account connection UX.
+3. Fake Meta server and end-to-end tests; comments/private replies (7-day rule) remain a separate decision.
