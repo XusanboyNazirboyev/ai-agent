@@ -318,14 +318,31 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     // Last month's reservations do not count this month. Normalize to
     // day 1 before changing months so dates such as October 31 cannot
     // overflow into the current month (September has only 30 days).
-    const lastMonth = previousUtcMonthStart(new Date());
+    // Use a fixed UTC month boundary: this assertion must not depend on
+    // whether CI happens to run near midnight or on the last day of a month.
+    const currentMonth = new Date('2026-10-01T00:00:00.000Z');
+    const lastMonth = previousUtcMonthStart(currentMonth);
     const old = new LlmBudgetLedger(
       clientA as unknown as PrismaService,
     ).configure({ clock: () => lastMonth, ttlMs: 10 * 60_000 });
     const three = await tenant();
     for (let i = 0; i < 3; i++) await reserve(old, three, `o:${i}`);
-    expect(await workerA.tenantMonthExposureNano(three)).toBe(0);
-    expect((await reserve(workerA, three, 'now:0')).granted).toBe(true);
+    const priorMonthRows = await clientA.llmBudgetReservation.findMany({
+      where: { tenantId: three },
+      select: { periodStart: true, state: true },
+    });
+    expect(priorMonthRows).toHaveLength(3);
+    expect(priorMonthRows.every((row) =>
+      row.periodStart.getTime() === lastMonth.getTime(),
+    )).toBe(true);
+    expect(await workerA.tenantMonthExposureNano(three, currentMonth)).toBe(0);
+    expect((await reserve(
+      new LlmBudgetLedger(clientA as unknown as PrismaService).configure({
+        clock: () => currentMonth,
+      }),
+      three,
+      'now:0',
+    )).granted).toBe(true);
   });
 
   it('reservations of other tenants and conversations stay out of conversation exposure', async () => {
