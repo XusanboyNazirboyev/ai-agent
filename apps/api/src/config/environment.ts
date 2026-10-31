@@ -63,6 +63,9 @@ const environmentSchema = postgresEnvironmentSchema
       .string()
       .regex(/^[A-Za-z0-9_-]{1,256}$/)
       .optional(),
+    /** Shared Meta app credentials; keep only in server environment. */
+    INSTAGRAM_APP_SECRET: z.string().min(1).optional(),
+    INSTAGRAM_VERIFY_TOKEN: z.string().min(1).optional(),
     TELEGRAM_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
       .int()
