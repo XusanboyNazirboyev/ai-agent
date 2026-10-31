@@ -64,11 +64,7 @@ const CAP = 3_500; // room for exactly three reservations of UNIT
  */
 function previousUtcMonthStart(reference: Date): Date {
   return new Date(
-    Date.UTC(
-      reference.getUTCFullYear(),
-      reference.getUTCMonth() - 1,
-      1,
-    ),
+    Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() - 1, 1),
   );
 }
 
