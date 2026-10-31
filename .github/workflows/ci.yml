@@ -73,10 +73,6 @@ jobs:
       # coverage per pack/locale/risk group, zero false success claims.
       - run: pnpm test:eval
       - run: pnpm test:coverage
-      - name: Diagnose Prettier output for ledger integration test
-        run: |
-          pnpm --filter @agentcore/api exec prettier --config ../../packages/config/prettier.json --write src/agent/llm-budget-ledger.integration.spec.ts
-          git diff -- apps/api/src/agent/llm-budget-ledger.integration.spec.ts
       - run: pnpm format:check
       - run: pnpm build
       # Browser end-to-end tests: real Chromium against the built API and web
