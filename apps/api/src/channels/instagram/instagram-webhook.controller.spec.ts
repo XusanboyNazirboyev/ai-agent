@@ -113,56 +113,56 @@ describe('InstagramWebhookController POST intake', () => {
   it(
     'accepts a correctly signed message and returns intake counts',
     async () => {
-    const accept = vi.fn().mockResolvedValue('accepted');
-    const { controller } = makeController({ appSecret: APP_SECRET, accept });
-    const raw = Buffer.from(JSON.stringify(body));
-    const result = await controller.receive(
-      signInstagramBody(raw, APP_SECRET),
-      requestFor(raw),
-    );
-    expect(result).toEqual({ accepted: 1, duplicate: 0, ignored: 0 });
-    expect(accept).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'text',
-        messageId: 'mid.1',
-        accountId: '123456',
-        customerId: '987654',
-        text: 'Salom',
-      }),
-    );
+      const accept = vi.fn().mockResolvedValue('accepted');
+      const { controller } = makeController({ appSecret: APP_SECRET, accept });
+      const raw = Buffer.from(JSON.stringify(body));
+      const result = await controller.receive(
+        signInstagramBody(raw, APP_SECRET),
+        requestFor(raw),
+      );
+      expect(result).toEqual({ accepted: 1, duplicate: 0, ignored: 0 });
+      expect(accept).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'text',
+          messageId: 'mid.1',
+          accountId: '123456',
+          customerId: '987654',
+          text: 'Salom',
+        }),
+      );
   });
 
   it(
     'counts duplicate and ignored events without sending them to intake',
     async () => {
-    const accept = vi.fn().mockResolvedValue('duplicate');
-    const { controller } = makeController({ appSecret: APP_SECRET, accept });
-    const ignoredBody = {
-      object: 'instagram',
-      entry: [
-        {
-          id: '123456',
-          messaging: [
-            {
-              sender: { id: '987654' },
-              recipient: { id: '123456' },
-              message: { mid: 'echo.1', text: 'echo', is_echo: true },
-            },
-            {
-              sender: { id: '987654' },
-              recipient: { id: '123456' },
-              message: { mid: 'mid.1', text: 'Salom' },
-            },
-          ],
-        },
-      ],
-    };
-    const raw = Buffer.from(JSON.stringify(ignoredBody));
-    const result = await controller.receive(
-      signInstagramBody(raw, APP_SECRET),
-      requestFor(raw, ignoredBody),
-    );
-    expect(result).toEqual({ accepted: 0, duplicate: 1, ignored: 1 });
-    expect(accept).toHaveBeenCalledTimes(1);
+      const accept = vi.fn().mockResolvedValue('duplicate');
+      const { controller } = makeController({ appSecret: APP_SECRET, accept });
+      const ignoredBody = {
+        object: 'instagram',
+        entry: [
+          {
+            id: '123456',
+            messaging: [
+              {
+                sender: { id: '987654' },
+                recipient: { id: '123456' },
+                message: { mid: 'echo.1', text: 'echo', is_echo: true },
+              },
+              {
+                sender: { id: '987654' },
+                recipient: { id: '123456' },
+                message: { mid: 'mid.1', text: 'Salom' },
+              },
+            ],
+          },
+        ],
+      };
+      const raw = Buffer.from(JSON.stringify(ignoredBody));
+      const result = await controller.receive(
+        signInstagramBody(raw, APP_SECRET),
+        requestFor(raw, ignoredBody),
+      );
+      expect(result).toEqual({ accepted: 0, duplicate: 1, ignored: 1 });
+      expect(accept).toHaveBeenCalledTimes(1);
   });
 });
