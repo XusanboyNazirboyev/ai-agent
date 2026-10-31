@@ -11,6 +11,6 @@ export async function cleanupTestQueue(prefix: string, queueName: string): Promi
     throw new Error(`Refusing cleanup for non-test prefix: ${prefix}`);
   }
   const queue = new Queue(queueName, { prefix, connection: { host: '127.0.0.1', port: 6379 } });
-  await queue.obliterate({ force: true });
+  await queue.obliterate();
   await queue.close();
 }
