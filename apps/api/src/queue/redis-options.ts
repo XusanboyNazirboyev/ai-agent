@@ -1,5 +1,10 @@
 import type { RedisOptions } from 'bullmq';
 
+/** BullMQ key namespace; integration tests set a per-run prefix. */
+export function bullmqPrefix(): string {
+  return process.env.BULLMQ_PREFIX?.trim() || 'bull';
+}
+
 /** BullMQ connection options from the validated REDIS_URL. */
 export function redisOptions(redisUrl: string): RedisOptions {
   const url = new URL(redisUrl);
