@@ -297,8 +297,11 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     expect((await reserve(workerA, one, 'x:3')).granted).toBe(false);
     expect((await reserve(workerA, two, 'y:0')).granted).toBe(true);
     // Last month's reservations do not count this month.
-    const lastMonth = new Date();
-    lastMonth.setUTCMonth(lastMonth.getUTCMonth() - 1);
+    const now = new Date();
+    // Anchor to day 1 to avoid month-end rollover (e.g. Oct 31 - 1 month).
+    const lastMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+    );
     const old = new LlmBudgetLedger(
       clientA as unknown as PrismaService,
     ).configure({ clock: () => lastMonth, ttlMs: 10 * 60_000 });
