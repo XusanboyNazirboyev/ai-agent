@@ -1,6 +1,6 @@
 # ADR 031: Instagram direct messages as a channel adapter
 
-Status: Proposed (2026-10-31). Slice 1 (pure core) and slice 2a (GET verification handshake plus raw-body capture) are implemented on `feat/instagram-dm-webhook`; POST intake is not wired.
+Status: Proposed (2026-10-31). Slice 1 (pure core), slice 2a (GET verification handshake plus raw-body capture), and slice 2b (signed POST durable intake) are implemented on `feat/instagram-webhook-ingestion`; PR pending.
 
 ## Decision
 Instagram is a channel adapter beside Telegram (D6). The LLM provider stays separate (D15): one key serves every channel. Slice 1 is pure, dependency-free code in `apps/api/src/channels/instagram/`:
@@ -20,9 +20,10 @@ Instagram is a channel adapter beside Telegram (D6). The LLM provider stays sepa
 
 ## Implementation status
 - Slice 2a: NestJS `GET /webhooks/instagram` verifies `hub.mode`, `hub.verify_token`, and `hub.challenge`, failing closed when the token is missing or wrong. `NestFactory` preserves raw request bodies for the next POST/signature slice. Meta app secret and verify token are optional environment settings; no secrets are committed.
-- The GET handshake does not imply inbound POST works. POST has no route yet, and messages are not queued or answered.
+- POST checks the HMAC against Nest's captured raw body before using the parsed payload. Each text `mid` is stored once per active Instagram channel; contact, conversation, message, inbound event and outbox row are committed in one transaction. Echoes and unsupported/text-less messages are acknowledged as ignored.
+- The outbox event type is `instagram.inbound`; no Instagram worker consumes it yet. This slice stores inbound messages durably but does not run the agent or send replies.
 
 ## Next slices
-1. POST webhook: verify `X-Hub-Signature-256` against `rawBody` before parsing; resolve the active Instagram channel; durably store each event with `mid` idempotency and queue it through the existing agent pipeline. Do not acknowledge success before durable acceptance.
+1. Add an Instagram outbox publisher/worker and channel-neutral agent-pipeline adapter; do not route Instagram jobs through the Telegram sender or silently acknowledge unconsumed work.
 2. Add encrypted secret-purpose handling and an Instagram sender with the messaging-window gate, channel-mode parity, and channel-account connection UX.
 3. Fake Meta server and end-to-end tests; comments/private replies (7-day rule) remain a separate decision.
