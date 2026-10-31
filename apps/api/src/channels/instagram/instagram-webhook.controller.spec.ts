@@ -12,7 +12,10 @@ function makeController(options?: {
   verifyToken?: string;
   appSecret?: string;
   accept?: ReturnType<typeof vi.fn>;
-}) {
+}): {
+  controller: InstagramWebhookController;
+  webhook: { accept: ReturnType<typeof vi.fn> };
+} {
   const config = {
     get: vi.fn((key: string) =>
       key === 'INSTAGRAM_VERIFY_TOKEN'
@@ -76,7 +79,7 @@ describe('InstagramWebhookController POST intake', () => {
     ],
   };
 
-  function requestFor(rawBody: Buffer, parsedBody: unknown = body) {
+  function requestFor(rawBody: Buffer, parsedBody: unknown = body): never {
     return { rawBody, body: parsedBody } as never;
   }
 
