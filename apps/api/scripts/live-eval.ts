@@ -50,7 +50,8 @@ import {
  *   (default 30), LIVE_EVAL_MAX_CALLS (default 90 recorded model calls, at
  *   most LIVE_EVAL_CALLS_PER_TURN=4 per case), LIVE_EVAL_MAX_RUNTIME_MS
  *   (default 900000), LIVE_EVAL_MAX_OUTPUT_TOKENS (default 200, at most
- *   200: the per-call output ceiling of every request).
+ *   1024, the app's LLM_MAX_OUTPUT_TOKENS: the per-call output ceiling of
+ *   every request; reasoning models spend part of it on thinking).
  * - Reports go to LIVE_EVAL_REPORT_DIR (default eval/reports, gitignored).
  * Only fictional eval cases and MockConnector data are used. Never in CI.
  */
@@ -116,7 +117,7 @@ async function main(): Promise<void> {
     900_000,
     3_600_000,
   );
-  const maxOutputTokens = positiveInt('LIVE_EVAL_MAX_OUTPUT_TOKENS', 200, 200);
+  const maxOutputTokens = positiveInt('LIVE_EVAL_MAX_OUTPUT_TOKENS', 200, 1024);
   const listed = process.env.LIVE_EVAL_MODELS?.split(',')
     .map((model) => model.trim())
     .filter(Boolean);
