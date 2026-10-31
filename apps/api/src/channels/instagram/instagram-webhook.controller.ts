@@ -14,7 +14,10 @@ import type { RawBodyRequest } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import type { AppEnvironment } from '../../config/environment.js';
-import { answerInstagramHandshake, verifyInstagramSignature } from './instagram-signature.js';
+import {
+  answerInstagramHandshake,
+  verifyInstagramSignature,
+} from './instagram-signature.js';
 import { normalizeInstagramWebhook } from './instagram-normalizer.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
 
@@ -60,7 +63,9 @@ export class InstagramWebhookController {
       infer: true,
     });
     if (!appSecret || !request.rawBody) {
-      throw new ServiceUnavailableException('Instagram webhook is not configured');
+      throw new ServiceUnavailableException(
+        'Instagram webhook is not configured',
+      );
     }
     if (
       !verifyInstagramSignature({
@@ -87,7 +92,9 @@ export class InstagramWebhookController {
       }
       const result = await this.webhook.accept(event);
       if (result === 'unavailable') {
-        throw new ServiceUnavailableException('Instagram channel is unavailable');
+        throw new ServiceUnavailableException(
+          'Instagram channel is unavailable',
+        );
       }
       if (result === 'duplicate') duplicate += 1;
       else accepted += 1;
