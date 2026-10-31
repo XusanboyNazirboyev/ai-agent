@@ -309,12 +309,12 @@ export function renderMarkdown(report: EvaluationReport): string {
     if (failed.length > 0) {
       lines.push(
         '',
-        '| Failed case | Extraction | Intent | Draft | Turn outcome | Handover |',
-        '|---|---|---|---|---|---|',
+        '| Failed case | Extraction | Intent | Draft | Turn outcome | Handover | Budget stop |',
+        '|---|---|---|---|---|---|---|',
       );
       for (const c of failed)
         lines.push(
-          `| ${c.id} | ${c.diagnostics.extractionFailure ?? 'ok'} | ${c.diagnostics.intent ?? '-'} | ${c.diagnostics.draftFailure ?? 'ok'} | ${c.diagnostics.turnOutcome} | ${c.diagnostics.handover ?? '-'} |`,
+          `| ${c.id} | ${c.diagnostics.extractionFailure ?? 'ok'} | ${c.diagnostics.intent ?? '-'} | ${c.diagnostics.draftFailure ?? 'ok'} | ${c.diagnostics.turnOutcome} | ${c.diagnostics.handover ?? '-'} | ${c.diagnostics.budgetStop ?? '-'} |`,
         );
     }
   }

@@ -395,6 +395,8 @@ export interface EvalDiagnostics {
   readonly handover: string | undefined;
   readonly violations: readonly string[];
   readonly regenerated: boolean;
+  /** Which budget limit stopped the turn, when one did. */
+  readonly budgetStop: string | undefined;
 }
 
 export interface EvalOutcome {
@@ -647,6 +649,7 @@ export function scoreCase(
       handover: result.handover,
       violations: [...result.violations],
       regenerated: result.regenerated,
+      budgetStop: result.budgetStop,
     },
   };
 }

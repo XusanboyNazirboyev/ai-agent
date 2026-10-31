@@ -118,6 +118,18 @@ async function main(): Promise<void> {
     3_600_000,
   );
   const maxOutputTokens = positiveInt('LIVE_EVAL_MAX_OUTPUT_TOKENS', 200, 1024);
+  // Optional per-turn cost limit (default: the harness default, $0.02), at
+  // most $0.10; the whole-run budget above still bounds the total.
+  const turnBudgetRaw = process.env.LIVE_EVAL_TURN_BUDGET_USD;
+  const turnBudgetNano =
+    turnBudgetRaw === undefined ? undefined : usdToNano(turnBudgetRaw);
+  if (
+    turnBudgetNano !== undefined &&
+    (turnBudgetNano <= 0 || turnBudgetNano > usdToNano('0.10'))
+  )
+    throw new Error(
+      'LIVE_EVAL_TURN_BUDGET_USD must be greater than 0 and at most 0.10.',
+    );
   const listed = process.env.LIVE_EVAL_MODELS?.split(',')
     .map((model) => model.trim())
     .filter(Boolean);
@@ -268,6 +280,9 @@ async function main(): Promise<void> {
       budgetTokens,
       limits: {
         maxOutputTokensPerCall: maxOutputTokens,
+        ...(turnBudgetNano !== undefined
+          ? { maxTurnCostNano: turnBudgetNano }
+          : {}),
         maxCallsPerTurn: callsPerTurn,
       },
       maxCalls,
