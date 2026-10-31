@@ -16,9 +16,7 @@ import { answerInstagramHandshake } from './instagram-signature.js';
  */
 @Controller('webhooks/instagram')
 export class InstagramWebhookController {
-  constructor(
-    private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+  constructor(private readonly config: ConfigService<AppEnvironment, true>) {}
 
   @Get()
   verify(
