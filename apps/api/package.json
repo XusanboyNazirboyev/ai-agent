@@ -35,6 +35,7 @@
     "locale:review": "tsx scripts/locale-review-package.ts",
     "operator:token": "tsx scripts/operator-token.ts",
     "dev:superadmin": "tsx scripts/dev-superadmin.ts",
+    "dev:mock-connector": "tsx scripts/dev-mock-connector.ts",
     "simulate": "tsx scripts/simulate.ts",
     "knowledge:ingest": "tsx scripts/knowledge-ingest.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
