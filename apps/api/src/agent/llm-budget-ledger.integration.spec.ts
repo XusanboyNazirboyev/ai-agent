@@ -332,17 +332,23 @@ describe('tenant-month reservations (PostgreSQL)', () => {
       select: { periodStart: true, state: true },
     });
     expect(priorMonthRows).toHaveLength(3);
-    expect(priorMonthRows.every((row) =>
-      row.periodStart.getTime() === lastMonth.getTime(),
-    )).toBe(true);
+    expect(
+      priorMonthRows.every(
+        (row) => row.periodStart.getTime() === lastMonth.getTime(),
+      ),
+    ).toBe(true);
     expect(await workerA.tenantMonthExposureNano(three, currentMonth)).toBe(0);
-    expect((await reserve(
-      new LlmBudgetLedger(clientA as unknown as PrismaService).configure({
-        clock: () => currentMonth,
-      }),
-      three,
-      'now:0',
-    )).granted).toBe(true);
+    expect(
+      (
+        await reserve(
+          new LlmBudgetLedger(clientA as unknown as PrismaService).configure({
+            clock: () => currentMonth,
+          }),
+          three,
+          'now:0',
+        )
+      ).granted,
+    ).toBe(true);
   });
 
   it('reservations of other tenants and conversations stay out of conversation exposure', async () => {
