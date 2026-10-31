@@ -12,7 +12,15 @@ const event: NormalizedInstagramText = {
   receivedAt: new Date('2026-10-31T10:00:00.000Z'),
 };
 
-function makeService(options?: { channel?: unknown; duplicate?: unknown }) {
+function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
+  service: InstagramWebhookService;
+  prisma: PrismaService;
+  tx: {
+    inboundEvent: { create: ReturnType<typeof vi.fn> };
+    message: { create: ReturnType<typeof vi.fn> };
+    outboxEvent: { create: ReturnType<typeof vi.fn> };
+  };
+} {
   const tx = {
     channelAccount: {
       findFirst: vi.fn().mockResolvedValue(
