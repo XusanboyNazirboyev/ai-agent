@@ -84,13 +84,17 @@ describe('InstagramWebhookController POST intake', () => {
   }
 
   it('rejects when the app secret or raw body is missing', async () => {
-    const { controller } = makeController({ appSecret: APP_SECRET });
-    await expect(
-      controller.receive(undefined, requestFor(Buffer.from(JSON.stringify(body)))),
-    ).rejects.toThrow(ServiceUnavailableException);
     const unconfigured = makeController();
     await expect(
-      unconfigured.controller.receive('sha256=bad', requestFor(Buffer.from('{}'))),
+      unconfigured.controller.receive(
+        'sha256=bad',
+        requestFor(Buffer.from(JSON.stringify(body))),
+      ),
+    ).rejects.toThrow(ServiceUnavailableException);
+
+    const { controller } = makeController({ appSecret: APP_SECRET });
+    await expect(
+      controller.receive('sha256=bad', { body } as never),
     ).rejects.toThrow(ServiceUnavailableException);
   });
 
