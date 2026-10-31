@@ -59,7 +59,9 @@ async function tenant(): Promise<string> {
 const UNIT = 1_000;
 const CAP = 3_500; // room for exactly three reservations of UNIT
 
-/** Start of the previous UTC month; avoids end-of-month setUTCMonth overflow. */
+/**
+ * Start of the previous UTC month; avoids end-of-month `setUTCMonth` overflow.
+ */
 function previousUtcMonthStart(reference: Date): Date {
   return new Date(
     Date.UTC(
