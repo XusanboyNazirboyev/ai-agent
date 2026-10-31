@@ -1,7 +1,4 @@
-import {
-  Injectable,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import type { NormalizedInstagramText } from './instagram-normalizer.js';
@@ -15,7 +12,10 @@ export class InstagramWebhookService {
   constructor(private readonly prisma: PrismaService) {}
 
   async accept(event: NormalizedInstagramText): Promise<InstagramAcceptance> {
-    if (!EXTERNAL_ID.test(event.accountId) || !EXTERNAL_ID.test(event.customerId)) {
+    if (
+      !EXTERNAL_ID.test(event.accountId) ||
+      !EXTERNAL_ID.test(event.customerId)
+    ) {
       throw new ServiceUnavailableException('Instagram account is unavailable');
     }
 
@@ -159,6 +159,7 @@ export class InstagramWebhookService {
             aggregateType: 'conversation',
             aggregateId: conversation.id,
             idempotencyKey: `instagram.inbound:${channel.id}:${event.messageId}`,
+
             payload: {
               inboundEventId: inboundEvent.id,
               conversationId: conversation.id,
