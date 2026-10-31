@@ -1,9 +1,4 @@
-import {
-  Controller,
-  ForbiddenException,
-  Get,
-  Query,
-} from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Query } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../../config/environment.js';
 import { answerInstagramHandshake } from './instagram-signature.js';
