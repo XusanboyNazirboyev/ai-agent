@@ -29,7 +29,10 @@ function makeController(options?: {
     accept: options?.accept ?? vi.fn().mockResolvedValue('accepted'),
   };
   return {
-    controller: new InstagramWebhookController(config as never, webhook as never),
+    controller: new InstagramWebhookController(
+      config as never,
+      webhook as never,
+    ),
     webhook,
   };
 }
@@ -107,7 +110,9 @@ describe('InstagramWebhookController POST intake', () => {
     expect(webhook.accept).not.toHaveBeenCalled();
   });
 
-  it('accepts a correctly signed message and returns intake counts', async () => {
+  it(
+    'accepts a correctly signed message and returns intake counts',
+    async () => {
     const accept = vi.fn().mockResolvedValue('accepted');
     const { controller } = makeController({ appSecret: APP_SECRET, accept });
     const raw = Buffer.from(JSON.stringify(body));
@@ -127,7 +132,9 @@ describe('InstagramWebhookController POST intake', () => {
     );
   });
 
-  it('counts duplicate and ignored events without sending them to intake', async () => {
+  it(
+    'counts duplicate and ignored events without sending them to intake',
+    async () => {
     const accept = vi.fn().mockResolvedValue('duplicate');
     const { controller } = makeController({ appSecret: APP_SECRET, accept });
     const ignoredBody = {
