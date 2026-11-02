@@ -50,13 +50,23 @@ export function DocumentDialog(props: {
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (props.open && !dialog.open) {
+    const reset = (): void => {
       setDraft(EMPTY);
       setConsent(false);
       setFileProblem(false);
+    };
+    if (props.open && !dialog.open) {
+      reset();
       dialog.showModal();
     }
-    if (!props.open && dialog.open) dialog.close();
+    if (!props.open && dialog.open) {
+      dialog.close();
+      // Forget the draft now, not on the next open: there the reset renders
+      // only after showModal(), so a reopened dialog briefly shows the old
+      // values, and typing the same title again is swallowed by React (the
+      // DOM value does not change) before the reset clears it (DEF-019).
+      reset();
+    }
   }, [props.open]);
 
   async function choose(file: File | undefined): Promise<void> {
