@@ -75,7 +75,7 @@ export class LeadSyncService {
     });
     for (const row of rows) {
       try {
-        const connector = this.loader.create(row);
+        const connector = await this.loader.create(row);
         if (
           connector.capabilities.createLead &&
           typeof connector.createLead === 'function'
