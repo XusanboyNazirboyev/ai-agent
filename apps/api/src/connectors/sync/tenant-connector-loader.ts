@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { parseTenantConnectorConfig } from '@agentcore/shared';
 import type { TenantConnector } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
@@ -11,6 +11,10 @@ import {
   ConnectorCapabilityError,
   ConnectorConfigurationError,
 } from '../interfaces/errors.js';
+import {
+  ConnectorSecretStore,
+  isConnectorSecretPurpose,
+} from '../../secrets/connector-secret-store.js';
 import { ConnectorRegistry } from '../registry/connector-registry.js';
 
 /**
@@ -25,6 +29,7 @@ export class TenantConnectorLoader {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: ConnectorRegistry,
+    @Optional() private readonly secrets?: ConnectorSecretStore,
   ) {}
 
   findActive(
@@ -43,7 +48,7 @@ export class TenantConnectorLoader {
     });
   }
 
-  create(row: TenantConnector): CrmConnector {
+  async create(row: TenantConnector): Promise<CrmConnector> {
     const parsed = parseTenantConnectorConfig(row.connectorKey, row.config);
     if (!parsed.success) {
       throw new ConnectorConfigurationError({
@@ -62,13 +67,59 @@ export class TenantConnectorLoader {
       });
     }
 
+    const stored = await this.storedSecrets(row);
     const connector = this.registry.create(
       { tenantId: row.tenantId, connectorKey: row.connectorKey },
       row.config as Record<string, unknown>,
+      stored,
     );
     assertStoredCapabilities(row, connector.capabilities);
     return connector;
   }
+
+  /**
+   * `store:<purpose>` references in the row's config (ADR 032) resolve to the
+   * row's own encrypted secret. Without a store, or for an unknown purpose,
+   * nothing is resolved and the connector fails closed as for a missing env
+   * secret.
+   */
+  private async storedSecrets(row: TenantConnector): Promise<{
+    storedSecrets?: ReadonlyMap<string, string>;
+    secretVersion?: string;
+  }> {
+    const refs = storeReferences(row.config);
+    if (refs.length === 0 || !this.secrets?.configured) return {};
+    const values = new Map<string, string>();
+    const versions: string[] = [];
+    for (const ref of refs) {
+      const purpose = ref.slice('store:'.length);
+      if (!isConnectorSecretPurpose(purpose)) continue;
+      const secret = await this.secrets.read(
+        { tenantId: row.tenantId, tenantConnectorId: row.id },
+        purpose,
+      );
+      if (!secret) continue;
+      values.set(ref, secret.value);
+      versions.push(`${purpose}:${secret.version}`);
+    }
+    return { storedSecrets: values, secretVersion: versions.join(',') };
+  }
+}
+
+const STORE_REF = /^store:[a-z0-9_]{1,40}$/u;
+
+/** Every `store:` reference anywhere in a connector config. */
+export function storeReferences(config: unknown): string[] {
+  const found = new Set<string>();
+  const walk = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (STORE_REF.test(value)) found.add(value);
+    } else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === 'object')
+      Object.values(value).forEach(walk);
+  };
+  walk(config);
+  return [...found].sort();
 }
 
 /**
