@@ -49,6 +49,7 @@ type NavKey =
   | 'inbox'
   | 'leads'
   | 'contacts'
+  | 'analytics'
   | 'bot'
   | 'knowledge'
   | 'channels'
@@ -59,6 +60,7 @@ const NAV: { key: NavKey; icon: IconName }[] = [
   { key: 'inbox', icon: 'inbox' },
   { key: 'leads', icon: 'target' },
   { key: 'contacts', icon: 'users' },
+  { key: 'analytics', icon: 'chart' },
   { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
   { key: 'channels', icon: 'link' },

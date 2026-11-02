@@ -6,9 +6,10 @@ import { useI18n } from '@/i18n';
 import { Icon, type IconName } from './ui/icons';
 
 const ITEMS: {
-  key: 'bot' | 'knowledge' | 'channels' | 'crm' | 'settings';
+  key: 'analytics' | 'bot' | 'knowledge' | 'channels' | 'crm' | 'settings';
   icon: IconName;
 }[] = [
+  { key: 'analytics', icon: 'chart' },
   { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
   { key: 'channels', icon: 'link' },
