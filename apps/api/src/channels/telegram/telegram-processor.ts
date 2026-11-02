@@ -16,6 +16,16 @@ import {
   TelegramApiError,
   TelegramSender,
 } from './telegram-sender.js';
+import {
+  InstagramAmbiguousSendError,
+  InstagramApiError,
+} from '../instagram/instagram-graph.js';
+import { evaluateMessagingWindow } from '../instagram/instagram-messaging-window.js';
+import {
+  InstagramNotConfiguredError,
+  InstagramSender,
+} from '../instagram/instagram-sender.js';
+import { splitInstagramText } from '../instagram/instagram-text.js';
 
 export type TelegramQueueEvent = {
   outboxId: string;
@@ -38,11 +48,15 @@ export class TelegramProcessor {
     @Optional() private readonly leads?: LeadService,
     @Optional() private readonly leadSync?: LeadSyncService,
     @Optional() private readonly actions?: ActionService,
+    @Optional() private readonly instagram?: InstagramSender,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
     if (event.type === 'telegram.inbound') {
       return this.processInbound(event);
+    }
+    if (event.type === 'instagram.inbound') {
+      return this.processInstagramInbound(event);
     }
     if (event.type === 'telegram.send') {
       await this.processSend(event);
@@ -70,7 +84,10 @@ export class TelegramProcessor {
   async markExhausted(event: TelegramQueueEvent): Promise<void> {
     if (isHandoverEvent(event.type)) {
       await this.handovers?.markExhausted(event);
-    } else if (event.type === 'telegram.inbound') {
+    } else if (
+      event.type === 'telegram.inbound' ||
+      event.type === 'instagram.inbound'
+    ) {
       const inboundEventId = jsonString(event.payload, 'inboundEventId');
       // An agent turn owned by this job can no longer finish.
       await this.agent?.failOwnedTurns(event);
@@ -125,6 +142,39 @@ export class TelegramProcessor {
       }
     }
     await this.processEcho(event, inboundEventId, conversationId);
+  }
+
+  /**
+   * Instagram DM batches run through the same agent pipeline as Telegram
+   * (modes, effective-mode degradation, handover, idempotent commit). With
+   * the assistant OFF nothing is sent: the Phase 2 echo is Telegram-only.
+   */
+  private async processInstagramInbound(
+    event: TelegramQueueEvent,
+  ): Promise<ProcessResult> {
+    const inboundEventId = jsonString(event.payload, 'inboundEventId');
+    const conversationId = jsonString(event.payload, 'conversationId');
+    if (!inboundEventId || !conversationId) {
+      throw new Error('Invalid durable inbound event reference');
+    }
+    if (this.agent) {
+      const mode = await this.agent.modeFor(event.tenantId, conversationId);
+      if (mode !== 'OFF') {
+        return this.agent.run(event, {
+          inboundEventId,
+          conversationId,
+          requestedMode: mode,
+        });
+      }
+    }
+    await this.prisma.inboundEvent.updateMany({
+      where: {
+        id: inboundEventId,
+        tenantId: event.tenantId,
+        status: 'RECEIVED',
+      },
+      data: { status: 'PROCESSED', processedAt: new Date() },
+    });
   }
 
   /** Phase 2 behavior (agent mode OFF): one echo per debounced batch. */
@@ -267,6 +317,132 @@ export class TelegramProcessor {
       .catch(() => undefined); // already recorded for this message
   }
 
+  private async failMessage(
+    tenantId: string,
+    messageId: string,
+    code: string,
+    from: 'PENDING' | 'UNKNOWN',
+  ): Promise<void> {
+    await this.prisma.message.updateMany({
+      where: { id: messageId, tenantId, deliveryState: from },
+      data: { deliveryState: 'FAILED', deliveryErrorCode: code },
+    });
+  }
+
+  /**
+   * Instagram send (ADR 031): only inside the 24-hour window opened by the
+   * customer's last message, code-decided (D4). The 7-day HUMAN_AGENT tag is
+   * not used: its request field is not stated on the pages read, so an
+   * operator reply past 24 hours fails instead. Replies are split into
+   * 1,000-byte parts; once one part is out, a failure is never resent.
+   */
+  private async sendInstagram(
+    tenantId: string,
+    message: {
+      readonly id: string;
+      readonly text: string;
+      readonly providerChatId: string;
+      readonly channelAccountId: string;
+      readonly authorType: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
+      readonly conversation: { readonly lastInboundAt: Date | null };
+    },
+  ): Promise<void> {
+    const window = evaluateMessagingWindow({
+      lastCustomerMessageAt: message.conversation.lastInboundAt ?? undefined,
+      now: new Date(),
+      author: message.authorType === 'OPERATOR' ? 'human' : 'bot',
+    });
+    if (!window.allowed || window.tag !== 'none') {
+      await this.failMessage(
+        tenantId,
+        message.id,
+        'instagram_window_closed',
+        'PENDING',
+      );
+      return;
+    }
+    const parts = splitInstagramText(message.text);
+    if (parts.length === 0 || !this.instagram) {
+      await this.failMessage(
+        tenantId,
+        message.id,
+        parts.length === 0
+          ? 'instagram_send_invalid'
+          : 'instagram_not_configured',
+        'PENDING',
+      );
+      return;
+    }
+
+    const claimed = await this.prisma.message.updateMany({
+      where: { id: message.id, tenantId, deliveryState: 'PENDING' },
+      data: { deliveryState: 'UNKNOWN', deliveryAttempts: { increment: 1 } },
+    });
+    if (claimed.count !== 1) return;
+
+    const sent: string[] = [];
+    try {
+      for (const part of parts) {
+        const result = await this.instagram.sendText(
+          tenantId,
+          message.channelAccountId,
+          message.providerChatId,
+          part,
+        );
+        sent.push(result.messageId);
+      }
+    } catch (error) {
+      if (sent.length > 0) {
+        // Part of the reply reached the customer: resending would repeat it.
+        await this.failMessage(
+          tenantId,
+          message.id,
+          'instagram_partial_send',
+          'UNKNOWN',
+        );
+        return;
+      }
+      if (error instanceof InstagramAmbiguousSendError) {
+        // Meta may have delivered it: stay UNKNOWN, never resend blindly.
+        await this.prisma.message.updateMany({
+          where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
+          data: { deliveryErrorCode: 'instagram_ambiguous_outcome' },
+        });
+        return;
+      }
+      if (error instanceof InstagramApiError && error.retryable) {
+        await this.prisma.message.updateMany({
+          where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
+          data: {
+            deliveryState: 'PENDING',
+            deliveryErrorCode: `instagram_api_${error.kind}`,
+          },
+        });
+        throw error;
+      }
+      await this.failMessage(
+        tenantId,
+        message.id,
+        error instanceof InstagramApiError
+          ? `instagram_api_${error.kind}`
+          : error instanceof InstagramNotConfiguredError
+            ? 'instagram_not_configured'
+            : 'instagram_send_invalid',
+        'UNKNOWN',
+      );
+      return;
+    }
+    await this.prisma.message.updateMany({
+      where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
+      data: {
+        deliveryState: 'SENT',
+        providerMessageId: sent[0],
+        deliveryErrorCode: null,
+      },
+    });
+    await this.afterDelivery(tenantId, message.id);
+  }
+
   private async processSend(event: TelegramQueueEvent): Promise<void> {
     const messageId = jsonString(event.payload, 'messageId');
     if (!messageId)
@@ -279,6 +455,9 @@ export class TelegramProcessor {
         providerChatId: true,
         channelAccountId: true,
         deliveryState: true,
+        authorType: true,
+        channelAccount: { select: { channelType: true } },
+        conversation: { select: { lastInboundAt: true } },
       },
     });
     if (
@@ -289,6 +468,12 @@ export class TelegramProcessor {
       return;
     }
     if (message.deliveryState === 'UNKNOWN') return;
+    // One send queue for every channel: the account decides the transport, so
+    // a reply to an Instagram customer can never reach the Telegram sender.
+    if (message.channelAccount.channelType === 'instagram') {
+      await this.sendInstagram(event.tenantId, message);
+      return;
+    }
 
     const claimed = await this.prisma.message.updateMany({
       where: {

@@ -85,13 +85,16 @@ export { agentModePolicyFrom as policyFrom } from '../agent/agent-mode.js';
 
 /**
  * Credentials count as "ui" only with both secrets saved (token and webhook
- * secret); the environment bot counts for the one account it names.
+ * secret); the environment bot counts for the one account it names. An
+ * Instagram account has only its saved access token (no environment source).
  */
 export function credentialSource(
-  row: { id: string },
+  row: { id: string; channelType?: string },
   savedPurposes: ReadonlySet<string>,
   config: ConfigService<AppEnvironment, true>,
 ): CredentialSource {
+  if (row.channelType === 'instagram')
+    return savedPurposes.has('instagram_access_token') ? 'ui' : 'none';
   if (savedPurposes.has('bot_token') && savedPurposes.has('webhook_secret'))
     return 'ui';
   const served = config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', { infer: true });

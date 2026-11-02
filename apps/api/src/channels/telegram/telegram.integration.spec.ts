@@ -29,6 +29,13 @@ const prisma = new PrismaClient({
   adapter: createPostgresAdapter(process.env, 'TEST_'),
 });
 
+/** Telegram message id the fake sender returns for the queued echo. */
+const ECHO_PROVIDER_MESSAGE_ID = '902';
+/** How long the fake send takes, so the in-flight UNKNOWN state is seen (DEF-018). */
+const SLOW_SEND_MS = 300;
+/** A delivery still UNKNOWN after this long is stuck, not in flight. */
+const UNKNOWN_SETTLE_MS = 2_000;
+
 function config(
   values: Record<string, unknown>,
 ): ConfigService<AppEnvironment, true> {
@@ -349,7 +356,17 @@ describe('Telegram persistence and processing integration', () => {
       await fixture.service.accept(fixture.channelAccountId, normalized),
     ).toBe('duplicate');
 
-    const sendMessage = vi.fn().mockResolvedValue({ messageId: '902' });
+    // A slow send keeps the reply in UNKNOWN (claimed, provider result not
+    // yet back) long enough for the poll below to see it every run (DEF-018).
+    const sendMessage = vi.fn(
+      (_chatId: string, _text: string, _channelAccountId?: string) =>
+        new Promise((resolve) =>
+          setTimeout(
+            () => resolve({ messageId: ECHO_PROVIDER_MESSAGE_ID }),
+            SLOW_SEND_MS,
+          ),
+        ),
+    );
     const processor = new TelegramProcessor(
       prisma as unknown as PrismaService,
       { sendMessage } as unknown as TelegramSender,
@@ -364,6 +381,9 @@ describe('Telegram persistence and processing integration', () => {
     try {
       const deadline = Date.now() + 15_000;
       let reply = null;
+      // UNKNOWN is also the in-flight state between the claim and the
+      // provider result: it is a failure only when it does not settle.
+      let unknownSince: number | null = null;
       while (Date.now() < deadline) {
         reply = await prisma.message.findFirst({
           where: {
@@ -373,18 +393,22 @@ describe('Telegram persistence and processing integration', () => {
           },
         });
         if (reply?.deliveryState === 'SENT') break;
-        if (
-          reply?.deliveryState === 'FAILED' ||
-          reply?.deliveryState === 'UNKNOWN'
-        ) {
-          throw new Error(`Echo delivery ended in ${reply.deliveryState}`);
+        if (reply?.deliveryState === 'FAILED')
+          throw new Error('Echo delivery ended in FAILED');
+        if (reply?.deliveryState === 'UNKNOWN') {
+          unknownSince ??= Date.now();
+          if (Date.now() - unknownSince > UNKNOWN_SETTLE_MS)
+            throw new Error('Echo delivery stuck in UNKNOWN');
+        } else {
+          unknownSince = null;
         }
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
+      expect(unknownSince).not.toBeNull(); // the in-flight state was seen
       expect(reply).toMatchObject({
         text: 'queued echo',
         deliveryState: 'SENT',
-        providerMessageId: '902',
+        providerMessageId: ECHO_PROVIDER_MESSAGE_ID,
       });
       expect(
         sendMessage.mock.calls.filter(
