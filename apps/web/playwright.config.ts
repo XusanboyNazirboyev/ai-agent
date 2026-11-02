@@ -40,11 +40,14 @@ const SECRETS_KEY =
 
 /** The fake api.telegram.org of the e2e (started by e2e/channels-connect.spec.ts). */
 export const FAKE_TELEGRAM_PORT = 4020;
+/** The fake Bitrix24 portal of the e2e (started by e2e/crm-connect.spec.ts). */
+export const FAKE_BITRIX24_PORT = 4022;
 
 export const E2E_ENV = {
   SECRETS_MASTER_KEY: SECRETS_KEY,
   PUBLIC_BASE_URL: 'https://e2e.example.test',
   TELEGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
+  BITRIX24_TEST_BASE_URL: `http://127.0.0.1:${FAKE_BITRIX24_PORT}`,
   WEB_PROXY_SECRET: PROXY_SECRET,
   ENV_FILE: resolve(import.meta.dirname, 'e2e/empty.env'),
   NODE_ENV: 'development',

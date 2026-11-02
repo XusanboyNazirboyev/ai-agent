@@ -141,7 +141,7 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
       for (const row of await this.loader.listActive()) {
         let syncable = false;
         try {
-          syncable = this.loader.create(row).capabilities.sync;
+          syncable = (await this.loader.create(row)).capabilities.sync;
         } catch {
           syncable = true;
         }

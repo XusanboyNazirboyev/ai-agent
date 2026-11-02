@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import IntlMessageFormat from 'intl-messageformat';
 import { describe, expect, it } from 'vitest';
 import { CATALOGS, LOCALES, detectLocale, translate } from './index';
 
@@ -32,6 +33,19 @@ describe('translation catalogs (CI gate)', () => {
       }
     },
   );
+
+  it.each(LOCALES)('%s: every message is valid ICU', (locale) => {
+    // A stray "<word>" is read as a markup tag and fails only when shown.
+    const broken: string[] = [];
+    for (const [key, value] of Object.entries(CATALOGS[locale])) {
+      try {
+        new IntlMessageFormat(value, locale);
+      } catch {
+        broken.push(key);
+      }
+    }
+    expect(broken).toEqual([]);
+  });
 
   it('formats plurals per language', () => {
     expect(translate('en', 'list.waitingFor', { minutes: 1 })).toContain(
@@ -211,6 +225,10 @@ describe('source uses the catalog', () => {
       'TELEGRAM_REJECTED',
       'INVALID_CHAT_ID',
       'WEBHOOK_NOT_REMOVED',
+      'INVALID_WEBHOOK_URL',
+      'CRM_UNREACHABLE',
+      'CRM_REJECTED',
+      'LEADS_DISABLED',
       'DOCUMENT_LIMIT',
       'DOCUMENT_TOO_LARGE',
       'UNKNOWN',

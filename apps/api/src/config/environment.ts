@@ -271,6 +271,11 @@ const environmentSchema = postgresEnvironmentSchema
     SECRETS_PREVIOUS_KEYS: z.string().max(2000).optional(),
     /** Test double for api.telegram.org (e2e). Refused in production. */
     TELEGRAM_API_BASE_URL: z.url().optional(),
+    /**
+     * Test only (e2e fake portal, ADR 032): the web Bitrix24 check sends its
+     * calls to this base instead of the portal. Refused in production.
+     */
+    BITRIX24_TEST_BASE_URL: z.url().optional(),
     /** https base URL of this API as Telegram sees it (webhook target). */
     PUBLIC_BASE_URL: z
       .url()
@@ -353,6 +358,17 @@ const environmentSchema = postgresEnvironmentSchema
     STUCK_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   })
   .superRefine((environment, context) => {
+    if (
+      environment.BITRIX24_TEST_BASE_URL &&
+      environment.NODE_ENV === 'production'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['BITRIX24_TEST_BASE_URL'],
+        message:
+          'BITRIX24_TEST_BASE_URL is a test setting and is refused in production',
+      });
+    }
     if (
       environment.TELEGRAM_API_BASE_URL &&
       environment.NODE_ENV === 'production'

@@ -76,7 +76,13 @@ export class ConnectorRegistry {
   create(
     context: ConnectorContext,
     config: Record<string, unknown>,
-    options: { resolveSecret?: SecretResolver } = {},
+    options: {
+      resolveSecret?: SecretResolver;
+      /** Secrets read from the connector secret store, by their `store:` reference. */
+      storedSecrets?: ReadonlyMap<string, string>;
+      /** Changes when a stored secret is replaced, so the cached instance is rebuilt. */
+      secretVersion?: string;
+    } = {},
   ): CrmConnector {
     if (!context.tenantId || !context.connectorKey) {
       throw new ConnectorConfigurationError({
@@ -86,6 +92,7 @@ export class ConnectorRegistry {
     const instanceKey = `${context.tenantId}:${context.connectorKey}`;
     const fingerprint = createHash('sha256')
       .update(stableStringify(config))
+      .update(`\u0000${options.secretVersion ?? ''}`)
       .digest('hex');
     const existing = this.instances.get(instanceKey);
     if (existing?.fingerprint === fingerprint) return existing.connector;
@@ -99,8 +106,22 @@ export class ConnectorRegistry {
       });
     }
 
+    const stored = options.storedSecrets;
+    const fallback = this.secretResolver;
     const connector = registration.factory(context, config, {
-      resolveSecret: options.resolveSecret ?? this.secretResolver,
+      resolveSecret:
+        options.resolveSecret ??
+        (stored && stored.size > 0
+          ? {
+              // A `store:` reference resolves only to this connector's own
+              // stored value; every other reference goes to the deployment
+              // resolver (env), which never resolves `store:`.
+              resolve: (ref): string | undefined =>
+                ref !== undefined && stored.has(ref)
+                  ? stored.get(ref)
+                  : fallback.resolve(ref),
+            }
+          : fallback),
     });
     this.verifyCapabilities(connector, registration);
 

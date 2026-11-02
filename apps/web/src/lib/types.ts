@@ -176,3 +176,16 @@ export interface KnowledgeDocumentItem {
   preview: string;
   updatedAt: string;
 }
+
+/** A connected CRM (ADR 032); the saved credential itself is never sent. */
+export interface ConnectorSummary {
+  id: string;
+  connectorKey: string;
+  status: 'ACTIVE' | 'DISABLED' | 'ERROR';
+  configured: boolean;
+}
+
+export interface ConnectorList {
+  items: ConnectorSummary[];
+  secretsConfigured: boolean;
+}
