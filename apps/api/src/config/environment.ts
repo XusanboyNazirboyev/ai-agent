@@ -66,6 +66,8 @@ const environmentSchema = postgresEnvironmentSchema
     /** Shared Meta app credentials; keep only in server environment. */
     INSTAGRAM_APP_SECRET: z.string().min(1).optional(),
     INSTAGRAM_VERIFY_TOKEN: z.string().min(1).optional(),
+    /** Test setting for a fake Meta server; refused in production. */
+    INSTAGRAM_API_BASE_URL: z.url().optional(),
     TELEGRAM_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
       .int()
@@ -362,6 +364,17 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['TELEGRAM_API_BASE_URL'],
         message:
           'TELEGRAM_API_BASE_URL is a test setting and is refused in production',
+      });
+    }
+    if (
+      environment.INSTAGRAM_API_BASE_URL &&
+      environment.NODE_ENV === 'production'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['INSTAGRAM_API_BASE_URL'],
+        message:
+          'INSTAGRAM_API_BASE_URL is a test setting and is refused in production',
       });
     }
     if (

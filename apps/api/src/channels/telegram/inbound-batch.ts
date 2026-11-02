@@ -38,6 +38,17 @@ export interface InboundBatch {
 }
 
 /**
+ * Position of an inbound event in its conversation: `orderKey` when the
+ * channel stores one (Instagram: our message sequence, because its `mid` is
+ * opaque), otherwise Telegram's increasing `providerMessageId`.
+ */
+function orderOf(payload: Prisma.JsonValue): string | null {
+  return (
+    jsonString(payload, 'orderKey') ?? jsonString(payload, 'providerMessageId')
+  );
+}
+
+/**
  * Debounced batch selection (Phase 2, ADR 005), shared by the echo path and
  * the agent path. Must run inside the conversation's advisory-lock
  * transaction. Pending RECEIVED events are ordered by provider message id;
@@ -66,7 +77,7 @@ export async function selectInboundBatch(
   const candidates = pending
     .map((candidate) => ({
       event: candidate,
-      messageId: jsonString(candidate.redactedPayload, 'providerMessageId'),
+      messageId: orderOf(candidate.redactedPayload),
       storedMessageId: jsonString(candidate.redactedPayload, 'messageId'),
     }))
     .filter(
@@ -92,9 +103,7 @@ export async function selectInboundBatch(
     },
     orderBy: { processedAt: 'desc' },
   });
-  const cursor = previous
-    ? jsonString(previous.redactedPayload, 'providerMessageId')
-    : null;
+  const cursor = previous ? orderOf(previous.redactedPayload) : null;
   const late = cursor
     ? candidates.filter(
         (candidate) => compareProviderIds(candidate.messageId, cursor) <= 0,

@@ -23,11 +23,13 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
 } {
   const tx = {
     channelAccount: {
-      findFirst: vi.fn().mockResolvedValue(
-        options?.channel === undefined
-          ? { id: 'channel-1', tenantId: 'tenant-1' }
-          : options.channel,
-      ),
+      findFirst: vi
+        .fn()
+        .mockResolvedValue(
+          options?.channel === undefined
+            ? { id: 'channel-1', tenantId: 'tenant-1' }
+            : options.channel,
+        ),
     },
     inboundEvent: {
       findUnique: vi.fn().mockResolvedValue(options?.duplicate ?? null),
@@ -59,64 +61,56 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
 }
 
 describe('InstagramWebhookService', () => {
-  it(
-    'persists one tenant-scoped inbound event and outbox row atomically',
-    async () => {
-      const { service, prisma, tx } = makeService();
-      await expect(service.accept(event)).resolves.toBe('accepted');
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(tx.inboundEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            tenantId: 'tenant-1',
-            channelAccountId: 'channel-1',
-            providerEventId: event.messageId,
-          }),
+  it('persists one tenant-scoped inbound event and outbox row atomically', async () => {
+    const { service, prisma, tx } = makeService();
+    await expect(service.accept(event)).resolves.toBe('accepted');
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.inboundEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tenantId: 'tenant-1',
+          channelAccountId: 'channel-1',
+          providerEventId: event.messageId,
         }),
-      );
-      expect(tx.message.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            text: event.text,
-            providerMessageId: event.messageId,
-            sequence: 5,
-          }),
+      }),
+    );
+    expect(tx.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          text: event.text,
+          providerMessageId: event.messageId,
+          sequence: 5,
         }),
-      );
-      expect(tx.outboxEvent.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            type: 'instagram.inbound',
-            idempotencyKey: 'instagram.inbound:channel-1:mid.123',
-          }),
+      }),
+    );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'instagram.inbound',
+          idempotencyKey: 'instagram.inbound:channel-1:mid.123',
         }),
-      );
+      }),
+    );
   });
 
-  it(
-    'returns duplicate without creating a second message or outbox event',
-    async () => {
-      const { service, tx } = makeService({ duplicate: { id: 'already-seen' } });
-      await expect(service.accept(event)).resolves.toBe('duplicate');
-      expect(tx.message.create).not.toHaveBeenCalled();
-      expect(tx.outboxEvent.create).not.toHaveBeenCalled();
+  it('returns duplicate without creating a second message or outbox event', async () => {
+    const { service, tx } = makeService({ duplicate: { id: 'already-seen' } });
+    await expect(service.accept(event)).resolves.toBe('duplicate');
+    expect(tx.message.create).not.toHaveBeenCalled();
+    expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
-  it(
-    'does not accept an unconnected or inactive Instagram account',
-    async () => {
-      const { service, tx } = makeService({ channel: null });
-      await expect(service.accept(event)).resolves.toBe('unavailable');
-      expect(tx.inboundEvent.create).not.toHaveBeenCalled();
+  it('does not accept an unconnected or inactive Instagram account', async () => {
+    const { service, tx } = makeService({ channel: null });
+    await expect(service.accept(event)).resolves.toBe('unavailable');
+    expect(tx.inboundEvent.create).not.toHaveBeenCalled();
   });
 
-  it(
-    'rejects malformed external identifiers before touching persistence',
-    async () => {
-      const { service, prisma } = makeService();
-      await expect(
-        service.accept({ ...event, customerId: 'not-numeric' }),
-      ).rejects.toThrow('Instagram account is unavailable');
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+  it('rejects malformed external identifiers before touching persistence', async () => {
+    const { service, prisma } = makeService();
+    await expect(
+      service.accept({ ...event, customerId: 'not-numeric' }),
+    ).rejects.toThrow('Instagram account is unavailable');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

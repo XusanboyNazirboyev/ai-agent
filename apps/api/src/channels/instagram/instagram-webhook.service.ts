@@ -135,7 +135,7 @@ export class InstagramWebhookService {
             providerMessageId: event.messageId,
             createdAt: event.receivedAt,
           },
-          select: { id: true },
+          select: { id: true, sequence: true },
         });
 
         await tx.inboundEvent.update({
@@ -146,6 +146,10 @@ export class InstagramWebhookService {
               providerUserId: event.customerId,
               conversationId: conversation.id,
               messageId: message.id,
+              providerMessageId: event.messageId,
+              // Batch order (inbound-batch.ts): Meta's mid is opaque, our
+              // per-conversation sequence is assigned under the lock above.
+              orderKey: String(message.sequence),
             } satisfies Prisma.InputJsonObject,
           },
         });
