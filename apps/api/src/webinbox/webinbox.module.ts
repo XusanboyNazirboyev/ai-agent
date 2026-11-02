@@ -1,4 +1,12 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
+import type { Bitrix24Transport } from '../connectors/bitrix24/bitrix24-client.js';
+import { bitrix24TestTransport } from './bitrix24-test-transport.js';
+import {
+  BITRIX24_CONNECT_TRANSPORT,
+  ConnectorsController,
+} from './connectors.controller.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
@@ -32,10 +40,21 @@ import { SessionService } from './session.service.js';
     KnowledgeFaqController,
     KnowledgeDocumentsController,
     ContactsController,
+    ConnectorsController,
   ],
   providers: [
     TelegramManagement,
     InstagramGraphClient,
+    {
+      provide: BITRIX24_CONNECT_TRANSPORT,
+      inject: [ConfigService],
+      useFactory: (
+        config: ConfigService<AppEnvironment, true>,
+      ): Bitrix24Transport | null => {
+        const base = config.get('BITRIX24_TEST_BASE_URL', { infer: true });
+        return base ? bitrix24TestTransport(base) : null;
+      },
+    },
     SessionService,
     SessionGuard,
     InboxReadService,

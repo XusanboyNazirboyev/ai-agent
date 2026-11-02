@@ -7,6 +7,10 @@ import {
   PrismaChannelSecretStore,
   SECRET_CIPHER,
 } from './channel-secret-store.js';
+import {
+  ConnectorSecretStore,
+  PrismaConnectorSecretStore,
+} from './connector-secret-store.js';
 import { createKeyring, SecretCipher } from './secret-cipher.js';
 
 /** Encrypted channel secrets (ADR 028). Without SECRETS_MASTER_KEY the store reports itself unconfigured. */
@@ -33,7 +37,8 @@ import { createKeyring, SecretCipher } from './secret-cipher.js';
       },
     },
     { provide: ChannelSecretStore, useClass: PrismaChannelSecretStore },
+    { provide: ConnectorSecretStore, useClass: PrismaConnectorSecretStore },
   ],
-  exports: [ChannelSecretStore],
+  exports: [ChannelSecretStore, ConnectorSecretStore],
 })
 export class SecretsModule {}
