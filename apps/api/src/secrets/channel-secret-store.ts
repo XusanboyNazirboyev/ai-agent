@@ -2,7 +2,8 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { SecretCipher } from './secret-cipher.js';
 
-export type SecretPurpose = 'bot_token' | 'webhook_secret';
+export type SecretPurpose =
+  'bot_token' | 'webhook_secret' | 'instagram_access_token';
 
 export class SecretsNotConfiguredError extends Error {
   constructor() {
