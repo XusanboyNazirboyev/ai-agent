@@ -74,7 +74,7 @@ const cfg = {
 } as unknown as ConfigService<AppEnvironment, true>;
 
 /** Fake values only; no real Meta credential or account is used. */
-const TOKEN = 'IGAA-integration-token-not-real-0123456789';
+const TOKEN = `test-${randomBytes(16).toString('hex')}`;
 /** Instagram-scoped id of the (fictional) customer. */
 const CUSTOMER_ID = '5550001';
 /** Meta error codes (graph-api/guides/error-handling; 613: Send API). */

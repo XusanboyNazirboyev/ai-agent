@@ -20,8 +20,9 @@ const prisma = db as unknown as PrismaService;
 afterAll(async () => db.$disconnect());
 
 /** Fake values only; no real Meta credential is used. */
-const TOKEN = 'IGAA-connect-token-not-real-0123456789';
-const WRONG_TOKEN = 'IGAA-wrong-token-not-real-0000000000';
+/** Generated per run: never real or credential-shaped literals. */
+const TOKEN = `test-${randomBytes(16).toString('hex')}`;
+const WRONG_TOKEN = `test-${randomBytes(16).toString('hex')}`;
 const USERNAME = 'demo_shop';
 /** Fictional professional-account ids look like real ones: digits only. */
 const IG_ID_PREFIX = '1784';
@@ -38,8 +39,8 @@ const SETTINGS: Record<string, unknown> = {
   LLM_PROVIDER: 'mock',
   LLM_TRUSTED_PROVIDERS: ['mock'],
   LLM_ALLOW_REAL_CUSTOMER_DATA: false,
-  INSTAGRAM_APP_SECRET: 'test-app-secret',
-  INSTAGRAM_VERIFY_TOKEN: 'test-verify-token',
+  INSTAGRAM_APP_SECRET: randomBytes(16).toString('hex'),
+  INSTAGRAM_VERIFY_TOKEN: randomBytes(16).toString('hex'),
 };
 
 async function tenant(
