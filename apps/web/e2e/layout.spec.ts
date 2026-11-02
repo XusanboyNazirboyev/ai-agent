@@ -82,6 +82,7 @@ test.describe('no overflow in the signed-in pages', () => {
           '/bot',
           '/knowledge',
           '/crm',
+          '/analytics',
         ]) {
           await page.goto(path);
           await expect(page.locator('#app-main [role="region"]')).toBeVisible();
