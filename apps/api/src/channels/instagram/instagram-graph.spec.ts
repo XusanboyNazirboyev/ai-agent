@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
   classifyInstagramError,
@@ -7,7 +8,8 @@ import {
   INSTAGRAM_GRAPH_BASE_URL,
 } from './instagram-graph.js';
 
-const TOKEN = 'IGAA-test-token-not-real-0123456789';
+/** Generated per run: never a real or credential-shaped literal. */
+const TOKEN = `test-${randomBytes(16).toString('hex')}`;
 const IG = '17841400000000001';
 const IGSID = '9876543210';
 
