@@ -92,7 +92,8 @@ export class ConnectorsController {
     private readonly transport?: Bitrix24Transport | null,
   ) {}
 
-  private admit(request: InboxRequest): {
+  /** OWNER/ADMIN only; reading the list is not rate limited. */
+  private manager(request: InboxRequest): {
     tenantId: string;
     operatorId: string;
   } {
@@ -103,6 +104,16 @@ export class ConnectorsController {
         message: 'Not allowed',
         i18nKey: 'errors.forbidden',
       });
+    return { tenantId: principal.tenantId, operatorId: principal.operatorId };
+  }
+
+  /** A change: OWNER/ADMIN and at most 10 a minute per operator. */
+  private admit(request: InboxRequest): {
+    tenantId: string;
+    operatorId: string;
+  } {
+    const who = this.manager(request);
+    const principal = request.principal!;
     const now = Date.now();
     const recent = (this.calls.get(principal.operatorId) ?? []).filter(
       (at) => now - at < 60_000,
@@ -110,7 +121,7 @@ export class ConnectorsController {
     if (recent.length >= 10) throw refuse('RATE_LIMITED');
     recent.push(now);
     this.calls.set(principal.operatorId, recent);
-    return { tenantId: principal.tenantId, operatorId: principal.operatorId };
+    return who;
   }
 
   private async audit(
@@ -134,7 +145,7 @@ export class ConnectorsController {
 
   @Get()
   async list(@Req() request: InboxRequest): Promise<ConnectorList> {
-    const who = this.admit(request);
+    const who = this.manager(request);
     const rows = await this.prisma.tenantConnector.findMany({
       where: { tenantId: who.tenantId },
       orderBy: { createdAt: 'asc' },
