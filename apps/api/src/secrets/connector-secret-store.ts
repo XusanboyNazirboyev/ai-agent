@@ -7,7 +7,14 @@ import {
 } from './channel-secret-store.js';
 import { SecretCipher } from './secret-cipher.js';
 
-export type ConnectorSecretPurpose = 'bitrix24_webhook_url';
+const PURPOSES = ['bitrix24_webhook_url'] as const;
+export type ConnectorSecretPurpose = (typeof PURPOSES)[number];
+
+export function isConnectorSecretPurpose(
+  value: string,
+): value is ConnectorSecretPurpose {
+  return (PURPOSES as readonly string[]).includes(value);
+}
 
 export interface ConnectorSecretOwner {
   readonly tenantId: string;

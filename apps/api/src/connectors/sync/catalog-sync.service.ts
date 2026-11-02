@@ -92,7 +92,7 @@ export class CatalogSyncService {
       });
 
     try {
-      const connector = this.loader.create(row);
+      const connector = await this.loader.create(row);
       const sourceSystem = connector.sourceSystem;
       if (
         sourceSystem &&

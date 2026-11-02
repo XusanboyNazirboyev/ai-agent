@@ -514,7 +514,7 @@ export class AgentConversationService implements OnModuleInit {
     });
     for (const row of rows) {
       try {
-        const connector = this.loader.create(row);
+        const connector = await this.loader.create(row);
         if (connector.capabilities.search) return connector;
       } catch (error: unknown) {
         this.logger.warn(
