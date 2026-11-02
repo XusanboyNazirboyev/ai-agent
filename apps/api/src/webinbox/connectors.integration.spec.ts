@@ -354,4 +354,19 @@ describe('connecting Bitrix24 from the web (ADR 032)', () => {
       'connector.disconnected',
     ]);
   });
+
+  it('reading the list is not rate limited; the eleventh change in a minute is', async () => {
+    const { controller } = setup();
+    const t = await tenant();
+    for (let i = 0; i < 15; i += 1)
+      expect((await controller.list(t.request)).items).toHaveLength(1);
+    for (let i = 0; i < 10; i += 1)
+      await expect(
+        controller.connectBitrix24(t.request, { webhookUrl: 'bad' }),
+      ).rejects.toMatchObject({ response: { code: 'INVALID_WEBHOOK_URL' } });
+    await expect(
+      controller.connectBitrix24(t.request, { webhookUrl: 'bad' }),
+    ).rejects.toMatchObject({ response: { code: 'RATE_LIMITED' } });
+    expect((await controller.list(t.request)).items).toHaveLength(1);
+  });
 });
