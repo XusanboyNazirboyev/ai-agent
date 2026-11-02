@@ -1,0 +1,218 @@
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../../config/environment.js';
+
+/**
+ * Instagram API with Instagram Login (official Meta docs, read 2026-11-02):
+ * - Messaging API, https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api:
+ *   `POST https://graph.instagram.com/v26.0/<IG_ID>/messages`,
+ *   `Authorization: Bearer <INSTAGRAM_USER_ACCESS_TOKEN>`, body
+ *   `{"recipient":{"id":"<IGSID>"},"message":{"text":"..."}}`, response
+ *   `{"recipient_id","message_id"}`; text "must be UTF-8 and be a 1000 bytes
+ *   or less"; a reply only after the user messaged the account.
+ * - Get started, https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started:
+ *   `GET /me?fields=user_id,username&access_token=...`; `user_id` "is value
+ *   of the `id` field received in webhook notifications for this account".
+ * - Webhooks setup, https://developers.facebook.com/documentation/instagram-platform/webhooks/setup.md:
+ *   `POST /<INSTAGRAM_ACCOUNT_ID>/subscribed_apps?subscribed_fields=...&access_token=...`
+ *   returns `{"success": true}`; the app must be Live for app users.
+ * - Error handling, https://developers.facebook.com/docs/graph-api/guides/error-handling:
+ *   `{"error":{"message","type","code","error_subcode","fbtrace_id"}}`;
+ *   codes 1, 2, 4, 17, 341 and 368 are temporary ("wait and retry"), 102 and
+ *   190 need a new access token, 10 and 200-299 are missing permissions.
+ *   613 is the Send API rate limit (Messenger send-messages page, read
+ *   2026-10-28). Rate-limit numbers are not stated on these pages.
+ * Customer text and Meta error text are never put into an error message.
+ */
+export const INSTAGRAM_GRAPH_BASE_URL = 'https://graph.instagram.com/v26.0';
+
+/** Numeric Instagram ids (account and Instagram-scoped user ids). */
+export const INSTAGRAM_ID = /^[0-9]{1,100}$/u;
+
+export type InstagramErrorKind =
+  'rate_limited' | 'temporary' | 'token' | 'permission' | 'rejected';
+
+export class InstagramApiError extends Error {
+  constructor(
+    readonly kind: InstagramErrorKind,
+    readonly code: number | null,
+    readonly httpStatus: number,
+  ) {
+    super(`Instagram API error (${kind}, code ${code ?? 'none'})`);
+    this.name = 'InstagramApiError';
+  }
+
+  /** Retrying later may succeed; anything else needs a person or a new token. */
+  get retryable(): boolean {
+    return this.kind === 'rate_limited' || this.kind === 'temporary';
+  }
+}
+
+/** A timeout or lost response after the request left: Meta may have sent it. */
+export class InstagramAmbiguousSendError extends Error {
+  constructor() {
+    super('Instagram send outcome is ambiguous');
+    this.name = 'InstagramAmbiguousSendError';
+  }
+}
+
+export function classifyInstagramError(
+  code: number | null,
+  httpStatus: number,
+): InstagramErrorKind {
+  if (code !== null) {
+    if ([4, 17, 341, 613].includes(code)) return 'rate_limited';
+    if ([1, 2, 368].includes(code)) return 'temporary';
+    if (code === 102 || code === 190) return 'token';
+    if (code === 10 || (code >= 200 && code <= 299)) return 'permission';
+  }
+  if (httpStatus === 429) return 'rate_limited';
+  if (httpStatus >= 500) return 'temporary';
+  return 'rejected';
+}
+
+export type InstagramFetch = typeof fetch;
+export const INSTAGRAM_FETCH = Symbol('INSTAGRAM_FETCH');
+
+const TIMEOUT_MS = 10_000;
+
+function errorOf(body: unknown, httpStatus: number): InstagramApiError {
+  const raw =
+    body && typeof body === 'object' && 'error' in body
+      ? (body as { error?: { code?: unknown } }).error?.code
+      : undefined;
+  const code = typeof raw === 'number' && Number.isInteger(raw) ? raw : null;
+  return new InstagramApiError(
+    classifyInstagramError(code, httpStatus),
+    code,
+    httpStatus,
+  );
+}
+
+function requireId(value: string, what: string): string {
+  if (!INSTAGRAM_ID.test(value)) throw new RangeError(`Invalid ${what}`);
+  return value;
+}
+
+@Injectable()
+export class InstagramGraphClient {
+  private readonly request: InstagramFetch;
+  private readonly base: string;
+
+  constructor(
+    @Optional() @Inject(INSTAGRAM_FETCH) request?: InstagramFetch,
+    @Optional() config?: ConfigService<AppEnvironment, true>,
+  ) {
+    this.request = request ?? fetch;
+    // INSTAGRAM_API_BASE_URL exists for tests with a fake Meta server and is
+    // refused in production by the environment schema.
+    this.base = (
+      config?.get('INSTAGRAM_API_BASE_URL', { infer: true }) ??
+      INSTAGRAM_GRAPH_BASE_URL
+    ).replace(/\/+$/u, '');
+  }
+
+  /** Reads JSON; a network failure here never sent anything, so it is temporary. */
+  private async call(url: string, init: RequestInit): Promise<unknown> {
+    let response: Response;
+    let body: unknown;
+    try {
+      response = await this.request(url, {
+        ...init,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      body = await response.json().catch(() => undefined);
+    } catch {
+      throw new InstagramApiError('temporary', null, 0);
+    }
+    if (!response.ok || (body && typeof body === 'object' && 'error' in body))
+      throw errorOf(body, response.status);
+    return body;
+  }
+
+  /** The professional account behind a token: `user_id` matches webhook `entry[].id`. */
+  async me(
+    token: string,
+  ): Promise<{ readonly userId: string; readonly username: string | null }> {
+    const url = new URL(`${this.base}/me`);
+    url.searchParams.set('fields', 'user_id,username');
+    url.searchParams.set('access_token', token);
+    const body = (await this.call(url.toString(), { method: 'GET' })) as {
+      user_id?: unknown;
+      username?: unknown;
+    } | null;
+    const userId =
+      typeof body?.user_id === 'number' ? String(body.user_id) : body?.user_id;
+    if (typeof userId !== 'string' || !INSTAGRAM_ID.test(userId))
+      throw new InstagramApiError('rejected', null, 200);
+    return {
+      userId,
+      username: typeof body?.username === 'string' ? body.username : null,
+    };
+  }
+
+  /** Subscribes the app to this account's webhook fields (e.g. `messages`). */
+  async subscribe(
+    igUserId: string,
+    token: string,
+    fields: readonly string[],
+  ): Promise<void> {
+    const url = new URL(
+      `${this.base}/${requireId(igUserId, 'Instagram account id')}/subscribed_apps`,
+    );
+    url.searchParams.set('subscribed_fields', fields.join(','));
+    url.searchParams.set('access_token', token);
+    const body = (await this.call(url.toString(), { method: 'POST' })) as {
+      success?: unknown;
+    } | null;
+    if (body?.success !== true)
+      throw new InstagramApiError('rejected', null, 200);
+  }
+
+  /**
+   * Sends one text (at most 1,000 bytes; split longer replies first). A lost
+   * response is ambiguous, never retried blindly.
+   */
+  async sendText(
+    igUserId: string,
+    token: string,
+    recipientId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    const bytes = Buffer.byteLength(text, 'utf8');
+    if (bytes === 0 || bytes > 1_000)
+      throw new RangeError('Instagram text must be 1 to 1000 bytes');
+    const url = `${this.base}/${requireId(igUserId, 'Instagram account id')}/messages`;
+    const payload = JSON.stringify({
+      recipient: { id: requireId(recipientId, 'recipient id') },
+      message: { text },
+    });
+    let response: Response;
+    let body: unknown;
+    try {
+      response = await this.request(url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+        },
+        body: payload,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch {
+      throw new InstagramAmbiguousSendError();
+    }
+    try {
+      body = await response.json();
+    } catch {
+      if (!response.ok) throw errorOf(undefined, response.status);
+      throw new InstagramAmbiguousSendError();
+    }
+    if (!response.ok || (body && typeof body === 'object' && 'error' in body))
+      throw errorOf(body, response.status);
+    const messageId = (body as { message_id?: unknown } | null)?.message_id;
+    if (typeof messageId !== 'string' || messageId === '')
+      throw new InstagramAmbiguousSendError();
+    return { messageId };
+  }
+}

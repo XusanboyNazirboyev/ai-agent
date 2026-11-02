@@ -142,6 +142,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
           type: {
             in: [
               'telegram.inbound',
+              'instagram.inbound',
               'telegram.send',
               'handover.notify',
               'handover.forward',
@@ -173,7 +174,10 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
           };
           await this.queue.add(event.type, data, {
             jobId: event.id,
-            ...(event.type === 'telegram.inbound' ? { delay: 2_000 } : {}),
+            ...(event.type === 'telegram.inbound' ||
+            event.type === 'instagram.inbound'
+              ? { delay: 2_000 }
+              : {}),
           });
           await this.prisma.outboxEvent.updateMany({
             where: {

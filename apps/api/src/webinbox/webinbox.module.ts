@@ -9,6 +9,7 @@ import {
 } from './connectors.controller.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
+import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AuthController } from './auth.controller.js';
@@ -16,6 +17,7 @@ import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
 import { EventsController } from './events.controller.js';
 import { TelegramConnectController } from './telegram-connect.controller.js';
+import { InstagramConnectController } from './instagram-connect.controller.js';
 import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { InboxController } from './inbox.controller.js';
@@ -34,6 +36,7 @@ import { SessionService } from './session.service.js';
     EventsController,
     ChannelsController,
     TelegramConnectController,
+    InstagramConnectController,
     KnowledgeFaqController,
     KnowledgeDocumentsController,
     ContactsController,
@@ -41,6 +44,7 @@ import { SessionService } from './session.service.js';
   ],
   providers: [
     TelegramManagement,
+    InstagramGraphClient,
     {
       provide: BITRIX24_CONNECT_TRANSPORT,
       inject: [ConfigService],
