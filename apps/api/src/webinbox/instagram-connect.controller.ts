@@ -1,0 +1,311 @@
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  HttpException,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { z } from 'zod';
+import {
+  InstagramApiError,
+  InstagramGraphClient,
+} from '../channels/instagram/instagram-graph.js';
+import type { AppEnvironment } from '../config/environment.js';
+import type { ChannelAccount } from '../generated/prisma/client.js';
+import { PrismaService } from '../persistence/prisma.service.js';
+import {
+  ChannelSecretStore,
+  SecretsNotConfiguredError,
+} from '../secrets/channel-secret-store.js';
+import {
+  credentialSource,
+  enabledBefore,
+  policyFrom,
+  summarizeChannel,
+  type ChannelAccountSummary,
+} from './channel-summary.js';
+import { SessionGuard, type InboxRequest } from './session.guard.js';
+
+/** Instagram User access tokens are opaque; bound the size, refuse whitespace. */
+const ConnectBody = z.object({
+  accessToken: z
+    .string()
+    .trim()
+    .regex(/^\S{20,2048}$/u),
+});
+
+/** Webhook field for direct messages (subscribed per account at enable). */
+const WEBHOOK_FIELDS = ['messages'] as const;
+
+const REFUSAL = {
+  INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
+  INVALID_TOKEN: { status: 400, i18nKey: 'errors.invalidToken' },
+  ALREADY_CONNECTED: { status: 409, i18nKey: 'errors.alreadyConnected' },
+  NOT_CONNECTED: { status: 409, i18nKey: 'errors.notConnected' },
+  SECRETS_NOT_CONFIGURED: {
+    status: 503,
+    i18nKey: 'errors.secretsNotConfigured',
+  },
+  WEBHOOK_NOT_CONFIGURED: {
+    status: 503,
+    i18nKey: 'errors.WEBHOOK_NOT_CONFIGURED',
+  },
+  INSTAGRAM_UNREACHABLE: {
+    status: 502,
+    i18nKey: 'errors.INSTAGRAM_UNREACHABLE',
+  },
+  INSTAGRAM_REJECTED: { status: 502, i18nKey: 'errors.INSTAGRAM_REJECTED' },
+  RATE_LIMITED: { status: 429, i18nKey: 'errors.rateLimited' },
+} as const;
+
+function refuse(code: keyof typeof REFUSAL): HttpException {
+  const spec = REFUSAL[code];
+  return new HttpException(
+    { code, message: code, i18nKey: spec.i18nKey },
+    spec.status,
+  );
+}
+
+/**
+ * Connecting an Instagram professional account from the web API (ADR 031,
+ * ADR 028 secret store). OWNER/ADMIN only, at most 10 calls a minute per
+ * operator, every change audited without any secret. The token is an
+ * Instagram User access token with `instagram_business_basic` and
+ * `instagram_business_manage_messages`; this slice takes it pasted (for
+ * example from the App Dashboard "Generate token"); the OAuth redirect flow
+ * is a later slice. A new account starts DISABLED with the assistant OFF.
+ */
+@Controller('api/v1/channels/instagram')
+@UseGuards(SessionGuard)
+export class InstagramConnectController {
+  private readonly calls = new Map<string, number[]>();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly secrets: ChannelSecretStore,
+    private readonly graph: InstagramGraphClient,
+  ) {}
+
+  private admit(request: InboxRequest): {
+    tenantId: string;
+    operatorId: string;
+  } {
+    const principal = request.principal!;
+    if (principal.role !== 'OWNER' && principal.role !== 'ADMIN')
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Not allowed',
+        i18nKey: 'errors.forbidden',
+      });
+    const now = Date.now();
+    const recent = (this.calls.get(principal.operatorId) ?? []).filter(
+      (at) => now - at < 60_000,
+    );
+    if (recent.length >= 10) throw refuse('RATE_LIMITED');
+    recent.push(now);
+    this.calls.set(principal.operatorId, recent);
+    return { tenantId: principal.tenantId, operatorId: principal.operatorId };
+  }
+
+  private async account(tenantId: string, id: string): Promise<ChannelAccount> {
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { id, tenantId, channelType: 'instagram' },
+    });
+    if (!account)
+      throw new NotFoundException({
+        code: 'NOT_FOUND',
+        message: 'Not found',
+        i18nKey: 'errors.notFound',
+      });
+    return account;
+  }
+
+  /** Runs a Meta call and maps its failure to the API's own codes. */
+  private async meta<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      if (error instanceof InstagramApiError)
+        throw refuse(
+          error.kind === 'temporary' || error.kind === 'rate_limited'
+            ? 'INSTAGRAM_UNREACHABLE'
+            : 'INSTAGRAM_REJECTED',
+        );
+      throw error;
+    }
+  }
+
+  private async audit(
+    who: { tenantId: string; operatorId: string },
+    action: string,
+    id: string,
+    summary: Record<string, string | boolean | null> = {},
+  ): Promise<void> {
+    await this.prisma.auditEvent.create({
+      data: {
+        tenantId: who.tenantId,
+        actorType: 'OPERATOR',
+        actorId: who.operatorId,
+        action,
+        entityType: 'channel_account',
+        entityId: id,
+        safeInputSummary: summary,
+      },
+    });
+  }
+
+  private async summary(
+    tenantId: string,
+    id: string,
+  ): Promise<ChannelAccountSummary> {
+    const [row, saved, enabled] = await Promise.all([
+      this.prisma.channelAccount.findFirstOrThrow({ where: { id, tenantId } }),
+      this.prisma.channelSecret.findMany({
+        where: { tenantId, channelAccountId: id },
+        select: { purpose: true },
+      }),
+      enabledBefore(this.prisma, tenantId, [id]),
+    ]);
+    return summarizeChannel(
+      row,
+      policyFrom(this.config),
+      credentialSource(row, new Set(saved.map((s) => s.purpose)), this.config),
+      this.config.get('PUBLIC_BASE_URL', { infer: true }),
+      enabled.has(id),
+    );
+  }
+
+  private async token(tenantId: string, id: string): Promise<string> {
+    let token: string | undefined;
+    try {
+      token = await this.secrets.get(
+        { tenantId, channelAccountId: id },
+        'instagram_access_token',
+      );
+    } catch (error) {
+      if (error instanceof SecretsNotConfiguredError)
+        throw refuse('SECRETS_NOT_CONFIGURED');
+      token = undefined; // unreadable counts as missing; reconnect
+    }
+    if (!token) throw refuse('NOT_CONNECTED');
+    return token;
+  }
+
+  @Post()
+  async connect(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<ChannelAccountSummary> {
+    const who = this.admit(request);
+    if (!this.secrets.configured) throw refuse('SECRETS_NOT_CONFIGURED');
+    const parsed = ConnectBody.safeParse(body);
+    if (!parsed.success) throw refuse('INVALID_BODY');
+    const token = parsed.data.accessToken;
+    const me = await this.meta(() => this.graph.me(token));
+    const existing = await this.prisma.channelAccount.findUnique({
+      where: {
+        channelType_externalAccountId: {
+          channelType: 'instagram',
+          externalAccountId: me.userId,
+        },
+      },
+      select: { id: true, tenantId: true },
+    });
+    // Another tenant's account: refuse without saying whose.
+    if (existing && existing.tenantId !== who.tenantId)
+      throw refuse('ALREADY_CONNECTED');
+    const displayName = me.username ? `@${me.username}` : null;
+    const id = await this.prisma.$transaction(async (tx) => {
+      const row =
+        existing ??
+        (await tx.channelAccount.create({
+          data: {
+            tenantId: who.tenantId,
+            channelType: 'instagram',
+            externalAccountId: me.userId,
+            displayName,
+            status: 'DISABLED',
+          },
+          select: { id: true },
+        }));
+      if (existing)
+        await tx.channelAccount.update({
+          where: { id: existing.id },
+          data: { displayName },
+        });
+      return row.id;
+    });
+    await this.secrets.put(
+      { tenantId: who.tenantId, channelAccountId: id },
+      'instagram_access_token',
+      token,
+    );
+    await this.audit(
+      who,
+      existing
+        ? 'channel.instagram_reconnected'
+        : 'channel.instagram_connected',
+      id,
+      { igUserId: me.userId },
+    );
+    return this.summary(who.tenantId, id);
+  }
+
+  /**
+   * Subscribes the app to the account's `messages` webhook field, then
+   * activates it. Without the app secret no delivery could be verified, so
+   * enabling is refused.
+   */
+  @Post(':id/enable')
+  async enable(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ChannelAccountSummary> {
+    const who = this.admit(request);
+    const account = await this.account(who.tenantId, id);
+    if (
+      !this.config.get('INSTAGRAM_APP_SECRET', { infer: true }) ||
+      !this.config.get('INSTAGRAM_VERIFY_TOKEN', { infer: true })
+    )
+      throw refuse('WEBHOOK_NOT_CONFIGURED');
+    const token = await this.token(who.tenantId, id);
+    await this.meta(() =>
+      this.graph.subscribe(account.externalAccountId, token, WEBHOOK_FIELDS),
+    );
+    await this.prisma.channelAccount.updateMany({
+      where: { id, tenantId: who.tenantId },
+      data: { status: 'ACTIVE' },
+    });
+    await this.audit(who, 'channel.instagram_enabled', id, {
+      fields: WEBHOOK_FIELDS.join(','),
+    });
+    return this.summary(who.tenantId, id);
+  }
+
+  /**
+   * Stops processing: the account is DISABLED and the assistant OFF. Meta's
+   * unsubscribe call is not used (not read in the docs); deliveries for a
+   * disabled account are refused by the intake.
+   */
+  @Post(':id/disable')
+  async disable(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ChannelAccountSummary> {
+    const who = this.admit(request);
+    await this.account(who.tenantId, id);
+    await this.prisma.channelAccount.updateMany({
+      where: { id, tenantId: who.tenantId },
+      data: { status: 'DISABLED', agentMode: 'OFF' },
+    });
+    await this.audit(who, 'channel.instagram_disabled', id);
+    return this.summary(who.tenantId, id);
+  }
+}
