@@ -35,7 +35,9 @@ Instagram is a channel adapter beside Telegram (D6). The LLM provider stays sepa
     - https://developers.facebook.com/docs/graph-api/guides/error-handling
   - **Tests.** A fake Meta transport covers intake, the agent and send end to end. `INSTAGRAM_API_BASE_URL` (test-only, refused in production) points the client at a fake server.
 
+- Slice 3b (2026-11-02, branch `feat/dev-mock-connector`): Channels page UI for Instagram. "Connect Instagram" opens a dialog for a pasted Instagram User access token; the token is sent once to `POST /api/v1/channels/instagram` and never shown again, then "Enable now". The account card offers enable and disable through the Instagram paths. Test, operator group, token replacement and disconnect stay Telegram-only. Strings in uz-Latn, ru and en. The e2e uses a fake graph.instagram.com (`INSTAGRAM_API_BASE_URL`, test-only).
+
 ## Next slices
-1. OAuth redirect connect (Business Login: `instagram.com/oauth/authorize`, code exchange, 60-day long-lived token) and token refresh (`ig_refresh_token`, at least 24 hours old) with expiry tracking; Channels page UI.
+1. OAuth redirect connect (Business Login: `instagram.com/oauth/authorize`, code exchange, 60-day long-lived token) and token refresh (`ig_refresh_token`, at least 24 hours old) with expiry tracking.
 2. A live check with an app-role Instagram account under Standard Access (the app must be Live for webhooks); then App Review and Business Verification for the public.
 3. Deliveries for a DISABLED account currently get 503 and Meta retries for up to 36 hours; decide whether to acknowledge and drop them. Comments and private replies (7-day rule) remain a separate decision.

@@ -7,6 +7,7 @@ import { api, errorKey } from '@/lib/api';
 import type { ChannelAccount, ChannelList, TelegramTest } from '@/lib/types';
 import { useShell } from './app-shell';
 import { OperatorGroupDialog } from './operator-group-dialog';
+import { InstagramConnectDialog } from './instagram-connect-dialog';
 import { TelegramConnectDialog } from './telegram-connect-dialog';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
@@ -23,7 +24,7 @@ const CHANNELS: {
   available: boolean;
 }[] = [
   { key: 'telegram', name: 'Telegram', icon: 'send', available: true },
-  { key: 'instagram', name: 'Instagram', icon: 'message', available: false },
+  { key: 'instagram', name: 'Instagram', icon: 'message', available: true },
   { key: 'whatsapp', name: 'WhatsApp', icon: 'phone', available: false },
   { key: 'webchat', name: 'Web chat', icon: 'globe', available: false },
 ];
@@ -107,7 +108,11 @@ function TestResult(props: { result: TelegramTest }): ReactNode {
   );
 }
 
-/** One connected Telegram account: status, credentials and the actions on it. */
+/**
+ * One connected account: status, credentials and the actions on it. Instagram
+ * accounts have only enable and disable (their own API paths); test, operator
+ * group, token replacement and disconnect are Telegram-only for now.
+ */
 function AccountCard(props: {
   account: ChannelAccount;
   index: number;
@@ -127,6 +132,10 @@ function AccountCard(props: {
   const [dropChoice, setDropChoice] = useState<boolean | null>(null);
   const dropPending = dropChoice ?? !account.everEnabled;
   const manageable = props.canManage && account.credentialSource === 'ui';
+  const instagram = account.channelType === 'instagram';
+  const base = instagram
+    ? `/api/v1/channels/instagram/${account.id}`
+    : `/api/v1/channels/${account.id}`;
 
   const act = useMutation({
     mutationFn: (input: {
@@ -134,7 +143,7 @@ function AccountCard(props: {
       method: 'POST' | 'DELETE';
       body?: unknown;
     }) =>
-      api<unknown>(`/api/v1/channels/${account.id}${input.path}`, {
+      api<unknown>(`${base}${input.path}`, {
         method: input.method,
         body: input.body,
       }),
@@ -167,7 +176,7 @@ function AccountCard(props: {
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary-fg">
-            <Icon name="send" className="h-5 w-5" />
+            <Icon name={instagram ? 'message' : 'send'} className="h-5 w-5" />
           </span>
           <span className="flex min-w-0 flex-col">
             {/* The bot's own name, from Telegram: plain text. */}
@@ -197,11 +206,13 @@ function AccountCard(props: {
             ? t('channels.credentialsOn')
             : t('channels.credentialsOff')}
         </Check>
-        <Check on={account.operatorGroupConfigured}>
-          {account.operatorGroupConfigured
-            ? t('channels.groupOn')
-            : t('channels.groupOff')}
-        </Check>
+        {instagram ? null : (
+          <Check on={account.operatorGroupConfigured}>
+            {account.operatorGroupConfigured
+              ? t('channels.groupOn')
+              : t('channels.groupOff')}
+          </Check>
+        )}
         {account.webhookUrl && account.credentialSource === 'ui' ? (
           <span className="min-w-0 text-xs text-muted">
             {t('channels.webhookUrl')}:{' '}
@@ -238,6 +249,16 @@ function AccountCard(props: {
               onClick={() => act.mutate({ path: '/disable', method: 'POST' })}
             >
               {t('channels.disable')}
+            </Button>
+          ) : instagram ? (
+            <Button
+              size="sm"
+              variant="primary"
+              data-testid="account-enable"
+              loading={act.isPending && act.variables?.path === '/enable'}
+              onClick={() => act.mutate({ path: '/enable', method: 'POST' })}
+            >
+              {t('channels.enable')}
             </Button>
           ) : (
             <>
@@ -277,40 +298,44 @@ function AccountCard(props: {
               </label>
             </>
           )}
-          <Button
-            size="sm"
-            icon="check"
-            data-testid="account-test"
-            loading={act.isPending && act.variables?.path === '/test'}
-            onClick={() => act.mutate({ path: '/test', method: 'POST' })}
-          >
-            {t('channels.check')}
-          </Button>
-          <Button
-            size="sm"
-            icon="users"
-            data-testid="account-group"
-            onClick={() => props.onGroup(account)}
-          >
-            {t('channels.operatorGroup')}
-          </Button>
-          <Button
-            size="sm"
-            icon="pencil"
-            data-testid="account-replace"
-            onClick={props.onReplace}
-          >
-            {t('channels.replaceToken')}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon="trash"
-            data-testid="account-disconnect"
-            onClick={() => setDisconnecting(true)}
-          >
-            {t('channels.disconnect')}
-          </Button>
+          {instagram ? null : (
+            <>
+              <Button
+                size="sm"
+                icon="check"
+                data-testid="account-test"
+                loading={act.isPending && act.variables?.path === '/test'}
+                onClick={() => act.mutate({ path: '/test', method: 'POST' })}
+              >
+                {t('channels.check')}
+              </Button>
+              <Button
+                size="sm"
+                icon="users"
+                data-testid="account-group"
+                onClick={() => props.onGroup(account)}
+              >
+                {t('channels.operatorGroup')}
+              </Button>
+              <Button
+                size="sm"
+                icon="pencil"
+                data-testid="account-replace"
+                onClick={props.onReplace}
+              >
+                {t('channels.replaceToken')}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="trash"
+                data-testid="account-disconnect"
+                onClick={() => setDisconnecting(true)}
+              >
+                {t('channels.disconnect')}
+              </Button>
+            </>
+          )}
         </div>
       ) : null}
       <ConfirmDialog
@@ -328,7 +353,7 @@ function AccountCard(props: {
   );
 }
 
-/** What Instagram needs, from Meta's documentation (the adapter is not built yet). */
+/** What Instagram needs on Meta's side, from Meta's documentation. */
 function InstagramGuide(): ReactNode {
   const { t } = useI18n();
   return (
@@ -357,6 +382,7 @@ export function ChannelsPage(): ReactNode {
   const queryClient = useQueryClient();
   const canManage = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const [connecting, setConnecting] = useState<'new' | 'replace' | null>(null);
+  const [connectingInstagram, setConnectingInstagram] = useState(false);
   const [groupFor, setGroupFor] = useState<ChannelAccount | null>(null);
   const query = useQuery({
     queryKey: ['channels'],
@@ -514,6 +540,17 @@ export function ChannelsPage(): ReactNode {
                       {t('channels.connectTelegram')}
                     </Button>
                   ) : null}
+                  {channel.key === 'instagram' && canManage ? (
+                    <Button
+                      variant="primary"
+                      icon="plus"
+                      data-testid="connect-instagram"
+                      disabled={!capabilities.secretsConfigured}
+                      onClick={() => setConnectingInstagram(true)}
+                    >
+                      {t('channels.connectInstagram')}
+                    </Button>
+                  ) : null}
                   {channel.key === 'instagram' ? <InstagramGuide /> : null}
                 </li>
               );
@@ -532,6 +569,11 @@ export function ChannelsPage(): ReactNode {
         replacing={connecting === 'replace'}
         canEnable={capabilities.publicUrlConfigured}
         onClose={() => setConnecting(null)}
+        onChanged={changed}
+      />
+      <InstagramConnectDialog
+        open={connectingInstagram}
+        onClose={() => setConnectingInstagram(false)}
         onChanged={changed}
       />
       <OperatorGroupDialog
