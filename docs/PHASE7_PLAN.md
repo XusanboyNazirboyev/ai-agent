@@ -32,7 +32,7 @@ A second read-only pack would only show that slots and prompts are configurable.
 - CI gate: mock-model suite on every change to packs, prompts, tools, guardrails or locale packs (exists; extend). Live-model suite: on demand / nightly within a budget the owner sets (cost decision).
 - Tenant-isolation eval cases: a prompt in tenant B asking for tenant A's offers, knowledge or instructions must get no A data (blocking).
 
-**7.3 Observability, cost and analytics (minimum practical).**
+**7.3 Observability, cost and analytics (minimum practical).** **Closed by the owner on 2026-11-02** (see `PROGRESS.md`).
 - Read-only Analytics page (12A.6) in `apps/web` from the existing tables: first-response time, auto-resolved rate, handover rate by reason, lead capture rate and score mix, CRM sync failures, language mix, guardrail block rate, p50/p95 latency, cost per conversation and per tenant month. Tenant-scoped, role-checked.
 - Alerts (in-process scan, delivered through the existing operator notifier or email): budget near limit, CRM sync failures above a threshold, handover SLA breaches, eval regression on main.
 - Logs stay structured JSON without customer text (already enforced by a test); add request/turn correlation ids to every log line.
