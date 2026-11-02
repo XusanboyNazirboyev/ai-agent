@@ -36,7 +36,7 @@
 - **Not done here:**
   - A trace does not continue from the webhook request into the queue job it creates (the job uses its outbox id).
   - Platform alerts are only log lines; nobody is paged unless the host's log collector alerts on `alert.*`.
-  - The two platform defaults (10 minutes, 20 turns) are proposals that still need the owner's confirmation.
+  - The two platform defaults (10 minutes, 20 turns) were confirmed by the owner on 2026-11-02.
 - **Tests:**
   - `observability.spec.ts`: context propagation and isolation, logger fields, header rules, the Telegram job and scan-pass traces.
   - `trace-http.spec.ts`: a real Nest HTTP app; it fails without the middleware.
