@@ -12,7 +12,8 @@
 ## Owner decisions (2026-11-02)
 1. **Source:** the videos the company posts on its **connected Instagram account**. The agent analyses them and answers customers' DM questions about the products they show. There is no video upload in tezda (an earlier upload draft of this ADR was dropped by the owner).
 2. **Order:** video knowledge comes before learning from customer questions.
-3. **Approval:** anything learned reaches customers only after an admin approves it. Whether this also holds for Instagram videos is asked again in V7, not assumed.
+3. **Approval:** anything learned reaches customers only after an admin approves it. Confirmed for Instagram videos on 2026-11-02 (V7).
+5. **Media types:** only videos and reels in the first slices; photos, carousels and stories later (V8, 2026-11-02).
 4. **Timing:** this ADR and the plan come first; code waits until the current phase (7.3) is closed.
 
 ## Context
@@ -40,7 +41,7 @@
 ## Decision (proposed)
 **1. Sync the account's videos.**
 - **Polling:** for every active Instagram channel, a scheduled job lists the account's media since the last sync, and admins have a "sync now" button.
-- **What is processed:** only `VIDEO` items in the first slice (V8).
+- **What is processed:** only videos and reels (owner decision 5).
 - **New or changed video:** the video goes to a `MediaUnderstandingProvider`. If `media_url` is absent, only the caption and the thumbnail are used, and the draft says so.
 - **Removed post:** the knowledge built from a post that is no longer on the account is switched off at the next sync.
 
@@ -49,7 +50,7 @@
   - transcript segments with `MM:SS` times, spoken language and script (D17);
   - visual notes: which product is shown, its parts and features, how it is used;
   - the caption, where readable.
-- **Approval** (V7) turns the draft into an ordinary knowledge document: source kind `instagram_video`, with the media id and permalink.
+- **Approval** by an admin (owner decision 3) turns the draft into an ordinary knowledge document: source kind `instagram_video`, with the media id and permalink.
 - **How the agent answers:** the document is chunked and embedded like any other, and the agent answers through `knowledge_search`, so the turn logic in `core/**` does not change.
 - **Before approval:** a draft is never retrievable.
 
@@ -94,8 +95,8 @@
 | V4 | A paid Gemini key and budget for the measurement. | Slice 0 |
 | V5 | Maximum video duration and monthly media budget per tenant. | Slice 1 |
 | V6 | May the original video be kept, and where (Open Question 9)? Default: no. | Slice 1 |
-| V7 | Does admin approval (owner decision 3) hold for Instagram videos, or may an analysed post answer customers at once? | Slice 1 |
-| V8 | Which media: only videos and reels, or also photos, carousels and stories (stories expire after 24 h)? | Slice 1 |
+| V7 | ~~Does admin approval hold for Instagram videos?~~ **Decided 2026-11-02: yes, an admin approves every draft.** | — |
+| V8 | ~~Which media?~~ **Decided 2026-11-02: videos and reels only for now.** | — |
 | V9 | Polling interval, and how far back the first sync reaches (all past posts, or the last N months). | Slice 1 |
 | V10 | When a customer shares a post with no text, does the bot answer first ("this is X, what would you like to know?") or wait? | Slice 3 |
 | V11 | Live read-only calls to verify the unverified points above (media path and `caption` under Instagram Login, reel attachment fields, media id match) on a test account. Live Instagram calls need explicit approval. | Slices 0 and 3 |

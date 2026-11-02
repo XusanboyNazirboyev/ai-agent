@@ -18,7 +18,7 @@ Design and open questions: [ADR 033](../adr/033-knowledge-from-company-videos.md
 - **Done when:** the owner picks the provider (V1), and every unverified API point is confirmed or the design is changed.
 
 ## Slice 1: sync and drafts (backend)
-- **Blocked by:** V1, V5, V6, V7, V8, V9.
+- **Blocked by:** V1, V5, V6, V9.
 - **Migration:** `channel_media` and `knowledge_drafts`, additive. It needs the owner's approval like every migration.
   - Fields: `tenantId`, channel, media id, permalink, type, timestamps, status, segments, flagged spans and linked catalog items.
 - **Sync job:** per active Instagram channel (BullMQ, scheduled, plus "sync now").
@@ -29,7 +29,7 @@ Design and open questions: [ADR 033](../adr/033-knowledge-from-company-videos.md
   2. Calls the provider, metered with purpose `media`.
   3. Scans for money, percentage and date spans, then stores the draft.
   4. Deletes the file.
-- **Approval** (per V7): an approved draft creates or updates a knowledge document (source kind `instagram_video`) and indexes it.
+- **Approval** (an admin approves every draft, V7): an approved draft creates or updates a knowledge document (source kind `instagram_video`) and indexes it.
 - **Tests:**
   - unit: segment mapping, scanner, sync diff;
   - integration: tenant isolation, a draft is never retrieved before approval, a removed post is switched off, the file is deleted, an unpriced model is refused;
