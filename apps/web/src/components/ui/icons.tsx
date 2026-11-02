@@ -30,6 +30,14 @@ const PATHS = {
       <path d="m6 6 12 12" />
     </>
   ),
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M8 17v-5" />
+      <path d="M13 17V7" />
+      <path d="M18 17v-9" />
+    </>
+  ),
   database: (
     <>
       <ellipse cx="12" cy="5" rx="9" ry="3" />
