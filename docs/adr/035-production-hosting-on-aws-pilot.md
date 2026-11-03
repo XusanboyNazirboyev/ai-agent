@@ -71,6 +71,12 @@ Done by the owner in the AWS console.
 - **Installed:** Docker Engine and Compose v5.7.0 from Docker's apt repository ([docs](https://docs.docker.com/engine/install/ubuntu/), read 2026-11-03) and a 2 GiB swap file in `/etc/fstab`; `hello-world` ran.
 - **Not done:** RDS, ECR, SSM parameters, CloudWatch, an Elastic IP, a domain, and any deploy. The Sydney `launch-wizard-1` security group and an unused IAM role `InstanceRole` are left to remove.
 
+## Amendment 2 (2026-11-03): PostgreSQL on the host for staging
+- **Owner decision:** staging runs PostgreSQL (pgvector, the same `pgvector/pgvector:pg16` image as local development) in a container on the EC2 host instead of RDS. Why: RDS `db.t4g.micro` with 20 GB gp3 adds about $16.6 a month in Frankfurt ($0.019 an hour and $0.137 per GB-month, AWS price list of 2026-10-29). The owner accepts the costs even if the account turns out to be on the paid plan, and may move to RDS later.
+- **How:** `deploy/docker-compose.local-db.yml` adds the `postgres` service with a named volume and makes `migrate` and `api` wait for it; the app connects with `POSTGRES_HOST=postgres` and `POSTGRES_SSL_MODE=disable` (the connection stays on the host's Docker network). Nothing else changes, so moving to RDS is a dump, a restore and new `POSTGRES_*` values.
+- **Backups:** `deploy/backup-postgres.sh` writes a daily `pg_dump` to `/var/backups/tezda` and deletes dumps older than `BACKUP_KEEP_DAYS` (no default in the script; the owner set 7 days on 2026-11-03, P5). Checked on a throwaway local container: the dump restored into a new database with its rows and the `vector` extension.
+- **Gives up, for now:** RDS's automated backups and point-in-time restore, and backups that survive losing the instance (the dumps are on its disk). An off-host copy (for example S3) is still open.
+
 ## Open questions (none assumed)
 | # | Question | Blocks |
 |---|---|---|
@@ -78,7 +84,7 @@ Done by the owner in the AWS console.
 | P2 | Domain name and registrar. | TLS, Meta redirect URI, public pages |
 | P3 | Monthly budget for the pilot. The estimate comes from the AWS price list once the size is chosen. | Creating resources |
 | P4 | Company details for the privacy policy: legal name, address, contact email, and who answers data requests. | Publishing the privacy pages |
-| P5 | Backup retention (days) and data retention for conversations (Open Question 9). | RDS setup; privacy policy |
+| P5 | Data retention for conversations (Open Question 9). Backup retention is answered: 7 days (owner, 2026-11-03). | Privacy policy |
 | P6 | Where alarms go (email address or the Telegram operator group). | Monitoring |
 
 ## Consequences
