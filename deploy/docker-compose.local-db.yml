@@ -1,0 +1,36 @@
+# Staging on one host (ADR 035 amendment 2): PostgreSQL runs next to the app
+# instead of RDS. Add this file after the main one; drop it to move to RDS.
+#   docker compose --env-file .env.production -f docker-compose.prod.yml \
+#     -f docker-compose.local-db.yml up -d
+# .env.production then sets POSTGRES_HOST=postgres and POSTGRES_SSL_MODE=disable
+# (the connection never leaves the host's Docker network).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    # Only the three values the image needs, not the whole app env file.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DATABASE:?POSTGRES_DATABASE is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  migrate:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
