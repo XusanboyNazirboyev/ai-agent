@@ -8,7 +8,11 @@ const ACCOUNT = '01a16865-91b2-706f-b43f-c098f959afa9';
 
 function check(
   values: Partial<AppEnvironment>,
-  row: { agentMode: string; isTestAccount: boolean } | null,
+  row: {
+    agentMode: string;
+    isTestAccount: boolean;
+    operatorChatId?: string | null;
+  } | null,
 ): { run: () => Promise<void>; findFirst: ReturnType<typeof vi.fn> } {
   const findFirst = vi
     .fn()
@@ -39,13 +43,13 @@ describe('agent mode startup check', () => {
         isTestAccount: false,
       },
     );
-    await expect(run()).rejects.toThrow(/operator handover notifier/);
+    await expect(run()).rejects.toThrow(/operator group/);
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: ACCOUNT, status: 'ACTIVE' } }),
     );
   });
 
-  it('starts with LIVE in local development, with SHADOW, or when unserved', async () => {
+  it('starts with LIVE in local development or with an operator group, with SHADOW, or when unserved', async () => {
     await expect(
       check(
         { NODE_ENV: 'development' },
@@ -57,6 +61,16 @@ describe('agent mode startup check', () => {
     ).resolves.toBeUndefined();
     await expect(
       check({}, { agentMode: 'SHADOW', isTestAccount: false }).run(),
+    ).resolves.toBeUndefined();
+    await expect(
+      check(
+        {},
+        {
+          agentMode: 'LIVE',
+          isTestAccount: false,
+          operatorChatId: '-1001234567890',
+        },
+      ).run(),
     ).resolves.toBeUndefined();
     const unserved = check(
       { TELEGRAM_CHANNEL_ACCOUNT_ID: undefined },

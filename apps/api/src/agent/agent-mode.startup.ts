@@ -37,13 +37,18 @@ export class AgentModeStartupCheck implements OnApplicationBootstrap {
     if (!served) return;
     const account = await this.prisma.channelAccount.findFirst({
       where: { id: served, status: 'ACTIVE' },
-      select: { id: true, agentMode: true, isTestAccount: true },
+      select: {
+        id: true,
+        agentMode: true,
+        isTestAccount: true,
+        operatorChatId: true,
+      },
     });
     if (!account || account.agentMode === 'OFF') return;
     // Throws AgentModeRefusedError: the API does not start in a mode it
     // would refuse to run.
     assertAgentModeAllowed(account.agentMode, policy, account);
-    if (account.agentMode === 'LIVE') {
+    if (account.agentMode === 'LIVE' && !account.operatorChatId) {
       this.logger.warn(
         JSON.stringify({
           event: 'agent.live_mode_development_only',
