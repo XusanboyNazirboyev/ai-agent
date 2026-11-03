@@ -233,7 +233,7 @@
   "botEffective.SHADOW": "Right now this account only prepares drafts: customers receive nothing from the assistant.",
   "botEffective.HOLD": "Right now customers get no reply from the assistant: it makes no model call and sends nothing, whatever is selected above.",
   "botRefusal.UNTRUSTED_PROVIDER": "Not available: the configured language model provider is not approved for real customer data.",
-  "botRefusal.NO_OPERATOR_NOTIFIER": "Not available on this server yet: it needs the operator hand-over notifier. Use drafts only.",
+  "botRefusal.NO_OPERATOR_NOTIFIER": "First connect an operator group to this bot: hand-overs are posted there. Until then, drafts only.",
   "botRefusal.UNTRUSTED_REAL_DATA": "Not available: this is not a test account and the provider is not approved for real customer data.",
   "bot.rulesTitle": "How the assistant works",
   "bot.rule1": "Prices, dates and seats come only from your connected data, never from the model's memory.",

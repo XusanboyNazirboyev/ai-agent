@@ -129,14 +129,30 @@ export class TelegramAgentPipeline {
   private async accountFor(
     tenantId: string,
     conversationId: string,
-  ): Promise<{ agentMode: AgentModeValue; isTestAccount: boolean }> {
+  ): Promise<{
+    agentMode: AgentModeValue;
+    isTestAccount: boolean;
+    operatorChatId: string | null;
+  }> {
     const row = await this.prisma.conversation.findFirst({
       where: { tenantId, id: conversationId },
       select: {
-        channelAccount: { select: { agentMode: true, isTestAccount: true } },
+        channelAccount: {
+          select: {
+            agentMode: true,
+            isTestAccount: true,
+            operatorChatId: true,
+          },
+        },
       },
     });
-    return row?.channelAccount ?? { agentMode: 'OFF', isTestAccount: false };
+    return (
+      row?.channelAccount ?? {
+        agentMode: 'OFF',
+        isTestAccount: false,
+        operatorChatId: null,
+      }
+    );
   }
 
   async run(

@@ -233,7 +233,7 @@
   "botEffective.SHADOW": "Hozir bu hisob faqat qoralama tayyorlaydi: mijozlar yordamchidan hech narsa olmaydi.",
   "botEffective.HOLD": "Hozir mijozlar yordamchidan javob olmaydi: u modelga murojaat qilmaydi va hech narsa yubormaydi, yuqorida nima tanlangan bo‘lishidan qat’i nazar.",
   "botRefusal.UNTRUSTED_PROVIDER": "Mavjud emas: sozlangan til modeli provayderi haqiqiy mijoz ma’lumotlari uchun tasdiqlanmagan.",
-  "botRefusal.NO_OPERATOR_NOTIFIER": "Bu serverda hozircha mavjud emas: operatorlarga topshirish xabarnomasi kerak. Qoralama rejimidan foydalaning.",
+  "botRefusal.NO_OPERATOR_NOTIFIER": "Avval bu botga operatorlar guruhini ulang: suhbatni topshirish xabarlari o‘sha yerga keladi. Ungacha faqat qoralama rejimi.",
   "botRefusal.UNTRUSTED_REAL_DATA": "Mavjud emas: bu test hisobi emas va provayder haqiqiy mijoz ma’lumotlari uchun tasdiqlanmagan.",
   "bot.rulesTitle": "Yordamchi qanday ishlaydi",
   "bot.rule1": "Narx, sana va o‘rinlar faqat ulangan ma’lumotlaringizdan olinadi, model xotirasidan emas.",

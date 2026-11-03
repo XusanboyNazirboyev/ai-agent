@@ -3,8 +3,10 @@
  * decide which mode may actually run.
  *
  * - LIVE sends agent replies and handover notices to customers, which is
- *   only acceptable when operators are notified of handovers. That notifier
- *   is Phase 5, so LIVE is refused everywhere except local development.
+ *   only acceptable when operators are notified of handovers. Handover
+ *   notices go to the channel account's own operator group (Phase 5), so
+ *   LIVE runs only on an account with an operator group, or in local
+ *   development (ADR 036).
  * - Data protection: a provider not listed in LLM_TRUSTED_PROVIDERS (by
  *   default every provider except the offline mock) may never run LIVE, and
  *   may run SHADOW on a real (non-test) channel account only with
@@ -22,7 +24,10 @@ import type { AppEnvironment } from '../config/environment.js';
 export type AgentModeValue = 'OFF' | 'SHADOW' | 'LIVE';
 export type EffectiveAgentMode = AgentModeValue | 'HOLD';
 
-/** Phase 5 builds the operator handover notifier; until then: false. */
+/**
+ * A server-wide handover notifier for every account. There is none: notices
+ * go to each account's operator group (AgentModeAccount.operatorChatId).
+ */
 export const OPERATOR_HANDOVER_NOTIFIER_AVAILABLE = false;
 
 /** Nest token to override the policy (tests); default reads config. */
@@ -39,6 +44,8 @@ export interface AgentModePolicy {
 
 export interface AgentModeAccount {
   readonly isTestAccount: boolean;
+  /** Telegram operator group that receives this account's handovers. */
+  readonly operatorChatId?: string | null;
 }
 
 export function agentModePolicy(settings: {
@@ -81,8 +88,14 @@ export class AgentModeRefusedError extends Error {
   }
 }
 
-/** Why LIVE is not allowed under `policy`, or undefined when it is. */
-export function liveModeRefusal(policy: AgentModePolicy): string | undefined {
+/**
+ * Why LIVE is not allowed under `policy` on `account`, or undefined when it
+ * is. Without an account only the server-wide rules apply.
+ */
+export function liveModeRefusal(
+  policy: AgentModePolicy,
+  account?: AgentModeAccount,
+): string | undefined {
   if (!policy.providerTrusted) {
     return (
       'Agent mode LIVE is refused for an untrusted LLM provider (not in ' +
@@ -90,11 +103,11 @@ export function liveModeRefusal(policy: AgentModePolicy): string | undefined {
     );
   }
   if (policy.operatorNotifierConfigured) return undefined;
+  if (account?.operatorChatId) return undefined;
   if (policy.nodeEnv === 'development') return undefined;
   return (
-    'Agent mode LIVE requires an operator handover notifier, which is not ' +
-    'implemented yet (Phase 5). Use SHADOW, or LIVE only with ' +
-    'NODE_ENV=development on a local test bot.'
+    'Agent mode LIVE requires an operator group on this channel account, ' +
+    'where handovers are posted. Connect one, or use SHADOW.'
   );
 }
 
@@ -127,7 +140,9 @@ export function modeRefusalCode(
   if (mode === 'OFF') return undefined;
   if (mode === 'LIVE') {
     if (!policy.providerTrusted) return 'UNTRUSTED_PROVIDER';
-    return liveModeRefusal(policy) ? 'NO_OPERATOR_NOTIFIER' : undefined;
+    return liveModeRefusal(policy, account)
+      ? 'NO_OPERATOR_NOTIFIER'
+      : undefined;
   }
   return shadowModeRefusal(policy, account) ? 'UNTRUSTED_REAL_DATA' : undefined;
 }
@@ -141,7 +156,7 @@ export function assertAgentModeAllowed(
   if (mode === 'OFF') return;
   const refusal =
     mode === 'LIVE'
-      ? liveModeRefusal(policy)
+      ? liveModeRefusal(policy, account)
       : shadowModeRefusal(policy, account);
   if (refusal) throw new AgentModeRefusedError(refusal);
 }
@@ -156,7 +171,7 @@ export function effectiveAgentMode(
   account: AgentModeAccount,
 ): { readonly mode: EffectiveAgentMode; readonly refusal?: string } {
   if (mode === 'OFF') return { mode };
-  const live = mode === 'LIVE' ? liveModeRefusal(policy) : undefined;
+  const live = mode === 'LIVE' ? liveModeRefusal(policy, account) : undefined;
   const shadow = shadowModeRefusal(policy, account);
   if (mode === 'LIVE' && !live) return { mode };
   if (shadow) return { mode: 'HOLD', refusal: live ?? shadow };

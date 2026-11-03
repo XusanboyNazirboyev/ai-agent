@@ -27,6 +27,7 @@ import {
   assertAgentModeAllowed,
   effectiveAgentMode,
   liveModeRefusal,
+  modeRefusalCode,
   shadowModeRefusal,
   type AgentModePolicy,
 } from './agent-mode.js';
@@ -48,11 +49,17 @@ const real = { isTestAccount: false };
 const testBot = { isTestAccount: true };
 
 describe('agent mode policy', () => {
-  it('refuses LIVE without an operator notifier outside local development', () => {
-    expect(liveModeRefusal(production)).toMatch(/Phase 5/);
+  it('refuses LIVE without an operator group outside local development', () => {
+    expect(liveModeRefusal(production)).toMatch(/operator group/);
     expect(() => assertAgentModeAllowed('LIVE', production, real)).toThrow(
-      /operator handover notifier/,
+      /operator group on this channel account/,
     );
+    expect(() =>
+      assertAgentModeAllowed('LIVE', production, {
+        ...real,
+        operatorChatId: null,
+      }),
+    ).toThrow(/operator group/);
     expect(() =>
       assertAgentModeAllowed('LIVE', { ...production, nodeEnv: 'test' }, real),
     ).toThrow();
@@ -69,6 +76,30 @@ describe('agent mode policy', () => {
     expect(
       liveModeRefusal({ ...production, operatorNotifierConfigured: true }),
     ).toBeUndefined();
+  });
+
+  it('allows LIVE in production on an account with an operator group (ADR 036)', () => {
+    const grouped = { ...real, operatorChatId: '-1001234567890' };
+    expect(liveModeRefusal(production, grouped)).toBeUndefined();
+    expect(() =>
+      assertAgentModeAllowed('LIVE', production, grouped),
+    ).not.toThrow();
+    expect(effectiveAgentMode('LIVE', production, grouped)).toEqual({
+      mode: 'LIVE',
+    });
+    expect(modeRefusalCode('LIVE', production, grouped)).toBeUndefined();
+    expect(modeRefusalCode('LIVE', production, real)).toBe(
+      'NO_OPERATOR_NOTIFIER',
+    );
+    // The group never overrides the data-protection guard.
+    const untrusted = { ...production, providerTrusted: false };
+    expect(liveModeRefusal(untrusted, grouped)).toMatch(/untrusted/);
+    expect(modeRefusalCode('LIVE', untrusted, grouped)).toBe(
+      'UNTRUSTED_PROVIDER',
+    );
+    expect(effectiveAgentMode('LIVE', untrusted, grouped).mode).not.toBe(
+      'LIVE',
+    );
   });
 
   it('degrades a refused LIVE row to SHADOW at processing time', () => {

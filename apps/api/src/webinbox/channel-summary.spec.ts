@@ -8,7 +8,11 @@ import { summarizeChannel, type ChannelRow } from './channel-summary.js';
 
 const MODES: AgentModeValue[] = ['OFF', 'SHADOW', 'LIVE'];
 
-function row(agentMode: AgentModeValue, isTestAccount: boolean): ChannelRow {
+function row(
+  agentMode: AgentModeValue,
+  isTestAccount: boolean,
+  operatorChatId: string | null = null,
+): ChannelRow {
   return {
     id: 'channel-1',
     channelType: 'telegram',
@@ -16,7 +20,7 @@ function row(agentMode: AgentModeValue, isTestAccount: boolean): ChannelRow {
     status: 'ACTIVE',
     agentMode,
     isTestAccount,
-    operatorChatId: null,
+    operatorChatId,
     createdAt: new Date('2026-10-28T00:00:00Z'),
   };
 }
@@ -42,29 +46,31 @@ describe('channel summary: requested vs effective mode', () => {
     let checked = 0;
     for (const policy of policies())
       for (const mode of MODES)
-        for (const isTestAccount of [true, false]) {
-          const account = row(mode, isTestAccount);
-          const summary = summarizeChannel(account, policy, 'none');
-          const pipeline = effectiveAgentMode(mode, policy, account).mode;
-          expect(summary.effectiveMode).toBe(pipeline);
-          checked += 1;
-        }
-    expect(checked).toBe(144);
+        for (const isTestAccount of [true, false])
+          for (const group of [null, '-1001234567890']) {
+            const account = row(mode, isTestAccount, group);
+            const summary = summarizeChannel(account, policy, 'none');
+            const pipeline = effectiveAgentMode(mode, policy, account).mode;
+            expect(summary.effectiveMode).toBe(pipeline);
+            checked += 1;
+          }
+    expect(checked).toBe(288);
   });
 
   it('explains every difference with a reason, and gives none when nothing differs', () => {
     for (const policy of policies())
       for (const mode of MODES)
-        for (const isTestAccount of [true, false]) {
-          const summary = summarizeChannel(
-            row(mode, isTestAccount),
-            policy,
-            'none',
-          );
-          if (summary.effectiveMode === mode)
-            expect(summary.effectiveReason).toBeUndefined();
-          else expect(summary.effectiveReason).toBeDefined();
-        }
+        for (const isTestAccount of [true, false])
+          for (const group of [null, '-1001234567890']) {
+            const summary = summarizeChannel(
+              row(mode, isTestAccount, group),
+              policy,
+              'none',
+            );
+            if (summary.effectiveMode === mode)
+              expect(summary.effectiveReason).toBeUndefined();
+            else expect(summary.effectiveReason).toBeDefined();
+          }
   });
 
   it('LIVE on an untrusted provider: a test account only drafts, a real account is held (customers get no reply)', () => {
