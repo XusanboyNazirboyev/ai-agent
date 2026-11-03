@@ -68,6 +68,19 @@ const environmentSchema = postgresEnvironmentSchema
     INSTAGRAM_VERIFY_TOKEN: z.string().min(1).optional(),
     /** Test setting for a fake Meta server; refused in production. */
     INSTAGRAM_API_BASE_URL: z.url().optional(),
+    /**
+     * Business Login for Instagram (ADR 031): the app's Instagram App ID and
+     * the exact OAuth redirect URI registered in the App Dashboard (the web
+     * page `/channels/instagram/callback`). Without both, only a pasted token
+     * can connect an account.
+     */
+    INSTAGRAM_APP_ID: z
+      .string()
+      .regex(/^[0-9]{1,30}$/u)
+      .optional(),
+    INSTAGRAM_OAUTH_REDIRECT_URI: z.url().optional(),
+    /** Test setting: a fake instagram.com / api.instagram.com; refused in production. */
+    INSTAGRAM_OAUTH_BASE_URL: z.url().optional(),
     TELEGRAM_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
       .int()
@@ -391,6 +404,28 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['INSTAGRAM_API_BASE_URL'],
         message:
           'INSTAGRAM_API_BASE_URL is a test setting and is refused in production',
+      });
+    }
+    if (
+      environment.INSTAGRAM_OAUTH_BASE_URL &&
+      environment.NODE_ENV === 'production'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['INSTAGRAM_OAUTH_BASE_URL'],
+        message:
+          'INSTAGRAM_OAUTH_BASE_URL is a test setting and is refused in production',
+      });
+    }
+    if (
+      environment.INSTAGRAM_OAUTH_REDIRECT_URI &&
+      environment.NODE_ENV === 'production' &&
+      !environment.INSTAGRAM_OAUTH_REDIRECT_URI.startsWith('https://')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['INSTAGRAM_OAUTH_REDIRECT_URI'],
+        message: 'INSTAGRAM_OAUTH_REDIRECT_URI must use https in production',
       });
     }
     if (

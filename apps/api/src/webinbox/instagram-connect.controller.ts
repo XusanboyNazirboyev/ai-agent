@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
   HttpException,
   NotFoundException,
   Param,
@@ -16,6 +17,11 @@ import {
   InstagramApiError,
   InstagramGraphClient,
 } from '../channels/instagram/instagram-graph.js';
+import {
+  InstagramOAuthClient,
+  MissingPermissionsError,
+  OAuthStateError,
+} from '../channels/instagram/instagram-oauth.js';
 import type { AppEnvironment } from '../config/environment.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
@@ -40,6 +46,18 @@ const ConnectBody = z.object({
     .regex(/^\S{20,2048}$/u),
 });
 
+/** What the callback page sends back from Instagram's redirect. */
+const CompleteBody = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^[^\s#]{1,2048}$/u),
+  state: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,2048}$/u),
+});
+
 /** Webhook field for direct messages (subscribed per account at enable). */
 const WEBHOOK_FIELDS = ['messages'] as const;
 
@@ -62,6 +80,18 @@ const REFUSAL = {
   },
   INSTAGRAM_REJECTED: { status: 502, i18nKey: 'errors.INSTAGRAM_REJECTED' },
   RATE_LIMITED: { status: 429, i18nKey: 'errors.rateLimited' },
+  OAUTH_NOT_CONFIGURED: {
+    status: 503,
+    i18nKey: 'errors.OAUTH_NOT_CONFIGURED',
+  },
+  OAUTH_STATE_INVALID: {
+    status: 400,
+    i18nKey: 'errors.OAUTH_STATE_INVALID',
+  },
+  MISSING_PERMISSIONS: {
+    status: 400,
+    i18nKey: 'errors.MISSING_PERMISSIONS',
+  },
 } as const;
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
@@ -77,9 +107,10 @@ function refuse(code: keyof typeof REFUSAL): HttpException {
  * ADR 028 secret store). OWNER/ADMIN only, at most 10 calls a minute per
  * operator, every change audited without any secret. The token is an
  * Instagram User access token with `instagram_business_basic` and
- * `instagram_business_manage_messages`; this slice takes it pasted (for
- * example from the App Dashboard "Generate token"); the OAuth redirect flow
- * is a later slice. A new account starts DISABLED with the assistant OFF.
+ * `instagram_business_manage_messages`, from Business Login for Instagram
+ * (`oauth/start` → Instagram → the web callback page → `oauth/complete`) or
+ * pasted (for example from the App Dashboard "Generate token"). A new account
+ * starts DISABLED with the assistant OFF.
  */
 @Controller('api/v1/channels/instagram')
 @UseGuards(SessionGuard)
@@ -91,11 +122,14 @@ export class InstagramConnectController {
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly secrets: ChannelSecretStore,
     private readonly graph: InstagramGraphClient,
+    private readonly oauth: InstagramOAuthClient,
   ) {}
 
-  private admit(request: InboxRequest): {
+  /** OWNER/ADMIN only; reading the setup is not rate limited. */
+  private manager(request: InboxRequest): {
     tenantId: string;
     operatorId: string;
+    sessionId: string;
   } {
     const principal = request.principal!;
     if (principal.role !== 'OWNER' && principal.role !== 'ADMIN')
@@ -104,6 +138,20 @@ export class InstagramConnectController {
         message: 'Not allowed',
         i18nKey: 'errors.forbidden',
       });
+    return {
+      tenantId: principal.tenantId,
+      operatorId: principal.operatorId,
+      sessionId: principal.sessionId,
+    };
+  }
+
+  private admit(request: InboxRequest): {
+    tenantId: string;
+    operatorId: string;
+    sessionId: string;
+  } {
+    const who = this.manager(request);
+    const principal = request.principal!;
     const now = Date.now();
     const recent = (this.calls.get(principal.operatorId) ?? []).filter(
       (at) => now - at < 60_000,
@@ -111,7 +159,7 @@ export class InstagramConnectController {
     if (recent.length >= 10) throw refuse('RATE_LIMITED');
     recent.push(now);
     this.calls.set(principal.operatorId, recent);
-    return { tenantId: principal.tenantId, operatorId: principal.operatorId };
+    return who;
   }
 
   private async account(tenantId: string, id: string): Promise<ChannelAccount> {
@@ -207,7 +255,63 @@ export class InstagramConnectController {
     if (!this.secrets.configured) throw refuse('SECRETS_NOT_CONFIGURED');
     const parsed = ConnectBody.safeParse(body);
     if (!parsed.success) throw refuse('INVALID_BODY');
-    const token = parsed.data.accessToken;
+    return this.save(who, parsed.data.accessToken, 'token');
+  }
+
+  /** Whether "Continue with Instagram" can work on this server. */
+  @Get('oauth')
+  setup(@Req() request: InboxRequest): { oauth: boolean } {
+    this.manager(request);
+    return { oauth: this.oauth.configured };
+  }
+
+  /** The Instagram authorization URL, with a state bound to this session. */
+  @Post('oauth/start')
+  start(@Req() request: InboxRequest): { url: string } {
+    const who = this.admit(request);
+    if (!this.oauth.configured) throw refuse('OAUTH_NOT_CONFIGURED');
+    return { url: this.oauth.authorizeUrl(this.oauth.state(who)) };
+  }
+
+  /**
+   * Finishes Business Login: the web callback page posts Instagram's `code`
+   * and the `state` back from the same session (the session cookie is
+   * SameSite=Strict, so Instagram's redirect itself carries none).
+   */
+  @Post('oauth/complete')
+  async complete(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<ChannelAccountSummary> {
+    const who = this.admit(request);
+    if (!this.oauth.configured) throw refuse('OAUTH_NOT_CONFIGURED');
+    if (!this.secrets.configured) throw refuse('SECRETS_NOT_CONFIGURED');
+    const parsed = CompleteBody.safeParse(body);
+    if (!parsed.success) throw refuse('INVALID_BODY');
+    try {
+      this.oauth.checkState(parsed.data.state, who);
+    } catch (error) {
+      if (error instanceof OAuthStateError) throw refuse('OAUTH_STATE_INVALID');
+      throw error;
+    }
+    let token: string;
+    try {
+      token = (await this.meta(() => this.oauth.exchange(parsed.data.code)))
+        .token;
+    } catch (error) {
+      if (error instanceof MissingPermissionsError)
+        throw refuse('MISSING_PERMISSIONS');
+      throw error;
+    }
+    return this.save(who, token, 'oauth');
+  }
+
+  /** Reads the account behind a token, then stores the account and the token. */
+  private async save(
+    who: { tenantId: string; operatorId: string },
+    token: string,
+    via: 'token' | 'oauth',
+  ): Promise<ChannelAccountSummary> {
     const me = await this.meta(() => this.graph.me(token));
     const existing = await this.prisma.channelAccount.findUnique({
       where: {
@@ -253,7 +357,7 @@ export class InstagramConnectController {
         ? 'channel.instagram_reconnected'
         : 'channel.instagram_connected',
       id,
-      { igUserId: me.userId },
+      { igUserId: me.userId, via },
     );
     return this.summary(who.tenantId, id);
   }

@@ -489,5 +489,18 @@
   "analytics.details.lowConfidence": "Messages with an uncertain language",
   "analytics.details.tokens": "Tokens (input / output)",
   "errors.INVALID_RANGE": "The period is not valid: at most 366 days, and the start must not be after the end.",
-  "errors.INVALID_QUERY": "The request is not valid."
+  "errors.INVALID_QUERY": "The request is not valid.",
+  "igConnect.oauthIntro": "Sign in to Instagram and allow access. No token is needed.",
+  "igConnect.oauthStart": "Continue with Instagram",
+  "igConnect.oauthRedirecting": "Opening Instagram…",
+  "igConnect.useToken": "Connect with an access token instead",
+  "igCallback.title": "Connect Instagram",
+  "igCallback.working": "Finishing the connection…",
+  "igCallback.denied": "Access was not allowed on Instagram, so nothing was connected.",
+  "igCallback.invalid": "This page opens after signing in to Instagram. Start again from the Channels page.",
+  "igCallback.enabled": "The account is enabled. Direct messages now reach the inbox.",
+  "igCallback.back": "Back to channels",
+  "errors.OAUTH_NOT_CONFIGURED": "Signing in with Instagram is not set up on this server. Connect with an access token instead.",
+  "errors.OAUTH_STATE_INVALID": "The sign-in link expired or belongs to another session. Start again from the Channels page.",
+  "errors.MISSING_PERMISSIONS": "Instagram did not allow reading and sending messages. Connect again and allow every requested permission."
 }

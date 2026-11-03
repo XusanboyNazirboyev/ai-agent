@@ -489,5 +489,18 @@
   "analytics.details.lowConfidence": "Tili aniq aniqlanmagan xabarlar",
   "analytics.details.tokens": "Tokenlar (kirish / chiqish)",
   "errors.INVALID_RANGE": "Davr noto‘g‘ri: ko‘pi bilan 366 kun, boshlanishi tugashidan keyin bo‘lmasin.",
-  "errors.INVALID_QUERY": "So‘rov noto‘g‘ri."
+  "errors.INVALID_QUERY": "So‘rov noto‘g‘ri.",
+  "igConnect.oauthIntro": "Instagram’ga kiring va ruxsat bering. Token kerak emas.",
+  "igConnect.oauthStart": "Instagram orqali davom etish",
+  "igConnect.oauthRedirecting": "Instagram ochilmoqda…",
+  "igConnect.useToken": "Buning o‘rniga token bilan ulash",
+  "igCallback.title": "Instagram’ni ulash",
+  "igCallback.working": "Ulanish yakunlanmoqda…",
+  "igCallback.denied": "Instagram’da ruxsat berilmadi, shuning uchun hech narsa ulanmadi.",
+  "igCallback.invalid": "Bu sahifa Instagram’ga kirgandan keyin ochiladi. Kanallar sahifasidan qaytadan boshlang.",
+  "igCallback.enabled": "Akkaunt yoqildi. Direct xabarlari endi kiruvchilarga keladi.",
+  "igCallback.back": "Kanallarga qaytish",
+  "errors.OAUTH_NOT_CONFIGURED": "Bu serverda Instagram orqali kirish sozlanmagan. Akkauntni token bilan ulang.",
+  "errors.OAUTH_STATE_INVALID": "Kirish havolasi eskirgan yoki boshqa seansga tegishli. Kanallar sahifasidan qaytadan boshlang.",
+  "errors.MISSING_PERMISSIONS": "Instagram xabarlarni o‘qish va yuborishga ruxsat bermadi. Qaytadan ulang va so‘ralgan barcha ruxsatlarni bering."
 }
