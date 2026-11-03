@@ -1,0 +1,71 @@
+# Pilot production stack on one host (ADR 035). PostgreSQL is external (RDS);
+# settings come from deploy/.env.production (never committed), rendered on
+# the host from SSM Parameter Store.
+#   docker compose -f deploy/docker-compose.prod.yml run --rm migrate
+#   docker compose -f deploy/docker-compose.prod.yml up -d
+name: tezda
+
+services:
+  migrate:
+    image: ${IMAGE_REPO:-tezda}-migrate:${TAG:-local}
+    env_file: .env.production
+    profiles: [migrate]
+
+  api:
+    image: ${IMAGE_REPO:-tezda}-api:${TAG:-local}
+    env_file: .env.production
+    environment:
+      REDIS_URL: redis://redis:6379
+      API_HOST: 0.0.0.0
+      PORT: '4000'
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  web:
+    image: ${IMAGE_REPO:-tezda}-web:${TAG:-local}
+    environment:
+      API_URL: http://api:4000
+      HOSTNAME: 0.0.0.0
+      PORT: '3000'
+      # One proxy (Caddy) appends X-Forwarded-For in front of the web server.
+      TRUSTED_PROXY_HOPS: '1'
+      WEB_PROXY_SECRET: ${WEB_PROXY_SECRET:?WEB_PROXY_SECRET is required}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      TEZDA_DOMAIN: ${TEZDA_DOMAIN:?TEZDA_DOMAIN is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:

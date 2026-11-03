@@ -5,3 +5,12 @@ dist
 **/dist
 coverage
 .env
+# Never in an image: local secrets, build output, tool state.
+.env.*
+!.env.example
+**/.next
+**/test-results
+**/playwright-report
+.claude
+**/.claude
+.cto-toolkit
