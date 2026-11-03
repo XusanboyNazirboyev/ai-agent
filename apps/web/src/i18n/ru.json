@@ -489,5 +489,18 @@
   "analytics.details.lowConfidence": "Сообщения с неуверенно определённым языком",
   "analytics.details.tokens": "Токены (вход / выход)",
   "errors.INVALID_RANGE": "Недопустимый период: не более 366 дней, начало не позже конца.",
-  "errors.INVALID_QUERY": "Неверный запрос."
+  "errors.INVALID_QUERY": "Неверный запрос.",
+  "igConnect.oauthIntro": "Войдите в Instagram и разрешите доступ. Токен не нужен.",
+  "igConnect.oauthStart": "Продолжить с Instagram",
+  "igConnect.oauthRedirecting": "Открываем Instagram…",
+  "igConnect.useToken": "Подключить по токену доступа",
+  "igCallback.title": "Подключение Instagram",
+  "igCallback.working": "Завершаем подключение…",
+  "igCallback.denied": "Доступ в Instagram не разрешён, поэтому ничего не подключено.",
+  "igCallback.invalid": "Эта страница открывается после входа в Instagram. Начните заново на странице «Каналы».",
+  "igCallback.enabled": "Аккаунт включён. Сообщения в Direct теперь приходят во входящие.",
+  "igCallback.back": "Назад к каналам",
+  "errors.OAUTH_NOT_CONFIGURED": "Вход через Instagram на этом сервере не настроен. Подключите аккаунт по токену доступа.",
+  "errors.OAUTH_STATE_INVALID": "Ссылка входа устарела или относится к другому сеансу. Начните заново на странице «Каналы».",
+  "errors.MISSING_PERMISSIONS": "Instagram не разрешил читать и отправлять сообщения. Подключите заново и разрешите все запрошенные права."
 }
