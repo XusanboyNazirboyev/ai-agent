@@ -15,6 +15,11 @@ import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import type { NormalizedTelegramText } from './telegram-normalizer.js';
 import { TelegramCredentials } from './telegram-credentials.js';
+import {
+  groupLinkKey,
+  startPayload,
+  verifyGroupLinkCode,
+} from './operator-group-link.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -84,6 +89,59 @@ export class TelegramWebhookService {
       throw new ServiceUnavailableException('Telegram channel is unavailable');
     }
     return { ...channel, channelAccountId: routeAccountId };
+  }
+
+  /**
+   * One-click operator group (ADR 036): a `/start <code>` in a group links
+   * that group when the code was made for this account and is still valid.
+   * Compare-and-set on the old group, so two uses of one code cannot both
+   * win. Anything else in a group is ignored by the caller.
+   */
+  async linkOperatorGroup(
+    routeAccountId: string,
+    update: NormalizedTelegramText,
+    now: Date = new Date(),
+  ): Promise<'linked' | 'refused'> {
+    const payload = startPayload(update.text);
+    const master = this.config.get('SECRETS_MASTER_KEY', { infer: true });
+    if (!payload || !master || !UUID.test(routeAccountId)) return 'refused';
+    const account = await this.prisma.channelAccount.findFirst({
+      where: { id: routeAccountId, channelType: 'telegram', status: 'ACTIVE' },
+      select: { tenantId: true, operatorChatId: true },
+    });
+    if (
+      !account ||
+      !verifyGroupLinkCode(
+        groupLinkKey(master),
+        payload,
+        routeAccountId,
+        account.operatorChatId,
+        now,
+      )
+    )
+      return 'refused';
+    return this.prisma.$transaction(async (tx) => {
+      const changed = await tx.channelAccount.updateMany({
+        where: {
+          id: routeAccountId,
+          tenantId: account.tenantId,
+          operatorChatId: account.operatorChatId,
+        },
+        data: { operatorChatId: update.chatId },
+      });
+      if (changed.count !== 1) return 'refused' as const;
+      await tx.auditEvent.create({
+        data: {
+          tenantId: account.tenantId,
+          actorType: 'SYSTEM',
+          action: 'channel.operator_group_changed',
+          entityType: 'channel_account',
+          entityId: routeAccountId,
+          safeInputSummary: { configured: true, via: 'group_link' },
+        },
+      });
+      return 'linked' as const;
+    });
   }
 
   async accept(

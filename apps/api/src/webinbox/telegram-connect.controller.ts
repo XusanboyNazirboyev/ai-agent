@@ -20,6 +20,10 @@ import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
 import {
+  createGroupLinkCode,
+  groupLinkKey,
+} from '../channels/telegram/operator-group-link.js';
+import {
   BOT_TOKEN_FORMAT,
   TelegramManagement,
   TelegramManagementError,
@@ -72,6 +76,10 @@ const REFUSAL: Record<string, { status: number; i18nKey: string }> = {
   // kept so that the operator can try again.
   WEBHOOK_NOT_REMOVED: { status: 502, i18nKey: 'errors.webhookNotRemoved' },
   RATE_LIMITED: { status: 429, i18nKey: 'errors.rateLimited' },
+  // One-click operator group: the bot must be enabled (its webhook receives
+  // the group's /start) and have a username for the t.me link.
+  BOT_NOT_ENABLED: { status: 409, i18nKey: 'errors.botNotEnabled' },
+  NO_BOT_USERNAME: { status: 409, i18nKey: 'errors.noBotUsername' },
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
 };
 
@@ -477,6 +485,40 @@ export class TelegramConnectController {
         lastErrorAt: info.lastErrorDate,
       },
       operatorGroupConfigured: Boolean(account.operatorChatId),
+    };
+  }
+
+  /**
+   * One-click operator group (ADR 036): a `t.me/<bot>?startgroup=<code>` link.
+   * Opening it lets the operator pick a group; Telegram adds the bot there and
+   * sends `/start <code>`, which the webhook turns into the operator group.
+   * The code is signed, expires in 10 minutes and works once.
+   */
+  @Post(':id/operator-group/link')
+  @HttpCode(200)
+  async operatorGroupLink(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<{ url: string; expiresAt: string }> {
+    const who = this.admit(request);
+    const master = this.config.get('SECRETS_MASTER_KEY', { infer: true });
+    if (!master) throw refuse('SECRETS_NOT_CONFIGURED');
+    const account = await this.account(who.tenantId, id);
+    if (account.status !== 'ACTIVE') throw refuse('BOT_NOT_ENABLED');
+    const username = /^@([A-Za-z0-9_]{5,64})$/u.exec(
+      account.displayName ?? '',
+    )?.[1];
+    if (!username) throw refuse('NO_BOT_USERNAME');
+    const { code, expiresAt } = createGroupLinkCode(
+      groupLinkKey(master),
+      account.id,
+      account.operatorChatId,
+      new Date(),
+    );
+    await this.audit(who, 'channel.operator_group_link_created', id);
+    return {
+      url: `https://t.me/${username}?startgroup=${code}`,
+      expiresAt: expiresAt.toISOString(),
     };
   }
 

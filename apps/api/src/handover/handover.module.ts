@@ -30,6 +30,7 @@ import { TelegramGroupNotifier } from './telegram-group-notifier.js';
     { provide: OPERATOR_NOTIFIER, useExisting: TelegramGroupNotifier },
   ],
   exports: [
+    TelegramBotApi,
     HandoverService,
     HandoverSlaService,
     HandoverNotificationService,

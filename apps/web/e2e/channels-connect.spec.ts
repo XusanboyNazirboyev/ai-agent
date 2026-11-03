@@ -111,6 +111,17 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
   );
 
   await card.getByTestId('account-group').click();
+  // One click: a signed t.me link that adds the bot to a group (ADR 036).
+  await page.getByTestId('group-link-create').click();
+  const link = await page.getByTestId('group-link-open').getAttribute('href');
+  expect(link).toMatch(
+    new RegExp(`^https://t\\.me/${USERNAME}\\?startgroup=[A-Za-z0-9_-]{48}$`),
+  );
+  await expect(page.getByTestId('operator-group-dialog')).toContainText(
+    'Waiting for the group',
+  );
+  // By hand: the chat id.
+  await page.getByTestId('group-manual').click();
   await page.getByTestId('group-chat-id').fill('abc');
   await page.getByTestId('group-save').click();
   await expect(
