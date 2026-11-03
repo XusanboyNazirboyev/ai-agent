@@ -82,6 +82,13 @@ Done by the owner in the AWS console.
 - **Address:** no domain yet (P2), so staging uses `18-185-27-82.sslip.io`, a public wildcard DNS name that resolves to the embedded IP, with a Let's Encrypt certificate from Caddy. The instance got an Elastic IP (`18.185.27.82`) so the name survives a stop and start; while attached it costs the same $0.005 an hour as the public IPv4 it replaced (AWS price list). Meta App Review still needs a real domain.
 - **Setup:** `deploy/bootstrap-staging.sh` clones `deploy/` to `/opt/tezda`, generates `.env.production` on the host (secrets never leave it), pulls the tag, migrates, starts and installs the daily backup cron (7 days). The LLM provider stays at the API default until real keys are added. The first login comes from `deploy/create-owner.sh` (a tenant and its OWNER; the password goes to `/var/lib/tezda-secrets`, never to the screen or logs).
 
+## Amendment 4 (2026-11-03): the first tenant, the LLM and the knowledge embedder on staging
+- **Tenant:** `tezda-test` (`education@1`, `uz-Latn`, `Asia/Tashkent`) with one OWNER, created on the host with `deploy/create-owner.sh`; the owner logged in. A Telegram bot is connected from the web.
+- **LLM:** paid Gemini through the OpenAI-compatible provider, as in local development: `gemini-3.8-flash` for both tiers, pricing version `gemini-paid-2026-10-29`, `openai-compatible` trusted. The keys were copied by the owner from the local `.env` into the host's `.env.production` (never through chat or git).
+- **Budget:** `LLM_TENANT_MONTHLY_BUDGET_USD=20`. The owner set $20 on 2026-11-03 and does not recall the $50 a month that ADR 026 records; ADR 026 is left unchanged until the owner settles which applies.
+- **Knowledge:** `KNOWLEDGE_EMBEDDINGS=gemini` with `gemini-embedding-2`, the model Google's OpenAI-compatibility page uses for embeddings ([docs](https://aistudio.google.com/docs/openai), read 2026-11-03); `hashing` is refused in production by `embedding.factory.ts`. Embedding prices not checked yet.
+- **LIVE refused:** `agent-mode.ts` refuses LIVE outside development while `OPERATOR_HANDOVER_NOTIFIER_AVAILABLE` is `false`, although the Telegram operator-group notifier exists. Staging stays in SHADOW (drafts). Allowing LIVE when a channel has an operator group is a separate change that needs the owner's approval.
+
 ## Open questions (none assumed)
 | # | Question | Blocks |
 |---|---|---|
