@@ -38,7 +38,7 @@ A second read-only pack would only show that slots and prompts are configurable.
 - Logs stay structured JSON without customer text (already enforced by a test); add request/turn correlation ids to every log line.
 - Done when: every Section 11 metric has a tested query and a chart; alerts have tests with fixed clocks.
 
-**7.4 Universality checklist in CI.** `architecture.spec.ts` extended to fail if `src/core/**` imports from `src/packs/**` or any connector implementation, and if a pack is referenced by name outside `src/packs` and the registry.
+**7.4 Universality checklist in CI.** **Implemented 2026-11-03** on `feat/phase7-4-universality` (see `PROGRESS.md`). `architecture.spec.ts` extended to fail if `src/core/**` imports from `src/packs/**` or any connector implementation, and if a pack is referenced by name outside `src/packs` and the registry.
 
 ## Use of the mock tourism catalog
 Tourism is a **validation example**, chosen because it differs from education in slots, regulated information and actions — not the product's scope. The mock connector stays fictional data; a real CRM (omonCRM or other) needs its API facts first (Open Question 1). A third, very different domain (e.g. a services business with appointment booking) is a good later check that the action framework is general.
