@@ -343,7 +343,7 @@
   "test.groupOk": "An operator group is set",
   "test.groupMissing": "No operator group yet",
   "group.title": "Operator group",
-  "group.hint": "Add the bot to your operators' Telegram group, then enter the group's chat id (a number such as -1001234567890).",
+  "group.hint": "Hand-overs from customers are posted to this Telegram group, where operators take them.",
   "group.id": "Chat id",
   "group.save": "Save",
   "group.remove": "Remove the group",
@@ -502,5 +502,13 @@
   "igCallback.back": "Back to channels",
   "errors.OAUTH_NOT_CONFIGURED": "Signing in with Instagram is not set up on this server. Connect with an access token instead.",
   "errors.OAUTH_STATE_INVALID": "The sign-in link expired or belongs to another session. Start again from the Channels page.",
-  "errors.MISSING_PERMISSIONS": "Instagram did not allow reading and sending messages. Connect again and allow every requested permission."
+  "errors.MISSING_PERMISSIONS": "Instagram did not allow reading and sending messages. Connect again and allow every requested permission.",
+  "group.oneClickHint": "Opens Telegram: pick your operators' group, the bot joins it and the group is connected. The link works once, for 10 minutes.",
+  "group.oneClick": "Choose the group in Telegram",
+  "group.open": "Open Telegram",
+  "group.waiting": "Waiting for the group… Pick it in Telegram and keep this window open.",
+  "group.waitingMove": "Pick the new group in Telegram; the bot confirms there when it is connected.",
+  "group.manual": "Or enter the group's chat id by hand",
+  "errors.BOT_NOT_ENABLED": "Enable the bot first: the group can be connected only while the bot is enabled.",
+  "errors.NO_BOT_USERNAME": "The bot's username is unknown. Run the connection check, then try again."
 }

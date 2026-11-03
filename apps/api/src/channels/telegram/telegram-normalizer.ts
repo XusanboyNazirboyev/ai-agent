@@ -12,7 +12,12 @@ const updateSchema = z
       .object({
         message_id: z.number().int().positive().safe(),
         date: z.number().int().nonnegative().safe(),
-        chat: z.object({ id: telegramId }).passthrough(),
+        chat: z
+          .object({
+            id: telegramId,
+            type: z.string().max(32).optional(),
+          })
+          .passthrough(),
         from: z
           .object({
             id: telegramId,
@@ -59,6 +64,11 @@ export type NormalizedTelegramText = {
   displayName: string | null;
   text: string;
   receivedAt: Date;
+  /**
+   * Telegram chat type (`private`, `group`, `supergroup`, ...). Only a
+   * private chat is a customer conversation (see isPrivateChat).
+   */
+  chatType?: string;
   /** The message this one replies to (operator-group routing). */
   replyToText?: string;
 };
@@ -125,8 +135,14 @@ export function normalizeTelegramUpdate(
     displayName: displayName || null,
     text: message.text,
     receivedAt: new Date(message.date * 1_000),
+    ...(message.chat.type !== undefined ? { chatType: message.chat.type } : {}),
     ...(message.reply_to_message?.text !== undefined
       ? { replyToText: message.reply_to_message.text }
       : {}),
   };
+}
+
+/** A customer conversation: a private chat (updates without a type count as private). */
+export function isPrivateChat(update: NormalizedTelegramText): boolean {
+  return update.chatType === undefined || update.chatType === 'private';
 }

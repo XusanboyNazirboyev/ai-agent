@@ -343,7 +343,7 @@
   "test.groupOk": "Operatorlar guruhi belgilangan",
   "test.groupMissing": "Operatorlar guruhi hali yo‘q",
   "group.title": "Operatorlar guruhi",
-  "group.hint": "Botni operatorlaringizning Telegram guruhiga qo‘shing, so‘ng guruhning chat id sini kiriting (-1001234567890 kabi raqam).",
+  "group.hint": "Mijozlardan operatorga topshirilgan suhbatlar shu Telegram guruhiga keladi, operatorlar ularni o‘sha yerdan oladi.",
   "group.id": "Chat id",
   "group.save": "Saqlash",
   "group.remove": "Guruhni olib tashlash",
@@ -502,5 +502,13 @@
   "igCallback.back": "Kanallarga qaytish",
   "errors.OAUTH_NOT_CONFIGURED": "Bu serverda Instagram orqali kirish sozlanmagan. Akkauntni token bilan ulang.",
   "errors.OAUTH_STATE_INVALID": "Kirish havolasi eskirgan yoki boshqa seansga tegishli. Kanallar sahifasidan qaytadan boshlang.",
-  "errors.MISSING_PERMISSIONS": "Instagram xabarlarni o‘qish va yuborishga ruxsat bermadi. Qaytadan ulang va so‘ralgan barcha ruxsatlarni bering."
+  "errors.MISSING_PERMISSIONS": "Instagram xabarlarni o‘qish va yuborishga ruxsat bermadi. Qaytadan ulang va so‘ralgan barcha ruxsatlarni bering.",
+  "group.oneClickHint": "Telegram ochiladi: operatorlar guruhini tanlang, bot unga qo‘shiladi va guruh ulanadi. Havola bir marta, 10 daqiqa ishlaydi.",
+  "group.oneClick": "Guruhni Telegram’da tanlash",
+  "group.open": "Telegram’ni ochish",
+  "group.waiting": "Guruh kutilmoqda… Uni Telegram’da tanlang va bu oynani yopmang.",
+  "group.waitingMove": "Telegram’da yangi guruhni tanlang; ulanganda bot u yerda tasdiqlaydi.",
+  "group.manual": "Yoki guruhning chat id sini qo‘lda kiriting",
+  "errors.BOT_NOT_ENABLED": "Avval botni yoqing: guruhni faqat bot yoqilgan paytda ulash mumkin.",
+  "errors.NO_BOT_USERNAME": "Botning username’i noma’lum. Ulanish tekshiruvini ishga tushiring va qaytadan urinib ko‘ring."
 }

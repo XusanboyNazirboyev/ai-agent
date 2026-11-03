@@ -18,3 +18,13 @@
 - A tenant can run LIVE on staging or production once it connects an operator group; handovers then reach people.
 - Real customers in LIVE still wait for ADR 035's P1 (data location) and the Phase 9 rollout (shadow, then limited live).
 - Not covered: an Instagram account has no operator group of its own today, so it stays in SHADOW until one can be set for it.
+
+## Amendment 1 (2026-11-03): one-click operator group
+- **Why:** the only way to set the group was typing its chat id, a number Telegram does not show. The owner asked for something easier.
+- **How:**
+  - `POST /api/v1/channels/:id/operator-group/link` (OWNER/ADMIN, audited) returns `https://t.me/<bot>?startgroup=<code>`. Telegram documents that this link lets the user pick a group, adds the bot and starts it there with the parameter (up to 64 base64url characters; [docs](https://core.telegram.org/api/links), read 2026-11-03).
+  - The code is stateless: account id, expiry (10 minutes) and an HMAC whose key is derived (HKDF) from `SECRETS_MASTER_KEY`, computed over both and the account's current operator group. Linking changes that group, so a code works once; the update is a compare-and-set, so two uses cannot both win. No table, no migration.
+  - The webhook links the group on `/start <code>` or `/start@bot <code>` from a group, writes a SYSTEM audit event and posts a short confirmation there.
+  - The web dialog offers "Choose the group in Telegram" and polls until the group is set; entering the chat id stays as a fallback.
+- **Also fixed:** a group or channel message was accepted as a customer conversation (the normalizer ignored the chat type), so a bot added to any group would have answered there in LIVE. Now only private chats (or updates without a chat type) reach customer intake; group messages are ignored except the link command and the operator group's own traffic.
+- **Checked:** unit tests (code, start parsing, controller routing), integration tests on `agentcore_test` (single use, another account's code, disabled bot, no master key, moving to a new group), the channels e2e spec (the link format and the manual fallback). The real Telegram flow (the exact `/start` text in a group) is checked on staging.
