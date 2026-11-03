@@ -1,0 +1,22 @@
+# TLS certificates are obtained and renewed automatically for the domain.
+# Only messenger webhooks go straight to the API; everything else (pages and
+# /api/*) goes to the web server, which forwards /api/* with WEB_PROXY_SECRET.
+# /health and /probe stay internal.
+{$TEZDA_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	@webhooks path /webhooks/*
+	handle @webhooks {
+		reverse_proxy api:4000
+	}
+	@internal path /health /health/* /probe /probe/*
+	handle @internal {
+		respond 404
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

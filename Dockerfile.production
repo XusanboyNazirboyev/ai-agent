@@ -1,0 +1,57 @@
+# Production images (ADR 035). Targets:
+#   api      — NestJS API with its workers;   docker build --target api .
+#   web      — Next.js web server;           docker build --target web .
+#   migrate  — runs `prisma migrate deploy`;  docker build --target migrate .
+# No secret is baked in: every setting comes from the runtime environment.
+
+FROM node:24-alpine AS base
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH" CI=true
+RUN corepack enable
+WORKDIR /app
+
+FROM base AS build
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN pnpm install --frozen-lockfile
+COPY . .
+# Next.js fixes the /api rewrite target at build time (next.config.mjs), so
+# the API address inside the stack is a build argument, not a runtime setting.
+ARG API_URL=http://api:4000
+ENV API_URL=$API_URL
+RUN pnpm db:generate \
+ && pnpm --filter @agentcore/shared build \
+ && pnpm --filter @agentcore/api build \
+ && NODE_ENV=production pnpm --filter @agentcore/web build
+# Production-only dependency trees, with the shared package copied in.
+RUN pnpm --filter @agentcore/api deploy --prod --legacy /prod/api \
+ && pnpm --filter @agentcore/web deploy --prod --legacy /prod/web
+
+# The migration runner keeps the Prisma CLI (a dev dependency).
+FROM build AS migrate
+WORKDIR /app/apps/api
+CMD ["pnpm", "db:migrate"]
+
+FROM node:24-alpine AS api
+ENV NODE_ENV=production PORT=4000 API_HOST=0.0.0.0
+WORKDIR /app
+COPY --from=build --chown=node:node /prod/api ./
+COPY --from=build --chown=node:node /app/apps/api/dist ./dist
+USER node
+EXPOSE 4000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1
+CMD ["node", "--enable-source-maps", "dist/main.js"]
+
+FROM node:24-alpine AS web
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
+WORKDIR /app
+COPY --from=build --chown=node:node /prod/web ./
+COPY --from=build --chown=node:node /app/apps/web/.next ./.next
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/login >/dev/null || exit 1
+CMD ["node", "server.mjs"]
