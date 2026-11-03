@@ -3,6 +3,10 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
+import {
+  InstagramOAuthClient,
+  STATE_TTL_MS,
+} from '../channels/instagram/instagram-oauth.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
@@ -34,6 +38,18 @@ const HTTP_NOT_FOUND = 404;
 /** The controller accepts 20 to 2,048 non-space characters. */
 const TOKEN_MIN = 20;
 const TOKEN_MAX = 2_048;
+/** Business Login fakes: a code, the short-lived token it buys, a code without messaging. */
+const CODE = `code-${randomBytes(12).toString('hex')}`;
+const NO_MESSAGES_CODE = `code-${randomBytes(12).toString('hex')}`;
+const SHORT_TOKEN = `test-${randomBytes(16).toString('hex')}`;
+const SCOPES = 'instagram_business_basic,instagram_business_manage_messages';
+const LONG_LIVED_SECONDS = 5_184_000;
+const OAUTH = {
+  INSTAGRAM_APP_ID: String(randomInt(10 ** 9, 10 ** 10 - 1)),
+  INSTAGRAM_OAUTH_REDIRECT_URI:
+    'https://app.example.test/channels/instagram/callback',
+  INSTAGRAM_OAUTH_BASE_URL: 'https://oauth.example.test',
+};
 const SETTINGS: Record<string, unknown> = {
   NODE_ENV: 'development',
   LLM_PROVIDER: 'mock',
@@ -78,6 +94,8 @@ interface Setup {
   readonly calls: { url: URL; method: string }[];
   readonly store: PrismaChannelSecretStore;
   readonly controller: InstagramConnectController;
+  readonly oauth: InstagramOAuthClient;
+  readonly bodies: string[];
   readonly setMe: (reply: { status: number; body: unknown }) => void;
 }
 
@@ -85,6 +103,7 @@ interface Setup {
 function setup(overrides: Record<string, unknown> = {}): Setup {
   const igUserId = `${IG_ID_PREFIX}${randomInt(10 ** 9, 10 ** 10 - 1)}`;
   const calls: { url: URL; method: string }[] = [];
+  const bodies: string[] = [];
   let meReply: { status: number; body: unknown } = {
     status: HTTP_OK,
     body: { user_id: igUserId, username: USERNAME },
@@ -92,6 +111,41 @@ function setup(overrides: Record<string, unknown> = {}): Setup {
   const request = vi.fn(async (url: string | URL, init?: RequestInit) => {
     const parsed = new URL(String(url));
     calls.push({ url: parsed, method: init?.method ?? 'GET' });
+    if (parsed.pathname === '/oauth/access_token') {
+      const form = new URLSearchParams(String(init?.body ?? ''));
+      bodies.push(String(init?.body ?? ''));
+      const code = form.get('code');
+      if (code !== CODE && code !== NO_MESSAGES_CODE)
+        return new Response(
+          JSON.stringify({ error_type: 'OAuthException', code: 400 }),
+          { status: HTTP_BAD_REQUEST },
+        );
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              access_token: SHORT_TOKEN,
+              user_id: igUserId,
+              permissions: code === CODE ? SCOPES : 'instagram_business_basic',
+            },
+          ],
+        }),
+        { status: HTTP_OK },
+      );
+    }
+    if (
+      parsed.pathname === '/access_token' &&
+      parsed.searchParams.get('grant_type') === 'ig_exchange_token' &&
+      parsed.searchParams.get('access_token') === SHORT_TOKEN
+    )
+      return new Response(
+        JSON.stringify({
+          access_token: TOKEN,
+          token_type: 'bearer',
+          expires_in: LONG_LIVED_SECONDS,
+        }),
+        { status: HTTP_OK },
+      );
     if (parsed.searchParams.get('access_token') !== TOKEN)
       return new Response(
         JSON.stringify({ error: { code: META_TOKEN_EXPIRED } }),
@@ -107,24 +161,31 @@ function setup(overrides: Record<string, unknown> = {}): Setup {
       });
     return new Response('{}', { status: HTTP_NOT_FOUND });
   });
-  const store = new PrismaChannelSecretStore(
-    prisma,
-    new SecretCipher(
-      createKeyring({ SECRETS_MASTER_KEY: randomBytes(32).toString('base64') }),
-    ),
+  const cipher = new SecretCipher(
+    createKeyring({ SECRETS_MASTER_KEY: randomBytes(32).toString('base64') }),
   );
+  const store = new PrismaChannelSecretStore(prisma, cipher);
   const values = { ...SETTINGS, ...overrides };
+  const config = { get: (key: string) => values[key] } as never;
+  const oauth = new InstagramOAuthClient(
+    config,
+    cipher,
+    request as unknown as typeof fetch,
+  );
   const controller = new InstagramConnectController(
     prisma,
-    { get: (key: string) => values[key] } as never,
+    config,
     store,
     new InstagramGraphClient(request as unknown as typeof fetch),
+    oauth,
   );
   return {
     igUserId,
     calls,
     store,
     controller,
+    oauth,
+    bodies,
     setMe: (reply: typeof meReply): void => {
       meReply = reply;
     },
@@ -289,5 +350,137 @@ describe('connecting an Instagram professional account from the web API', () => 
     expect(
       (await db.channelAccount.findUniqueOrThrow({ where: { id } })).status,
     ).toBe('DISABLED');
+  });
+});
+
+describe('Business Login for Instagram (oauth/start, oauth/complete)', () => {
+  const principalOf = (
+    request: never,
+  ): { tenantId: string; operatorId: string; sessionId: string } =>
+    (
+      request as {
+        principal: { tenantId: string; operatorId: string; sessionId: string };
+      }
+    ).principal;
+
+  it('reports whether OAuth is set up; start refuses without it', async () => {
+    const off = setup();
+    const t = await tenant();
+    expect(off.controller.setup(t.request)).toEqual({ oauth: false });
+    expect(() => off.controller.start(t.request)).toThrow(
+      expect.objectContaining({
+        response: expect.objectContaining({ code: 'OAUTH_NOT_CONFIGURED' }),
+      }),
+    );
+    expect(setup(OAUTH).controller.setup(t.request)).toEqual({ oauth: true });
+  });
+
+  it('start builds the authorization URL with both scopes and a state, calling nobody', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant();
+    const { url } = s.controller.start(t.request);
+    const parsed = new URL(url);
+    expect(`${parsed.origin}${parsed.pathname}`).toBe(
+      'https://oauth.example.test/oauth/authorize',
+    );
+    expect(parsed.searchParams.get('client_id')).toBe(OAUTH.INSTAGRAM_APP_ID);
+    expect(parsed.searchParams.get('redirect_uri')).toBe(
+      OAUTH.INSTAGRAM_OAUTH_REDIRECT_URI,
+    );
+    expect(parsed.searchParams.get('response_type')).toBe('code');
+    expect(parsed.searchParams.get('scope')).toBe(SCOPES);
+    expect(parsed.searchParams.get('state')).toMatch(/^[A-Za-z0-9_-]+$/u);
+    // The state is sealed: no tenant, operator or session id is readable in it.
+    const state = parsed.searchParams.get('state')!;
+    const plain = Buffer.from(state, 'base64url').toString('utf8');
+    expect(plain).not.toContain(principalOf(t.request).tenantId);
+    expect(plain).not.toContain(principalOf(t.request).sessionId);
+    expect(s.calls).toHaveLength(0);
+  });
+
+  it('complete exchanges the code for a long-lived token, stores it and starts DISABLED', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant();
+    const state = new URL(s.controller.start(t.request).url).searchParams.get(
+      'state',
+    )!;
+    const connected = await s.controller.complete(t.request, {
+      code: CODE,
+      state,
+    });
+    expect(connected).toMatchObject({
+      channelType: 'instagram',
+      displayName: `@${USERNAME}`,
+      status: 'DISABLED',
+      agentMode: 'OFF',
+    });
+    expect(JSON.stringify(connected)).not.toContain(TOKEN);
+    expect(
+      await s.store.get(
+        { tenantId: t.tenantId, channelAccountId: connected.id },
+        'instagram_access_token',
+      ),
+    ).toBe(TOKEN);
+    expect(s.calls.map((c) => `${c.method} ${c.url.pathname}`)).toEqual([
+      'POST /oauth/access_token',
+      'GET /access_token',
+      'GET /v26.0/me',
+    ]);
+    const form = new URLSearchParams(s.bodies[0]);
+    expect(form.get('grant_type')).toBe('authorization_code');
+    expect(form.get('redirect_uri')).toBe(OAUTH.INSTAGRAM_OAUTH_REDIRECT_URI);
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: { tenantId: t.tenantId, action: 'channel.instagram_connected' },
+    });
+    expect(audit.safeInputSummary).toMatchObject({ via: 'oauth' });
+    expect(JSON.stringify(audit.safeInputSummary)).not.toContain(TOKEN);
+  });
+
+  it('refuses a state from another session, a tampered state and an expired one, before calling Meta', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant();
+    const me = principalOf(t.request);
+    const otherSession = s.oauth.state({ ...me, sessionId: randomUUID() });
+    const expired = s.oauth.state(me, Date.now() - STATE_TTL_MS - 1);
+    const good = s.oauth.state(me);
+    const tampered = `${good.slice(0, -2)}${good.endsWith('A') ? 'B' : 'A'}${good.slice(-1)}`;
+    for (const state of [otherSession, expired, tampered, 'not-a-state'])
+      await expect(
+        s.controller.complete(t.request, { code: CODE, state }),
+      ).rejects.toMatchObject({ response: { code: 'OAUTH_STATE_INVALID' } });
+    expect(s.calls).toHaveLength(0);
+  });
+
+  it('refuses an authorization without the messaging permission and stores nothing', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant();
+    await expect(
+      s.controller.complete(t.request, {
+        code: NO_MESSAGES_CODE,
+        state: s.oauth.state(principalOf(t.request)),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'MISSING_PERMISSIONS' } });
+    expect(
+      await db.channelAccount.count({ where: { tenantId: t.tenantId } }),
+    ).toBe(0);
+  });
+
+  it('maps a code Instagram refuses to INSTAGRAM_REJECTED', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant();
+    await expect(
+      s.controller.complete(t.request, {
+        code: `code-${randomBytes(12).toString('hex')}`,
+        state: s.oauth.state(principalOf(t.request)),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'INSTAGRAM_REJECTED' } });
+  });
+
+  it('is for owners and admins only', async () => {
+    const s = setup(OAUTH);
+    const t = await tenant('OPERATOR');
+    expect(() => s.controller.start(t.request)).toThrow(
+      expect.objectContaining({ status: 403 }),
+    );
   });
 });
