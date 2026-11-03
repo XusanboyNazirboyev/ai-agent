@@ -75,6 +75,8 @@ test('an admin connects an Instagram account with its token, enables and disable
   const { page } = admin;
   await page.goto('/channels');
   await page.getByTestId('connect-instagram').click();
+  // Business Login is set up in the e2e; the token form is the fallback.
+  await page.getByTestId('ig-token-toggle').click();
 
   // A token Meta refuses is reported, and nothing is connected.
   await page
@@ -120,6 +122,8 @@ test('refuses an empty token, a /me reply without user_id, and keeps the account
   const { page } = admin;
   await page.goto('/channels');
   await page.getByTestId('connect-instagram').click();
+  // Business Login is set up in the e2e; the token form is the fallback.
+  await page.getByTestId('ig-token-toggle').click();
 
   // Empty or whitespace-only: nothing can be submitted.
   await expect(page.getByTestId('ig-connect-submit')).toBeDisabled();
