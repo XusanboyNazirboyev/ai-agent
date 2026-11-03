@@ -17,6 +17,12 @@ Caddy obtains the TLS certificate for `TEZDA_DOMAIN` (ports 80 and 443 must reac
 Only `/webhooks/*` reaches the API directly; `/health` and `/probe` are not public.
 
 ## Staging with PostgreSQL on the host
+First setup or update, as root on the instance (clones `deploy/` to `/opt/tezda`, generates
+`.env.production` once, pulls the tag from `ghcr.io`, migrates, starts, installs the backup cron):
+
+    curl -fsSLo /tmp/bootstrap.sh https://raw.githubusercontent.com/XusanboyNazirboyev/ai-agent/feat/production-pilot/deploy/bootstrap-staging.sh
+    sh /tmp/bootstrap.sh <domain> <image tag>
+
 Run every command from `deploy/` with both files; `--env-file` also supplies the values
 the compose files interpolate (`WEB_PROXY_SECRET`, `TEZDA_DOMAIN`, `POSTGRES_*`):
 

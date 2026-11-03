@@ -77,6 +77,11 @@ Done by the owner in the AWS console.
 - **Backups:** `deploy/backup-postgres.sh` writes a daily `pg_dump` to `/var/backups/tezda` and deletes dumps older than `BACKUP_KEEP_DAYS` (no default in the script; the owner set 7 days on 2026-11-03, P5). Checked on a throwaway local container: the dump restored into a new database with its rows and the `vector` extension.
 - **Gives up, for now:** RDS's automated backups and point-in-time restore, and backups that survive losing the instance (the dumps are on its disk). An off-host copy (for example S3) is still open.
 
+## Amendment 3 (2026-11-03): images on ghcr.io, a temporary staging address
+- **Images:** `ghcr.io/xusanboynazirboyev/tezda-{api,web,migrate}:<commit>` instead of ECR. Why: the repository is public, and GitHub states that container image storage and bandwidth are currently free and that it gives at least a month's notice before charging ([GitHub Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages), read 2026-11-03); ECR would cost $0.10 per GB-month (AWS price list, Frankfurt). The packages are to be public (owner: "whichever is safe"; set by the owner in each package's settings), so the host pulls without a stored token. Checked before publishing: no `.env`, key or certificate files other than the system CA bundles in the images. The first build is arm64 from the owner's Mac (commit `71ea82b`); CI builds come with step 6.
+- **Address:** no domain yet (P2), so staging uses `18-185-27-82.sslip.io`, a public wildcard DNS name that resolves to the embedded IP, with a Let's Encrypt certificate from Caddy. The instance got an Elastic IP (`18.185.27.82`) so the name survives a stop and start; while attached it costs the same $0.005 an hour as the public IPv4 it replaced (AWS price list). Meta App Review still needs a real domain.
+- **Setup:** `deploy/bootstrap-staging.sh` clones `deploy/` to `/opt/tezda`, generates `.env.production` on the host (secrets never leave it), pulls the tag, migrates, starts and installs the daily backup cron (7 days). The LLM provider stays at the API default until real keys are added.
+
 ## Open questions (none assumed)
 | # | Question | Blocks |
 |---|---|---|
