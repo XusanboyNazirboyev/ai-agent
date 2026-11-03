@@ -104,13 +104,15 @@ async function tenant(label: string): Promise<{
     },
   });
   const operators: Record<string, { id: string; email: string }> = {};
-  const roles: [string, 'OPERATOR' | 'VIEWER' | 'ADMIN'][] =
+  const roles: [string, 'OPERATOR' | 'VIEWER' | 'ADMIN' | 'OWNER'][] =
     label === 'a'
       ? [
           ['op1', 'OPERATOR'],
           ['op2', 'OPERATOR'],
           ['viewer', 'VIEWER'],
           ['admin', 'ADMIN'],
+          // Its own rate-limit budget for the Business Login e2e.
+          ['owner', 'OWNER'],
         ]
       : [['op1', 'OPERATOR']];
   for (const [key, role] of roles) {

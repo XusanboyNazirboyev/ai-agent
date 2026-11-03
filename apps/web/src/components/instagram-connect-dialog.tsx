@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   useEffect,
   useId,
@@ -20,10 +20,12 @@ import { Icon } from './ui/icons';
 const TOKEN_MAX = 2_048;
 
 /**
- * Pastes an Instagram User access token (generated in the Meta App Dashboard
- * for an account with a role on the app). The token goes to the server once
- * and is never shown again; enabling subscribes the account to direct
- * messages at Meta.
+ * Connects an Instagram professional account. With Business Login set up on
+ * the server, "Continue with Instagram" sends the browser to Instagram to
+ * allow access, and `/channels/instagram/callback` finishes it; a pasted
+ * Instagram User access token stays available as the fallback. A token goes
+ * to the server once and is never shown again; enabling subscribes the
+ * account to direct messages at Meta.
  */
 export function InstagramConnectDialog(props: {
   open: boolean;
@@ -35,6 +37,14 @@ export function InstagramConnectDialog(props: {
   const titleId = useId();
   const [token, setToken] = useState('');
   const [connected, setConnected] = useState<ChannelAccount | null>(null);
+  const [tokenOpen, setTokenOpen] = useState(false);
+  const setup = useQuery({
+    queryKey: ['instagram-oauth'],
+    queryFn: () => api<{ oauth: boolean }>('/api/v1/channels/instagram/oauth'),
+    enabled: props.open,
+  });
+  const oauth = setup.data?.oauth === true;
+  const showToken = !oauth || tokenOpen;
 
   useEffect(() => {
     const dialog = ref.current;
@@ -42,6 +52,7 @@ export function InstagramConnectDialog(props: {
     if (props.open && !dialog.open) {
       setToken('');
       setConnected(null);
+      setTokenOpen(false);
       dialog.showModal();
     }
     if (!props.open && dialog.open) dialog.close();
@@ -60,6 +71,13 @@ export function InstagramConnectDialog(props: {
       props.onChanged();
     },
   });
+  const start = useMutation({
+    mutationFn: () =>
+      api<{ url: string }>('/api/v1/channels/instagram/oauth/start', {
+        method: 'POST',
+      }),
+    onSuccess: ({ url }) => window.location.assign(url),
+  });
   const enable = useMutation({
     mutationFn: (id: string) =>
       api<ChannelAccount>(`/api/v1/channels/instagram/${id}/enable`, {
@@ -75,7 +93,7 @@ export function InstagramConnectDialog(props: {
     event.preventDefault();
     if (token.trim() && !connect.isPending) connect.mutate();
   }
-  const failure = connect.error ?? enable.error;
+  const failure = connect.error ?? enable.error ?? start.error;
 
   return (
     <dialog
@@ -113,28 +131,65 @@ export function InstagramConnectDialog(props: {
             <p className="text-sm text-muted">{t('igConnect.doneNext')}</p>
           </>
         ) : (
-          <form onSubmit={submit} className="flex flex-col gap-4">
-            <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted">
-              <li>{t('igConnect.step1')}</li>
-              <li>{t('igConnect.step2')}</li>
-              <li>{t('igConnect.step3')}</li>
-            </ol>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('igConnect.token')}
-              <input
-                type="password"
-                data-testid="ig-connect-token"
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                required
-                maxLength={TOKEN_MAX}
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                className={fieldClass}
-              />
-            </label>
-          </form>
+          <>
+            {oauth ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted">
+                  {t('igConnect.oauthIntro')}
+                </p>
+                <Button
+                  variant="primary"
+                  loading={start.isPending}
+                  data-testid="ig-oauth-start"
+                  onClick={() => {
+                    if (!start.isPending) start.mutate();
+                  }}
+                >
+                  {start.isPending
+                    ? t('igConnect.oauthRedirecting')
+                    : t('igConnect.oauthStart')}
+                </Button>
+              </div>
+            ) : null}
+            {oauth ? (
+              <details
+                open={tokenOpen}
+                onToggle={(event) => setTokenOpen(event.currentTarget.open)}
+                className="text-sm"
+              >
+                <summary
+                  data-testid="ig-token-toggle"
+                  className="cursor-pointer text-muted"
+                >
+                  {t('igConnect.useToken')}
+                </summary>
+              </details>
+            ) : null}
+            {showToken ? (
+              <form onSubmit={submit} className="flex flex-col gap-4">
+                <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted">
+                  <li>{t('igConnect.step1')}</li>
+                  <li>{t('igConnect.step2')}</li>
+                  <li>{t('igConnect.step3')}</li>
+                </ol>
+                <label className="flex flex-col gap-1.5 text-sm font-medium">
+                  {t('igConnect.token')}
+                  <input
+                    type="password"
+                    data-testid="ig-connect-token"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    required
+                    maxLength={TOKEN_MAX}
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    className={fieldClass}
+                  />
+                </label>
+              </form>
+            ) : null}
+          </>
         )}
         {failure ? (
           <p
@@ -166,19 +221,21 @@ export function InstagramConnectDialog(props: {
               <Button onClick={props.onClose} data-testid="ig-connect-cancel">
                 {t('confirm.cancel')}
               </Button>
-              <Button
-                variant="primary"
-                loading={connect.isPending}
-                disabled={!token.trim()}
-                data-testid="ig-connect-submit"
-                onClick={() => {
-                  if (token.trim() && !connect.isPending) connect.mutate();
-                }}
-              >
-                {connect.isPending
-                  ? t('connect.submitting')
-                  : t('connect.submit')}
-              </Button>
+              {showToken ? (
+                <Button
+                  variant="primary"
+                  loading={connect.isPending}
+                  disabled={!token.trim()}
+                  data-testid="ig-connect-submit"
+                  onClick={() => {
+                    if (token.trim() && !connect.isPending) connect.mutate();
+                  }}
+                >
+                  {connect.isPending
+                    ? t('connect.submitting')
+                    : t('connect.submit')}
+                </Button>
+              ) : null}
             </>
           )}
         </div>
