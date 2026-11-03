@@ -10,6 +10,7 @@ import {
 import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
+import { InstagramOAuthClient } from '../channels/instagram/instagram-oauth.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AuthController } from './auth.controller.js';
@@ -49,6 +50,7 @@ import { SessionService } from './session.service.js';
     AnalyticsService,
     TelegramManagement,
     InstagramGraphClient,
+    InstagramOAuthClient,
     {
       provide: BITRIX24_CONNECT_TRANSPORT,
       inject: [ConfigService],

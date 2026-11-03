@@ -39,6 +39,7 @@ import { createKeyring, SecretCipher } from './secret-cipher.js';
     { provide: ChannelSecretStore, useClass: PrismaChannelSecretStore },
     { provide: ConnectorSecretStore, useClass: PrismaConnectorSecretStore },
   ],
-  exports: [ChannelSecretStore, ConnectorSecretStore],
+  // The cipher is shared for short-lived sealed values (OAuth state).
+  exports: [ChannelSecretStore, ConnectorSecretStore, SECRET_CIPHER],
 })
 export class SecretsModule {}
