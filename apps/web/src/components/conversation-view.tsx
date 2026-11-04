@@ -311,7 +311,7 @@ export function ConversationViewPane(props: {
             ) : null}
           </span>
         </div>
-        {operating && state !== 'CLOSED' ? (
+        {canWrite ? (
           <div
             role="radiogroup"
             aria-label={t('mode.label')}
@@ -324,30 +324,32 @@ export function ConversationViewPane(props: {
               data-testid="mode-ai"
               disabled={busy}
               onClick={toAi}
-              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+              className={`flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors lg:px-3 ${
                 !operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
               <Icon name="bot" className="h-4 w-4" />
-              {t('mode.ai')}
+              <span className="sr-only lg:not-sr-only">{t('mode.ai')}</span>
             </button>
             <button
               type="button"
               role="radio"
               aria-checked={operatorMode}
               data-testid="take-over"
-              disabled={busy || (state === 'OPERATOR_ACTIVE' && !mine)}
+              disabled={busy}
               onClick={toOperator}
-              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+              className={`flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors lg:px-3 ${
                 operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
               <Icon name="headset" className="h-4 w-4" />
-              {t('mode.operator')}
+              <span className="sr-only lg:not-sr-only">
+                {t('mode.operator')}
+              </span>
             </button>
           </div>
         ) : null}
@@ -383,6 +385,8 @@ export function ConversationViewPane(props: {
         >
           <section
             ref={timelineRef}
+            // Focusable so the history can be scrolled from the keyboard.
+            tabIndex={0}
             role="log"
             aria-label={t('view.timeline')}
             onScroll={(event) => {
