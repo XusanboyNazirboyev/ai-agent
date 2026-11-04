@@ -89,6 +89,12 @@ Done by the owner in the AWS console.
 - **Knowledge:** `KNOWLEDGE_EMBEDDINGS=gemini` with `gemini-embedding-2`, the model Google's OpenAI-compatibility page uses for embeddings ([docs](https://aistudio.google.com/docs/openai), read 2026-11-03); `hashing` is refused in production by `embedding.factory.ts`. Embedding prices not checked yet.
 - **LIVE refused:** `agent-mode.ts` refuses LIVE outside development while `OPERATOR_HANDOVER_NOTIFIER_AVAILABLE` is `false`, although the Telegram operator-group notifier exists. Staging stays in SHADOW (drafts). Allowing LIVE when a channel has an operator group is a separate change that needs the owner's approval.
 
+## Amendment 5 (2026-11-04): automatic staging deploy from GitHub Actions
+- **Flow:** on a push to `feat/production-pilot`, after `quality` and `images` pass, `publish` builds the arm64 images on GitHub's `ubuntu-24.04-arm` runner (free for public repositories, [docs](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), read 2026-11-04) and pushes them to ghcr.io with `GITHUB_TOKEN`; `deploy-staging` assumes an AWS role through OIDC, runs `bootstrap-staging.sh` on the host through SSM and checks the public routes. One deploy at a time.
+- **Access:** the role `tezda-github-deploy` trusts only this repository's `feat/production-pilot` branch. The repository was created after 2026-07-15, so GitHub signs an immutable subject with numeric ids (`repo:XusanboyNazirboyev@244120293/ai-agent@1430650024:ref:...`, read from the repository's OIDC customization on 2026-11-04); the classic `repo:owner/name` subject would never match. The role may only `ssm:SendCommand` with `AWS-RunShellScript` to the staging instance and read results. No AWS keys are stored in GitHub.
+- **Who creates it:** creating IAM identities was refused to the assistant by the session's safety check, so the owner runs `deploy/aws/github-deploy-role.sh` once. Both jobs are skipped until the repository variable `AWS_DEPLOY_ROLE_ARN` exists.
+- **Later:** when the work moves to `main`, the branch in the workflow condition and in the role's subject changes with it.
+
 ## Open questions (none assumed)
 | # | Question | Blocks |
 |---|---|---|
