@@ -25,6 +25,7 @@ fi
 cd "$dir/deploy"
 
 umask 077
+previous=''
 if [ ! -f .env.production ]; then
   cat > .env.production <<EOF
 NODE_ENV=production
@@ -45,6 +46,7 @@ TAG=$tag
 EOF
   echo "created $dir/deploy/.env.production (secrets generated on this host)"
 else
+  previous="$(sed -n 's/^TAG=//p' .env.production)"
   sed -i "s/^TAG=.*/TAG=$tag/" .env.production
   echo "kept $dir/deploy/.env.production, TAG=$tag"
 fi
@@ -58,10 +60,25 @@ dc up -d --wait postgres redis
 dc run --rm migrate
 dc up -d --wait
 
+# The disk holds about two releases: keep this tag and the one before it
+# (rollback); a migrate image is needed only while migrating. Every tag can be
+# pulled again from ghcr.io. (A full disk stopped a deploy on 2026-11-04.)
+docker images --format '{{.Repository}}:{{.Tag}}' | grep '/tezda-' |
+  while read -r image; do
+    old="${image##*:}"
+    case "$image" in
+      */tezda-migrate:*) ;;
+      *) if [ "$old" = "$tag" ] || [ "$old" = "$previous" ]; then continue; fi ;;
+    esac
+    docker rmi "$image" >/dev/null 2>&1 || true
+  done
+docker image prune -f >/dev/null
+
 printf '%s\n' \
   "30 2 * * * root BACKUP_KEEP_DAYS=7 $dir/deploy/backup-postgres.sh >> /var/log/tezda-backup.log 2>&1" \
   > /etc/cron.d/tezda-backup
 chmod 644 /etc/cron.d/tezda-backup
 
 dc ps --format 'table {{.Service}}\t{{.Status}}'
+df -h / | awk 'NR == 2 { print "disk: " $3 " used of " $2 " (" $5 ")" }'
 echo "open https://$domain"

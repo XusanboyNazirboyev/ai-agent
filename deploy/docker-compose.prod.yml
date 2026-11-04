@@ -5,13 +5,23 @@
 #   docker compose -f deploy/docker-compose.prod.yml up -d
 name: tezda
 
+# Container logs are rotated (3 x 10 MB per service) so they cannot fill the
+# instance's disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '3'
+
 services:
   migrate:
+    logging: *logging
     image: ${IMAGE_REPO:-tezda}-migrate:${TAG:-local}
     env_file: .env.production
     profiles: [migrate]
 
   api:
+    logging: *logging
     image: ${IMAGE_REPO:-tezda}-api:${TAG:-local}
     env_file: .env.production
     environment:
@@ -25,6 +35,7 @@ services:
     stop_grace_period: 30s
 
   web:
+    logging: *logging
     image: ${IMAGE_REPO:-tezda}-web:${TAG:-local}
     environment:
       API_URL: http://api:4000
@@ -39,6 +50,7 @@ services:
     restart: unless-stopped
 
   redis:
+    logging: *logging
     image: redis:7-alpine
     command: ['redis-server', '--appendonly', 'yes']
     volumes:
@@ -51,6 +63,7 @@ services:
     restart: unless-stopped
 
   caddy:
+    logging: *logging
     image: caddy:2-alpine
     ports:
       - '80:80'
