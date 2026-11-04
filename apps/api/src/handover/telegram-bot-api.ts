@@ -121,6 +121,18 @@ export class TelegramBotApi {
     return { messageId: String(result.message_id) };
   }
 
+  /** Shows "typing…" in the chat for up to 5 seconds (Bot API). */
+  async sendChatAction(options: {
+    chatId: string;
+    channelAccountId?: string;
+  }): Promise<void> {
+    await this.call(
+      'sendChatAction',
+      { chat_id: options.chatId, action: 'typing' },
+      options.channelAccountId,
+    );
+  }
+
   async answerCallbackQuery(
     callbackQueryId: string,
     text: string,

@@ -255,16 +255,28 @@ export class AgentTools {
   private readonly knownOffers = new Set<string>();
   private readonly seenCalls = new Set<string>();
   readonly trace: ToolTraceEntry[] = [];
+  private readonly withheld = new Set<AgentToolName>();
 
   constructor(private readonly context: ToolContext) {}
 
   /** Pack-enabled tools the tenant's connector actually supports. */
   available(): AgentToolName[] {
     return this.context.pack.tools.filter((name) =>
-      name === 'knowledge_search'
-        ? this.context.knowledge !== undefined
-        : supported(this.context.connector, name),
+      this.withheld.has(name)
+        ? false
+        : name === 'knowledge_search'
+          ? this.context.knowledge !== undefined
+          : supported(this.context.connector, name),
     );
+  }
+
+  /**
+   * Takes tools away for the rest of the turn: they are neither offered to
+   * the model nor run. Used when the code's own search already put the same
+   * data in the prompt, so asking for it again only costs a model round.
+   */
+  withhold(names: readonly AgentToolName[]): void {
+    for (const name of names) this.withheld.add(name);
   }
 
   definitions(): LlmToolDefinition[] {
