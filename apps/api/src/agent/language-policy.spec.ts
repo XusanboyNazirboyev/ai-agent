@@ -475,3 +475,50 @@ describe('explicit language requests', () => {
     expect(d.result.locale).toBe('en');
   });
 });
+
+describe('reply locale follows a clear short message (D17, ADR 013 amendment)', () => {
+  // Before: a switch needed 0.6 while the gate called 0.467 clear, so a
+  // one-word greeting stayed in the old locale and was then held as unclear;
+  // the second such turn handed the conversation over (seen on staging).
+  it.each([
+    ['hello', 'en', 'uz-Latn', 'en', 'Latn'],
+    ['привет', 'ru', 'uz-Latn', 'ru', 'Cyrl'],
+    ['salom', 'uz-Latn', 'ru', 'uz', 'Latn'],
+    ['спасибо', 'ru', 'en', 'ru', 'Cyrl'],
+  ] as const)(
+    '%s is answered in %s inside a %s conversation, without a hand-over',
+    async (text, expected, current, language, script) => {
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([
+          extraction({}, 'greeting', language, script),
+        ]),
+        text,
+        input: {
+          conversationLocale: current,
+          // One unclear turn already: the old code escalated on this one.
+          history: [{ role: 'customer', text: 'matem' }],
+        },
+      });
+      expect(result.locale).toBe(expected);
+      expect(result.outcome).not.toBe('HANDOVER');
+      expect(result.handover).toBeUndefined();
+    },
+  );
+
+  it('keeps the conversation locale for words that belong to no language', async () => {
+    for (const text of ['ok', 'da', '12']) {
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([
+          extraction({}, 'other', 'uz', 'Latn'),
+          { kind: 'tools', text: 'Yana savolingiz bormi?' },
+        ]),
+        text,
+        input: {
+          conversationLocale: 'uz-Latn',
+          history: [{ role: 'customer', text: 'Salom, menga kurs kerak' }],
+        },
+      });
+      expect(result.locale, text).toBe('uz-Latn');
+    }
+  });
+});
