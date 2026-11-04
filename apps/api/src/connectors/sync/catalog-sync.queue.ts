@@ -51,6 +51,9 @@ export function shouldRetry(result: CatalogSyncResult): string | undefined {
  * overlap guard. On shutdown, in-flight syncs are aborted and close their run
  * as FAILED instead of being left RUNNING.
  */
+/** Delay of the first scheduler tick after start (lets the API settle). */
+export const FIRST_TICK_MS = 10_000;
+
 @Injectable()
 export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CatalogSyncQueueRuntime.name);
@@ -59,6 +62,7 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
   private queue: Queue<CatalogSyncRequest> | undefined;
   private worker: Worker<CatalogSyncRequest> | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private firstTick: ReturnType<typeof setTimeout> | undefined;
   private readonly shutdown = new AbortController();
 
   constructor(
@@ -99,13 +103,24 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
         }),
       );
     });
-    if (this.intervalMs > 0) {
-      this.timer = setInterval(() => void this.schedule(), this.intervalMs);
-      this.timer.unref();
-    }
+    this.startTimers();
+  }
+
+  /**
+   * One scheduler tick shortly after start, then one per interval. Without
+   * the first tick a connector activated before a restart waited a whole
+   * interval for its first sync (seen on staging, 2026-11-04).
+   */
+  startTimers(): void {
+    if (this.intervalMs <= 0) return;
+    this.firstTick = setTimeout(() => void this.schedule(), FIRST_TICK_MS);
+    this.firstTick.unref();
+    this.timer = setInterval(() => void this.schedule(), this.intervalMs);
+    this.timer.unref();
   }
 
   async onModuleDestroy(): Promise<void> {
+    if (this.firstTick) clearTimeout(this.firstTick);
     if (this.timer) clearInterval(this.timer);
     this.shutdown.abort();
     await Promise.allSettled([this.worker?.close(), this.queue?.close()]);

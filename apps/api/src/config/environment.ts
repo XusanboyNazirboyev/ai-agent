@@ -147,6 +147,16 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_MAX_TOKENS_PARAM: z
       .enum(['max_tokens', 'max_completion_tokens'])
       .default('max_tokens'),
+    /**
+     * openai-compatible only: sent as `reasoning_effort` when set. Gemini's
+     * OpenAI-compatible endpoint documents minimal, low, medium and high
+     * (https://aistudio.google.com/docs/openai, read 2026-11-04). Unset, the
+     * model's default thinking applies; with gemini-3.8-flash that ended about
+     * a third of the extraction calls as truncated (2026-11-04 measurement).
+     */
+    LLM_REASONING_EFFORT: z
+      .enum(['minimal', 'low', 'medium', 'high'])
+      .optional(),
     /** Client-side limits to stay inside a provider quota (any provider). */
     LLM_RATE_LIMIT_RPM: z.coerce.number().int().min(1).max(100_000).optional(),
     LLM_RATE_LIMIT_TPM: z.coerce

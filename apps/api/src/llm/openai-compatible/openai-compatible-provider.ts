@@ -67,6 +67,8 @@ export interface OpenAiCompatibleOptions {
    */
   readonly capabilityOf?: (model: string) => CapabilityView;
   readonly maxTokensParam: MaxTokensParam;
+  /** Sent as `reasoning_effort` when set (e.g. Gemini's thinking level). */
+  readonly reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   readonly requestTimeoutMs: number;
   readonly maxRetries: number;
   readonly providerId?: string;
@@ -474,8 +476,16 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     };
   }
 
-  private outputCeiling(maxOutputTokens: number): Record<string, number> {
-    return { [this.options.maxTokensParam]: maxOutputTokens };
+  /** The output ceiling, plus the reasoning effort when one is configured. */
+  private outputCeiling(
+    maxOutputTokens: number,
+  ): Record<string, number | string> {
+    return {
+      [this.options.maxTokensParam]: maxOutputTokens,
+      ...(this.options.reasoningEffort
+        ? { reasoning_effort: this.options.reasoningEffort }
+        : {}),
+    };
   }
 
   async generateStructured<T>(
