@@ -32,7 +32,7 @@ Design and open questions: [ADR 035](../adr/035-production-hosting-on-aws-pilot.
   - a short load test;
   - a security review of open ports, IAM and secrets.
 
-## Step 6: CI/CD deploy
+## Step 6: CI/CD deploy — workflow written 2026-11-04 (ghcr.io instead of ECR), waiting for the owner's IAM setup
 - **Builds:** GitHub Actions builds and pushes images to ECR with OIDC (no long-lived AWS keys in GitHub).
 - **Deploy:** a manual, approved deploy job runs the migration, then the new containers through SSM.
 

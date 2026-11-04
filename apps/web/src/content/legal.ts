@@ -34,7 +34,8 @@ export const LEGAL_DETAILS: Record<
   address: null,
   email: null,
   retention: null,
-  deletionDays: null,
+  // Owner, 2026-11-04.
+  deletionDays: '30',
 };
 
 const PRIVACY_EN: LegalDocument = {

@@ -35,3 +35,17 @@ and deletes dumps older than `BACKUP_KEEP_DAYS` (required; 7 for staging, ADR 03
 root's crontab. Restore: `pg_restore -d <database> <file>`. The dumps stay on the
 instance's disk, so they do not survive losing the instance; an off-host copy is still open.
 Moving to RDS later: dump, restore into RDS, point `POSTGRES_*` at RDS, drop the second file.
+
+## Automatic deploy (GitHub Actions)
+A push to `feat/production-pilot` runs CI; when it passes, the `publish` job builds the three
+images on an arm64 runner, pushes them to `ghcr.io` tagged with the short commit id, and
+`deploy-staging` runs `bootstrap-staging.sh` on the host through SSM, then checks `/login`
+(200), `/api/v1/auth/me` (401) and `/health` (404 from outside).
+One-time setup by the owner:
+1. `sh deploy/aws/github-deploy-role.sh <aws profile> <instance id>` creates the GitHub OIDC
+   provider and the role `tezda-github-deploy` (only this branch may assume it; it may only
+   send a command to that instance). No AWS keys are stored in GitHub.
+2. Repository variables: `AWS_DEPLOY_ROLE_ARN`, `STAGING_INSTANCE_ID`, `STAGING_DOMAIN`.
+   Until `AWS_DEPLOY_ROLE_ARN` is set both jobs are skipped.
+3. Each ghcr.io package (`tezda-api`, `tezda-web`, `tezda-migrate`) must give this repository's
+   Actions write access (package settings, "Manage Actions access").
