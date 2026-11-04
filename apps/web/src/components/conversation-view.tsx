@@ -126,15 +126,40 @@ export function ConversationViewPane(props: {
 
   const handoverId = view?.handover?.id;
   const command = useMutation({
-    mutationFn: (input: { action: Action; body?: unknown }) =>
-      api(`/api/v1/handovers/${handoverId}/${input.action}`, {
-        method: 'POST',
-        body: input.body,
-        command: true,
-      }),
+    mutationFn: (input: {
+      action: Action;
+      body?: unknown;
+      handoverId?: string;
+    }) =>
+      api(
+        `/api/v1/handovers/${input.handoverId ?? handoverId}/${input.action}`,
+        {
+          method: 'POST',
+          body: input.body,
+          command: true,
+        },
+      ),
     onMutate: () => setError(undefined),
     onError: (failure) => setError(errorKey(failure)),
     onSuccess: (_data, input) => notify(t(TOAST[input.action])),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['conversation', props.id],
+      });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+  // Operator mode (ADR 038): take the conversation from the bot (or from the
+  // waiting queue) by conversation id; the bot stays silent from then on.
+  const takeOver = useMutation({
+    mutationFn: () =>
+      api<{ handoverId: string; state: string }>(
+        `/api/v1/handovers/by-conversation/${props.id}/take-over`,
+        { method: 'POST', command: true },
+      ),
+    onMutate: () => setError(undefined),
+    onError: (failure) => setError(errorKey(failure)),
+    onSuccess: () => notify(t('toast.takeOver')),
     onSettled: () => {
       void queryClient.invalidateQueries({
         queryKey: ['conversation', props.id],
@@ -170,9 +195,21 @@ export function ConversationViewPane(props: {
   const operating = OPERATING.includes(props.me.role);
   const state = view.conversation.state;
   const mine = view.conversation.assignedOperatorId === props.me.id;
-  const canTake = operating && state === 'WAITING_OPERATOR' && handoverId;
   const canAct = operating && state === 'OPERATOR_ACTIVE' && mine && handoverId;
-  const busy = command.isPending;
+  // The composer is open whenever the operator could speak: writing to a
+  // conversation the bot holds takes it over first (ADR 038).
+  const canWrite =
+    operating && state !== 'CLOSED' && !(state === 'OPERATOR_ACTIVE' && !mine);
+  const busy = command.isPending || takeOver.isPending;
+  const operatorMode =
+    state === 'OPERATOR_ACTIVE' || state === 'WAITING_OPERATOR';
+  function toOperator(): void {
+    if (!busy && !(state === 'OPERATOR_ACTIVE' && mine)) takeOver.mutate();
+  }
+  function toAi(): void {
+    if (!busy && state !== 'BOT_ACTIVE' && state !== 'CLOSED' && handoverId)
+      command.mutate({ action: 'return-to-bot' });
+  }
   const notice = !operating
     ? t('view.readOnly')
     : state === 'CLOSED'
@@ -187,10 +224,21 @@ export function ConversationViewPane(props: {
     event?.preventDefault();
     const text = reply.trim();
     if (!text || busy) return;
-    command.mutate(
-      { action: 'reply', body: { text } },
-      { onSuccess: () => setReply('') },
-    );
+    const deliver = (id?: string): void =>
+      command.mutate(
+        { action: 'reply', body: { text }, ...(id ? { handoverId: id } : {}) },
+        { onSuccess: () => setReply('') },
+      );
+    if (canAct) deliver();
+    else
+      takeOver.mutate(undefined, {
+        onSuccess: (taken) => deliver(taken.handoverId),
+      });
+  }
+  function onReplyChange(value: string): void {
+    setReply(value);
+    // The first keystroke moves the conversation to the operator.
+    if (value.trim() && !canAct && !takeOver.isPending) toOperator();
   }
   function onReplyKey(event: KeyboardEvent): void {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
@@ -263,6 +311,46 @@ export function ConversationViewPane(props: {
             ) : null}
           </span>
         </div>
+        {operating && state !== 'CLOSED' ? (
+          <div
+            role="radiogroup"
+            aria-label={t('mode.label')}
+            className="flex shrink-0 gap-1 rounded-xl border border-line bg-surface-2 p-1"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!operatorMode}
+              data-testid="mode-ai"
+              disabled={busy}
+              onClick={toAi}
+              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                !operatorMode
+                  ? 'bg-primary text-white'
+                  : 'text-muted hover:text-fg'
+              }`}
+            >
+              <Icon name="bot" className="h-4 w-4" />
+              {t('mode.ai')}
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={operatorMode}
+              data-testid="take-over"
+              disabled={busy || (state === 'OPERATOR_ACTIVE' && !mine)}
+              onClick={toOperator}
+              className={`flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors ${
+                operatorMode
+                  ? 'bg-primary text-white'
+                  : 'text-muted hover:text-fg'
+              }`}
+            >
+              <Icon name="headset" className="h-4 w-4" />
+              {t('mode.operator')}
+            </button>
+          </div>
+        ) : null}
         <Button
           size="sm"
           variant={showDetails ? 'primary' : 'secondary'}
@@ -396,25 +484,7 @@ export function ConversationViewPane(props: {
           </section>
 
           <div className="shrink-0 border-t border-line bg-surface p-3">
-            {canTake ? (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="flex items-center gap-2 text-sm text-muted">
-                  <Icon name="clock" />
-                  {t('view.waitingBanner')}
-                </p>
-                <Button
-                  variant="primary"
-                  icon="headset"
-                  className="w-full sm:w-auto"
-                  data-testid="take-over"
-                  loading={busy}
-                  onClick={() => command.mutate({ action: 'take-over' })}
-                >
-                  {t('action.takeOver')}
-                </Button>
-              </div>
-            ) : null}
-            {canAct ? (
+            {canWrite ? (
               <form onSubmit={send} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Select
@@ -436,26 +506,28 @@ export function ConversationViewPane(props: {
                       </option>
                     ))}
                   </Select>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      data-testid="return-to-bot"
-                      disabled={busy}
-                      icon="bot"
-                      onClick={() => setConfirm('return-to-bot')}
-                    >
-                      {t('action.returnToBot')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      data-testid="close"
-                      disabled={busy}
-                      icon="x"
-                      onClick={() => setConfirm('close')}
-                    >
-                      {t('action.close')}
-                    </Button>
-                  </div>
+                  {canAct ? (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        data-testid="return-to-bot"
+                        disabled={busy}
+                        icon="bot"
+                        onClick={() => setConfirm('return-to-bot')}
+                      >
+                        {t('action.returnToBot')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        data-testid="close"
+                        disabled={busy}
+                        icon="x"
+                        onClick={() => setConfirm('close')}
+                      >
+                        {t('action.close')}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
                 <textarea
                   data-testid="reply-input"
@@ -464,7 +536,7 @@ export function ConversationViewPane(props: {
                   value={reply}
                   maxLength={4096}
                   rows={3}
-                  onChange={(e) => setReply(e.target.value)}
+                  onChange={(e) => onReplyChange(e.target.value)}
                   onKeyDown={onReplyKey}
                   className={`${textareaClass} min-h-24 resize-y`}
                 />
@@ -486,7 +558,7 @@ export function ConversationViewPane(props: {
                 </div>
               </form>
             ) : null}
-            {!canTake && !canAct && notice ? (
+            {!canWrite && notice ? (
               <p className="flex items-center gap-2 text-sm text-muted">
                 <Icon name="info" />
                 {notice}

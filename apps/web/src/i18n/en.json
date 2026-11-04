@@ -571,5 +571,9 @@
   "leads.view.score": "By score",
   "leads.view.status": "By status",
   "leads.moveTo": "Move to",
-  "leads.moved": "Lead moved."
+  "leads.moved": "Lead moved.",
+  "mode.label": "Who answers",
+  "mode.ai": "AI",
+  "mode.operator": "Operator",
+  "handover.reason.OPERATOR_INITIATED": "An operator took the conversation"
 }

@@ -24,6 +24,8 @@ describe('ownership state machine', () => {
     [
       ['BOT_ACTIVE', 'HANDOVER', 'WAITING_OPERATOR'],
       ['WAITING_OPERATOR', 'TAKE_OVER', 'OPERATOR_ACTIVE'],
+      // Operator-initiated take-over while the bot answers (ADR 038).
+      ['BOT_ACTIVE', 'TAKE_OVER', 'OPERATOR_ACTIVE'],
       ['OPERATOR_ACTIVE', 'RETURN_TO_BOT', 'BOT_ACTIVE'],
       ['WAITING_OPERATOR', 'RETURN_TO_BOT', 'BOT_ACTIVE'],
       ['BOT_ACTIVE', 'CLOSE', 'CLOSED'],

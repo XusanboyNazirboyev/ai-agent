@@ -571,5 +571,9 @@
   "leads.view.score": "Baho bo‘yicha",
   "leads.view.status": "Holat bo‘yicha",
   "leads.moveTo": "Ko‘chirish",
-  "leads.moved": "Lid ko‘chirildi."
+  "leads.moved": "Lid ko‘chirildi.",
+  "mode.label": "Kim javob beradi",
+  "mode.ai": "AI",
+  "mode.operator": "Operator",
+  "handover.reason.OPERATOR_INITIATED": "Operator suhbatni o‘zi oldi"
 }
