@@ -270,7 +270,7 @@ export function ConversationViewPane(props: {
       className="flex min-h-0 flex-1 flex-col bg-canvas"
       data-testid="conversation-view"
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-3 sm:px-4">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-3 sm:px-4">
         <Button
           size="sm"
           variant="ghost"
@@ -315,7 +315,7 @@ export function ConversationViewPane(props: {
           <div
             role="radiogroup"
             aria-label={t('mode.label')}
-            className="flex shrink-0 gap-1 rounded-xl border border-line bg-surface-2 p-1"
+            className="order-last flex w-full gap-1 rounded-xl border border-line bg-surface-2 p-1 lg:order-none lg:w-auto lg:shrink-0"
           >
             <button
               type="button"
@@ -324,14 +324,14 @@ export function ConversationViewPane(props: {
               data-testid="mode-ai"
               disabled={busy}
               onClick={toAi}
-              className={`flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors lg:px-3 ${
+              className={`flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors lg:flex-none ${
                 !operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
               <Icon name="bot" className="h-4 w-4" />
-              <span className="sr-only lg:not-sr-only">{t('mode.ai')}</span>
+              {t('mode.ai')}
             </button>
             <button
               type="button"
@@ -340,16 +340,14 @@ export function ConversationViewPane(props: {
               data-testid="take-over"
               disabled={busy}
               onClick={toOperator}
-              className={`flex min-h-9 min-w-9 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors lg:px-3 ${
+              className={`flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors lg:flex-none ${
                 operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
               <Icon name="headset" className="h-4 w-4" />
-              <span className="sr-only lg:not-sr-only">
-                {t('mode.operator')}
-              </span>
+              {t('mode.operator')}
             </button>
           </div>
         ) : null}
