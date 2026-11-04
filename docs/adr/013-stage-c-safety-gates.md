@@ -30,3 +30,11 @@ Detection accuracy per locale, native-speaker review, and a live eval of the liv
 - **Decision:** the reply locale follows a message the gate rates HIGH for a supported locale (`replyLocale` in `agent-turn.ts`, used by normal and interrupted turns); otherwise `chooseLocale` keeps the conversation's locale as before. An explicit language request still outranks both. Words that belong to no language ("ok", "da", digits) stay LOW and do not switch.
 - **Owner requirement (2026-11-04):** answer in the customer's language: English for English, Russian for Russian, Uzbek for Uzbek.
 - **Checked:** new tests in `language-policy.spec.ts` fail on the old code (4 of 5) and pass now; the API unit suite passes (1840, 15 skipped).
+
+## Amendment 2 (2026-11-04): language requests in the customer's own words
+- **Found on staging (owner's screenshot):** "o'zbek tilni bilmayman. ingliz tilida gaplash" ("I don't know Uzbek, speak English") was not a request (only fixed phrases such as "ingliz tilida yozing" were), so "ingliz tili" was extracted as a subject and the bot answered in Uzbek with the IELTS course. "helloo" was not recognised as English and got the Uzbek greeting.
+- **Decision:**
+  - A request is a fixed phrase, or a locale's language name ("ingliz tilida", "in English", "на английском") together with any pack's request verb ("gaplash", "speak", "давайте"), verbs matched as whole words. Generic verbs ("javob bering", "ответьте") are not request verbs, and "gapirishni o'rganish" (learning to speak) is not a request. Names and verbs live in the locale packs (`languageRequestNames`, `languageRequestVerbs`).
+  - A request that changes the reply language is answered with the new locale's `languageSwitched` template after extraction, unless a handover intent or the facts language gate decides otherwise; nothing extracted from that message is kept.
+  - The detector also recognises stretched words ("helloo", "salooom") by comparing words with repeated letters collapsed (4+ letters only).
+- **Known limit:** a question in the same message as the request ("speak English, do you have IELTS?") gets the acknowledgement first; the customer asks again. Wording of the new templates is not native-reviewed (D18).

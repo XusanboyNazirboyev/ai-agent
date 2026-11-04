@@ -136,8 +136,10 @@ export function assessLanguage(
 }
 
 /**
- * Locale a message explicitly asks to be answered in, from the locale
- * packs' request phrases. Two different matches are ambiguous: no request.
+ * Locale a message explicitly asks to be answered in: a pack's request
+ * phrase, or one of its language names together with any pack's request
+ * verb ("ingliz tilida gaplash"). Two different matches are ambiguous: no
+ * request.
  */
 export function requestedLocale(
   text: string,
@@ -147,13 +149,23 @@ export function requestedLocale(
   const fold = (value: string): string =>
     updatedLatnToLegacy(unifyApostrophes(value)).toLowerCase();
   const haystack = fold(text);
+  const contains = (value: string): boolean => haystack.includes(fold(value));
+  // Verbs match whole words only: "gapir" (speak!) is a request, but
+  // "gapirishni o'rganish" (learning to speak) is a subject.
+  const word = (value: string): boolean =>
+    new RegExp(
+      `(?<![\\p{L}'])${fold(value).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(?![\\p{L}'])`,
+      'u',
+    ).test(haystack);
+  const verb = registry
+    .all()
+    .some((pack) => pack.languageRequestVerbs.some(word));
   const matches = new Set<LocaleId>();
   for (const pack of registry.all()) {
     if (!supported.includes(pack.id)) continue;
     if (
-      pack.languageRequestPhrases.some((phrase) =>
-        haystack.includes(fold(phrase)),
-      )
+      pack.languageRequestPhrases.some(contains) ||
+      (verb && pack.languageRequestNames.some(contains))
     )
       matches.add(pack.id);
   }

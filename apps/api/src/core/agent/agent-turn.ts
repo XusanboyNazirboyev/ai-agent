@@ -431,7 +431,6 @@ export async function runAgentTurn(
     decideBeforeModel(languageAssessment, spoken, languagePolicy),
   );
   if (early) return early;
-
   // 1-2. Candidate slots: deterministic enum matches plus model extraction.
   const deterministic = detectEnumSlots(pack, input.customerText);
   let proposed: Record<string, string | null> = { ...deterministic };
@@ -496,6 +495,27 @@ export async function runAgentTurn(
   // 3. Handover intents and missing search information.
   const reason = intent ? HANDOVER_INTENTS[intent] : undefined;
   if (reason) return handover(reason);
+  // A request to switch language is acknowledged in the new language by
+  // code; its words ("ingliz tilida") are not what the customer asks about,
+  // so nothing extracted from it is kept. The facts gate still applies: a
+  // request never makes unreadable text understood.
+  const previous = past.pinned ?? input.conversationLocale ?? past.established;
+  if (requested && requested !== previous) {
+    const unclear = languageStop(
+      decideBeforeFacts(
+        languageAssessment,
+        spoken,
+        localeId,
+        locales,
+        modelLocale,
+        languagePolicy,
+      ),
+    );
+    if (unclear) return unclear;
+    return finish(locale().templates.languageSwitched, 'ANSWERED', {
+      slots: input.slots,
+    });
+  }
   // Truthful AI disclosure when asked (addendum §3.10).
   if (intent === 'ai_question')
     return finish(locale().templates.aiDisclosure, 'ANSWERED');

@@ -205,6 +205,16 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
   ]),
 };
 
+/** Repeated letters collapsed: "helloo", "salooom" are typed for warmth. */
+function squeeze(word: string): string {
+  return word.replace(/(\p{L})\1+/gu, '$1');
+}
+const SQUEEZED: Record<LanguageCode, ReadonlySet<string>> = {
+  uz: new Set([...WORDS.uz].map(squeeze)),
+  ru: new Set([...WORDS.ru].map(squeeze)),
+  en: new Set([...WORDS.en].map(squeeze)),
+};
+
 const LATIN = /[a-z]/giu;
 const CYRILLIC = /[\u0400-\u04ff]/giu;
 
@@ -253,7 +263,10 @@ export function detectLanguage(input: string): LanguageDetection {
     // A single letter ("a", "i", "у") is not evidence of any language.
     if (word.length < 2) continue;
     for (const language of ['uz', 'ru', 'en'] as const) {
-      if (WORDS[language].has(word)) {
+      if (
+        WORDS[language].has(word) ||
+        (word.length >= 4 && SQUEEZED[language].has(squeeze(word)))
+      ) {
         score[language] += 2;
         lexical[language] += 1;
       }
