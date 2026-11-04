@@ -30,6 +30,7 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { ConnectorSecretStore } from '../secrets/connector-secret-store.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
+import { requeueLocalLeads } from '../leads/lead-requeue.js';
 
 /** Test seam for the Bitrix24 check (a fake portal in tests and e2e). */
 export const BITRIX24_CONNECT_TRANSPORT = Symbol('BITRIX24_CONNECT_TRANSPORT');
@@ -128,7 +129,7 @@ export class ConnectorsController {
     who: { tenantId: string; operatorId: string },
     action: string,
     id: string,
-    summary: Record<string, string | boolean> = {},
+    summary: Record<string, string | number | boolean> = {},
   ): Promise<void> {
     await this.prisma.auditEvent.create({
       data: {
@@ -224,13 +225,19 @@ export class ConnectorsController {
       webhookUrl,
     );
     await this.stopMockLeads(who.tenantId);
+    // Leads kept local while no CRM was connected go to the new one (ADR 037).
+    const requeued = await requeueLocalLeads(
+      this.prisma,
+      who.tenantId,
+      `crm-connected:${row.id}:${Date.now()}`,
+    );
     await this.audit(
       who,
       existing
         ? 'connector.bitrix24_reconnected'
         : 'connector.bitrix24_connected',
       row.id,
-      { connectorKey: 'bitrix24' },
+      { connectorKey: 'bitrix24', requeuedLeads: requeued },
     );
     return {
       id: row.id,

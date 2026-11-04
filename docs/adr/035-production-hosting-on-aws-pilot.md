@@ -95,6 +95,11 @@ Done by the owner in the AWS console.
 - **Who creates it:** creating IAM identities was refused to the assistant by the session's safety check, so the owner runs `deploy/aws/github-deploy-role.sh` once. Both jobs are skipped until the repository variable `AWS_DEPLOY_ROLE_ARN` exists.
 - **Later:** when the work moves to `main`, the branch in the workflow condition and in the role's subject changes with it.
 
+## Amendment 6 (2026-11-04): a fictional course catalog on staging
+- **Why:** with no catalog connected, every course or price question ends in a NO_DATA hand-over. Learnix is not ready, and Bitrix24 carries leads only (its product catalog is out of scope). The owner chose a demo catalog for staging.
+- **How:** the mock connector (fictional courses and prices) stays unregistered with `NODE_ENV=production` unless the server sets `CONNECTOR_DEMO_CATALOG=on`; then it is registered and every start logs `connector.demo_catalog_enabled`. `node dist/ops/demo-catalog.cli.js <tenant slug> on|off` switches it for one education tenant (audited), always with `createLead: false`, so Bitrix24 stays the lead sink.
+- **Limit:** only on a server that holds test data. Before real customers: `off`, and remove the setting.
+
 ## Open questions (none assumed)
 | # | Question | Blocks |
 |---|---|---|

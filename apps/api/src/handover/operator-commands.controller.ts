@@ -56,6 +56,9 @@ function error(
 const LEAD_STATUS = z.object({
   status: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']),
 });
+const LEAD_SCORE = z
+  .object({ score: z.enum(['HOT', 'WARM', 'COLD']).nullable() })
+  .strict();
 
 @Controller('api/v1/handovers')
 @UseGuards(OperatorRequestGuard)
@@ -103,6 +106,13 @@ export class OperatorCommandsController {
       case 'NO_LEAD':
         throw new ConflictException(
           error('NO_LEAD', 'This conversation has no lead yet'),
+        );
+      case 'NOT_RESENDABLE':
+        throw new ConflictException(
+          error(
+            'NOT_RESENDABLE',
+            'Only a lead kept local because no CRM was connected can be sent again',
+          ),
         );
       case 'EMPTY_TEXT':
         throw new BadRequestException(
@@ -233,6 +243,44 @@ export class OperatorCommandsController {
         ...this.base(request.operator, id, key),
         status: parsed.data.status,
       }),
+    );
+  }
+
+  @Post(':id/lead-score')
+  @HttpCode(200)
+  async leadScore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() body: unknown,
+    @Req() request: { operator: AuthenticatedOperator },
+  ): Promise<CommandResponse> {
+    const parsed = LEAD_SCORE.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException(
+        error(
+          'INVALID_BODY',
+          'Body must be { "score": "HOT" | "WARM" | "COLD" | null } (null: automatic)',
+        ),
+      );
+    return this.outcome(
+      await this.handovers.setLeadScore({
+        ...this.base(request.operator, id, key),
+        score: parsed.data.score,
+      }),
+    );
+  }
+
+  @Post(':id/lead-crm-sync')
+  @HttpCode(200)
+  async leadCrmSync(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: { operator: AuthenticatedOperator },
+  ): Promise<CommandResponse> {
+    return this.outcome(
+      await this.handovers.resendLeadToCrm(
+        this.base(request.operator, id, key),
+      ),
     );
   }
 }

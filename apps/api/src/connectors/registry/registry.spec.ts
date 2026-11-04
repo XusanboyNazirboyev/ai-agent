@@ -190,6 +190,23 @@ describe('createConnectorRegistry', () => {
     expect(production.has('generic-rest')).toBe(true);
   });
 
+  it('registers the mock in production only with the explicit staging opt-in (ADR 035)', async () => {
+    const { createConnectorRegistry } = await import('../connectors.module.js');
+    for (const [demo, expected] of [
+      [undefined, false],
+      ['off', false],
+      ['on', true],
+    ] as const)
+      expect(
+        createConnectorRegistry({
+          NODE_ENV: 'production',
+          CONNECTOR_OUTBOUND_POLICY: 'strict',
+          ...(demo ? { CONNECTOR_DEMO_CATALOG: demo } : {}),
+        }).has('mock'),
+        String(demo),
+      ).toBe(expected);
+  });
+
   it('applies the permissive policy only when the deployment selects it', async () => {
     const { createConnectorRegistry } = await import('../connectors.module.js');
     const config = { baseUrl: 'http://localhost:8080' };

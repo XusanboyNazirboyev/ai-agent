@@ -557,5 +557,14 @@
   "handover.group.customerClaims": "Mijoz aytgan",
   "handover.group.inferences": "Bot tushungani",
   "handover.group.unknowns": "Aniqlanmagan",
-  "handover.group.verifiedFacts": "Tasdiqlangan"
+  "handover.group.verifiedFacts": "Tasdiqlangan",
+  "view.leadScore": "Lid bahosi",
+  "view.scoreAuto": "Avtomatik",
+  "view.scoreByOperator": "operator belgilagan",
+  "view.scoreAutomatic": "avtomatik hisoblangan",
+  "view.crmNotSent": "Bu lid CRM ulanishidan oldin yaratilgan va CRM’ga yuborilmagan.",
+  "view.crmSend": "CRM’ga yuborish",
+  "toast.leadScore": "Lid bahosi yangilandi.",
+  "toast.leadCrmSync": "Lid CRM’ga yuborish navbatiga qo‘yildi.",
+  "errors.NOT_RESENDABLE": "Bu lidni qayta yuborib bo‘lmaydi: u allaqachon CRM’da yoki yuborilmoqda."
 }

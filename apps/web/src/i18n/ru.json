@@ -557,5 +557,14 @@
   "handover.group.customerClaims": "Клиент сообщил",
   "handover.group.inferences": "Бот понял",
   "handover.group.unknowns": "Не выяснено",
-  "handover.group.verifiedFacts": "Проверено"
+  "handover.group.verifiedFacts": "Проверено",
+  "view.leadScore": "Оценка лида",
+  "view.scoreAuto": "Автоматически",
+  "view.scoreByOperator": "задана оператором",
+  "view.scoreAutomatic": "рассчитана автоматически",
+  "view.crmNotSent": "Этот лид создан до подключения CRM и в CRM не отправлен.",
+  "view.crmSend": "Отправить в CRM",
+  "toast.leadScore": "Оценка лида обновлена.",
+  "toast.leadCrmSync": "Лид поставлен в очередь на отправку в CRM.",
+  "errors.NOT_RESENDABLE": "Этот лид нельзя отправить повторно: он уже в CRM или отправляется."
 }

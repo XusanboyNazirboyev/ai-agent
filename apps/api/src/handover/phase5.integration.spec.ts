@@ -9,6 +9,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { ConnectorUnavailableError } from '../connectors/interfaces/errors.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadService } from '../leads/lead.service.js';
+import { requeueLocalLeads } from '../leads/lead-requeue.js';
 import { ShownOffersService } from '../leads/shown-offers.service.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
@@ -1152,5 +1153,145 @@ describe('offers shown and quotes', () => {
 describe('the education pack stays valid', () => {
   it('has lead scoring', () => {
     expect(EDUCATION_PACK.leadScoring?.rules.length).toBeGreaterThan(3);
+  });
+});
+
+describe('operator lead score and CRM resend (ADR 037)', () => {
+  const handovers = new HandoverService(prisma);
+  const slots = (
+    v: Record<string, string>,
+  ): Record<string, { value: string }> =>
+    Object.fromEntries(Object.entries(v).map(([k, value]) => [k, { value }]));
+  const rescore = (
+    w: World,
+    s: Record<string, string>,
+  ): ReturnType<LeadService['rescoreFromTurn']> =>
+    db.$transaction((tx) =>
+      new LeadService(prisma).rescoreFromTurn(tx, {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        slots: slots(s),
+      }),
+    );
+  const base = (w: World): Parameters<HandoverService['setLeadScore']>[0] => ({
+    tenantId: w.tenantId,
+    handoverId: w.handoverId,
+    operatorId: w.op1,
+    idempotencyKey: `k-${randomUUID()}`,
+    score: null,
+  });
+  const lead = (w: World): ReturnType<typeof db.lead.findFirstOrThrow> =>
+    db.lead.findFirstOrThrow({ where: { conversationId: w.conversationId } });
+
+  it('keeps an operator score through rescoring until it is set back to automatic', async () => {
+    const w = await world();
+    await rescore(w, {
+      subject: 'IELTS',
+      format: 'online',
+      preferredTime: 'evening',
+    });
+    expect((await lead(w)).score).toBe('WARM');
+
+    expect(
+      await handovers.setLeadScore({ ...base(w), score: 'HOT' }),
+    ).toMatchObject({ status: 'OK' });
+    expect(await lead(w)).toMatchObject({
+      score: 'HOT',
+      scoreSetByOperator: true,
+    });
+    // The customer's next turn would compute WARM; the operator's HOT stays.
+    await rescore(w, {
+      subject: 'IELTS',
+      format: 'online',
+      preferredTime: 'evening',
+      budget: '100',
+    });
+    const kept = await lead(w);
+    expect(kept.score).toBe('HOT');
+    expect(kept.reasonCodes).toContain('BUDGET_STATED');
+    expect(
+      await db.outboxEvent.count({
+        where: {
+          aggregateId: kept.id,
+          idempotencyKey: { contains: 'operator-score:HOT' },
+        },
+      }),
+    ).toBe(1);
+
+    await handovers.setLeadScore({ ...base(w), score: null });
+    expect((await lead(w)).scoreSetByOperator).toBe(false);
+    await rescore(w, {
+      subject: 'IELTS',
+      format: 'online',
+      preferredTime: 'evening',
+      budget: '200',
+    });
+    expect((await lead(w)).score).toBe('WARM');
+    expect(
+      await db.auditEvent.count({
+        where: { tenantId: w.tenantId, action: 'operator.set_lead_score' },
+      }),
+    ).toBe(2);
+  });
+
+  it('sends a lead kept local to the CRM once, and refuses any other lead', async () => {
+    const w = await world();
+    await rescore(w, {
+      subject: 'IELTS',
+      format: 'online',
+      preferredTime: 'evening',
+    });
+    const { id } = await lead(w);
+    const resend = (): ReturnType<HandoverService['resendLeadToCrm']> =>
+      handovers.resendLeadToCrm({
+        tenantId: w.tenantId,
+        handoverId: w.handoverId,
+        operatorId: w.op1,
+        idempotencyKey: `k-${randomUUID()}`,
+      });
+    // Still PENDING (never synced): not a local-only lead.
+    expect(await resend()).toMatchObject({
+      status: 'REJECTED',
+      code: 'NOT_RESENDABLE',
+    });
+    await db.lead.update({
+      where: { id },
+      data: {
+        crmSyncStatus: 'NOT_REQUIRED',
+        lastErrorCode: 'NO_CRM_CAPABILITY',
+      },
+    });
+    expect(await resend()).toMatchObject({ status: 'OK' });
+    expect(await lead(w)).toMatchObject({
+      crmSyncStatus: 'PENDING',
+      lastErrorCode: null,
+    });
+    expect(
+      await db.outboxEvent.count({
+        where: { aggregateId: id, idempotencyKey: { contains: ':resend:' } },
+      }),
+    ).toBe(1);
+    expect(await resend()).toMatchObject({ code: 'NOT_RESENDABLE' });
+  });
+
+  it('queues every local lead of a tenant when a CRM is connected', async () => {
+    const w = await world();
+    await rescore(w, {
+      subject: 'IELTS',
+      format: 'online',
+      preferredTime: 'evening',
+    });
+    const { id } = await lead(w);
+    await db.lead.update({
+      where: { id },
+      data: { crmSyncStatus: 'NOT_REQUIRED' },
+    });
+    expect(await requeueLocalLeads(db, w.tenantId, 'crm-connected:test')).toBe(
+      1,
+    );
+    expect((await lead(w)).crmSyncStatus).toBe('PENDING');
+    expect(await requeueLocalLeads(db, w.tenantId, 'crm-connected:test')).toBe(
+      0,
+    );
   });
 });

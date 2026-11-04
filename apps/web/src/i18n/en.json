@@ -557,5 +557,14 @@
   "handover.group.customerClaims": "Customer said",
   "handover.group.inferences": "Bot understood",
   "handover.group.unknowns": "Not known",
-  "handover.group.verifiedFacts": "Verified"
+  "handover.group.verifiedFacts": "Verified",
+  "view.leadScore": "Lead score",
+  "view.scoreAuto": "Automatic",
+  "view.scoreByOperator": "set by an operator",
+  "view.scoreAutomatic": "calculated automatically",
+  "view.crmNotSent": "This lead was created before a CRM was connected and has not been sent to it.",
+  "view.crmSend": "Send to CRM",
+  "toast.leadScore": "Lead score updated.",
+  "toast.leadCrmSync": "The lead is queued for the CRM.",
+  "errors.NOT_RESENDABLE": "This lead cannot be sent again: it is already in the CRM or on its way."
 }

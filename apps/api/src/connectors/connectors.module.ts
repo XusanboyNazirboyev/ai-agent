@@ -1,4 +1,4 @@
-import { Module, type OnModuleDestroy } from '@nestjs/common';
+import { Logger, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
@@ -18,7 +18,8 @@ import { SecretsModule } from '../secrets/secrets.module.js';
 import { TenantConnectorLoader } from './sync/tenant-connector-loader.js';
 
 export function createConnectorRegistry(
-  environment: Pick<AppEnvironment, 'NODE_ENV' | 'CONNECTOR_OUTBOUND_POLICY'>,
+  environment: Pick<AppEnvironment, 'NODE_ENV' | 'CONNECTOR_OUTBOUND_POLICY'> &
+    Partial<Pick<AppEnvironment, 'CONNECTOR_DEMO_CATALOG'>>,
   secretResolver: SecretResolver = new EnvSecretResolver(),
 ): ConnectorRegistry {
   const registry = new ConnectorRegistry(secretResolver);
@@ -32,10 +33,24 @@ export function createConnectorRegistry(
   );
   registry.register(bitrix24ConnectorRegistration());
   // The mock serves fictional catalog data and prices; it must never be
-  // selectable for real customers.
-  if (environment.NODE_ENV !== 'production') {
+  // selectable for real customers. A staging server with test data only may
+  // opt in explicitly (CONNECTOR_DEMO_CATALOG=on).
+  if (
+    environment.NODE_ENV !== 'production' ||
+    environment.CONNECTOR_DEMO_CATALOG === 'on'
+  ) {
     registry.register(mockConnectorRegistration());
   }
+  if (
+    environment.NODE_ENV === 'production' &&
+    environment.CONNECTOR_DEMO_CATALOG === 'on'
+  )
+    new Logger('ConnectorRegistry').warn(
+      JSON.stringify({
+        event: 'connector.demo_catalog_enabled',
+        note: 'fictional courses and prices are selectable; test data only',
+      }),
+    );
   return registry;
 }
 
@@ -55,6 +70,9 @@ export function createConnectorRegistry(
         createConnectorRegistry({
           NODE_ENV: config.get('NODE_ENV', { infer: true }),
           CONNECTOR_OUTBOUND_POLICY: config.get('CONNECTOR_OUTBOUND_POLICY', {
+            infer: true,
+          }),
+          CONNECTOR_DEMO_CATALOG: config.get('CONNECTOR_DEMO_CATALOG', {
             infer: true,
           }),
         }),
