@@ -23,6 +23,8 @@ import { LeadService } from '../../leads/lead.service.js';
 import { ActionService } from '../../actions/action.service.js';
 import { extractPhone } from '../../leads/phone.js';
 import { selectInboundBatch } from './inbound-batch.js';
+import { startTyping } from './typing-indicator.js';
+import { TelegramBotApi } from '../../handover/telegram-bot-api.js';
 import { enrichLogContext } from '../../observability/log-context.js';
 import type {
   ProcessResult,
@@ -112,10 +114,38 @@ export class TelegramAgentPipeline {
     @Optional() handovers?: HandoverService,
     @Optional() leads?: LeadService,
     @Optional() private readonly actions?: ActionService,
+    @Optional() private readonly bot?: TelegramBotApi,
   ) {
     this.handoverService = handovers ?? new HandoverService(prisma);
     this.leadService = leads ?? new LeadService(prisma);
     this.policy = policy ?? agentModePolicyFrom(this.config);
+  }
+
+  /**
+   * Starts "typing…" in a Telegram chat while a LIVE reply is prepared;
+   * returns its stop function, or undefined for other channels.
+   */
+  private async typing(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<(() => void) | undefined> {
+    if (!this.bot) return undefined;
+    const row = await this.prisma.conversation.findFirst({
+      where: { tenantId, id: conversationId },
+      select: {
+        providerChatId: true,
+        channelAccountId: true,
+        channelAccount: { select: { channelType: true } },
+      },
+    });
+    if (!row || row.channelAccount.channelType !== 'telegram') return undefined;
+    const bot = this.bot;
+    return startTyping(() =>
+      bot.sendChatAction({
+        chatId: row.providerChatId,
+        channelAccountId: row.channelAccountId,
+      }),
+    );
   }
 
   /** The channel account's configured agent mode for a conversation. */
@@ -198,6 +228,10 @@ export class TelegramAgentPipeline {
       const { claim } = claimed;
 
       let computed: ComputedTurn;
+      const stopTyping =
+        claim.mode === 'LIVE'
+          ? await this.typing(event.tenantId, input.conversationId)
+          : undefined;
       try {
         computed = await this.agent.compute({
           tenantId: event.tenantId,
@@ -207,10 +241,12 @@ export class TelegramAgentPipeline {
           beforeSequence: claim.firstSequence,
         });
       } catch (error: unknown) {
+        stopTyping?.();
         await this.fail(event.tenantId, input.conversationId, claim, error);
         if (error instanceof AgentConfigurationError) return;
         throw error;
       }
+      stopTyping?.();
       enrichLogContext({ language: computed.result.locale });
 
       const result = await this.commit(

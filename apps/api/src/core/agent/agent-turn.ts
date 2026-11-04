@@ -677,8 +677,13 @@ export async function runAgentTurn(
     );
   };
 
-  // 5. Model-proposed tool calls and the reply draft.
-  const draft = await respond(deps, tools, {
+  // 5. Model-proposed tool calls and the reply draft. Items the code found
+  // are already in the prompt (id, title, description, attributes), so
+  // searching again or asking for their details only costs model rounds
+  // (on staging a reply took four rounds and 25 s, two of them repeats).
+  if (!knowledgeOutcome && search.ok && search.items.length > 0)
+    tools!.withhold(['search_catalog', 'get_item_details']);
+  const draft = await respond(deps, tools!, {
     system: responseSystemPrompt(pack, locale()),
     user: responseUserMessage({
       history: input.history,

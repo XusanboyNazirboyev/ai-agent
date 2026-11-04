@@ -133,6 +133,19 @@ describe('agent turn: grounded answers', () => {
       'model:list_offers:ok',
       'model:get_quote:ok',
     ]);
+    // The code already searched: the model is not offered the same lookups.
+    const offered = provider.calls
+      .filter((call) => call.type === 'tools')
+      .map((call) =>
+        call.type === 'tools'
+          ? call.request.tools.map((tool) => tool.name)
+          : [],
+      );
+    for (const names of offered) {
+      expect(names).not.toContain('search_catalog');
+      expect(names).not.toContain('get_item_details');
+      expect(names).toContain('list_offers');
+    }
     const quote = result.facts.find((fact) => fact.id === 'F10');
     expect(quote).toMatchObject({
       value: {
@@ -287,9 +300,11 @@ describe('agent turn: tool control', () => {
       connector: noQuote,
     });
     const offered = provider.calls[1];
+    // No get_quote (unsupported); no search_catalog either, because the
+    // code's search already found the item.
     expect(
       offered.type === 'tools' && offered.request.tools.map((t) => t.name),
-    ).toEqual(['search_catalog', 'list_offers']);
+    ).toEqual(['list_offers']);
     expect(result.tools.at(-1)).toMatchObject({
       name: 'get_quote',
       code: 'UNSUPPORTED',
