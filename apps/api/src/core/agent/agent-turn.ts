@@ -570,6 +570,13 @@ export async function runAgentTurn(
     );
   }
 
+  // A greeting once the search slots are known is answered as a greeting: it
+  // asks nothing, so nothing is searched. (On staging, "hello" in a
+  // conversation that already had a subject ran the catalog search and ended
+  // in a NO_DATA hand-over.)
+  if (intent === 'greeting')
+    return finish(locale().templates.greeting, 'ANSWERED');
+
   // Commercial facts need a language the customer demonstrably uses.
   const unsure = languageStop(
     decideBeforeFacts(

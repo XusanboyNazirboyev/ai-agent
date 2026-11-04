@@ -522,3 +522,24 @@ describe('reply locale follows a clear short message (D17, ADR 013 amendment)', 
     }
   });
 });
+
+describe('a greeting is answered as a greeting', () => {
+  it('does not search or hand over when the search slots are already known', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({}, 'greeting', 'en', 'Latn'),
+      ]),
+      text: 'hello',
+      connector: null,
+      input: {
+        conversationLocale: 'uz-Latn',
+        slots: { subject: { value: 'Mathematics', source: 'customer' } },
+        history: [{ role: 'customer', text: 'matem' }],
+      },
+    });
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.handover).toBeUndefined();
+    expect(result.locale).toBe('en');
+    expect(result.reply).toBe(LOCALES.get('en').templates.greeting);
+  });
+});
