@@ -11,6 +11,9 @@ export interface ConversationListItem {
   readonly contactName: string | null;
   readonly language: string | null;
   readonly leadScore: string | null;
+  readonly leadStatus: string | null;
+  /** The score was set by an operator (ADR 037). */
+  readonly leadScoreSetByOperator: boolean;
   readonly assignedOperatorId: string | null;
   readonly waitingSince: string | null;
   readonly slaDueAt: string | null;
@@ -131,6 +134,7 @@ export class InboxReadService {
       q?: string;
       language?: string;
       leadScore?: 'HOT' | 'WARM' | 'COLD';
+      leadStatus?: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
     },
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), MAX_PAGE);
@@ -146,8 +150,15 @@ export class InboxReadService {
         : {}),
       ...(options.scope === 'closed' ? { state: 'CLOSED' } : {}),
       ...(options.language ? { language: options.language } : {}),
-      ...(options.leadScore
-        ? { leads: { some: { score: options.leadScore } } }
+      ...(options.leadScore || options.leadStatus
+        ? {
+            leads: {
+              some: {
+                ...(options.leadScore ? { score: options.leadScore } : {}),
+                ...(options.leadStatus ? { status: options.leadStatus } : {}),
+              },
+            },
+          }
         : {}),
       ...(options.q
         ? {
@@ -197,7 +208,7 @@ export class InboxReadService {
         leads: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { score: true },
+          select: { score: true, status: true, scoreSetByOperator: true },
         },
         handovers: {
           where: { status: { in: ['OPEN', 'TAKEN'] } },
@@ -214,6 +225,8 @@ export class InboxReadService {
       contactName: row.contact.name,
       language: row.language,
       leadScore: row.leads[0]?.score ?? null,
+      leadStatus: row.leads[0]?.status ?? null,
+      leadScoreSetByOperator: row.leads[0]?.scoreSetByOperator ?? false,
       assignedOperatorId: row.assignedOperatorId,
       waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
       slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,

@@ -164,7 +164,7 @@
   "nav.inbox": "Suhbatlar",
   "nav.leads": "Lidlar",
   "nav.settings": "Sozlamalar",
-  "leads.intro": "Lid bahosi bor suhbatlar: eng issiqdan sovuqqacha. Kartani ochib, suhbatni davom ettiring.",
+  "leads.intro": "Lidlar baho yoki holat bo‘yicha. Kartani boshqa ustunga suring yoki “Ko‘chirish” orqali o‘zgartiring.",
   "leads.columns": "Lid bahosi ustunlari",
   "leads.empty": "Bu ustunda lidlar yo‘q.",
   "leads.updated": "Yangilangan: {date}",
@@ -566,5 +566,10 @@
   "view.crmSend": "CRM’ga yuborish",
   "toast.leadScore": "Lid bahosi yangilandi.",
   "toast.leadCrmSync": "Lid CRM’ga yuborish navbatiga qo‘yildi.",
-  "errors.NOT_RESENDABLE": "Bu lidni qayta yuborib bo‘lmaydi: u allaqachon CRM’da yoki yuborilmoqda."
+  "errors.NOT_RESENDABLE": "Bu lidni qayta yuborib bo‘lmaydi: u allaqachon CRM’da yoki yuborilmoqda.",
+  "leads.view": "Ko‘rinish",
+  "leads.view.score": "Baho bo‘yicha",
+  "leads.view.status": "Holat bo‘yicha",
+  "leads.moveTo": "Ko‘chirish",
+  "leads.moved": "Lid ko‘chirildi."
 }

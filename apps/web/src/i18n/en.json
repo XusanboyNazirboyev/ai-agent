@@ -164,7 +164,7 @@
   "nav.inbox": "Inbox",
   "nav.leads": "Leads",
   "nav.settings": "Settings",
-  "leads.intro": "Conversations with a lead score, grouped from hottest to coldest. Open a card to continue in the inbox.",
+  "leads.intro": "Leads by score or by status. Drag a card to another column, or use “Move to”.",
   "leads.columns": "Lead score columns",
   "leads.empty": "No leads in this column.",
   "leads.updated": "Updated {date}",
@@ -566,5 +566,10 @@
   "view.crmSend": "Send to CRM",
   "toast.leadScore": "Lead score updated.",
   "toast.leadCrmSync": "The lead is queued for the CRM.",
-  "errors.NOT_RESENDABLE": "This lead cannot be sent again: it is already in the CRM or on its way."
+  "errors.NOT_RESENDABLE": "This lead cannot be sent again: it is already in the CRM or on its way.",
+  "leads.view": "View",
+  "leads.view.score": "By score",
+  "leads.view.status": "By status",
+  "leads.moveTo": "Move to",
+  "leads.moved": "Lead moved."
 }
