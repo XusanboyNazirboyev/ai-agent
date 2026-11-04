@@ -24,6 +24,7 @@ import { EventsController, openStreams } from './events.controller.js';
 import { InboxEventBus, type BusEvent } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
+import { LeadsController } from './leads.controller.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { CSRF_HEADER, SESSION_COOKIE, SessionGuard } from './session.guard.js';
 import {
@@ -1600,5 +1601,118 @@ describe('knowledge documents', () => {
     await expect(docs().remove(asAdmin, faqDoc.id)).rejects.toMatchObject({
       response: { code: 'NOT_FOUND' },
     });
+  });
+});
+
+describe('lead board moves (ADR 037)', () => {
+  const controller = new LeadsController(prisma);
+  const lead = (w: World): Promise<{ id: string }> =>
+    db.lead.create({
+      data: {
+        tenantId: w.tenantId,
+        contactId: w.contactId,
+        conversationId: w.conversationId,
+        score: 'COLD',
+        summary: 's',
+        requirements: {},
+        crmSyncStatus: 'NOT_REQUIRED',
+        idempotencyKey: `lead-${randomUUID()}`,
+      },
+      select: { id: true },
+    });
+
+  it('moves a lead between score and status columns without a hand-over, and lists it there', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const request = { principal: s.principal } as never;
+    await expect(
+      controller.score(request, w.conversationId, { score: 'HOT' }),
+    ).rejects.toMatchObject({ status: 409 });
+    const { id } = await lead(w);
+
+    expect(
+      await controller.score(request, w.conversationId, { score: 'HOT' }),
+    ).toEqual({ score: 'HOT' });
+    expect(
+      await controller.status(request, w.conversationId, {
+        status: 'IN_PROGRESS',
+      }),
+    ).toEqual({ status: 'IN_PROGRESS' });
+    expect(await db.lead.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      score: 'HOT',
+      scoreSetByOperator: true,
+      status: 'IN_PROGRESS',
+    });
+    const hot = await read.list(s.principal, {
+      scope: 'all',
+      leadScore: 'HOT',
+    });
+    expect(hot.items.map((item) => item.id)).toContain(w.conversationId);
+    expect(
+      hot.items.find((item) => item.id === w.conversationId),
+    ).toMatchObject({
+      leadStatus: 'IN_PROGRESS',
+      leadScoreSetByOperator: true,
+    });
+    const won = await read.list(s.principal, {
+      scope: 'all',
+      leadStatus: 'WON',
+    });
+    expect(won.items.map((item) => item.id)).not.toContain(w.conversationId);
+    expect(
+      await db.auditEvent.count({
+        where: {
+          tenantId: w.tenantId,
+          entityId: id,
+          action: {
+            in: ['operator.set_lead_score', 'operator.set_lead_status'],
+          },
+        },
+      }),
+    ).toBe(2);
+
+    await controller.score(request, w.conversationId, { score: null });
+    expect(
+      (await db.lead.findUniqueOrThrow({ where: { id } })).scoreSetByOperator,
+    ).toBe(false);
+    await expect(
+      controller.status(request, w.conversationId, { status: 'DONE' }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('refuses viewers and another tenant’s conversation', async () => {
+    const viewer = await world('VIEWER');
+    await lead(viewer);
+    const sv = await signIn(viewer);
+    await expect(
+      controller.status(
+        { principal: sv.principal } as never,
+        viewer.conversationId,
+        {
+          status: 'WON',
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const a = await world();
+    const b = await world();
+    await lead(b);
+    const sa = await signIn(a);
+    await expect(
+      controller.status(
+        { principal: sa.principal } as never,
+        b.conversationId,
+        {
+          status: 'WON',
+        },
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(
+      (
+        await db.lead.findFirstOrThrow({
+          where: { conversationId: b.conversationId },
+        })
+      ).status,
+    ).toBe('NEW');
   });
 });

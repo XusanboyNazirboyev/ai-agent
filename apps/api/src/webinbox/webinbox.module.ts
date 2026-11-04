@@ -29,6 +29,7 @@ import { InboxEventsService } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { SessionGuard } from './session.guard.js';
 import { SessionService } from './session.service.js';
+import { LeadsController } from './leads.controller.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
 @Module({
@@ -44,6 +45,7 @@ import { SessionService } from './session.service.js';
     KnowledgeDocumentsController,
     ContactsController,
     ConnectorsController,
+    LeadsController,
     AnalyticsController,
   ],
   providers: [

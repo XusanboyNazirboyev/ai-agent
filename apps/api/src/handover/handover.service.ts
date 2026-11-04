@@ -10,6 +10,7 @@ import {
   lockConversation,
   type TransactionClient,
 } from './conversation-lock.js';
+import { latestLead, setOperatorLeadScore } from '../leads/lead-operator.js';
 
 export type CommandRejection =
   | 'NOT_FOUND'
@@ -476,29 +477,13 @@ export class HandoverService {
       'operator.set_lead_score',
       command,
       async (c) => {
-        const lead = await c.tx.lead.findFirst({
-          where: {
-            tenantId: command.tenantId,
-            conversationId: c.conversation.id,
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, crmSyncStatus: true },
-        });
+        const lead = await latestLead(
+          c.tx,
+          command.tenantId,
+          c.conversation.id,
+        );
         if (!lead) return { status: 'REJECTED', code: 'NO_LEAD' } as const;
-        await c.tx.lead.updateMany({
-          where: { tenantId: command.tenantId, id: lead.id },
-          data:
-            command.score === null
-              ? { scoreSetByOperator: false }
-              : { score: command.score, scoreSetByOperator: true },
-        });
-        if (command.score !== null && lead.crmSyncStatus !== 'SYNCED')
-          await this.queueLeadSync(
-            c.tx,
-            command.tenantId,
-            lead.id,
-            `operator-score:${command.score}:${Date.now()}`,
-          );
+        await setOperatorLeadScore(c.tx, command.tenantId, lead, command.score);
         return { status: 'OK', state: c.conversation.state } as const;
       },
       { leadScore: command.score ?? 'AUTO' },

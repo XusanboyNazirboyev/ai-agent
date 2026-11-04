@@ -23,6 +23,7 @@ const ListQuery = z.object({
     .regex(/^[A-Za-z-]{2,16}$/u)
     .optional(),
   leadScore: z.enum(['HOT', 'WARM', 'COLD']).optional(),
+  leadStatus: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']).optional(),
 });
 
 @Controller('api/v1/inbox')

@@ -20,3 +20,10 @@
 - An operator's judgement is not silently overwritten; the reason codes still show what the customer did.
 - Leads collected before a CRM existed are not lost to it.
 - **Checked:** integration tests (score kept through rescoring and released by `null`, audit count, outbox events; resend only for `NOT_REQUIRED`, once; requeue on connect), API unit suite, schema drift check, e2e (operator flow, a11y, CRM connect).
+
+## Amendment 1 (2026-11-04): lead board moves
+- **Owner request:** move a lead on the leads page by dragging it, both between score columns and between status columns.
+- **API:** `PUT /api/v1/leads/conversations/:conversationId/score` (`{ "score": "HOT" | "WARM" | "COLD" | null }`) and `.../status` (`{ "status": "NEW" | "IN_PROGRESS" | "WON" | "LOST" }`). Keyed by conversation, so a lead whose conversation was never handed over can be moved too. OWNER, ADMIN and OPERATOR only; session and CSRF guard; tenant-scoped; audited with `via: lead_board`. The score and the hand-over command share one helper (`leads/lead-operator.ts`).
+- **List:** the inbox list takes `leadStatus` as a filter and returns `leadStatus` and `leadScoreSetByOperator`.
+- **Web:** the leads page switches between "By score" (3 columns) and "By status" (4 columns). A card moves by HTML drag and drop or by its "Move to" menu (keyboard and phones). Viewers see the board without move controls.
+- **Checked:** integration tests (moves without a hand-over, list filters, audit, viewer 403, another tenant 404), e2e (menu and drag in both views, viewer), API unit suite.

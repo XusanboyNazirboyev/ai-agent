@@ -26,6 +26,9 @@ export interface ConversationListItem {
   contactName: string | null;
   language: string | null;
   leadScore: LeadScore | null;
+  leadStatus: LeadStatus | null;
+  /** The score was set by an operator (ADR 037). */
+  leadScoreSetByOperator: boolean;
   assignedOperatorId: string | null;
   waitingSince: string | null;
   slaDueAt: string | null;
