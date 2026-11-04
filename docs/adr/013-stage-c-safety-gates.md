@@ -24,3 +24,9 @@ Stage B left four items open: listed prices could still be shown without a live 
 
 ## Not done / pre-live acceptance
 Detection accuracy per locale, native-speaker review, and a live eval of the live-quote flow are required before `stable` and before any LIVE traffic. Operator notification is Phase 5.
+
+## Amendment (2026-11-04): one threshold for switching the reply locale
+- **Found on staging:** a customer in a conversation whose locale was `uz-Latn` wrote "hello". The language gate rated it HIGH for `en` (score 0.467 ≥ the beta threshold 0.45), but `chooseLocale` switches only from `LOCALE_SWITCH_CONFIDENCE` = 0.6 (a Phase 4 constant older than this ADR), so the reply stayed `uz-Latn`. `decideBeforeFacts` then saw a clear `en` message against an `uz-Latn` reply, counted it as unclear, and with one earlier unclear turn handed the conversation over (`LOW_LANG_CONFIDENCE`) with an Uzbek message. The same for "привет", "salom", "спасибо".
+- **Decision:** the reply locale follows a message the gate rates HIGH for a supported locale (`replyLocale` in `agent-turn.ts`, used by normal and interrupted turns); otherwise `chooseLocale` keeps the conversation's locale as before. An explicit language request still outranks both. Words that belong to no language ("ok", "da", digits) stay LOW and do not switch.
+- **Owner requirement (2026-11-04):** answer in the customer's language: English for English, Russian for Russian, Uzbek for Uzbek.
+- **Checked:** new tests in `language-policy.spec.ts` fail on the old code (4 of 5) and pass now; the API unit suite passes (1840, 15 skipped).

@@ -220,6 +220,34 @@ type Draft =
   | { readonly kind: 'refusal' | 'truncated' | 'budget' }
   | { readonly kind: 'error'; readonly code: string };
 
+/**
+ * The locale a reply is written in (D17): a message that the language gate
+ * rates HIGH for a supported locale decides it, so the customer is answered in
+ * the language and script they just used, even for a one-word greeting
+ * ("hello", "привет"). Otherwise the conversation keeps its locale
+ * (chooseLocale). One threshold for both: before, a switch needed 0.6 while
+ * the gate accepted 0.45, so a short message the gate called clear stayed in
+ * the old locale and was then treated as unclear (ADR 013 amendment).
+ */
+function replyLocale(
+  input: AgentTurnInput,
+  locales: LocaleRegistry,
+  assessment: LanguageAssessment,
+): LocaleId {
+  if (
+    assessment.confidenceClass === 'HIGH' &&
+    assessment.localeId !== undefined &&
+    input.supportedLocales.includes(assessment.localeId)
+  )
+    return assessment.localeId;
+  return chooseLocale(detectLanguage(input.customerText), {
+    current: input.conversationLocale,
+    supported: input.supportedLocales,
+    fallback: input.defaultLocale,
+    registry: locales,
+  });
+}
+
 export async function runAgentTurn(
   input: AgentTurnInput,
   deps: AgentDependencies,
@@ -228,18 +256,13 @@ export async function runAgentTurn(
   const { pack, locales, llm } = deps;
   const facts = new FactStore();
   const language = detectLanguage(input.customerText);
-  let localeId = chooseLocale(language, {
-    current: input.conversationLocale,
-    supported: input.supportedLocales,
-    fallback: input.defaultLocale,
-    registry: locales,
-  });
   const languagePolicy = deps.languagePolicy ?? DEFAULT_LANGUAGE_POLICY;
   const languageAssessment = assessLanguage(
     input.customerText,
     locales,
     languagePolicy,
   );
+  let localeId = replyLocale(input, locales, languageAssessment);
   // An explicit request ("write in Russian") outranks detection, now and
   // until the customer asks for another language.
   const requested = requestedLocale(
@@ -908,12 +931,11 @@ export function interruptedTurnResult(
   llmFailure: string,
 ): AgentTurnResult {
   const language = detectLanguage(input.customerText);
-  const localeId = chooseLocale(language, {
-    current: input.conversationLocale,
-    supported: input.supportedLocales,
-    fallback: input.defaultLocale,
-    registry: locales,
-  });
+  const localeId = replyLocale(
+    input,
+    locales,
+    assessLanguage(input.customerText, locales, DEFAULT_LANGUAGE_POLICY),
+  );
   return {
     reply: locales.get(localeId).templates.handover[reason],
     locale: localeId,
