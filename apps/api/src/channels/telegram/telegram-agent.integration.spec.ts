@@ -1,3 +1,4 @@
+import { OperatorIdleReturnService } from '../../handover/operator-idle-return.service.js';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadEnv } from 'dotenv';
@@ -638,6 +639,39 @@ describe('agent mode LIVE (local development policy)', () => {
         where: { tenantId: f.tenantId, type: 'handover.forward' },
       }),
     ).toBe(1);
+  });
+
+  it('answers the waiting customer once an idle operator returns the conversation (ADR 038)', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    const event = await receive(f, 'IELTS kursi bormi?');
+    await prisma.conversation.updateMany({
+      where: { tenantId: f.tenantId },
+      data: { state: 'OPERATOR_ACTIVE', version: { increment: 1 } },
+    });
+    await f.processor.process(event);
+    expect(await outbound(f)).toBe(0);
+
+    const idle = new OperatorIdleReturnService(
+      prisma as unknown as PrismaService,
+      config({}),
+    );
+    const later = new Date(Date.now() + 3 * 60_000);
+    expect(await idle.scan(later, 2, { tenantId: f.tenantId })).toBe(1);
+    const replay = await prisma.outboxEvent.findFirstOrThrow({
+      where: {
+        tenantId: f.tenantId,
+        type: 'telegram.inbound',
+        idempotencyKey: { startsWith: 'idle-return:' },
+      },
+    });
+    await f.processor.process({
+      outboxId: replay.id,
+      tenantId: f.tenantId,
+      type: replay.type,
+      payload: replay.payload,
+    });
+    expect(await outbound(f)).toBe(1);
+    expect((await turns(f)).map((turn) => turn.status)).toEqual(['COMMITTED']);
   });
 
   it('hands over BUDGET_EXCEEDED from the stored ledger without a model call', async () => {
