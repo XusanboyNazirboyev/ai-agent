@@ -166,6 +166,25 @@ export class OperatorCommandsController {
     );
   }
 
+  /** Operator-initiated take-over by conversation id (ADR 038). */
+  @Post('by-conversation/:conversationId/take-over')
+  @HttpCode(200)
+  async takeOverConversation(
+    @Param('conversationId', ParseUUIDPipe) conversationId: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Req() request: { operator: AuthenticatedOperator },
+  ): Promise<CommandResponse> {
+    const base = this.base(request.operator, conversationId, key);
+    return this.outcome(
+      await this.handovers.takeOverConversation({
+        tenantId: base.tenantId,
+        conversationId,
+        operatorId: base.operatorId,
+        idempotencyKey: base.idempotencyKey,
+      }),
+    );
+  }
+
   @Post(':id/return-to-bot')
   @HttpCode(200)
   async returnToBot(

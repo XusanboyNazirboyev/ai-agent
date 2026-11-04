@@ -571,5 +571,9 @@
   "leads.view.score": "По оценке",
   "leads.view.status": "По статусу",
   "leads.moveTo": "Переместить",
-  "leads.moved": "Лид перемещён."
+  "leads.moved": "Лид перемещён.",
+  "mode.label": "Кто отвечает",
+  "mode.ai": "ИИ",
+  "mode.operator": "Оператор",
+  "handover.reason.OPERATOR_INITIATED": "Оператор сам взял диалог"
 }

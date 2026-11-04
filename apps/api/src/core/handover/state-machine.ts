@@ -10,7 +10,10 @@ export type ConversationState =
 export type OwnershipCommand =
   /** The bot escalates (any handover reason). */
   | 'HANDOVER'
-  /** An operator claims a waiting conversation. */
+  /**
+   * An operator claims a conversation: a waiting one, or one the bot is
+   * answering (operator-initiated, ADR 038).
+   */
   | 'TAKE_OVER'
   /** The operator gives the conversation back to the bot. */
   | 'RETURN_TO_BOT'
@@ -25,7 +28,10 @@ const TRANSITIONS: Readonly<
   >
 > = {
   HANDOVER: { BOT_ACTIVE: 'WAITING_OPERATOR' },
-  TAKE_OVER: { WAITING_OPERATOR: 'OPERATOR_ACTIVE' },
+  TAKE_OVER: {
+    WAITING_OPERATOR: 'OPERATOR_ACTIVE',
+    BOT_ACTIVE: 'OPERATOR_ACTIVE',
+  },
   RETURN_TO_BOT: {
     WAITING_OPERATOR: 'BOT_ACTIVE',
     OPERATOR_ACTIVE: 'BOT_ACTIVE',

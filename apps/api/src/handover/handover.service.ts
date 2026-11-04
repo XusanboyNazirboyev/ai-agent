@@ -301,6 +301,136 @@ export class HandoverService {
     });
   }
 
+  /**
+   * Operator-initiated take-over from the conversation (ADR 038): the bot
+   * stops answering from this commit (its pending reply is dropped by the
+   * BOT_ACTIVE check before sending). An open hand-over is taken; without one,
+   * a hand-over is created already TAKEN with reason OPERATOR_INITIATED, so
+   * replies and "return to bot" keep their hand-over-based path. No operator
+   * group card and no SLA: an operator is already on it.
+   */
+  async takeOverConversation(command: {
+    readonly tenantId: string;
+    readonly conversationId: string;
+    readonly operatorId: string;
+    readonly idempotencyKey: string;
+  }): Promise<CommandResult> {
+    const action = 'operator.take_over';
+    return this.prisma.$transaction(async (tx): Promise<CommandResult> => {
+      const exists = await tx.conversation.findFirst({
+        where: { tenantId: command.tenantId, id: command.conversationId },
+        select: { id: true },
+      });
+      if (!exists) return { status: 'REJECTED', code: 'NOT_FOUND' };
+      await lockConversation(tx, command.tenantId, exists.id);
+      const open = (): Promise<{ id: string; status: string } | null> =>
+        tx.handover.findFirst({
+          where: {
+            tenantId: command.tenantId,
+            conversationId: exists.id,
+            status: { in: ['OPEN', 'TAKEN'] },
+          },
+          orderBy: { openedAt: 'desc' },
+          select: { id: true, status: true },
+        });
+      const done = await tx.auditEvent.findFirst({
+        where: {
+          tenantId: command.tenantId,
+          action,
+          idempotencyKey: command.idempotencyKey,
+        },
+        select: { entityId: true },
+      });
+      if (done) return { status: 'DUPLICATE', handoverId: done.entityId };
+      const operator = await tx.operator.findFirst({
+        where: {
+          id: command.operatorId,
+          tenantId: command.tenantId,
+          isActive: true,
+          role: { in: [...OPERATING_ROLES] },
+        },
+        select: { id: true },
+      });
+      if (!operator) return { status: 'REJECTED', code: 'FORBIDDEN' };
+      const conversation = await tx.conversation.findFirstOrThrow({
+        where: { tenantId: command.tenantId, id: exists.id },
+        select: { state: true, version: true, assignedOperatorId: true },
+      });
+      const current = await open();
+      if (conversation.state === 'OPERATOR_ACTIVE') {
+        if (conversation.assignedOperatorId === operator.id && current)
+          return {
+            status: 'OK',
+            handoverId: current.id,
+            state: 'OPERATOR_ACTIVE',
+          };
+        return { status: 'REJECTED', code: 'ALREADY_TAKEN' };
+      }
+      const next = nextState(conversation.state, 'TAKE_OVER');
+      if (!next) return { status: 'REJECTED', code: 'ILLEGAL_STATE' };
+      const claimed = await tx.conversation.updateMany({
+        where: {
+          tenantId: command.tenantId,
+          id: exists.id,
+          state: conversation.state,
+          version: conversation.version,
+        },
+        data: {
+          state: next,
+          assignedOperatorId: operator.id,
+          version: { increment: 1 },
+        },
+      });
+      if (claimed.count !== 1)
+        return { status: 'REJECTED', code: 'ALREADY_TAKEN' };
+      const now = new Date();
+      const handoverId = current
+        ? (
+            await tx.handover.update({
+              where: { id: current.id },
+              data: {
+                status: 'TAKEN',
+                assignedOperatorId: operator.id,
+                takenAt: now,
+                version: { increment: 1 },
+              },
+              select: { id: true },
+            })
+          ).id
+        : (
+            await tx.handover.create({
+              data: {
+                tenantId: command.tenantId,
+                conversationId: exists.id,
+                reasonCode: 'OPERATOR_INITIATED',
+                summary: {},
+                status: 'TAKEN',
+                assignedOperatorId: operator.id,
+                takenAt: now,
+              },
+              select: { id: true },
+            })
+          ).id;
+      await tx.auditEvent.create({
+        data: {
+          tenantId: command.tenantId,
+          actorType: 'OPERATOR',
+          actorId: operator.id,
+          action,
+          entityType: 'handover',
+          entityId: handoverId,
+          safeInputSummary: {
+            state: next,
+            from: conversation.state,
+            via: 'conversation',
+          },
+          idempotencyKey: command.idempotencyKey,
+        },
+      });
+      return { status: 'OK', handoverId, state: next };
+    });
+  }
+
   /** Delivers an operator message through the normal outbound path. */
   reply(command: CommandBase & { text: string }): Promise<CommandResult> {
     const text = command.text.trim();

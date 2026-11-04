@@ -1716,3 +1716,136 @@ describe('lead board moves (ADR 037)', () => {
     ).toBe('NEW');
   });
 });
+
+describe('operator-initiated take-over (ADR 038)', () => {
+  const requestGuard = new OperatorRequestGuard(
+    new OperatorTokenGuard(prisma),
+    guard,
+  );
+  const controller = new OperatorCommandsController(
+    new HandoverService(prisma),
+  );
+  const as = async (s: { cookie: string; csrf: string }): Promise<never> => {
+    const request = {
+      method: 'POST',
+      headers: { cookie: s.cookie, [CSRF_HEADER]: s.csrf },
+    };
+    await requestGuard.canActivate(context(request));
+    return request as never;
+  };
+
+  it('takes a conversation the bot is answering, replies, and gives it back', async () => {
+    const w = await world();
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    const s = await signIn(w);
+    const key = `k-${randomUUID()}`;
+    const taken = await controller.takeOverConversation(
+      w.conversationId,
+      key,
+      await as(s),
+    );
+    expect(taken).toMatchObject({ status: 'ok', state: 'OPERATOR_ACTIVE' });
+    const handoverId = (taken as { handoverId: string }).handoverId;
+    expect(
+      await db.handover.findUniqueOrThrow({ where: { id: handoverId } }),
+    ).toMatchObject({
+      reasonCode: 'OPERATOR_INITIATED',
+      status: 'TAKEN',
+      assignedOperatorId: w.operatorId,
+      slaDueAt: null,
+    });
+    expect(
+      await controller.takeOverConversation(w.conversationId, key, await as(s)),
+    ).toMatchObject({ status: 'duplicate', handoverId });
+    // Taking again with a new key is a no-op for the owner.
+    expect(
+      await controller.takeOverConversation(
+        w.conversationId,
+        `k-${randomUUID()}`,
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'ok', handoverId });
+
+    expect(
+      await controller.reply(
+        handoverId,
+        `k-${randomUUID()}`,
+        { text: 'Salom, operatorman.' },
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'ok' });
+    expect(
+      await controller.returnToBot(
+        handoverId,
+        `k-${randomUUID()}`,
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'ok', state: 'BOT_ACTIVE' });
+    expect(
+      (await db.handover.findUniqueOrThrow({ where: { id: handoverId } }))
+        .status,
+    ).toBe('RESOLVED');
+  });
+
+  it('takes an open bot hand-over instead of creating another', async () => {
+    const w = await world();
+    const open = await db.handover.create({
+      data: {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        reasonCode: 'COMPLAINT',
+        summary: {},
+      },
+    });
+    const s = await signIn(w);
+    expect(
+      await controller.takeOverConversation(
+        w.conversationId,
+        `k-${randomUUID()}`,
+        await as(s),
+      ),
+    ).toMatchObject({ status: 'ok', handoverId: open.id });
+    expect(
+      await db.handover.count({ where: { conversationId: w.conversationId } }),
+    ).toBe(1);
+  });
+
+  it('refuses viewers, other tenants and a conversation another operator holds', async () => {
+    const viewer = await world('VIEWER');
+    await expect(
+      controller.takeOverConversation(
+        viewer.conversationId,
+        `k-${randomUUID()}`,
+        await as(await signIn(viewer)),
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    const a = await world();
+    const b = await world();
+    await expect(
+      controller.takeOverConversation(
+        b.conversationId,
+        `k-${randomUUID()}`,
+        await as(await signIn(a)),
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+
+    const other = await db.operator.create({
+      data: { tenantId: a.tenantId, displayName: 'Other', role: 'OPERATOR' },
+    });
+    await db.conversation.update({
+      where: { id: a.conversationId },
+      data: { state: 'OPERATOR_ACTIVE', assignedOperatorId: other.id },
+    });
+    await expect(
+      controller.takeOverConversation(
+        a.conversationId,
+        `k-${randomUUID()}`,
+        await as(await signIn(a)),
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+});
