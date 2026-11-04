@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { LegalLinks } from './legal-page';
 import { LocaleSwitcher } from './locale-switcher';
 import { BrandLogo } from './ui/brand';
 import { Button } from './ui/button';
@@ -121,6 +122,7 @@ export function LoginForm(): ReactNode {
               {busy ? t('login.submitting') : t('login.submit')}
             </Button>
           </form>
+          <LegalLinks />
         </div>
       </div>
     </main>

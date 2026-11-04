@@ -510,5 +510,11 @@
   "group.waitingMove": "Telegram’da yangi guruhni tanlang; ulanganda bot u yerda tasdiqlaydi.",
   "group.manual": "Yoki guruhning chat id sini qo‘lda kiriting",
   "errors.BOT_NOT_ENABLED": "Avval botni yoqing: guruhni faqat bot yoqilgan paytda ulash mumkin.",
-  "errors.NO_BOT_USERNAME": "Botning username’i noma’lum. Ulanish tekshiruvini ishga tushiring va qaytadan urinib ko‘ring."
+  "errors.NO_BOT_USERNAME": "Botning username’i noma’lum. Ulanish tekshiruvini ishga tushiring va qaytadan urinib ko‘ring.",
+  "legal.draft": "Yuridik tekshiruv uchun qoralama. Kompaniya ma’lumotlari va ayrim muddatlar hali kiritilmagan.",
+  "legal.placeholder": "[ko‘rsatiladi]",
+  "legal.updated": "Oxirgi o‘zgarish: {date}",
+  "legal.nav": "Huquqiy ma’lumot",
+  "legal.privacy": "Maxfiylik siyosati",
+  "legal.dataDeletion": "Ma’lumotlarni o‘chirish"
 }
