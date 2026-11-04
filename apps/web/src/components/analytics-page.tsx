@@ -16,6 +16,7 @@ import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
+import { reasonLabel } from '@/lib/handover-text';
 
 type Range = { from: string; to: string };
 
@@ -324,7 +325,7 @@ function Report(props: { data: AnalyticsReport; f: MetricFormat }): ReactNode {
           testId="analytics-chart-reasons"
           title={t('analytics.chart.handoverReasons')}
           rows={data.handovers.byReason.map((row) => ({
-            label: row.reason,
+            label: reasonLabel(t, row.reason),
             count: row.count,
           }))}
           f={fmt}
