@@ -1,7 +1,8 @@
 import type { Locale } from '@/i18n';
 
 /**
- * Public privacy policy and data deletion instructions (ADR 035 step 2).
+ * Public privacy policy, data deletion instructions and terms of service
+ * (ADR 035 step 2; Meta app settings ask for all three).
  * Written from what the code stores and sends (see the PR description), not
  * from a template. A DRAFT for legal review: company details, the contact
  * address and retention periods are open questions P4 and P5 and render as
@@ -9,7 +10,7 @@ import type { Locale } from '@/i18n';
  * texts are not native-reviewed.
  *
  * A paragraph is a string; a bullet list is an array. `{company}`,
- * `{address}`, `{email}`, `{retention}` and `{deletionDays}` are replaced
+ * `{address}`, `{email}`, `{retention}`, `{deletionDays}` and `{law}` are replaced
  * by LEGAL_DETAILS (a placeholder while null).
  */
 export interface LegalSection {
@@ -27,7 +28,7 @@ export const LEGAL_UPDATED = '2026-11-04';
 
 /** Open questions P4/P5 (ADR 035): null until the owner provides them. */
 export const LEGAL_DETAILS: Record<
-  'company' | 'address' | 'email' | 'retention' | 'deletionDays',
+  'company' | 'address' | 'email' | 'retention' | 'deletionDays' | 'law',
   string | null
 > = {
   company: null,
@@ -36,6 +37,8 @@ export const LEGAL_DETAILS: Record<
   retention: null,
   // Owner, 2026-11-04.
   deletionDays: '30',
+  // Governing law and courts: a decision for the lawyer (P1/P4).
+  law: null,
 };
 
 const PRIVACY_EN: LegalDocument = {
@@ -413,6 +416,231 @@ const DELETION_UZ: LegalDocument = {
   ],
 };
 
+const TERMS_EN: LegalDocument = {
+  title: 'Terms of service',
+  intro: [
+    'These terms apply to the tezda service: the web app for businesses and the AI assistant that answers their customers in messengers (Telegram, Instagram). The service is provided by {company}, {address}.',
+  ],
+  sections: [
+    {
+      heading: 'The service',
+      body: [
+        'tezda lets a business connect its messenger accounts, answer customers with an AI assistant and its own operators, keep requests as leads and, if it chooses, send them to its CRM. The service is in a pilot phase: features may change and it may be unavailable at times.',
+      ],
+    },
+    {
+      heading: 'Accounts',
+      body: [
+        [
+          'A business account is created for a business by tezda; the business is responsible for the people it gives access to and for keeping passwords secret.',
+          'Each business sees only its own data.',
+          'Tell us at {email} if you think an account was used without permission.',
+        ],
+      ],
+    },
+    {
+      heading: 'The AI assistant',
+      body: [
+        [
+          'Replies are prepared by an AI model and can be wrong. Prices, dates and availability are taken from the business’s own systems, not from the model; the business is responsible for that data being correct.',
+          'The assistant hands a conversation to a person when it should not answer, and an operator can take over at any time.',
+          'The assistant tells a customer that it is an AI when asked.',
+        ],
+      ],
+    },
+    {
+      heading: 'Responsibilities of the business',
+      body: [
+        [
+          'Use the service only for its own customers and lawfully, including the rules of the messengers it connects (Telegram, Meta) and the laws on personal data and advertising.',
+          'Do not send spam, unlawful content or messages to people who asked not to receive them.',
+          'Do not try to get around the limits, the security or the data separation of the service.',
+        ],
+      ],
+    },
+    {
+      heading: 'Customers who write to a business',
+      body: [
+        'If you write to a business that uses tezda, your conversation is with that business. How your data is handled is described in the privacy policy; you can ask for it to be deleted on the data deletion page.',
+      ],
+    },
+    {
+      heading: 'Fees',
+      body: [
+        'Fees, if any, are agreed separately with each business. For a customer who only writes to a business, the service is free.',
+      ],
+    },
+    {
+      heading: 'Suspension and ending',
+      body: [
+        'We may suspend access that breaks these terms or puts the service or other users at risk. A business may stop using the service at any time; its data is then deleted as described in the privacy policy.',
+      ],
+    },
+    {
+      heading: 'Liability',
+      body: [
+        'The service is provided as it is, during a pilot. To the extent the law allows, {company} is not liable for indirect losses or for losses caused by wrong data in the business’s own systems.',
+      ],
+    },
+    {
+      heading: 'Changes, law and contact',
+      body: [
+        'We will update this page when the terms change; the date below shows the last change. These terms are governed by {law}. Contact: {company}, {address}, {email}.',
+      ],
+    },
+  ],
+};
+
+const TERMS_RU: LegalDocument = {
+  title: 'Условия использования',
+  intro: [
+    'Эти условия относятся к сервису tezda: веб-приложению для компаний и ИИ-ассистенту, который отвечает их клиентам в мессенджерах (Telegram, Instagram). Сервис предоставляет {company}, {address}.',
+  ],
+  sections: [
+    {
+      heading: 'Сервис',
+      body: [
+        'tezda позволяет компании подключить свои аккаунты в мессенджерах, отвечать клиентам с помощью ИИ-ассистента и своих операторов, сохранять запросы как лиды и, если компания захочет, передавать их в её CRM. Сервис работает в пилотном режиме: функции могут меняться, а сервис может быть временно недоступен.',
+      ],
+    },
+    {
+      heading: 'Учётные записи',
+      body: [
+        [
+          'Учётную запись компании создаёт tezda; компания отвечает за людей, которым даёт доступ, и за сохранность паролей.',
+          'Каждая компания видит только свои данные.',
+          'Если вы считаете, что учётной записью воспользовались без разрешения, напишите на {email}.',
+        ],
+      ],
+    },
+    {
+      heading: 'ИИ-ассистент',
+      body: [
+        [
+          'Ответы готовит ИИ-модель, и они могут быть ошибочными. Цены, даты и наличие берутся из систем самой компании, а не из модели; за правильность этих данных отвечает компания.',
+          'Ассистент передаёт разговор человеку, когда ему не следует отвечать, а оператор может подключиться в любой момент.',
+          'Если клиент спрашивает, ассистент сообщает, что он ИИ.',
+        ],
+      ],
+    },
+    {
+      heading: 'Обязанности компании',
+      body: [
+        [
+          'Использовать сервис только для своих клиентов и законно, включая правила подключённых мессенджеров (Telegram, Meta) и законы о персональных данных и рекламе.',
+          'Не отправлять спам, незаконный контент и сообщения людям, которые отказались их получать.',
+          'Не пытаться обойти ограничения, защиту или разделение данных сервиса.',
+        ],
+      ],
+    },
+    {
+      heading: 'Клиенты, которые пишут компании',
+      body: [
+        'Если вы пишете компании, которая использует tezda, вы общаетесь с этой компанией. Как обрабатываются ваши данные, описано в политике конфиденциальности; попросить их удалить можно на странице удаления данных.',
+      ],
+    },
+    {
+      heading: 'Оплата',
+      body: [
+        'Стоимость, если она есть, согласуется отдельно с каждой компанией. Для клиента, который только пишет компании, сервис бесплатен.',
+      ],
+    },
+    {
+      heading: 'Приостановка и прекращение',
+      body: [
+        'Мы можем приостановить доступ, который нарушает эти условия или создаёт риск для сервиса или других пользователей. Компания может прекратить пользоваться сервисом в любой момент; её данные удаляются, как описано в политике конфиденциальности.',
+      ],
+    },
+    {
+      heading: 'Ответственность',
+      body: [
+        'Сервис предоставляется «как есть», в пилотном режиме. В пределах, допускаемых законом, {company} не отвечает за косвенные убытки и за убытки из-за неверных данных в собственных системах компании.',
+      ],
+    },
+    {
+      heading: 'Изменения, право и контакты',
+      body: [
+        'Мы обновим эту страницу при изменении условий; дата ниже показывает последнее изменение. К этим условиям применяется {law}. Контакты: {company}, {address}, {email}.',
+      ],
+    },
+  ],
+};
+
+const TERMS_UZ: LegalDocument = {
+  title: 'Foydalanish shartlari',
+  intro: [
+    'Ushbu shartlar tezda xizmatiga taalluqli: kompaniyalar uchun veb-ilova va ularning mijozlariga messenjerlarda (Telegram, Instagram) javob beradigan sun’iy intellekt yordamchisi. Xizmatni {company}, {address} taqdim etadi.',
+  ],
+  sections: [
+    {
+      heading: 'Xizmat',
+      body: [
+        'tezda kompaniyaga messenjer akkauntlarini ulash, mijozlarga sun’iy intellekt yordamchisi va o‘z operatorlari orqali javob berish, so‘rovlarni lid sifatida saqlash va xohlasa, ularni CRM tizimiga yuborish imkonini beradi. Xizmat sinov (pilot) bosqichida: imkoniyatlar o‘zgarishi va xizmat vaqtincha ishlamay qolishi mumkin.',
+      ],
+    },
+    {
+      heading: 'Akkauntlar',
+      body: [
+        [
+          'Kompaniya akkauntini tezda yaratadi; kompaniya o‘zi kirish huquqini bergan xodimlar va parollarning maxfiyligi uchun javob beradi.',
+          'Har bir kompaniya faqat o‘z ma’lumotlarini ko‘radi.',
+          'Akkauntdan ruxsatsiz foydalanilgan deb hisoblasangiz, {email} manziliga yozing.',
+        ],
+      ],
+    },
+    {
+      heading: 'Sun’iy intellekt yordamchisi',
+      body: [
+        [
+          'Javoblarni sun’iy intellekt modeli tayyorlaydi va ular xato bo‘lishi mumkin. Narx, sana va bo‘sh joylar modeldan emas, kompaniyaning o‘z tizimlaridan olinadi; bu ma’lumotlar to‘g‘riligi uchun kompaniya javob beradi.',
+          'Yordamchi javob bermasligi kerak bo‘lgan holatda suhbatni xodimga o‘tkazadi, operator esa istalgan paytda suhbatga qo‘shilishi mumkin.',
+          'Mijoz so‘rasa, yordamchi o‘zi sun’iy intellekt ekanini aytadi.',
+        ],
+      ],
+    },
+    {
+      heading: 'Kompaniyaning majburiyatlari',
+      body: [
+        [
+          'Xizmatdan faqat o‘z mijozlari uchun va qonuniy foydalanish, jumladan ulangan messenjerlar (Telegram, Meta) qoidalari hamda shaxsiy ma’lumotlar va reklama to‘g‘risidagi qonunlarga rioya qilish.',
+          'Spam, noqonuniy kontent yoki xabar olishdan bosh tortgan odamlarga xabar yubormaslik.',
+          'Xizmatning cheklovlari, himoyasi yoki ma’lumotlar ajratilishini chetlab o‘tishga urinmaslik.',
+        ],
+      ],
+    },
+    {
+      heading: 'Kompaniyaga yozadigan mijozlar',
+      body: [
+        'tezda’dan foydalanadigan kompaniyaga yozsangiz, siz o‘sha kompaniya bilan yozishasiz. Ma’lumotlaringiz qanday ishlanishi maxfiylik siyosatida yozilgan; ularni o‘chirishni ma’lumotlarni o‘chirish sahifasida so‘rashingiz mumkin.',
+      ],
+    },
+    {
+      heading: 'To‘lov',
+      body: [
+        'To‘lov, agar bo‘lsa, har bir kompaniya bilan alohida kelishiladi. Kompaniyaga shunchaki yozadigan mijoz uchun xizmat bepul.',
+      ],
+    },
+    {
+      heading: 'To‘xtatish va tugatish',
+      body: [
+        'Ushbu shartlarni buzgan yoki xizmatga va boshqa foydalanuvchilarga xavf tug‘diradigan kirishni to‘xtatib qo‘yishimiz mumkin. Kompaniya xizmatdan istalgan paytda voz kechishi mumkin; uning ma’lumotlari maxfiylik siyosatida yozilganidek o‘chiriladi.',
+      ],
+    },
+    {
+      heading: 'Javobgarlik',
+      body: [
+        'Xizmat sinov bosqichida “boricha” taqdim etiladi. Qonun ruxsat bergan darajada {company} bilvosita zararlar va kompaniyaning o‘z tizimlaridagi noto‘g‘ri ma’lumotlar sabab bo‘lgan zararlar uchun javob bermaydi.',
+      ],
+    },
+    {
+      heading: 'O‘zgarishlar, qonun va aloqa',
+      body: [
+        'Shartlar o‘zgarganda bu sahifani yangilaymiz; pastdagi sana oxirgi o‘zgarishni ko‘rsatadi. Ushbu shartlarga {law} qo‘llaniladi. Aloqa: {company}, {address}, {email}.',
+      ],
+    },
+  ],
+};
+
 export const PRIVACY: Record<Locale, LegalDocument> = {
   en: PRIVACY_EN,
   ru: PRIVACY_RU,
@@ -423,4 +651,10 @@ export const DATA_DELETION: Record<Locale, LegalDocument> = {
   en: DELETION_EN,
   ru: DELETION_RU,
   'uz-Latn': DELETION_UZ,
+};
+
+export const TERMS: Record<Locale, LegalDocument> = {
+  en: TERMS_EN,
+  ru: TERMS_RU,
+  'uz-Latn': TERMS_UZ,
 };
