@@ -37,7 +37,14 @@ const LEAD_STATUSES: LeadStatus[] = ['NEW', 'IN_PROGRESS', 'WON', 'LOST'];
 const OPERATING: Role[] = ['OWNER', 'ADMIN', 'OPERATOR'];
 
 type Action =
-  'take-over' | 'return-to-bot' | 'close' | 'reply' | 'notes' | 'lead-status';
+  | 'take-over'
+  | 'return-to-bot'
+  | 'close'
+  | 'reply'
+  | 'notes'
+  | 'lead-status'
+  | 'lead-score'
+  | 'lead-crm-sync';
 
 const TOAST: Record<Action, string> = {
   'take-over': 'toast.takeOver',
@@ -46,7 +53,11 @@ const TOAST: Record<Action, string> = {
   reply: 'toast.reply',
   notes: 'toast.note',
   'lead-status': 'toast.leadStatus',
+  'lead-score': 'toast.leadScore',
+  'lead-crm-sync': 'toast.leadCrmSync',
 };
+
+const LEAD_SCORES: LeadScore[] = ['HOT', 'WARM', 'COLD'];
 
 const SCORE_TONE: Record<LeadScore, Tone> = {
   HOT: 'danger',
@@ -529,11 +540,56 @@ export function ConversationViewPane(props: {
           <Section title={t('view.lead')} icon="inbox">
             {view.lead ? (
               <>
-                <p>
+                <p className="flex flex-wrap items-center gap-2">
                   <Badge tone={SCORE_TONE[view.lead.score]}>
                     {t(`score.${view.lead.score}`)}
                   </Badge>
+                  <span className="text-xs text-muted">
+                    {view.lead.scoreSetByOperator
+                      ? t('view.scoreByOperator')
+                      : t('view.scoreAutomatic')}
+                  </span>
                 </p>
+                <label className="flex flex-col gap-1 text-xs text-muted">
+                  {t('view.leadScore')}
+                  <Select
+                    value={
+                      view.lead.scoreSetByOperator ? view.lead.score : 'AUTO'
+                    }
+                    disabled={!operating || busy || !handoverId}
+                    onChange={(e) =>
+                      command.mutate({
+                        action: 'lead-score',
+                        body: {
+                          score:
+                            e.target.value === 'AUTO' ? null : e.target.value,
+                        },
+                      })
+                    }
+                  >
+                    <option value="AUTO">{t('view.scoreAuto')}</option>
+                    {LEAD_SCORES.map((score) => (
+                      <option key={score} value={score}>
+                        {t(`score.${score}`)}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                {view.lead.crmSyncStatus === 'NOT_REQUIRED' ? (
+                  <div className="flex flex-col gap-1 text-xs text-muted">
+                    <span>{t('view.crmNotSent')}</span>
+                    <Button
+                      size="sm"
+                      disabled={!operating || busy || !handoverId}
+                      data-testid="lead-crm-sync"
+                      onClick={() =>
+                        command.mutate({ action: 'lead-crm-sync' })
+                      }
+                    >
+                      {t('view.crmSend')}
+                    </Button>
+                  </div>
+                ) : null}
                 <label className="flex flex-col gap-1 text-xs text-muted">
                   {t('view.leadStatus')}
                   <Select

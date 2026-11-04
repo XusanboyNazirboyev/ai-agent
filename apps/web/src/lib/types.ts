@@ -58,8 +58,12 @@ export interface ConversationView {
   lead: {
     id: string;
     score: LeadScore;
+    /** Set by an operator; automatic scoring keeps it (ADR 037). */
+    scoreSetByOperator: boolean;
     status: LeadStatus;
     summary: string;
+    crmSyncStatus:
+      'PENDING' | 'SYNCED' | 'NOT_REQUIRED' | 'FAILED' | 'UNCERTAIN' | string;
   } | null;
   messages: {
     id: string;

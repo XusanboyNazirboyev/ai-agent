@@ -727,6 +727,9 @@ model Lead {
   contactId       String       @map("contact_id") @db.Uuid
   conversationId  String       @map("conversation_id") @db.Uuid
   score           LeadScore    @default(COLD)
+  /// Set by an operator: automatic rescoring keeps it until the operator
+  /// returns the lead to automatic scoring.
+  scoreSetByOperator Boolean @default(false) @map("score_set_by_operator")
   reasonCodes     String[]     @default([]) @map("reason_codes")
   summary         String       @db.Text
   status          LeadStatus   @default(NEW)

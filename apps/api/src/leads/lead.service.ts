@@ -190,19 +190,21 @@ export class LeadService {
     const points = scoring.rules
       .filter((rule) => known.has(rule.code))
       .reduce((sum, rule) => sum + rule.points, 0);
+    const computedLevel: LeadLevel =
+      points >= scoring.hot ? 'HOT' : points >= scoring.warm ? 'WARM' : 'COLD';
+    // An operator's score stands until the operator returns the lead to
+    // automatic scoring; the evidence (reason codes) still accumulates.
     const result = {
       points,
       reasonCodes,
-      level: (points >= scoring.hot
-        ? 'HOT'
-        : points >= scoring.warm
-          ? 'WARM'
-          : 'COLD') as LeadLevel,
+      level: existing?.scoreSetByOperator
+        ? (existing.score as LeadLevel)
+        : computedLevel,
     };
     if (result.level === 'COLD' && openHandover === 0 && !existing)
       return undefined;
     const summary = [
-      `${result.level} (${result.points}): ${result.reasonCodes.join(', ') || 'no reasons'}`,
+      `${result.level}${existing?.scoreSetByOperator ? ' (operator)' : ''} (${result.points}): ${result.reasonCodes.join(', ') || 'no reasons'}`,
       Object.entries(slotValues)
         .map(([key, value]) => `${key}=${String(value)}`)
         .join(', '),

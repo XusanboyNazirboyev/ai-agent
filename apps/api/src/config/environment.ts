@@ -95,6 +95,12 @@ const environmentSchema = postgresEnvironmentSchema
     CONNECTOR_OUTBOUND_POLICY: z
       .enum(['strict', 'permissive'])
       .default('strict'),
+    /**
+     * `on` registers the mock connector (fictional courses and prices) even
+     * with NODE_ENV=production, for a staging server that holds test data
+     * only (ADR 035 amendment 6). Never on a server real customers write to.
+     */
+    CONNECTOR_DEMO_CATALOG: z.enum(['off', 'on']).default('off'),
     /** Scheduled catalog sync per active connector; 0 disables scheduling. */
     CATALOG_SYNC_INTERVAL_MINUTES: z.coerce
       .number()

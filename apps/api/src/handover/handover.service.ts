@@ -18,7 +18,8 @@ export type CommandRejection =
   | 'ALREADY_TAKEN'
   | 'NOT_ASSIGNED'
   | 'EMPTY_TEXT'
-  | 'NO_LEAD';
+  | 'NO_LEAD'
+  | 'NOT_RESENDABLE';
 
 export type CommandResult =
   | {
@@ -461,5 +462,103 @@ export class HandoverService {
       },
       { leadStatus: command.status },
     );
+  }
+
+  /**
+   * An operator sets the lead's score (ADR 037); `null` returns it to
+   * automatic scoring, which applies from the next customer turn. The CRM
+   * copy is refreshed when the CRM can still take it.
+   */
+  setLeadScore(
+    command: CommandBase & { score: 'HOT' | 'WARM' | 'COLD' | null },
+  ): Promise<CommandResult> {
+    return this.command(
+      'operator.set_lead_score',
+      command,
+      async (c) => {
+        const lead = await c.tx.lead.findFirst({
+          where: {
+            tenantId: command.tenantId,
+            conversationId: c.conversation.id,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, crmSyncStatus: true },
+        });
+        if (!lead) return { status: 'REJECTED', code: 'NO_LEAD' } as const;
+        await c.tx.lead.updateMany({
+          where: { tenantId: command.tenantId, id: lead.id },
+          data:
+            command.score === null
+              ? { scoreSetByOperator: false }
+              : { score: command.score, scoreSetByOperator: true },
+        });
+        if (command.score !== null && lead.crmSyncStatus !== 'SYNCED')
+          await this.queueLeadSync(
+            c.tx,
+            command.tenantId,
+            lead.id,
+            `operator-score:${command.score}:${Date.now()}`,
+          );
+        return { status: 'OK', state: c.conversation.state } as const;
+      },
+      { leadScore: command.score ?? 'AUTO' },
+    );
+  }
+
+  /**
+   * Sends a lead that was kept local (no CRM at the time) to the CRM now
+   * (ADR 037). Only a NOT_REQUIRED lead: failed and uncertain writes have
+   * their own retry and resolution paths.
+   */
+  resendLeadToCrm(command: CommandBase): Promise<CommandResult> {
+    return this.command('operator.resend_lead_to_crm', command, async (c) => {
+      const lead = await c.tx.lead.findFirst({
+        where: {
+          tenantId: command.tenantId,
+          conversationId: c.conversation.id,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, crmSyncStatus: true },
+      });
+      if (!lead) return { status: 'REJECTED', code: 'NO_LEAD' } as const;
+      if (lead.crmSyncStatus !== 'NOT_REQUIRED')
+        return { status: 'REJECTED', code: 'NOT_RESENDABLE' } as const;
+      await c.tx.lead.updateMany({
+        where: {
+          tenantId: command.tenantId,
+          id: lead.id,
+          crmSyncStatus: 'NOT_REQUIRED',
+        },
+        data: { crmSyncStatus: 'PENDING', lastErrorCode: null },
+      });
+      await this.queueLeadSync(
+        c.tx,
+        command.tenantId,
+        lead.id,
+        `resend:${Date.now()}`,
+      );
+      return { status: 'OK', state: c.conversation.state } as const;
+    });
+  }
+
+  private async queueLeadSync(
+    tx: TransactionClient,
+    tenantId: string,
+    leadId: string,
+    suffix: string,
+  ): Promise<void> {
+    await tx.outboxEvent.createMany({
+      data: [
+        {
+          tenantId,
+          type: 'crm.lead.sync',
+          aggregateType: 'lead',
+          aggregateId: leadId,
+          idempotencyKey: `crm.lead.sync:${leadId}:${suffix}`,
+          payload: { leadId } satisfies Prisma.InputJsonObject,
+        },
+      ],
+      skipDuplicates: true,
+    });
   }
 }

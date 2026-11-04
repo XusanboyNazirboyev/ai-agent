@@ -46,6 +46,8 @@ export interface ConversationView {
     score: string;
     status: string;
     summary: string;
+    scoreSetByOperator: boolean;
+    crmSyncStatus: string;
   } | null;
   readonly messages: readonly {
     id: string;
@@ -261,7 +263,14 @@ export class InboxReadService {
         leads: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { id: true, score: true, status: true, summary: true },
+          select: {
+            id: true,
+            score: true,
+            scoreSetByOperator: true,
+            status: true,
+            summary: true,
+            crmSyncStatus: true,
+          },
         },
       },
     });

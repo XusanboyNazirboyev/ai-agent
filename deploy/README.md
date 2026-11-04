@@ -49,3 +49,9 @@ One-time setup by the owner:
    Until `AWS_DEPLOY_ROLE_ARN` is set both jobs are skipped.
 3. Each ghcr.io package (`tezda-api`, `tezda-web`, `tezda-migrate`) must give this repository's
    Actions write access (package settings, "Manage Actions access").
+
+## Demo catalog (staging only, ADR 035 amendment 6)
+With `CONNECTOR_DEMO_CATALOG=on` in `.env.production` (then restart `api`):
+
+    dc run --rm --no-deps api node dist/ops/demo-catalog.cli.js <tenant slug> on   # or off
+
