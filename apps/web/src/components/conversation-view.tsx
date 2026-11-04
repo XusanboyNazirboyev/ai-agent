@@ -12,6 +12,7 @@ import {
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { factLines } from '@/lib/facts';
+import { handoverSummaryLines, reasonLabel } from '@/lib/handover-text';
 import { markSeen } from '@/lib/seen';
 import type {
   ConversationView,
@@ -195,7 +196,11 @@ export function ConversationViewPane(props: {
       { onSuccess: () => setNote('') },
     );
   }
-  const summaryLines = factLines(view.handover?.summary);
+  const summaryLines = handoverSummaryLines(
+    t,
+    view.handover?.summary,
+    view.handover?.reasonCode,
+  );
   const slots = factLines(view.slots);
   const slaDue = view.handover?.slaDueAt ?? null;
   const slaOverdue = slaDue ? Date.parse(slaDue) < now : false;
@@ -487,7 +492,11 @@ export function ConversationViewPane(props: {
           <Section title={t('view.handover')} icon="headset">
             {view.handover ? (
               <>
-                <p>{t('view.reason', { code: view.handover.reasonCode })}</p>
+                <p>
+                  {t('view.reason', {
+                    code: reasonLabel(t, view.handover.reasonCode),
+                  })}
+                </p>
                 {slaDue ? (
                   <p
                     className={`flex items-center gap-1.5 ${slaOverdue ? 'font-medium text-danger-fg' : 'text-muted'}`}
