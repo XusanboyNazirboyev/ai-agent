@@ -27,6 +27,14 @@ describe('language detection evidence rules', () => {
     expect(detectLanguage(text).confidence).toBeLessThanOrEqual(0.25);
   });
 
+  it.each([
+    ['helloo', 'en'],
+    ['hellooo', 'en'],
+    ['salooom', 'uz'],
+  ])('recognises the stretched greeting %j as %s', (text, language) => {
+    expect(detectLanguage(text).language).toBe(language);
+  });
+
   it.each([['ok'], ['a'], ['?'], ['Ali'], ['IELTS'], ['Python 3']])(
     'treats the very short message %j as ambiguous',
     (text) => {

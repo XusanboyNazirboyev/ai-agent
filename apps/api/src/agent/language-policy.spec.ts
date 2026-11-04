@@ -357,6 +357,11 @@ describe('explicit language requests', () => {
     ['O‘zbekcha yozing', 'uz-Latn'],
     ['ўзбекча ёзинг', 'uz-Cyrl'],
     ['kirilchada yozing', 'uz-Cyrl'],
+    // A language name with a verb, in other words than the fixed phrases.
+    ["o'zbek tilni bilmayman. ingliz tilida gaplash", 'en'],
+    ['can you speak in english', 'en'],
+    ['давайте на русском', 'ru'],
+    ["o'zbekcha gapiring", 'uz-Latn'],
   ])('reads %j as a request for %s', (text, locale) => {
     expect(requestedLocale(text, LOCALES, all)).toBe(locale);
   });
@@ -366,6 +371,9 @@ describe('explicit language requests', () => {
     ['Курс на русском языке есть?'],
     ['IELTS kerak'],
     ['write in english or write in russian'],
+    ["ingliz tilida gapirishni o'rganmoqchiman"],
+    ['inglizcha kurs bormi, javob bering'],
+    ['Курс на английском есть? ответьте'],
   ])('does not treat %j as a request (subject or ambiguous)', (text) => {
     expect(requestedLocale(text, LOCALES, all)).toBeUndefined();
   });
@@ -393,6 +401,39 @@ describe('explicit language requests', () => {
       LOCALES,
     );
     expect(changed.pinned).toBe('en');
+  });
+
+  it('acknowledges a switch in the new language without a catalog search', async () => {
+    // On staging "ingliz tilida gaplash" was read as a subject (English).
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'English' }, 'search', 'uz', 'Latn'),
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: "o'zbek tilni bilmayman. ingliz tilida gaplash",
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [{ role: 'customer', text: 'salom' }],
+      },
+    });
+    expect(result.locale).toBe('en');
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.reply).toBe(LOCALES.get('en').templates.languageSwitched);
+    expect(result.tools).toEqual([]);
+    expect(result.slots).toEqual({});
+  });
+
+  it('answers normally when the requested language is already in use', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'The {{F1}} course fits you.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'please speak in english, do you have IELTS?',
+      input: { conversationLocale: 'en' },
+    });
+    expect(result.reply).not.toBe(LOCALES.get('en').templates.languageSwitched);
   });
 
   it('keeps a pinned locale for later messages in a turn', async () => {

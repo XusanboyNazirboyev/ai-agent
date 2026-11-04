@@ -58,6 +58,11 @@ export interface LocaleTemplates {
    */
   readonly languageClarification: string;
   /**
+   * Acknowledges an explicit request to switch to THIS locale ("speak
+   * English") and invites the customer to continue.
+   */
+  readonly languageSwitched: string;
+  /**
    * Sent once when no operator has picked up a handover within the SLA and
    * the operators were reached. It must not promise a time or a reply.
    */
@@ -142,6 +147,19 @@ export interface LocalePack {
    * case-insensitively after apostrophe unification.
    */
   readonly languageRequestPhrases: readonly string[];
+  /**
+   * "In THIS language" forms, in any supported language ("in English",
+   * "ingliz tilida"). A request is a name together with any pack's
+   * `languageRequestVerbs`; a name alone may be what the customer asks about.
+   */
+  readonly languageRequestNames: readonly string[];
+  /**
+   * Verb forms, in THIS locale's language, with which a customer asks how to
+   * be answered ("gaplashing", "write"), matched as whole words. No generic
+   * verbs such as "javob bering" (answer!), which also follow a question
+   * about something taught in that language.
+   */
+  readonly languageRequestVerbs: readonly string[];
   /**
    * Whole-message phrases (after normalization) with which a customer stops
    * reminders, in any supported language. Deliberately short and exact: a
