@@ -11,7 +11,7 @@ import {
 import { LocaleSwitcher } from './locale-switcher';
 import { BrandLogo } from './ui/brand';
 
-const TOKEN = /\{(company|address|email|retention|deletionDays)\}/g;
+const TOKEN = /\{(company|address|email|retention|deletionDays|law)\}/g;
 
 /** Replaces `{company}`-style tokens; an unknown detail shows a placeholder. */
 function Filled(props: { text: string; placeholder: string }): ReactNode {
@@ -38,7 +38,7 @@ function Filled(props: { text: string; placeholder: string }): ReactNode {
   return <>{parts}</>;
 }
 
-/** A public, signed-out page: the privacy policy or data deletion steps. */
+/** A public, signed-out page: privacy policy, data deletion or terms. */
 export function LegalPage(props: {
   documents: Record<Locale, LegalDocument>;
   testId: string;
@@ -101,7 +101,7 @@ export function LegalPage(props: {
   );
 }
 
-/** Links to both public pages (footer of the login and legal pages). */
+/** Links to the public pages (footer of the login and legal pages). */
 export function LegalLinks(): ReactNode {
   const { t } = useI18n();
   return (
@@ -114,6 +114,9 @@ export function LegalLinks(): ReactNode {
       </Link>
       <Link href="/data-deletion" className="underline hover:text-fg">
         {t('legal.dataDeletion')}
+      </Link>
+      <Link href="/terms" className="underline hover:text-fg">
+        {t('legal.terms')}
       </Link>
     </nav>
   );
