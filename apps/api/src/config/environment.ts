@@ -269,6 +269,16 @@ const environmentSchema = postgresEnvironmentSchema
       .default(120_000),
     /** Minutes a handover may wait for an operator before the SLA alert. */
     HANDOVER_SLA_MINUTES: z.coerce.number().int().min(1).max(1_440).default(10),
+    /**
+     * Minutes an operator may leave the customer's latest message unanswered
+     * before the conversation returns to the bot (ADR 038); 0 turns it off.
+     */
+    OPERATOR_IDLE_RETURN_MINUTES: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(1_440)
+      .default(2),
     /** How often overdue handovers and failed lead syncs are scanned. */
     HANDOVER_SCAN_SECONDS: z.coerce
       .number()

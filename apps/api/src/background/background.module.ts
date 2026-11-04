@@ -7,6 +7,7 @@ import {
 } from '../handover/handover-runtime.js';
 import { DigestService } from '../handover/digest.service.js';
 import { HandoverModule } from '../handover/handover.module.js';
+import { OperatorIdleReturnService } from '../handover/operator-idle-return.service.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadsModule } from '../leads/leads.module.js';
 import { ActionsModule } from '../actions/actions.module.js';
@@ -17,8 +18,8 @@ import { AlertsService } from '../observability/alerts.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 
 /**
- * The periodic scans of the API process: SLA alerts, CRM lead retries and
- * follow-ups. One interval, one overlap guard (HandoverRuntime); each scan is
+ * The periodic scans of the API process: SLA alerts, CRM lead retries,
+ * follow-ups and idle operator returns. One interval, one overlap guard (HandoverRuntime); each scan is
  * idempotent, so several API processes may run it.
  */
 @Module({
@@ -33,6 +34,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
     FollowUpService,
     DigestService,
     AlertsService,
+    OperatorIdleReturnService,
     {
       provide: SCHEDULED_SCANS,
       inject: [
@@ -42,6 +44,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         InboxEventsService,
         ActionService,
         AlertsService,
+        OperatorIdleReturnService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -50,7 +53,16 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         inbox: InboxEventsService,
         actions: ActionService,
         alerts: AlertsService,
-      ): ScheduledScan[] => [lead, followUp, digest, inbox, actions, alerts],
+        idle: OperatorIdleReturnService,
+      ): ScheduledScan[] => [
+        lead,
+        followUp,
+        digest,
+        inbox,
+        actions,
+        alerts,
+        idle,
+      ],
     },
     HandoverRuntime,
   ],

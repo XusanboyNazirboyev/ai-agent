@@ -16,5 +16,11 @@
 
 ## Consequences
 - The bot stops as soon as an operator starts typing; a reply it was preparing is not sent.
-- An operator who forgets to switch back leaves the customer with no bot; the conversation stays in "Mine" until returned or closed (no auto-return yet).
+- An operator who forgets to switch back leaves the customer with no bot; the conversation stays in "Mine" until returned or closed, or until amendment 1 returns it.
 - `OPERATOR_INITIATED` handovers count in handover lists and reports like any other taken handover; they never had an SLA.
+
+## Amendment 1: an idle operator hands the conversation back (2026-11-04, owner: 2 minutes)
+- A scan in the existing 30-second background pass returns an `OPERATOR_ACTIVE` conversation to the bot when the customer's latest message has had no reply (operator or bot) for `OPERATOR_IDLE_RETURN_MINUTES` (default 2; 0 turns it off) and the operator took it at least that long ago. `WAITING_OPERATOR` is not touched: the bot itself asked for a human there.
+- Under the conversation lock: state `BOT_ACTIVE`, open/taken handovers `RESOLVED`, audit `system.operator_idle_return` (actor `SYSTEM`). The customer's unanswered messages (at most 4, the pipeline's batch size) are set back to `RECEIVED` and one `telegram.inbound` / `instagram.inbound` event is queued, so the bot answers them like newly arrived messages.
+- The operator can take the conversation back at any time by typing again.
+- One setting for the whole deployment for now; a per-tenant setting in the web settings is a follow-up.
