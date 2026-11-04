@@ -510,5 +510,11 @@
   "group.waitingMove": "Pick the new group in Telegram; the bot confirms there when it is connected.",
   "group.manual": "Or enter the group's chat id by hand",
   "errors.BOT_NOT_ENABLED": "Enable the bot first: the group can be connected only while the bot is enabled.",
-  "errors.NO_BOT_USERNAME": "The bot's username is unknown. Run the connection check, then try again."
+  "errors.NO_BOT_USERNAME": "The bot's username is unknown. Run the connection check, then try again.",
+  "legal.draft": "Draft for legal review. Company details and some periods are not filled in yet.",
+  "legal.placeholder": "[to be provided]",
+  "legal.updated": "Last updated: {date}",
+  "legal.nav": "Legal",
+  "legal.privacy": "Privacy policy",
+  "legal.dataDeletion": "Data deletion"
 }

@@ -9,7 +9,7 @@ Design and open questions: [ADR 035](../adr/035-production-hosting-on-aws-pilot.
 - **Local proof:** the stack builds and starts locally from the images against a local database, `/health` answers, and the login page loads.
 - **Done when:** CI builds both images on every change.
 
-## Step 2: public pages Meta and the law need (no cost)
+## Step 2: public pages Meta and the law need (no cost) — draft done 2026-11-04, waiting for P4/P5 and legal review
 - **Pages:** `/privacy` (privacy policy) and `/data-deletion` (how to ask for deletion, and what is deleted), public and in en, ru and uz-Latn.
 - **Content:** drafted from what the code really stores and which processors it uses (LLM providers, Meta, Telegram, the CRM). Company details stay as placeholders until P4.
 - **Caveat:** the draft is marked for legal review, not published as final.
