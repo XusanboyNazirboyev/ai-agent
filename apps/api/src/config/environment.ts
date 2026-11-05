@@ -81,6 +81,16 @@ const environmentSchema = postgresEnvironmentSchema
     INSTAGRAM_OAUTH_REDIRECT_URI: z.url().optional(),
     /** Test setting: a fake instagram.com / api.instagram.com; refused in production. */
     INSTAGRAM_OAUTH_BASE_URL: z.url().optional(),
+    /**
+     * Facebook Login for Business configuration id (App Dashboard → Instagram
+     * API → "API setup with Unified login"; ADR 031 amendment 2026-11-05).
+     * When set, "Continue" opens the Facebook dialog and INSTAGRAM_APP_ID /
+     * INSTAGRAM_APP_SECRET are the Meta app's App ID and App Secret.
+     */
+    INSTAGRAM_LOGIN_CONFIG_ID: z
+      .string()
+      .regex(/^[0-9]{1,30}$/u)
+      .optional(),
     TELEGRAM_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
       .int()

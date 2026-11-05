@@ -3,7 +3,11 @@ import { PrismaService } from '../persistence/prisma.service.js';
 import { SecretCipher } from './secret-cipher.js';
 
 export type SecretPurpose =
-  'bot_token' | 'webhook_secret' | 'instagram_access_token';
+  | 'bot_token'
+  | 'webhook_secret'
+  | 'instagram_access_token'
+  /** Facebook Page access token of the Page linked to an Instagram account. */
+  | 'instagram_page_access_token';
 
 export class SecretsNotConfiguredError extends Error {
   constructor() {
@@ -35,6 +39,10 @@ export abstract class ChannelSecretStore {
     owner: { tenantId: string; channelAccountId: string },
     purpose: SecretPurpose,
   ): Promise<boolean>;
+  abstract delete(
+    owner: { tenantId: string; channelAccountId: string },
+    purpose: SecretPurpose,
+  ): Promise<void>;
   abstract deleteAll(owner: {
     tenantId: string;
     channelAccountId: string;
@@ -131,6 +139,19 @@ export class PrismaChannelSecretStore extends ChannelSecretStore {
         },
       })) > 0
     );
+  }
+
+  async delete(
+    owner: { tenantId: string; channelAccountId: string },
+    purpose: SecretPurpose,
+  ): Promise<void> {
+    await this.prisma.channelSecret.deleteMany({
+      where: {
+        tenantId: owner.tenantId,
+        channelAccountId: owner.channelAccountId,
+        purpose,
+      },
+    });
   }
 
   async deleteAll(owner: {

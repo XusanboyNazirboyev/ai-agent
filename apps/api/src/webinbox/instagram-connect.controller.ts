@@ -14,6 +14,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import {
+  readInstagramCredential,
+  type InstagramCredential,
+} from '../channels/instagram/instagram-credential.js';
+import {
   InstagramApiError,
   InstagramGraphClient,
 } from '../channels/instagram/instagram-graph.js';
@@ -92,7 +96,15 @@ const REFUSAL = {
     status: 400,
     i18nKey: 'errors.MISSING_PERMISSIONS',
   },
+  NO_INSTAGRAM_PAGE: { status: 400, i18nKey: 'errors.NO_INSTAGRAM_PAGE' },
+  SEVERAL_INSTAGRAM_PAGES: {
+    status: 400,
+    i18nKey: 'errors.SEVERAL_INSTAGRAM_PAGES',
+  },
 } as const;
+
+/** How the token was obtained, and which secret purpose holds it. */
+type Via = 'token' | 'oauth' | 'facebook';
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
   const spec = REFUSAL[code];
@@ -109,8 +121,11 @@ function refuse(code: keyof typeof REFUSAL): HttpException {
  * Instagram User access token with `instagram_business_basic` and
  * `instagram_business_manage_messages`, from Business Login for Instagram
  * (`oauth/start` → Instagram → the web callback page → `oauth/complete`) or
- * pasted (for example from the App Dashboard "Generate token"). A new account
- * starts DISABLED with the assistant OFF.
+ * pasted (for example from the App Dashboard "Generate token"). With
+ * `INSTAGRAM_LOGIN_CONFIG_ID` set, `oauth/start` opens Facebook Login for
+ * Business instead, and the stored token is the linked Facebook Page's
+ * access token (ADR 031 amendment 2026-11-05). A new account starts DISABLED
+ * with the assistant OFF.
  */
 @Controller('api/v1/channels/instagram')
 @UseGuards(SessionGuard)
@@ -230,20 +245,23 @@ export class InstagramConnectController {
     );
   }
 
-  private async token(tenantId: string, id: string): Promise<string> {
-    let token: string | undefined;
+  private async credential(
+    tenantId: string,
+    id: string,
+  ): Promise<InstagramCredential> {
+    let credential: InstagramCredential | undefined;
     try {
-      token = await this.secrets.get(
-        { tenantId, channelAccountId: id },
-        'instagram_access_token',
-      );
+      credential = await readInstagramCredential(this.secrets, {
+        tenantId,
+        channelAccountId: id,
+      });
     } catch (error) {
       if (error instanceof SecretsNotConfiguredError)
         throw refuse('SECRETS_NOT_CONFIGURED');
-      token = undefined; // unreadable counts as missing; reconnect
+      credential = undefined; // unreadable counts as missing; reconnect
     }
-    if (!token) throw refuse('NOT_CONNECTED');
-    return token;
+    if (!credential) throw refuse('NOT_CONNECTED');
+    return credential;
   }
 
   @Post()
@@ -255,14 +273,19 @@ export class InstagramConnectController {
     if (!this.secrets.configured) throw refuse('SECRETS_NOT_CONFIGURED');
     const parsed = ConnectBody.safeParse(body);
     if (!parsed.success) throw refuse('INVALID_BODY');
-    return this.save(who, parsed.data.accessToken, 'token');
+    const token = parsed.data.accessToken;
+    const me = await this.meta(() => this.graph.me(token));
+    return this.save(who, me, token, 'token');
   }
 
   /** Whether "Continue with Instagram" can work on this server. */
   @Get('oauth')
-  setup(@Req() request: InboxRequest): { oauth: boolean } {
+  setup(@Req() request: InboxRequest): {
+    oauth: boolean;
+    login: 'facebook' | 'instagram';
+  } {
     this.manager(request);
-    return { oauth: this.oauth.configured };
+    return { oauth: this.oauth.configured, login: this.oauth.mode };
   }
 
   /** The Instagram authorization URL, with a state bound to this session. */
@@ -294,6 +317,23 @@ export class InstagramConnectController {
       if (error instanceof OAuthStateError) throw refuse('OAUTH_STATE_INVALID');
       throw error;
     }
+    if (this.oauth.mode === 'facebook') {
+      // The Facebook dialog lets the operator choose the Pages to grant; one
+      // granted Page with an Instagram account is connected, never a guess.
+      const pages = await this.meta(() =>
+        this.oauth.exchangeFacebook(parsed.data.code),
+      );
+      if (pages.length === 0) throw refuse('NO_INSTAGRAM_PAGE');
+      if (pages.length > 1) throw refuse('SEVERAL_INSTAGRAM_PAGES');
+      const page = pages[0]!;
+      const username = await this.graph.username(page.igUserId, page.pageToken);
+      return this.save(
+        who,
+        { userId: page.igUserId, username },
+        page.pageToken,
+        'facebook',
+      );
+    }
     let token: string;
     try {
       token = (await this.meta(() => this.oauth.exchange(parsed.data.code)))
@@ -303,16 +343,20 @@ export class InstagramConnectController {
         throw refuse('MISSING_PERMISSIONS');
       throw error;
     }
-    return this.save(who, token, 'oauth');
+    const me = await this.meta(() => this.graph.me(token));
+    return this.save(who, me, token, 'oauth');
   }
 
-  /** Reads the account behind a token, then stores the account and the token. */
+  /**
+   * Stores the account and its token. A reconnect with the other kind of
+   * token removes the old one, so the sender never picks a stale credential.
+   */
   private async save(
     who: { tenantId: string; operatorId: string },
+    me: { readonly userId: string; readonly username: string | null },
     token: string,
-    via: 'token' | 'oauth',
+    via: Via,
   ): Promise<ChannelAccountSummary> {
-    const me = await this.meta(() => this.graph.me(token));
     const existing = await this.prisma.channelAccount.findUnique({
       where: {
         channelType_externalAccountId: {
@@ -346,11 +390,13 @@ export class InstagramConnectController {
         });
       return row.id;
     });
-    await this.secrets.put(
-      { tenantId: who.tenantId, channelAccountId: id },
-      'instagram_access_token',
-      token,
-    );
+    const owner = { tenantId: who.tenantId, channelAccountId: id };
+    const [keep, drop] =
+      via === 'facebook'
+        ? (['instagram_page_access_token', 'instagram_access_token'] as const)
+        : (['instagram_access_token', 'instagram_page_access_token'] as const);
+    await this.secrets.put(owner, keep, token);
+    await this.secrets.delete(owner, drop);
     await this.audit(
       who,
       existing
@@ -379,9 +425,15 @@ export class InstagramConnectController {
       !this.config.get('INSTAGRAM_VERIFY_TOKEN', { infer: true })
     )
       throw refuse('WEBHOOK_NOT_CONFIGURED');
-    const token = await this.token(who.tenantId, id);
+    const credential = await this.credential(who.tenantId, id);
     await this.meta(() =>
-      this.graph.subscribe(account.externalAccountId, token, WEBHOOK_FIELDS),
+      credential.kind === 'page'
+        ? this.graph.subscribePage(credential.token, WEBHOOK_FIELDS)
+        : this.graph.subscribe(
+            account.externalAccountId,
+            credential.token,
+            WEBHOOK_FIELDS,
+          ),
     );
     await this.prisma.channelAccount.updateMany({
       where: { id, tenantId: who.tenantId },
