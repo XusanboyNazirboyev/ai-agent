@@ -22,19 +22,21 @@ import type { AppEnvironment } from '../../config/environment.js';
  *   190 need a new access token, 10 and 200-299 are missing permissions.
  *   613 is the Send API rate limit (Messenger send-messages page, read
  *   2026-10-28). Rate-limit numbers are not stated on these pages.
- * Instagram Messaging through a linked Facebook Page (Facebook Login for
- * Business, ADR 031 amendment 2026-11-05; official Meta docs read 2026-11-05):
- * - send, https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/send-message.md:
- *   `POST https://graph.facebook.com/<API_VERSION>/me/messages?access_token=<PAGE_ACCESS_TOKEN>`,
- *   body `recipient={"id":"IGSID"}`, `message={"text":...}`, answer
- *   `{"recipient_id","message_id"}`; "Message text must be UTF-8 and be 1,000
- *   bytes or less"; `messaging_type: RESPONSE` from the Messenger send page
- *   (https://developers.facebook.com/documentation/business-messaging/messenger-platform/send-messages);
+ * Instagram API with Unified login (ADR 031 amendment 2026-11-05; official
+ * Meta docs read 2026-11-05), with a Business Integration System User token:
  * - webhooks setup, https://developers.facebook.com/documentation/instagram-platform/webhooks/setup.md:
- *   "For Facebook Login, use a Facebook Page access token. Send a `POST`
- *   request to the linked Page's `/subscribed_apps` edge", `/me` when the
- *   token represents the Page, answer `{"success": true}`; payloads are signed
- *   with the app's App Secret (`X-Hub-Signature-256`).
+ *   "send a `POST` request to the Instagram professional account's
+ *   `/subscribed_apps` edge on `graph.facebook.com`",
+ *   `https://graph.facebook.com/v27.0/<INSTAGRAM_ACCOUNT_ID>/subscribed_apps`
+ *   with `subscribed_fields` and `access_token` as form data, answer
+ *   `{"success": true}`; Instagram User tokens and graph.instagram.com "do not
+ *   work" there; payloads are signed with the app's App Secret;
+ * - .../instagram-api-with-unified-login/authentication and /migration:
+ *   requests go to `graph.facebook.com/v27.0/<INSTAGRAM_ACCOUNT_ID>`.
+ * Inferred, not stated on any page read: sending is
+ * `POST graph.facebook.com/v27.0/<INSTAGRAM_ACCOUNT_ID>/messages` with the
+ * same body as the Instagram Login Send API (recipient IGSID, text at most
+ * 1,000 bytes); verify on the first live send.
  * Customer text and Meta error text are never put into an error message.
  */
 export const INSTAGRAM_GRAPH_BASE_URL = 'https://graph.instagram.com/v26.0';
@@ -194,39 +196,26 @@ export class InstagramGraphClient {
       throw new InstagramApiError('rejected', null, 200);
   }
 
-  /** Subscribes the app to the linked Page's webhooks with a Page access token. */
-  async subscribePage(
-    pageToken: string,
+  /** Unified login: subscribes the account on graph.facebook.com with the system-user token. */
+  async subscribeUnified(
+    igUserId: string,
+    token: string,
     fields: readonly string[],
   ): Promise<void> {
-    const url = new URL(`${this.facebookBase}/me/subscribed_apps`);
-    url.searchParams.set('subscribed_fields', fields.join(','));
-    url.searchParams.set('access_token', pageToken);
-    const body = (await this.call(url.toString(), { method: 'POST' })) as {
-      success?: unknown;
-    } | null;
-    if (body?.success !== true)
+    const body = new URLSearchParams({
+      subscribed_fields: fields.join(','),
+      access_token: token,
+    });
+    const answer = (await this.call(
+      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+    )) as { success?: unknown } | null;
+    if (answer?.success !== true)
       throw new InstagramApiError('rejected', null, 200);
-  }
-
-  /** The Instagram account's @username, read with a Page access token; null if unreadable. */
-  async username(igUserId: string, pageToken: string): Promise<string | null> {
-    const url = new URL(
-      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}`,
-    );
-    url.searchParams.set('fields', 'username');
-    url.searchParams.set('access_token', pageToken);
-    try {
-      const body = (await this.call(url.toString(), { method: 'GET' })) as {
-        username?: unknown;
-      } | null;
-      return typeof body?.username === 'string' &&
-        /^[A-Za-z0-9._]{1,30}$/u.test(body.username)
-        ? body.username
-        : null;
-    } catch {
-      return null;
-    }
   }
 
   /**
@@ -250,21 +239,23 @@ export class InstagramGraphClient {
     );
   }
 
-  /** Sends one text through the linked Facebook Page (Page access token). */
-  async sendTextAsPage(
-    pageToken: string,
+  /** Unified login: sends one text as the account on graph.facebook.com. */
+  async sendTextUnified(
+    igUserId: string,
+    token: string,
     recipientId: string,
     text: string,
   ): Promise<{ readonly messageId: string }> {
     checkText(text);
-    const url = new URL(`${this.facebookBase}/me/messages`);
-    url.searchParams.set('access_token', pageToken);
+    const url = new URL(
+      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}/messages`,
+    );
+    url.searchParams.set('access_token', token);
     return this.send(
       url.toString(),
       {},
       {
         recipient: { id: requireId(recipientId, 'recipient id') },
-        messaging_type: 'RESPONSE',
         message: { text },
       },
     );

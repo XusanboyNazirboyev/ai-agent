@@ -6,8 +6,8 @@ export type SecretPurpose =
   | 'bot_token'
   | 'webhook_secret'
   | 'instagram_access_token'
-  /** Facebook Page access token of the Page linked to an Instagram account. */
-  | 'instagram_page_access_token';
+  /** Business Integration System User token from Instagram Unified login. */
+  | 'instagram_system_user_token';
 
 export class SecretsNotConfiguredError extends Error {
   constructor() {

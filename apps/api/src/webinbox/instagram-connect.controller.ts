@@ -22,8 +22,12 @@ import {
   InstagramGraphClient,
 } from '../channels/instagram/instagram-graph.js';
 import {
+  OAuthStateLedger,
+  OAuthStateLedgerUnavailableError,
+} from '../channels/instagram/instagram-oauth-state-ledger.js';
+import {
   InstagramOAuthClient,
-  MissingPermissionsError,
+  STATE_TTL_MS,
   OAuthStateError,
 } from '../channels/instagram/instagram-oauth.js';
 import type { AppEnvironment } from '../config/environment.js';
@@ -92,19 +96,19 @@ const REFUSAL = {
     status: 400,
     i18nKey: 'errors.OAUTH_STATE_INVALID',
   },
-  MISSING_PERMISSIONS: {
+  OAUTH_UNAVAILABLE: { status: 503, i18nKey: 'errors.OAUTH_UNAVAILABLE' },
+  NO_INSTAGRAM_ACCOUNT: {
     status: 400,
-    i18nKey: 'errors.MISSING_PERMISSIONS',
+    i18nKey: 'errors.NO_INSTAGRAM_ACCOUNT',
   },
-  NO_INSTAGRAM_PAGE: { status: 400, i18nKey: 'errors.NO_INSTAGRAM_PAGE' },
-  SEVERAL_INSTAGRAM_PAGES: {
+  SEVERAL_INSTAGRAM_ACCOUNTS: {
     status: 400,
-    i18nKey: 'errors.SEVERAL_INSTAGRAM_PAGES',
+    i18nKey: 'errors.SEVERAL_INSTAGRAM_ACCOUNTS',
   },
 } as const;
 
 /** How the token was obtained, and which secret purpose holds it. */
-type Via = 'token' | 'oauth' | 'facebook';
+type Via = 'token' | 'oauth';
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
   const spec = REFUSAL[code];
@@ -117,15 +121,13 @@ function refuse(code: keyof typeof REFUSAL): HttpException {
 /**
  * Connecting an Instagram professional account from the web API (ADR 031,
  * ADR 028 secret store). OWNER/ADMIN only, at most 10 calls a minute per
- * operator, every change audited without any secret. The token is an
- * Instagram User access token with `instagram_business_basic` and
- * `instagram_business_manage_messages`, from Business Login for Instagram
- * (`oauth/start` → Instagram → the web callback page → `oauth/complete`) or
- * pasted (for example from the App Dashboard "Generate token"). With
- * `INSTAGRAM_LOGIN_CONFIG_ID` set, `oauth/start` opens Facebook Login for
- * Business instead, and the stored token is the linked Facebook Page's
- * access token (ADR 031 amendment 2026-11-05). A new account starts DISABLED
- * with the assistant OFF.
+ * operator, every change audited without any secret. One click: Instagram
+ * API with Unified login (`oauth/start` → Meta's dialog → the web callback
+ * page → `oauth/complete`), which stores a Business Integration System User
+ * token (ADR 031 amendment 2026-11-05). Fallback: a pasted Instagram User
+ * access token with `instagram_business_basic` and
+ * `instagram_business_manage_messages`. A new account starts DISABLED with
+ * the assistant OFF.
  */
 @Controller('api/v1/channels/instagram')
 @UseGuards(SessionGuard)
@@ -138,6 +140,7 @@ export class InstagramConnectController {
     private readonly secrets: ChannelSecretStore,
     private readonly graph: InstagramGraphClient,
     private readonly oauth: InstagramOAuthClient,
+    private readonly ledger: OAuthStateLedger,
   ) {}
 
   /** OWNER/ADMIN only; reading the setup is not rate limited. */
@@ -280,12 +283,9 @@ export class InstagramConnectController {
 
   /** Whether "Continue with Instagram" can work on this server. */
   @Get('oauth')
-  setup(@Req() request: InboxRequest): {
-    oauth: boolean;
-    login: 'facebook' | 'instagram';
-  } {
+  setup(@Req() request: InboxRequest): { oauth: boolean } {
     this.manager(request);
-    return { oauth: this.oauth.configured, login: this.oauth.mode };
+    return { oauth: this.oauth.configured };
   }
 
   /** The Instagram authorization URL, with a state bound to this session. */
@@ -297,9 +297,11 @@ export class InstagramConnectController {
   }
 
   /**
-   * Finishes Business Login: the web callback page posts Instagram's `code`
-   * and the `state` back from the same session (the session cookie is
-   * SameSite=Strict, so Instagram's redirect itself carries none).
+   * Finishes Unified login: the web callback page posts Meta's `code` and the
+   * `state` back from the same session (the session cookie is
+   * SameSite=Strict, so Meta's redirect itself carries none). The state is
+   * checked (sealed, this tenant, operator and session, not expired) and then
+   * spent once, before Meta is called.
    */
   @Post('oauth/complete')
   async complete(
@@ -317,34 +319,28 @@ export class InstagramConnectController {
       if (error instanceof OAuthStateError) throw refuse('OAUTH_STATE_INVALID');
       throw error;
     }
-    if (this.oauth.mode === 'facebook') {
-      // The Facebook dialog lets the operator choose the Pages to grant; one
-      // granted Page with an Instagram account is connected, never a guess.
-      const pages = await this.meta(() =>
-        this.oauth.exchangeFacebook(parsed.data.code),
-      );
-      if (pages.length === 0) throw refuse('NO_INSTAGRAM_PAGE');
-      if (pages.length > 1) throw refuse('SEVERAL_INSTAGRAM_PAGES');
-      const page = pages[0]!;
-      const username = await this.graph.username(page.igUserId, page.pageToken);
-      return this.save(
-        who,
-        { userId: page.igUserId, username },
-        page.pageToken,
-        'facebook',
-      );
-    }
-    let token: string;
+    let first: boolean;
     try {
-      token = (await this.meta(() => this.oauth.exchange(parsed.data.code)))
-        .token;
+      first = await this.ledger.consume(parsed.data.state, STATE_TTL_MS);
     } catch (error) {
-      if (error instanceof MissingPermissionsError)
-        throw refuse('MISSING_PERMISSIONS');
+      if (error instanceof OAuthStateLedgerUnavailableError)
+        throw refuse('OAUTH_UNAVAILABLE');
       throw error;
     }
-    const me = await this.meta(() => this.graph.me(token));
-    return this.save(who, me, token, 'oauth');
+    if (!first) throw refuse('OAUTH_STATE_INVALID');
+    const { token, accounts } = await this.meta(() =>
+      this.oauth.exchange(parsed.data.code),
+    );
+    // The client picks the account in Meta's dialog; tezda never guesses.
+    if (accounts.length === 0) throw refuse('NO_INSTAGRAM_ACCOUNT');
+    if (accounts.length > 1) throw refuse('SEVERAL_INSTAGRAM_ACCOUNTS');
+    const account = accounts[0]!;
+    return this.save(
+      who,
+      { userId: account.igUserId, username: account.username },
+      token,
+      'oauth',
+    );
   }
 
   /**
@@ -392,9 +388,9 @@ export class InstagramConnectController {
     });
     const owner = { tenantId: who.tenantId, channelAccountId: id };
     const [keep, drop] =
-      via === 'facebook'
-        ? (['instagram_page_access_token', 'instagram_access_token'] as const)
-        : (['instagram_access_token', 'instagram_page_access_token'] as const);
+      via === 'oauth'
+        ? (['instagram_system_user_token', 'instagram_access_token'] as const)
+        : (['instagram_access_token', 'instagram_system_user_token'] as const);
     await this.secrets.put(owner, keep, token);
     await this.secrets.delete(owner, drop);
     await this.audit(
@@ -427,8 +423,12 @@ export class InstagramConnectController {
       throw refuse('WEBHOOK_NOT_CONFIGURED');
     const credential = await this.credential(who.tenantId, id);
     await this.meta(() =>
-      credential.kind === 'page'
-        ? this.graph.subscribePage(credential.token, WEBHOOK_FIELDS)
+      credential.kind === 'unified'
+        ? this.graph.subscribeUnified(
+            account.externalAccountId,
+            credential.token,
+            WEBHOOK_FIELDS,
+          )
         : this.graph.subscribe(
             account.externalAccountId,
             credential.token,

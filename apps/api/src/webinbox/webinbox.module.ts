@@ -11,6 +11,10 @@ import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
 import { InstagramOAuthClient } from '../channels/instagram/instagram-oauth.js';
+import {
+  OAuthStateLedger,
+  RedisOAuthStateLedger,
+} from '../channels/instagram/instagram-oauth-state-ledger.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AuthController } from './auth.controller.js';
@@ -53,6 +57,7 @@ import { LeadsController } from './leads.controller.js';
     TelegramManagement,
     InstagramGraphClient,
     InstagramOAuthClient,
+    { provide: OAuthStateLedger, useClass: RedisOAuthStateLedger },
     {
       provide: BITRIX24_CONNECT_TRANSPORT,
       inject: [ConfigService],

@@ -95,7 +95,7 @@ export function credentialSource(
 ): CredentialSource {
   if (row.channelType === 'instagram')
     return savedPurposes.has('instagram_access_token') ||
-      savedPurposes.has('instagram_page_access_token')
+      savedPurposes.has('instagram_system_user_token')
       ? 'ui'
       : 'none';
   if (savedPurposes.has('bot_token') && savedPurposes.has('webhook_secret'))
