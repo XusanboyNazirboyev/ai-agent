@@ -42,7 +42,7 @@ Measured on `gemini-3.8-flash` (paid, 2026-10-30/31), fictional English cases on
 | 200-token cap | 5/15 | 60% | 3.3 s / 6.8 s | All 10 failures were truncated model output (thinking tokens share the cap) |
 | 1024-token cap (the app's cap) | 7/15 | 100% | 13.2 s / 20.4 s | 0 hard-fact violations shipped; 4 cases ended as BUDGET_EXCEEDED; 3 drafts still truncated; cost $0.039 / 15 cases |
 Real Telegram turn (LIVE, test bot): outcome FALLBACK, 5 model calls, about 27 s from message to reply.
-- A1 (High) Latency and fallbacks make the bot feel broken. Candidate fixes: `reasoning_effort` pass-through (documented by Google as low/medium/high; being added), fewer calls per turn, a typing indicator, a tuned turn budget (default $0.02 is hit by worst-case reservation at a 1024 cap; the exact limit is measured by `LIVE_EVAL_TURN_BUDGET_USD`).
+- A1 (High) Latency and fallbacks make the bot feel broken. Candidate fixes: `reasoning_effort` pass-through (documented by Google as low/medium/high; being added), fewer calls per turn, a typing indicator, a tuned turn budget (4 of 15 cases ended as BUDGET_EXCEEDED under the default $0.02 per turn; the stopping limit was not recorded, the reservation of the worst case at a 1024 cap is the *unverified* suspect, and the eval now reports it and accepts `LIVE_EVAL_TURN_BUDGET_USD`).
 - A2 (High) Only 15 English cases were run live. No live evidence for uz-Latn, uz-Cyrl or ru, and native-speaker review is still pending (D18). Language claims are unproven.
 - A3 (Med) Safety design is sound (facts only from tools, rendered by code); injection resisted in one case, which is a very small sample.
 
