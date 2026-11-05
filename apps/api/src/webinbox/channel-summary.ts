@@ -94,7 +94,10 @@ export function credentialSource(
   config: ConfigService<AppEnvironment, true>,
 ): CredentialSource {
   if (row.channelType === 'instagram')
-    return savedPurposes.has('instagram_access_token') ? 'ui' : 'none';
+    return savedPurposes.has('instagram_access_token') ||
+      savedPurposes.has('instagram_page_access_token')
+      ? 'ui'
+      : 'none';
   if (savedPurposes.has('bot_token') && savedPurposes.has('webhook_secret'))
     return 'ui';
   const served = config.get('TELEGRAM_CHANNEL_ACCOUNT_ID', { infer: true });

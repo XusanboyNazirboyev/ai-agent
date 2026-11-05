@@ -22,9 +22,23 @@ import type { AppEnvironment } from '../../config/environment.js';
  *   190 need a new access token, 10 and 200-299 are missing permissions.
  *   613 is the Send API rate limit (Messenger send-messages page, read
  *   2026-10-28). Rate-limit numbers are not stated on these pages.
+ * Instagram Messaging through a linked Facebook Page (Facebook Login for
+ * Business, ADR 031 amendment 2026-11-05; official Meta docs read 2026-11-05):
+ * - send, https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/send-message.md:
+ *   `POST https://graph.facebook.com/<API_VERSION>/me/messages?access_token=<PAGE_ACCESS_TOKEN>`,
+ *   body `recipient={"id":"IGSID"}`, `message={"text":...}`, answer
+ *   `{"recipient_id","message_id"}`; "Message text must be UTF-8 and be 1,000
+ *   bytes or less"; `messaging_type: RESPONSE` from the Messenger send page
+ *   (https://developers.facebook.com/documentation/business-messaging/messenger-platform/send-messages);
+ * - webhooks setup, https://developers.facebook.com/documentation/instagram-platform/webhooks/setup.md:
+ *   "For Facebook Login, use a Facebook Page access token. Send a `POST`
+ *   request to the linked Page's `/subscribed_apps` edge", `/me` when the
+ *   token represents the Page, answer `{"success": true}`; payloads are signed
+ *   with the app's App Secret (`X-Hub-Signature-256`).
  * Customer text and Meta error text are never put into an error message.
  */
 export const INSTAGRAM_GRAPH_BASE_URL = 'https://graph.instagram.com/v26.0';
+export const FACEBOOK_GRAPH_BASE_URL = 'https://graph.facebook.com/v27.0';
 
 /** Numeric Instagram ids (account and Instagram-scoped user ids). */
 export const INSTAGRAM_ID = /^[0-9]{1,100}$/u;
@@ -89,6 +103,12 @@ function errorOf(body: unknown, httpStatus: number): InstagramApiError {
   );
 }
 
+function checkText(text: string): void {
+  const bytes = Buffer.byteLength(text, 'utf8');
+  if (bytes === 0 || bytes > 1_000)
+    throw new RangeError('Instagram text must be 1 to 1000 bytes');
+}
+
 function requireId(value: string, what: string): string {
   if (!INSTAGRAM_ID.test(value)) throw new RangeError(`Invalid ${what}`);
   return value;
@@ -98,6 +118,7 @@ function requireId(value: string, what: string): string {
 export class InstagramGraphClient {
   private readonly request: InstagramFetch;
   private readonly base: string;
+  private readonly facebookBase: string;
 
   constructor(
     @Optional() @Inject(INSTAGRAM_FETCH) request?: InstagramFetch,
@@ -109,6 +130,10 @@ export class InstagramGraphClient {
     this.base = (
       config?.get('INSTAGRAM_API_BASE_URL', { infer: true }) ??
       INSTAGRAM_GRAPH_BASE_URL
+    ).replace(/\/+$/u, '');
+    this.facebookBase = (
+      config?.get('INSTAGRAM_API_BASE_URL', { infer: true }) ??
+      FACEBOOK_GRAPH_BASE_URL
     ).replace(/\/+$/u, '');
   }
 
@@ -169,6 +194,41 @@ export class InstagramGraphClient {
       throw new InstagramApiError('rejected', null, 200);
   }
 
+  /** Subscribes the app to the linked Page's webhooks with a Page access token. */
+  async subscribePage(
+    pageToken: string,
+    fields: readonly string[],
+  ): Promise<void> {
+    const url = new URL(`${this.facebookBase}/me/subscribed_apps`);
+    url.searchParams.set('subscribed_fields', fields.join(','));
+    url.searchParams.set('access_token', pageToken);
+    const body = (await this.call(url.toString(), { method: 'POST' })) as {
+      success?: unknown;
+    } | null;
+    if (body?.success !== true)
+      throw new InstagramApiError('rejected', null, 200);
+  }
+
+  /** The Instagram account's @username, read with a Page access token; null if unreadable. */
+  async username(igUserId: string, pageToken: string): Promise<string | null> {
+    const url = new URL(
+      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}`,
+    );
+    url.searchParams.set('fields', 'username');
+    url.searchParams.set('access_token', pageToken);
+    try {
+      const body = (await this.call(url.toString(), { method: 'GET' })) as {
+        username?: unknown;
+      } | null;
+      return typeof body?.username === 'string' &&
+        /^[A-Za-z0-9._]{1,30}$/u.test(body.username)
+        ? body.username
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Sends one text (at most 1,000 bytes; split longer replies first). A lost
    * response is ambiguous, never retried blindly.
@@ -179,24 +239,49 @@ export class InstagramGraphClient {
     recipientId: string,
     text: string,
   ): Promise<{ readonly messageId: string }> {
-    const bytes = Buffer.byteLength(text, 'utf8');
-    if (bytes === 0 || bytes > 1_000)
-      throw new RangeError('Instagram text must be 1 to 1000 bytes');
-    const url = `${this.base}/${requireId(igUserId, 'Instagram account id')}/messages`;
-    const payload = JSON.stringify({
-      recipient: { id: requireId(recipientId, 'recipient id') },
-      message: { text },
-    });
+    checkText(text);
+    return this.send(
+      `${this.base}/${requireId(igUserId, 'Instagram account id')}/messages`,
+      { authorization: `Bearer ${token}` },
+      {
+        recipient: { id: requireId(recipientId, 'recipient id') },
+        message: { text },
+      },
+    );
+  }
+
+  /** Sends one text through the linked Facebook Page (Page access token). */
+  async sendTextAsPage(
+    pageToken: string,
+    recipientId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    checkText(text);
+    const url = new URL(`${this.facebookBase}/me/messages`);
+    url.searchParams.set('access_token', pageToken);
+    return this.send(
+      url.toString(),
+      {},
+      {
+        recipient: { id: requireId(recipientId, 'recipient id') },
+        messaging_type: 'RESPONSE',
+        message: { text },
+      },
+    );
+  }
+
+  private async send(
+    url: string,
+    headers: Record<string, string>,
+    payload: unknown,
+  ): Promise<{ readonly messageId: string }> {
     let response: Response;
     let body: unknown;
     try {
       response = await this.request(url, {
         method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: payload,
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch {

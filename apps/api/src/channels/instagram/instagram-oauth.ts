@@ -5,8 +5,10 @@ import type { SecretCipher } from '../../secrets/secret-cipher.js';
 import { SECRET_CIPHER } from '../../secrets/channel-secret-store.js';
 import {
   classifyInstagramError,
+  FACEBOOK_GRAPH_BASE_URL,
   INSTAGRAM_FETCH,
   INSTAGRAM_GRAPH_BASE_URL,
+  INSTAGRAM_ID,
   InstagramApiError,
   type InstagramFetch,
 } from './instagram-graph.js';
@@ -28,6 +30,31 @@ import {
  * Unverified until a live check: whether the exchange answer is wrapped in
  * `data: [...]` and whether `permissions` is a list or a comma string (both
  * are accepted below).
+ *
+ * Facebook Login for Business (ADR 031 amendment 2026-11-05), used when
+ * `INSTAGRAM_LOGIN_CONFIG_ID` is set; then `INSTAGRAM_APP_ID` and
+ * `INSTAGRAM_APP_SECRET` are the Meta app's App ID and App Secret. Official
+ * Meta docs read 2026-11-05:
+ * - https://developers.facebook.com/documentation/facebook-login/facebook-login-for-business.md:
+ *   "config_id has replaced scope", `response_type=code` with
+ *   `override_default_response_type=true`; the App Dashboard's Login URL for
+ *   this app (owner, 2026-11-05) is `https://www.facebook.com/dialog/oauth?
+ *   client_id&config_id&display=popup&override_default_response_type=true
+ *   &redirect_uri&response_type=code&state`; tezda uses a full-page redirect;
+ * - https://developers.facebook.com/documentation/facebook-login/guides/advanced/manual-flow.md:
+ *   dialog `https://www.facebook.com/v27.0/dialog/oauth` with `client_id`,
+ *   `redirect_uri`, `state`; code exchange `GET https://graph.facebook.com/v27.0/oauth/access_token`
+ *   with `client_id`, `redirect_uri` (the same), `client_secret`, `code`;
+ *   answer `access_token`, `token_type`, `expires_in`; cancel carries
+ *   `error=access_denied`;
+ * - https://developers.facebook.com/documentation/facebook-login/guides/access-tokens/get-long-lived.md:
+ *   `GET /oauth/access_token?grant_type=fb_exchange_token&client_id&client_secret
+ *   &fb_exchange_token` gives a long-lived User token ("about 60 days");
+ *   "Long-lived Page access token do not have an expiration date";
+ * - https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-facebook-login/business-login-for-instagram.md:
+ *   `GET /me/accounts` with fields `id,name,access_token,instagram_business_account`.
+ * Unverified until a live check: that the code from a "Instagram Login
+ * Compatible" configuration buys a User token (not a system-user token).
  */
 export const INSTAGRAM_SCOPES = [
   'instagram_business_basic',
@@ -36,6 +63,8 @@ export const INSTAGRAM_SCOPES = [
 
 const AUTHORIZE_BASE = 'https://www.instagram.com';
 const TOKEN_BASE = 'https://api.instagram.com';
+const FACEBOOK_DIALOG_BASE = 'https://www.facebook.com';
+const FACEBOOK_DIALOG_PATH = '/v27.0/dialog/oauth';
 const TIMEOUT_MS = 10_000;
 /** An authorization started in tezda must come back within this time. */
 export const STATE_TTL_MS = 10 * 60_000;
@@ -62,6 +91,14 @@ export class MissingPermissionsError extends Error {
   }
 }
 
+/** A Facebook Page the operator granted that has an Instagram professional account. */
+export interface InstagramPage {
+  readonly pageId: string;
+  readonly pageToken: string;
+  readonly igUserId: string;
+}
+
+const TOKEN_SHAPE = /^\S{20,2048}$/u;
 const b64url = (data: Buffer): string => data.toString('base64url');
 
 @Injectable()
@@ -73,6 +110,9 @@ export class InstagramOAuthClient {
   private readonly authorizeBase: string;
   private readonly tokenBase: string;
   private readonly graphOrigin: string;
+  private readonly configId?: string;
+  private readonly facebookDialogBase: string;
+  private readonly facebookGraph: string;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
@@ -91,10 +131,19 @@ export class InstagramOAuthClient {
       ?.replace(/\/+$/u, '');
     this.authorizeBase = fake ?? AUTHORIZE_BASE;
     this.tokenBase = fake ?? TOKEN_BASE;
-    this.graphOrigin = new URL(
-      config.get('INSTAGRAM_API_BASE_URL', { infer: true }) ??
-        INSTAGRAM_GRAPH_BASE_URL,
-    ).origin;
+    this.facebookDialogBase = fake ?? FACEBOOK_DIALOG_BASE;
+    const fakeGraph = config.get('INSTAGRAM_API_BASE_URL', { infer: true });
+    this.graphOrigin = new URL(fakeGraph ?? INSTAGRAM_GRAPH_BASE_URL).origin;
+    this.facebookGraph = (fakeGraph ?? FACEBOOK_GRAPH_BASE_URL).replace(
+      /\/+$/u,
+      '',
+    );
+    this.configId = config.get('INSTAGRAM_LOGIN_CONFIG_ID', { infer: true });
+  }
+
+  /** Which login the App Dashboard offers: Facebook Login for Business when a configuration id is set. */
+  get mode(): 'facebook' | 'instagram' {
+    return this.configId ? 'facebook' : 'instagram';
   }
 
   /** App id, app secret, redirect URI and the secret cipher are all set. */
@@ -171,6 +220,17 @@ export class InstagramOAuthClient {
   }
 
   authorizeUrl(state: string): string {
+    if (this.mode === 'facebook') {
+      const url = new URL(`${this.facebookDialogBase}${FACEBOOK_DIALOG_PATH}`);
+      url.searchParams.set('client_id', this.appId!);
+      url.searchParams.set('config_id', this.configId!);
+      url.searchParams.set('display', 'page');
+      url.searchParams.set('override_default_response_type', 'true');
+      url.searchParams.set('redirect_uri', this.redirectUri!);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('state', state);
+      return url.toString();
+    }
     const url = new URL(`${this.authorizeBase}/oauth/authorize`);
     url.searchParams.set('client_id', this.appId!);
     url.searchParams.set('redirect_uri', this.redirectUri!);
@@ -265,5 +325,74 @@ export class InstagramOAuthClient {
       expiresInSeconds:
         typeof long.expires_in === 'number' ? long.expires_in : null,
     };
+  }
+
+  /**
+   * Facebook Login: code → User token → long-lived User token → the granted
+   * Pages that have an Instagram professional account, each with its
+   * (non-expiring) Page access token.
+   */
+  async exchangeFacebook(code: string): Promise<InstagramPage[]> {
+    const exchange = new URL(`${this.facebookGraph}/oauth/access_token`);
+    exchange.searchParams.set('client_id', this.appId!);
+    exchange.searchParams.set('redirect_uri', this.redirectUri!);
+    exchange.searchParams.set('client_secret', this.appSecret!);
+    exchange.searchParams.set('code', code);
+    const short = (await this.json(exchange.toString(), { method: 'GET' })) as {
+      access_token?: unknown;
+    } | null;
+    if (
+      typeof short?.access_token !== 'string' ||
+      !TOKEN_SHAPE.test(short.access_token)
+    )
+      throw new InstagramApiError('rejected', null, 200);
+
+    const extend = new URL(`${this.facebookGraph}/oauth/access_token`);
+    extend.searchParams.set('grant_type', 'fb_exchange_token');
+    extend.searchParams.set('client_id', this.appId!);
+    extend.searchParams.set('client_secret', this.appSecret!);
+    extend.searchParams.set('fb_exchange_token', short.access_token);
+    const long = (await this.json(extend.toString(), { method: 'GET' })) as {
+      access_token?: unknown;
+    } | null;
+    if (
+      typeof long?.access_token !== 'string' ||
+      !TOKEN_SHAPE.test(long.access_token)
+    )
+      throw new InstagramApiError('rejected', null, 200);
+
+    const accounts = new URL(`${this.facebookGraph}/me/accounts`);
+    accounts.searchParams.set(
+      'fields',
+      'id,name,access_token,instagram_business_account',
+    );
+    accounts.searchParams.set('access_token', long.access_token);
+    const listed = (await this.json(accounts.toString(), {
+      method: 'GET',
+    })) as {
+      data?: unknown;
+    } | null;
+    const rows = Array.isArray(listed?.data) ? listed.data : [];
+    const pages: InstagramPage[] = [];
+    for (const row of rows as {
+      id?: unknown;
+      access_token?: unknown;
+      instagram_business_account?: { id?: unknown } | null;
+    }[]) {
+      const pageId = typeof row?.id === 'string' ? row.id : undefined;
+      const pageToken = row?.access_token;
+      const rawIg = row?.instagram_business_account?.id;
+      const igUserId = typeof rawIg === 'number' ? String(rawIg) : rawIg;
+      if (
+        pageId &&
+        INSTAGRAM_ID.test(pageId) &&
+        typeof pageToken === 'string' &&
+        TOKEN_SHAPE.test(pageToken) &&
+        typeof igUserId === 'string' &&
+        INSTAGRAM_ID.test(igUserId)
+      )
+        pages.push({ pageId, pageToken, igUserId });
+    }
+    return pages;
   }
 }

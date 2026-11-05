@@ -44,6 +44,14 @@ const NO_MESSAGES_CODE = `code-${randomBytes(12).toString('hex')}`;
 const SHORT_TOKEN = `test-${randomBytes(16).toString('hex')}`;
 const SCOPES = 'instagram_business_basic,instagram_business_manage_messages';
 const LONG_LIVED_SECONDS = 5_184_000;
+/** Facebook Login for Business fakes: the configuration, Page and its token. */
+const CONFIG_ID = String(randomInt(10 ** 9, 10 ** 10 - 1));
+const PAGE_ID = `1000${randomInt(10 ** 9, 10 ** 10 - 1)}`;
+const PAGE_TOKEN = `test-${randomBytes(16).toString('hex')}`;
+const FB_SHORT_TOKEN = `test-${randomBytes(16).toString('hex')}`;
+const FB_LONG_TOKEN = `test-${randomBytes(16).toString('hex')}`;
+const NO_PAGE_CODE = `code-${randomBytes(12).toString('hex')}`;
+const TWO_PAGES_CODE = `code-${randomBytes(12).toString('hex')}`;
 const OAUTH = {
   INSTAGRAM_APP_ID: String(randomInt(10 ** 9, 10 ** 10 - 1)),
   INSTAGRAM_OAUTH_REDIRECT_URI:
@@ -108,9 +116,81 @@ function setup(overrides: Record<string, unknown> = {}): Setup {
     status: HTTP_OK,
     body: { user_id: igUserId, username: USERNAME },
   };
+  const page = (id: string, ig: string): unknown => ({
+    id,
+    name: 'Demo shop',
+    access_token: PAGE_TOKEN,
+    instagram_business_account: { id: ig },
+  });
+  // Each code buys its own short token, extended to its own long token,
+  // which lists that code's Pages.
+  const fbCodes = [CODE, NO_PAGE_CODE, TWO_PAGES_CODE];
+  const shortOf = (code: string): string =>
+    `${FB_SHORT_TOKEN}-${fbCodes.indexOf(code)}`;
+  const longOf = (short: string): string =>
+    `${FB_LONG_TOKEN}-${short.slice(FB_SHORT_TOKEN.length + 1)}`;
+  const pagesOf = new Map<string, unknown[]>([
+    [
+      longOf(shortOf(CODE)),
+      [page(PAGE_ID, igUserId), { id: '1000000000001', name: 'No IG' }],
+    ],
+    [longOf(shortOf(NO_PAGE_CODE)), []],
+    [
+      longOf(shortOf(TWO_PAGES_CODE)),
+      [page(PAGE_ID, igUserId), page('1000000000002', `${IG_ID_PREFIX}1`)],
+    ],
+  ]);
   const request = vi.fn(async (url: string | URL, init?: RequestInit) => {
     const parsed = new URL(String(url));
     calls.push({ url: parsed, method: init?.method ?? 'GET' });
+    if (parsed.hostname === 'graph.facebook.com') {
+      const q = parsed.searchParams;
+      if (parsed.pathname === '/v27.0/oauth/access_token') {
+        const code = q.get('code');
+        if (q.get('grant_type') === 'fb_exchange_token')
+          return new Response(
+            JSON.stringify({
+              access_token: longOf(q.get('fb_exchange_token')!),
+              expires_in: LONG_LIVED_SECONDS,
+            }),
+            { status: HTTP_OK },
+          );
+        if (code && fbCodes.includes(code))
+          return new Response(JSON.stringify({ access_token: shortOf(code) }), {
+            status: HTTP_OK,
+          });
+        return new Response(
+          JSON.stringify({ error: { code: 100, message: 'detail' } }),
+          { status: HTTP_BAD_REQUEST },
+        );
+      }
+      if (parsed.pathname === '/v27.0/me/accounts') {
+        const data = pagesOf.get(q.get('access_token') ?? '');
+        if (!data)
+          return new Response(
+            JSON.stringify({ error: { code: META_TOKEN_EXPIRED } }),
+            { status: HTTP_BAD_REQUEST },
+          );
+        return new Response(JSON.stringify({ data }), { status: HTTP_OK });
+      }
+      if (q.get('access_token') !== PAGE_TOKEN)
+        return new Response(
+          JSON.stringify({ error: { code: META_TOKEN_EXPIRED } }),
+          { status: HTTP_BAD_REQUEST },
+        );
+      if (parsed.pathname === `/v27.0/${igUserId}`)
+        return new Response(
+          JSON.stringify({ username: USERNAME, id: igUserId }),
+          {
+            status: HTTP_OK,
+          },
+        );
+      if (parsed.pathname === '/v27.0/me/subscribed_apps')
+        return new Response(JSON.stringify({ success: true }), {
+          status: HTTP_OK,
+        });
+      return new Response('{}', { status: HTTP_NOT_FOUND });
+    }
     if (parsed.pathname === '/oauth/access_token') {
       const form = new URLSearchParams(String(init?.body ?? ''));
       bodies.push(String(init?.body ?? ''));
@@ -366,13 +446,19 @@ describe('Business Login for Instagram (oauth/start, oauth/complete)', () => {
   it('reports whether OAuth is set up; start refuses without it', async () => {
     const off = setup();
     const t = await tenant();
-    expect(off.controller.setup(t.request)).toEqual({ oauth: false });
+    expect(off.controller.setup(t.request)).toEqual({
+      oauth: false,
+      login: 'instagram',
+    });
     expect(() => off.controller.start(t.request)).toThrow(
       expect.objectContaining({
         response: expect.objectContaining({ code: 'OAUTH_NOT_CONFIGURED' }),
       }),
     );
-    expect(setup(OAUTH).controller.setup(t.request)).toEqual({ oauth: true });
+    expect(setup(OAUTH).controller.setup(t.request)).toEqual({
+      oauth: true,
+      login: 'instagram',
+    });
   });
 
   it('start builds the authorization URL with both scopes and a state, calling nobody', async () => {
@@ -482,5 +568,108 @@ describe('Business Login for Instagram (oauth/start, oauth/complete)', () => {
     expect(() => s.controller.start(t.request)).toThrow(
       expect.objectContaining({ status: 403 }),
     );
+  });
+});
+
+describe('Facebook Login for Business (INSTAGRAM_LOGIN_CONFIG_ID set)', () => {
+  const FACEBOOK = { ...OAUTH, INSTAGRAM_LOGIN_CONFIG_ID: CONFIG_ID };
+  const stateFor = (s: Setup, request: never): string =>
+    new URL(s.controller.start(request).url).searchParams.get('state')!;
+
+  it('reports the Facebook login and starts the Facebook dialog with the configuration id', async () => {
+    const s = setup(FACEBOOK);
+    const t = await tenant();
+    expect(s.controller.setup(t.request)).toEqual({
+      oauth: true,
+      login: 'facebook',
+    });
+    const parsed = new URL(s.controller.start(t.request).url);
+    expect(`${parsed.origin}${parsed.pathname}`).toBe(
+      'https://oauth.example.test/v27.0/dialog/oauth',
+    );
+    expect(parsed.searchParams.get('config_id')).toBe(CONFIG_ID);
+    expect(parsed.searchParams.get('response_type')).toBe('code');
+    expect(parsed.searchParams.has('scope')).toBe(false);
+    expect(s.calls).toHaveLength(0);
+  });
+
+  it("connects the granted Page's Instagram account with the Page token; enable subscribes the Page", async () => {
+    const s = setup(FACEBOOK);
+    const t = await tenant();
+    // An earlier Instagram-login token for the same account must not survive.
+    const pasted = await s.controller.connect(t.request, {
+      accessToken: TOKEN,
+    });
+    const connected = await s.controller.complete(t.request, {
+      code: CODE,
+      state: stateFor(s, t.request),
+    });
+    expect(connected).toMatchObject({
+      id: pasted.id,
+      displayName: `@${USERNAME}`,
+      status: 'DISABLED',
+      agentMode: 'OFF',
+    });
+    expect(JSON.stringify(connected)).not.toContain(PAGE_TOKEN);
+    const owner = { tenantId: t.tenantId, channelAccountId: connected.id };
+    expect(await s.store.get(owner, 'instagram_page_access_token')).toBe(
+      PAGE_TOKEN,
+    );
+    expect(await s.store.get(owner, 'instagram_access_token')).toBeUndefined();
+    const row = await db.channelAccount.findFirstOrThrow({
+      where: { id: connected.id },
+    });
+    expect(row.externalAccountId).toBe(s.igUserId);
+
+    const enabled = await s.controller.enable(t.request, connected.id);
+    expect(enabled.status).toBe('ACTIVE');
+    const subscribe = s.calls.at(-1)!;
+    expect(`${subscribe.method} ${subscribe.url.pathname}`).toBe(
+      'POST /v27.0/me/subscribed_apps',
+    );
+    expect(subscribe.url.searchParams.get('subscribed_fields')).toBe(
+      'messages',
+    );
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: { tenantId: t.tenantId, action: 'channel.instagram_reconnected' },
+    });
+    expect(audit.safeInputSummary).toMatchObject({ via: 'facebook' });
+    expect(JSON.stringify(audit.safeInputSummary)).not.toContain(PAGE_TOKEN);
+  });
+
+  it('refuses when no granted Page has an Instagram account, or several do, storing nothing', async () => {
+    const s = setup(FACEBOOK);
+    const t = await tenant();
+    await expect(
+      s.controller.complete(t.request, {
+        code: NO_PAGE_CODE,
+        state: stateFor(s, t.request),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'NO_INSTAGRAM_PAGE' } });
+    await expect(
+      s.controller.complete(t.request, {
+        code: TWO_PAGES_CODE,
+        state: stateFor(s, t.request),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'SEVERAL_INSTAGRAM_PAGES' } });
+    expect(
+      await db.channelAccount.count({ where: { tenantId: t.tenantId } }),
+    ).toBe(0);
+  });
+
+  it('maps a code Facebook refuses to INSTAGRAM_REJECTED and checks the state first', async () => {
+    const s = setup(FACEBOOK);
+    const t = await tenant();
+    await expect(
+      s.controller.complete(t.request, {
+        code: `code-${randomBytes(12).toString('hex')}`,
+        state: stateFor(s, t.request),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'INSTAGRAM_REJECTED' } });
+    const before = s.calls.length;
+    await expect(
+      s.controller.complete(t.request, { code: CODE, state: 'not-a-state' }),
+    ).rejects.toMatchObject({ response: { code: 'OAUTH_STATE_INVALID' } });
+    expect(s.calls).toHaveLength(before);
   });
 });
