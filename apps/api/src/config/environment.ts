@@ -63,29 +63,33 @@ const environmentSchema = postgresEnvironmentSchema
       .string()
       .regex(/^[A-Za-z0-9_-]{1,256}$/)
       .optional(),
-    /** Shared Meta app credentials; keep only in server environment. */
+    /**
+     * The Meta app's App Secret (App Dashboard → Settings → Basic): signs the
+     * Instagram webhooks and buys Unified login tokens. Server only.
+     */
     INSTAGRAM_APP_SECRET: z.string().min(1).optional(),
     INSTAGRAM_VERIFY_TOKEN: z.string().min(1).optional(),
     /** Test setting for a fake Meta server; refused in production. */
     INSTAGRAM_API_BASE_URL: z.url().optional(),
     /**
-     * Business Login for Instagram (ADR 031): the app's Instagram App ID and
-     * the exact OAuth redirect URI registered in the App Dashboard (the web
-     * page `/channels/instagram/callback`). Without both, only a pasted token
-     * can connect an account.
+     * Instagram API with Unified login (ADR 031 amendment 2026-11-05): the
+     * Meta app's App ID (Settings → Basic) and the redirect URI registered in
+     * the Unified login configuration (the web page
+     * `/channels/instagram/callback`). With INSTAGRAM_LOGIN_CONFIG_ID and the
+     * App Secret, one-click connect works; otherwise only a pasted token can
+     * connect an account.
      */
     INSTAGRAM_APP_ID: z
       .string()
       .regex(/^[0-9]{1,30}$/u)
       .optional(),
     INSTAGRAM_OAUTH_REDIRECT_URI: z.url().optional(),
-    /** Test setting: a fake instagram.com / api.instagram.com; refused in production. */
+    /** Test setting: a fake www.facebook.com login dialog; refused in production. */
     INSTAGRAM_OAUTH_BASE_URL: z.url().optional(),
     /**
-     * Facebook Login for Business configuration id (App Dashboard → Instagram
-     * API → "API setup with Unified login"; ADR 031 amendment 2026-11-05).
-     * When set, "Continue" opens the Facebook dialog and INSTAGRAM_APP_ID /
-     * INSTAGRAM_APP_SECRET are the Meta app's App ID and App Secret.
+     * Configuration ID of the "Instagram API (Unified Login)" configuration
+     * (App Dashboard → Instagram API → API setup with Unified login →
+     * Configure your app). Required for one-click connect.
      */
     INSTAGRAM_LOGIN_CONFIG_ID: z
       .string()

@@ -9,17 +9,17 @@ import {
 import { findOverflow, fixtures, newSession } from './helpers';
 
 /**
- * Fake Meta for Business Login: instagram.com/oauth/authorize sends the
- * browser straight back with a code (as if the person allowed access),
- * api.instagram.com/oauth/access_token buys a short-lived token with it, and
- * graph.instagram.com turns that into the long-lived token behind one account.
+ * Fake Meta for Instagram API with Unified login: the login dialog sends the
+ * browser straight back with a code (as if the client chose an account),
+ * the Graph API exchanges it for a system-user token only with the exact
+ * documented parameters and lists the one shared Instagram account. The
+ * retired instagram.com / api.instagram.com endpoints answer 404.
  */
 const CODE = `code${randomBytes(12).toString('hex')}`;
-const SHORT = `test-${randomBytes(16).toString('hex')}`;
-const LONG = `test-${randomBytes(16).toString('hex')}`;
+const SYSTEM_TOKEN = `test-${randomBytes(16).toString('hex')}`;
 const IG_USER_ID = `1784${randomInt(10 ** 9, 10 ** 10 - 1)}`;
 const USERNAME = `e2e_oauth_${randomInt(10 ** 5, 10 ** 6 - 1)}`;
-const SCOPES = 'instagram_business_basic,instagram_business_manage_messages';
+const GRAPH_PATH = new URL(E2E_ENV.INSTAGRAM_API_BASE_URL).pathname;
 const authorizeSeen: URL[] = [];
 const servers: http.Server[] = [];
 
@@ -40,53 +40,60 @@ function listen(port: number, handler: http.RequestListener): Promise<void> {
 
 test.beforeAll(async () => {
   await listen(FAKE_INSTAGRAM_OAUTH_PORT, (request, response) => {
-    const url = new URL(request.url ?? '/', 'http://fake.instagram');
-    if (request.method === 'GET' && url.pathname === '/oauth/authorize') {
+    const url = new URL(request.url ?? '/', 'http://fake.facebook');
+    if (request.method === 'GET' && url.pathname === '/dialog/oauth') {
       authorizeSeen.push(url);
       const back = new URL(url.searchParams.get('redirect_uri')!);
       back.searchParams.set('code', CODE);
       back.searchParams.set('state', url.searchParams.get('state')!);
-      // Instagram appends `#_` to the redirect (Business Login docs).
-      response.writeHead(302, { location: `${back.toString()}#_` });
+      response.writeHead(302, { location: back.toString() });
       return response.end();
-    }
-    if (request.method === 'POST' && url.pathname === '/oauth/access_token') {
-      let body = '';
-      request.on('data', (chunk: Buffer) => (body += chunk.toString('utf8')));
-      request.on('end', () => {
-        const form = new URLSearchParams(body);
-        if (form.get('code') !== CODE)
-          return json(response, 400, {
-            error_type: 'OAuthException',
-            code: 400,
-          });
-        json(response, 200, {
-          data: [
-            { access_token: SHORT, user_id: IG_USER_ID, permissions: SCOPES },
-          ],
-        });
-      });
-      return;
     }
     json(response, 404, {});
   });
   await listen(FAKE_INSTAGRAM_PORT, (request, response) => {
     const url = new URL(request.url ?? '/', 'http://fake.graph');
-    const token = url.searchParams.get('access_token');
-    if (url.pathname === '/access_token' && token === SHORT)
+    const q = url.searchParams;
+    if (
+      request.method === 'GET' &&
+      url.pathname === `${GRAPH_PATH}/oauth/access_token`
+    ) {
+      const exact =
+        q.get('client_id') === E2E_ENV.INSTAGRAM_APP_ID &&
+        // The config module draws a fresh random secret per process, so the
+        // worker cannot know the API's value; it must be present, server side.
+        /^[0-9a-f]{32}$/u.test(q.get('client_secret') ?? '') &&
+        q.get('redirect_uri') === E2E_ENV.INSTAGRAM_OAUTH_REDIRECT_URI &&
+        q.get('code') === CODE;
+      return exact
+        ? json(response, 200, { access_token: SYSTEM_TOKEN })
+        : json(response, 400, { error: { code: 100, type: 'OAuthException' } });
+    }
+    if (
+      request.method === 'GET' &&
+      url.pathname === `${GRAPH_PATH}/me/assigned_instagram_accounts` &&
+      q.get('access_token') === SYSTEM_TOKEN
+    )
       return json(response, 200, {
-        access_token: LONG,
-        token_type: 'bearer',
-        expires_in: 5_184_000,
+        data: [{ id: IG_USER_ID, username: USERNAME }],
       });
-    if (token !== LONG)
-      return json(response, 400, {
-        error: { code: 190, type: 'OAuthException' },
+    if (
+      request.method === 'POST' &&
+      url.pathname === `${GRAPH_PATH}/${IG_USER_ID}/subscribed_apps`
+    ) {
+      let body = '';
+      request.on('data', (chunk: Buffer) => (body += chunk.toString('utf8')));
+      request.on('end', () => {
+        const form = new URLSearchParams(body);
+        if (
+          form.get('access_token') === SYSTEM_TOKEN &&
+          form.get('subscribed_fields') === 'messages'
+        )
+          return json(response, 200, { success: true });
+        json(response, 400, { error: { code: 190 } });
       });
-    if (url.pathname === '/v26.0/me')
-      return json(response, 200, { user_id: IG_USER_ID, username: USERNAME });
-    if (url.pathname === `/v26.0/${IG_USER_ID}/subscribed_apps`)
-      return json(response, 200, { success: true });
+      return;
+    }
     json(response, 404, {});
   });
 });
@@ -98,7 +105,7 @@ test.afterAll(async () => {
   );
 });
 
-test('an admin connects Instagram with one click through Business Login, then enables it', async ({
+test('an admin connects Instagram with one click through Unified login, then enables it', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -119,15 +126,19 @@ test('an admin connects Instagram with one click through Business Login, then en
   expect(authorize.searchParams.get('client_id')).toBe(
     E2E_ENV.INSTAGRAM_APP_ID,
   );
-  expect(authorize.searchParams.get('scope')).toBe(SCOPES);
+  expect(authorize.searchParams.get('config_id')).toBe(
+    E2E_ENV.INSTAGRAM_LOGIN_CONFIG_ID,
+  );
   expect(authorize.searchParams.get('response_type')).toBe('code');
+  expect(authorize.searchParams.has('scope')).toBe(false);
   // The single-use code and the state are gone from the address bar.
   expect(new URL(page.url()).search).toBe('');
   // Tokens never reach the page. The code is gone from the address bar and
   // the text; Next.js keeps the first URL in its render payload, which is
   // harmless: the code is single-use and worthless without the app secret.
   const html = await page.content();
-  for (const token of [SHORT, LONG]) expect(html).not.toContain(token);
+  expect(html).not.toContain(SYSTEM_TOKEN);
+  expect(html).not.toContain('client_secret');
   expect(await page.locator('body').innerText()).not.toContain(CODE);
   expect(await findOverflow(page), 'instagram callback').toEqual([]);
 

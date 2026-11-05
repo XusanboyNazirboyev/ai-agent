@@ -17,10 +17,10 @@ export class InstagramNotConfiguredError extends Error {
 
 /**
  * Sends to an Instagram customer as one connected professional account. The
- * account's token (an Instagram User access token, or the linked Facebook
- * Page's access token after Facebook Login) lives only in the encrypted
- * channel secret store (ADR 028, purposes `instagram_access_token` and
- * `instagram_page_access_token`); it is read per
+ * account's token (a Unified login system-user token, or a pasted Instagram
+ * User access token) lives only in the encrypted channel secret store
+ * (ADR 028, purposes `instagram_system_user_token` and
+ * `instagram_access_token`); it is read per
  * send, never cached, returned or logged. Tenant scope comes from the stored
  * account, never from the caller.
  */
@@ -72,8 +72,13 @@ export class InstagramSender {
       tenantId,
       channelAccountId,
     );
-    return credential.kind === 'page'
-      ? this.graph.sendTextAsPage(credential.token, recipientId, text)
+    return credential.kind === 'unified'
+      ? this.graph.sendTextUnified(
+          igUserId,
+          credential.token,
+          recipientId,
+          text,
+        )
       : this.graph.sendText(igUserId, credential.token, recipientId, text);
   }
 }

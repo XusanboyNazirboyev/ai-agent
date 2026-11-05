@@ -40,14 +40,10 @@ export function InstagramConnectDialog(props: {
   const [tokenOpen, setTokenOpen] = useState(false);
   const setup = useQuery({
     queryKey: ['instagram-oauth'],
-    queryFn: () =>
-      api<{ oauth: boolean; login?: 'facebook' | 'instagram' }>(
-        '/api/v1/channels/instagram/oauth',
-      ),
+    queryFn: () => api<{ oauth: boolean }>('/api/v1/channels/instagram/oauth'),
     enabled: props.open,
   });
   const oauth = setup.data?.oauth === true;
-  const viaFacebook = setup.data?.login === 'facebook';
   const showToken = !oauth || tokenOpen;
 
   useEffect(() => {
@@ -139,11 +135,7 @@ export function InstagramConnectDialog(props: {
             {oauth ? (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-muted">
-                  {t(
-                    viaFacebook
-                      ? 'igConnect.oauthIntroFacebook'
-                      : 'igConnect.oauthIntro',
-                  )}
+                  {t('igConnect.oauthIntro')}
                 </p>
                 <Button
                   variant="primary"
@@ -155,11 +147,7 @@ export function InstagramConnectDialog(props: {
                 >
                   {start.isPending
                     ? t('igConnect.oauthRedirecting')
-                    : t(
-                        viaFacebook
-                          ? 'igConnect.oauthStartFacebook'
-                          : 'igConnect.oauthStart',
-                      )}
+                    : t('igConnect.oauthStart')}
                 </Button>
               </div>
             ) : null}
