@@ -47,6 +47,11 @@
       "@prisma/engines",
       "esbuild",
       "prisma"
-    ]
+    ],
+    "overrides": {
+      "body-parser": ">=2.4.0",
+      "multer": ">=2.5.0",
+      "mysql2": ">=3.23.1"
+    }
   }
 }
