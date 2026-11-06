@@ -4,10 +4,10 @@
  * Instagram account (audit F1).
  */
 const NAMES: Readonly<Record<string, string>> = {
-  telegram: "Telegram",
-  instagram: "Instagram",
-  whatsapp: "WhatsApp",
-  webchat: "Web chat",
+  telegram: 'Telegram',
+  instagram: 'Instagram',
+  whatsapp: 'WhatsApp',
+  webchat: 'Web chat',
 };
 
 export function channelName(channelType: string): string {
