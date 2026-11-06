@@ -1,28 +1,28 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
-import { useI18n } from '@/i18n';
-import { api, errorKey } from '@/lib/api';
-import { effectiveNotice } from '@/lib/effective-mode';
-import type { AgentMode, ChannelAccount } from '@/lib/types';
-import { useShell } from './app-shell';
-import { Badge, type Tone } from './ui/badge';
-import { Button } from './ui/button';
-import { ConfirmDialog } from './ui/confirm-dialog';
-import { Icon } from './ui/icons';
-import { SkeletonRows } from './ui/skeleton';
-import { useToast } from './ui/toast';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
+import { api, errorKey } from "@/lib/api";
+import { channelName } from "@/lib/channel-names";
+import { effectiveNotice } from "@/lib/effective-mode";
+import type { AgentMode, ChannelAccount } from "@/lib/types";
+import { useShell } from "./app-shell";
+import { Badge, type Tone } from "./ui/badge";
+import { Button } from "./ui/button";
+import { ConfirmDialog } from "./ui/confirm-dialog";
+import { Icon } from "./ui/icons";
+import { SkeletonRows } from "./ui/skeleton";
+import { useToast } from "./ui/toast";
 
-const MODES: AgentMode[] = ['OFF', 'SHADOW', 'LIVE'];
+const MODES: AgentMode[] = ["OFF", "SHADOW", "LIVE"];
 const MODE_TONE: Record<AgentMode, Tone> = {
-  OFF: 'neutral',
-  SHADOW: 'warning',
-  LIVE: 'success',
+  OFF: "neutral",
+  SHADOW: "warning",
+  LIVE: "success",
 };
 
 /** Product names are not translated. */
-const NAMES: Record<string, string> = { telegram: 'Telegram' };
 
 /** Switches the assistant Off / Drafts only / On for each messenger account. */
 export function BotPage(): ReactNode {
@@ -30,29 +30,29 @@ export function BotPage(): ReactNode {
   const { operator } = useShell();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const canChange = operator.role === 'OWNER' || operator.role === 'ADMIN';
+  const canChange = operator.role === "OWNER" || operator.role === "ADMIN";
   const [pendingLive, setPendingLive] = useState<string | null>(null);
 
   const query = useQuery({
-    queryKey: ['channels'],
-    queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
+    queryKey: ["channels"],
+    queryFn: () => api<{ items: ChannelAccount[] }>("/api/v1/channels"),
   });
   const change = useMutation({
     mutationFn: (input: { id: string; mode: AgentMode }) =>
       api<ChannelAccount>(`/api/v1/channels/${input.id}/agent-mode`, {
-        method: 'PUT',
+        method: "PUT",
         body: { mode: input.mode },
       }),
     onSuccess: () => {
-      toast(t('toast.botMode'));
-      void queryClient.invalidateQueries({ queryKey: ['channels'] });
+      toast(t("toast.botMode"));
+      void queryClient.invalidateQueries({ queryKey: ["channels"] });
     },
     onSettled: () => setPendingLive(null),
   });
 
   function choose(account: ChannelAccount, mode: AgentMode): void {
     if (mode === account.agentMode) return;
-    if (mode === 'LIVE') setPendingLive(account.id);
+    if (mode === "LIVE") setPendingLive(account.id);
     else change.mutate({ id: account.id, mode });
   }
 
@@ -61,15 +61,15 @@ export function BotPage(): ReactNode {
     <div
       role="region"
       tabIndex={0}
-      aria-label={t('nav.bot')}
+      aria-label={t("nav.bot")}
       className="min-h-0 flex-1 overflow-y-auto"
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
-        <p className="text-sm text-muted">{t('bot.intro')}</p>
+        <p className="text-sm text-muted">{t("bot.intro")}</p>
         {!canChange ? (
           <p className="flex items-start gap-2 rounded-xl bg-surface-2 p-3 text-sm text-muted">
             <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />
-            {t('bot.readOnly')}
+            {t("bot.readOnly")}
           </p>
         ) : null}
         {change.isError ? (
@@ -87,7 +87,7 @@ export function BotPage(): ReactNode {
             role="status"
             className="overflow-hidden rounded-2xl border border-line bg-surface"
           >
-            <span className="sr-only">{t('app.loading')}</span>
+            <span className="sr-only">{t("app.loading")}</span>
             <SkeletonRows rows={2} />
           </div>
         ) : null}
@@ -101,13 +101,13 @@ export function BotPage(): ReactNode {
               {t(errorKey(query.error))}
             </p>
             <Button size="sm" onClick={() => void query.refetch()}>
-              {t('app.retry')}
+              {t("app.retry")}
             </Button>
           </div>
         ) : null}
         {query.isSuccess && items.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center text-sm text-muted">
-            {t('bot.empty')}
+            {t("bot.empty")}
           </p>
         ) : null}
 
@@ -127,8 +127,8 @@ export function BotPage(): ReactNode {
                   <Icon name="bot" className="h-5 w-5" />
                 </span>
                 <span className="truncate">
-                  {t('bot.account', {
-                    name: NAMES[account.channelType] ?? account.channelType,
+                  {t("bot.account", {
+                    name: channelName(account.channelType),
                     number: index + 1,
                   })}
                 </span>
@@ -159,7 +159,7 @@ export function BotPage(): ReactNode {
             ) : null}
             <div
               role="radiogroup"
-              aria-label={t('bot.modeGroup')}
+              aria-label={t("bot.modeGroup")}
               className="grid grid-cols-1 gap-2 md:grid-cols-3"
             >
               {MODES.map((mode) => {
@@ -172,9 +172,9 @@ export function BotPage(): ReactNode {
                     key={mode}
                     className={`relative flex min-w-0 flex-col gap-1.5 rounded-xl border p-3 transition-colors ${
                       selected
-                        ? 'border-primary bg-primary-soft'
-                        : 'border-line bg-canvas'
-                    } ${disabled && !selected ? 'opacity-70' : 'cursor-pointer hover:border-primary'}`}
+                        ? "border-primary bg-primary-soft"
+                        : "border-line bg-canvas"
+                    } ${disabled && !selected ? "opacity-70" : "cursor-pointer hover:border-primary"}`}
                   >
                     <input
                       type="radio"
@@ -212,9 +212,9 @@ export function BotPage(): ReactNode {
         ))}
 
         <section className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="font-semibold">{t('bot.rulesTitle')}</h2>
+          <h2 className="font-semibold">{t("bot.rulesTitle")}</h2>
           <ul className="flex flex-col gap-2 text-sm text-muted">
-            {['bot.rule1', 'bot.rule2', 'bot.rule3'].map((key) => (
+            {["bot.rule1", "bot.rule2", "bot.rule3"].map((key) => (
               <li key={key} className="flex items-start gap-2">
                 <Icon
                   name="check"
@@ -229,13 +229,13 @@ export function BotPage(): ReactNode {
 
       <ConfirmDialog
         open={pendingLive !== null}
-        title={t('bot.confirmTitle')}
-        body={t('bot.confirmBody')}
-        confirmLabel={t('bot.confirmOn')}
-        cancelLabel={t('confirm.cancel')}
+        title={t("bot.confirmTitle")}
+        body={t("bot.confirmBody")}
+        confirmLabel={t("bot.confirmOn")}
+        cancelLabel={t("confirm.cancel")}
         busy={change.isPending}
         onConfirm={() => {
-          if (pendingLive) change.mutate({ id: pendingLive, mode: 'LIVE' });
+          if (pendingLive) change.mutate({ id: pendingLive, mode: "LIVE" });
         }}
         onCancel={() => setPendingLive(null)}
       />
