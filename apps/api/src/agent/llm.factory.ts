@@ -45,6 +45,7 @@ export type LlmEnvironment = Pick<
   | 'LLM_MODEL_STRONG'
   | 'LLM_STRUCTURED_OUTPUT'
   | 'LLM_MAX_TOKENS_PARAM'
+  | 'LLM_REASONING_EFFORT'
   | 'LLM_RATE_LIMIT_RPM'
   | 'LLM_RATE_LIMIT_TPM'
   | 'LLM_RATE_LIMIT_RPD'
@@ -79,6 +80,7 @@ const LLM_KEYS = [
   'LLM_MODEL_STRONG',
   'LLM_STRUCTURED_OUTPUT',
   'LLM_MAX_TOKENS_PARAM',
+  'LLM_REASONING_EFFORT',
   'LLM_RATE_LIMIT_RPM',
   'LLM_RATE_LIMIT_TPM',
   'LLM_RATE_LIMIT_RPD',
@@ -143,6 +145,9 @@ function baseProvider(
       },
       structuredOutput: environment.LLM_STRUCTURED_OUTPUT,
       maxTokensParam: environment.LLM_MAX_TOKENS_PARAM,
+      ...(environment.LLM_REASONING_EFFORT
+        ? { reasoningEffort: environment.LLM_REASONING_EFFORT }
+        : {}),
       requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
       maxRetries: environment.LLM_MAX_RETRIES,
       ...(transport ? { fetch: transport } : {}),

@@ -53,6 +53,14 @@ export interface CapabilityView {
 }
 export type MaxTokensParam = 'max_tokens' | 'max_completion_tokens';
 
+/**
+ * Gemini's OpenAI-compatible endpoint documents `reasoning_effort` as
+ * low | medium | high (https://ai.google.dev/gemini-api/docs/openai, read
+ * 2026-10-30). Reasoning cannot be switched off for Gemini 3 models, so `low`
+ * is the smallest value; thinking tokens share the output ceiling.
+ */
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+
 export interface OpenAiCompatibleOptions {
   /** e.g. https://generativelanguage.googleapis.com/v1beta/openai */
   readonly baseUrl: string;
@@ -67,6 +75,8 @@ export interface OpenAiCompatibleOptions {
    */
   readonly capabilityOf?: (model: string) => CapabilityView;
   readonly maxTokensParam: MaxTokensParam;
+  /** Sent as `reasoning_effort` on every request; omitted when unset. */
+  readonly reasoningEffort?: ReasoningEffort;
   readonly requestTimeoutMs: number;
   readonly maxRetries: number;
   readonly providerId?: string;
@@ -478,6 +488,12 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     return { [this.options.maxTokensParam]: maxOutputTokens };
   }
 
+  private reasoning(): { reasoning_effort?: ReasoningEffort } {
+    return this.options.reasoningEffort
+      ? { reasoning_effort: this.options.reasoningEffort }
+      : {};
+  }
+
   async generateStructured<T>(
     request: StructuredGenerationRequest<T>,
   ): Promise<StructuredGenerationResult<T>> {
@@ -504,6 +520,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         model,
         messages: this.wireMessages(system, request.messages),
         ...this.outputCeiling(request.maxOutputTokens),
+        ...this.reasoning(),
         response_format: jsonObject
           ? { type: 'json_object' }
           : {
@@ -565,6 +582,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         model,
         messages: this.wireMessages(request.system, request.messages),
         ...this.outputCeiling(request.maxOutputTokens),
+        ...this.reasoning(),
         ...(request.tools.length > 0
           ? {
               tools: request.tools.map((tool) => ({

@@ -141,6 +141,8 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_MAX_TOKENS_PARAM: z
       .enum(['max_tokens', 'max_completion_tokens'])
       .default('max_tokens'),
+    /** Optional `reasoning_effort` for openai-compatible providers that document it (Gemini). */
+    LLM_REASONING_EFFORT: z.enum(['low', 'medium', 'high']).optional(),
     /** Client-side limits to stay inside a provider quota (any provider). */
     LLM_RATE_LIMIT_RPM: z.coerce.number().int().min(1).max(100_000).optional(),
     LLM_RATE_LIMIT_TPM: z.coerce

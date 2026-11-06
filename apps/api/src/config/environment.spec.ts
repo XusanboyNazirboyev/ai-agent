@@ -156,6 +156,26 @@ describe('validateEnvironment', () => {
     ).toBe('anthropic');
   });
 
+  it('accepts only low, medium or high as LLM_REASONING_EFFORT and defaults to unset', () => {
+    const base = {
+      ...postgresEnvironment,
+      LLM_PROVIDER: 'openai-compatible',
+      LLM_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      LLM_API_KEY: 'test-only',
+      LLM_MODEL_FAST: 'gemini-3.1-flash-lite',
+      LLM_MODEL_STRONG: 'gemini-3.8-flash',
+      LLM_PRICING_VERSION: 'gemini-free-2026-10-23',
+    };
+    expect(validateEnvironment(base).LLM_REASONING_EFFORT).toBeUndefined();
+    expect(
+      validateEnvironment({ ...base, LLM_REASONING_EFFORT: 'low' })
+        .LLM_REASONING_EFFORT,
+    ).toBe('low');
+    expect(() =>
+      validateEnvironment({ ...base, LLM_REASONING_EFFORT: 'none' }),
+    ).toThrow();
+  });
+
   it('configures an OpenAI-compatible provider (Gemini free tier, local Ollama)', () => {
     const gemini = validateEnvironment({
       ...postgresEnvironment,

@@ -239,6 +239,28 @@ describe('OpenAI-compatible adapter: request mapping', () => {
     expect(requests[0].body).not.toHaveProperty('max_tokens');
   });
 
+  it('sends reasoning_effort on tool and structured requests only when configured', async () => {
+    const withEffort = provider(
+      [
+        { body: completion({ content: 'hi' }) },
+        { body: completion({ content: '{"ok":true}' }) },
+      ],
+      { reasoningEffort: 'low' },
+    );
+    await withEffort.llm.generateWithTools(toolRequest);
+    await withEffort.llm.generateStructured(structuredRequest);
+    expect(withEffort.requests[0].body).toMatchObject({
+      reasoning_effort: 'low',
+    });
+    expect(withEffort.requests[1].body).toMatchObject({
+      reasoning_effort: 'low',
+    });
+
+    const without = provider([{ body: completion({ content: 'hi' }) }]);
+    await without.llm.generateWithTools(toolRequest);
+    expect(without.requests[0].body).not.toHaveProperty('reasoning_effort');
+  });
+
   it('requests json_schema output, or json_object with the schema in the prompt', async () => {
     const schema = provider([{ body: completion({ content: '{"ok":true}' }) }]);
     const result = await schema.llm.generateStructured(structuredRequest);
