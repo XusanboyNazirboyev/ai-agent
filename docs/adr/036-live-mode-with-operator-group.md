@@ -28,3 +28,10 @@
   - The web dialog offers "Choose the group in Telegram" and polls until the group is set; entering the chat id stays as a fallback.
 - **Also fixed:** a group or channel message was accepted as a customer conversation (the normalizer ignored the chat type), so a bot added to any group would have answered there in LIVE. Now only private chats (or updates without a chat type) reach customer intake; group messages are ignored except the link command and the operator group's own traffic.
 - **Checked:** unit tests (code, start parsing, controller routing), integration tests on `agentcore_test` (single use, another account's code, disabled bot, no master key, moving to a new group), the channels e2e spec (the link format and the manual fallback). The real Telegram flow (the exact `/start` text in a group) is checked on staging.
+
+## Amendment 2 (2026-11-07): LIVE without an operator group
+- **Owner decision (2026-11-07):** after Instagram was connected the bot could only draft, because an Instagram account has no operator group. The owner asked for LIVE without a Telegram group.
+- **Change:** `OPERATOR_HANDOVER_NOTIFIER_AVAILABLE` is `true`. Every handover is stored and shown in the tenant's Web Inbox with its SSE updates (Phase 6A), which counts as the operator notifier; the Telegram operator group stays optional for push notices. `liveModeRefusal` now refuses LIVE only for an untrusted provider (or a policy built with the notifier off, as in tests).
+- **Unchanged:** an untrusted provider never runs LIVE; the SHADOW rules; ADR 038 (an operator can take over at any time; idle return).
+- **Risk accepted by the owner:** a handover in LIVE waits until someone opens the Web Inbox; there is no push notice without a group. Real customers in LIVE still wait for ADR 035's P1 (data location).
+- Ported from the 2026-11-06 worktree into `feat/integration-2026-11-07`.
