@@ -310,8 +310,17 @@ export class TelegramWebhookService {
             channelAccountId: channel.id,
             authorType: 'CUSTOMER',
             direction: 'INBOUND',
-            type: 'TEXT',
+            type: update.voice ? 'VOICE' : 'TEXT',
             text: update.text,
+            // ADR 042: the worker downloads and transcribes the note later.
+            ...(update.voice
+              ? {
+                  voiceStatus: 'PENDING' as const,
+                  mediaRef: update.voice.fileId,
+                  mediaMimeType: update.voice.mimeType,
+                  mediaDurationSeconds: update.voice.durationSeconds,
+                }
+              : {}),
             sequence: (latest?.sequence ?? 0) + 1,
             providerChatId: update.chatId,
             providerMessageId: update.messageId,

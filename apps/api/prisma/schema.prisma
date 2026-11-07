@@ -68,6 +68,14 @@ enum MessageDirection {
 
 enum MessageType {
   TEXT
+  VOICE
+}
+
+/// ADR 042: a customer voice note waits for transcription.
+enum VoiceStatus {
+  PENDING
+  TRANSCRIBED
+  FAILED
 }
 
 enum DeliveryState {
@@ -579,6 +587,12 @@ model Message {
   detectedLanguage     String?           @map("detected_language") @db.VarChar(16)
   detectedScript       String?           @map("detected_script") @db.VarChar(16)
   languageConfidence   Decimal?          @map("language_confidence") @db.Decimal(4, 3)
+  /// ADR 042: voice notes. The provider's media reference (Telegram file_id,
+  /// Meta attachment URL), never the audio itself; the transcript is `text`.
+  voiceStatus          VoiceStatus?      @map("voice_status")
+  mediaRef             String?           @map("media_ref") @db.VarChar(2048)
+  mediaMimeType        String?           @map("media_mime_type") @db.VarChar(100)
+  mediaDurationSeconds Int?              @map("media_duration_seconds")
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   conversation         Conversation       @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
