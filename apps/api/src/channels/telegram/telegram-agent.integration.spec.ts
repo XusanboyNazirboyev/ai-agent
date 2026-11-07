@@ -1141,14 +1141,18 @@ describe('voice notes (ADR 042)', () => {
       providerId: 'fake',
       model: 'fake',
       calls: 0,
-      transcribe: async () => {
+      transcribe: async (): Promise<
+        Awaited<ReturnType<SpeechToText['transcribe']>>
+      > => {
         stt.calls += 1;
         return result;
       },
     };
     return stt;
   };
-  const lastTurn = async (f: Fixture) =>
+  const lastTurn = async (
+    f: Fixture,
+  ): Promise<Awaited<ReturnType<typeof turns>>[number] | undefined> =>
     (await turns(f)).filter((t) => t.status === 'COMMITTED').at(-1);
 
   it('answers the transcript as the customer text', async () => {
