@@ -21,6 +21,7 @@ import {
   InstagramApiError,
 } from '../instagram/instagram-graph.js';
 import { evaluateMessagingWindow } from '../instagram/instagram-messaging-window.js';
+import { storedMetaId } from '../meta/meta-event-key.js';
 import {
   FacebookNotConfiguredError,
   FacebookSender,
@@ -451,7 +452,7 @@ export class TelegramProcessor {
       where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
       data: {
         deliveryState: 'SENT',
-        providerMessageId: sent[0],
+        providerMessageId: sent[0] ? storedMetaId(sent[0]) : null,
         deliveryErrorCode: null,
       },
     });

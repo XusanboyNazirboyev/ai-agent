@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import { metaInboundKey } from '../meta/meta-event-key.js';
 import type { NormalizedInstagramText } from './instagram-normalizer.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
 
@@ -87,7 +88,7 @@ describe('InstagramWebhookService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           type: 'instagram.inbound',
-          idempotencyKey: 'instagram.inbound:channel-1:mid.123',
+          idempotencyKey: metaInboundKey('instagram', 'channel-1', 'mid.123'),
         }),
       }),
     );

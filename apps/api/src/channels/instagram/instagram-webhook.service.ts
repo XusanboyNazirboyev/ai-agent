@@ -1,6 +1,7 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
 import type { NormalizedInstagramText } from './instagram-normalizer.js';
 
 const EXTERNAL_ID = /^[0-9]{1,100}$/u;
@@ -29,6 +30,7 @@ export class InstagramWebhookService {
       );
     }
 
+    const storedId = storedMetaId(event.messageId);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
@@ -49,7 +51,7 @@ export class InstagramWebhookService {
             tenantId_channelAccountId_providerEventId: {
               tenantId: channel.tenantId,
               channelAccountId: channel.id,
-              providerEventId: event.messageId,
+              providerEventId: storedId,
             },
           },
           select: { id: true },
@@ -60,7 +62,7 @@ export class InstagramWebhookService {
           data: {
             tenantId: channel.tenantId,
             channelAccountId: channel.id,
-            providerEventId: event.messageId,
+            providerEventId: storedId,
             receivedAt: event.receivedAt,
             redactedPayload: {
               providerAccountId: event.accountId,
@@ -142,7 +144,7 @@ export class InstagramWebhookService {
             text: event.text,
             sequence: (latest?.sequence ?? 0) + 1,
             providerChatId: event.customerId,
-            providerMessageId: event.messageId,
+            providerMessageId: storedId,
             createdAt: event.receivedAt,
           },
           select: { id: true, sequence: true },
@@ -156,7 +158,7 @@ export class InstagramWebhookService {
               providerUserId: event.customerId,
               conversationId: conversation.id,
               messageId: message.id,
-              providerMessageId: event.messageId,
+              providerMessageId: storedId,
               // Batch order (inbound-batch.ts): Meta's mid is opaque, our
               // per-conversation sequence is assigned under the lock above.
               orderKey: String(message.sequence),
@@ -171,7 +173,11 @@ export class InstagramWebhookService {
             type: `${channelType}.inbound`,
             aggregateType: 'conversation',
             aggregateId: conversation.id,
-            idempotencyKey: `${channelType}.inbound:${channel.id}:${event.messageId}`,
+            idempotencyKey: metaInboundKey(
+              channelType,
+              channel.id,
+              event.messageId,
+            ),
 
             payload: {
               inboundEventId: inboundEvent.id,
