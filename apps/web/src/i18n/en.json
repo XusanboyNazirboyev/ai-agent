@@ -556,6 +556,7 @@
   "handover.reason.CONNECTOR_UNAVAILABLE": "The catalog or CRM could not be reached",
   "handover.reason.TOOL_LOOP_LIMIT": "The bot could not find an answer (too many steps)",
   "handover.reason.LOW_LANG_CONFIDENCE": "The customer's language was unclear",
+  "handover.reason.VOICE_UNREADABLE": "Voice messages could not be understood",
   "handover.reason.STUCK": "The conversation is not moving forward",
   "handover.reason.HIGH_VALUE": "A high-value request needs a person",
   "handover.reason.LEGAL_UNVERIFIED": "A legal question without a checked answer",
@@ -614,5 +615,8 @@
   "fbCallback.title": "Connect a Facebook Page",
   "fbCallback.denied": "Access was not allowed on Facebook, so nothing was connected.",
   "fbCallback.invalid": "This page opens after signing in to Facebook. Start again from the Channels page.",
-  "fbCallback.enabled": "The Page is enabled. Messenger messages now reach the inbox."
+  "fbCallback.enabled": "The Page is enabled. Messenger messages now reach the inbox.",
+  "voice.transcript": "Voice message (transcript)",
+  "voice.pending": "Voice message, transcribing…",
+  "voice.failed": "Voice message, could not be understood"
 }

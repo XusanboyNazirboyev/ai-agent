@@ -97,6 +97,8 @@ export interface ConversationView {
     direction: string;
     type: string;
     text: string;
+    /** ADR 042: set on customer voice notes. */
+    voiceStatus?: 'PENDING' | 'TRANSCRIBED' | 'FAILED' | null;
     deliveryState: 'PENDING' | 'SENT' | 'FAILED' | 'UNKNOWN';
     createdAt: string;
   }[];

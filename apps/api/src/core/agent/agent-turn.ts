@@ -15,6 +15,7 @@ import type {
 } from '../locales/locale-pack.js';
 import { isOptOutMessage } from '../followup/optout.js';
 import { decimalAtLeast } from './money.js';
+import { decideVoice } from '../speech/speech-to-text.js';
 import {
   DEFAULT_STUCK_POLICY,
   detectStuck,
@@ -107,6 +108,12 @@ export interface AgentTurnInput {
    * Progress signals for the STUCK trigger and the contact request, supplied
    * by the conversation layer from stored turns (oldest first).
    */
+  /**
+   * ADR 042: the answered batch held a voice note that could not be
+   * transcribed (its text is empty), with the number of failed voice notes
+   * in a row before it.
+   */
+  readonly voice?: { readonly failed: true; readonly failedBefore: number };
   readonly progress?: {
     readonly priorTurns: readonly PriorTurnSignal[];
     readonly stuck?: StuckPolicy;
@@ -389,6 +396,19 @@ export async function runAgentTurn(
       handover: reason,
       ...extra,
     });
+
+  // ADR 042: an unreadable voice note is never a customer message. Without
+  // other text it is answered by code: ask to type, or after repeated
+  // failures a person (core/speech decideVoice); no model call.
+  if (input.voice?.failed && input.customerText.trim() === '') {
+    const decision = decideVoice(
+      { ok: false, code: 'UNINTELLIGIBLE' },
+      input.voice.failedBefore,
+    );
+    return decision.action === 'HANDOVER'
+      ? handover('VOICE_UNREADABLE')
+      : finish(locale().templates.voiceNotUnderstood, 'CLARIFICATION_REQUIRED');
+  }
 
   // Tier-0 language gate: runs before any metered model call. Clarification
   // keeps the slots and history untouched so the conversation resumes once

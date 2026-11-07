@@ -22,6 +22,7 @@ import {
 } from '../instagram/instagram-graph.js';
 import { evaluateMessagingWindow } from '../instagram/instagram-messaging-window.js';
 import { storedMetaId } from '../meta/meta-event-key.js';
+import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 import {
   FacebookNotConfiguredError,
   FacebookSender,
@@ -57,6 +58,7 @@ export class TelegramProcessor {
     @Optional() private readonly actions?: ActionService,
     @Optional() private readonly instagram?: InstagramSender,
     @Optional() private readonly facebook?: FacebookSender,
+    @Optional() private readonly voice?: VoiceTranscriptionService,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
@@ -143,6 +145,8 @@ export class TelegramProcessor {
     if (!inboundEventId || !conversationId) {
       throw new Error('Invalid durable inbound event reference');
     }
+    // ADR 042: voice notes become text (or FAILED) before anyone reads them.
+    await this.voice?.resolvePending(event.tenantId, conversationId);
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);
       if (mode !== 'OFF') {
@@ -277,6 +281,8 @@ export class TelegramProcessor {
         },
       });
       if (!conversation || conversation.state !== 'BOT_ACTIVE') return;
+      // A voice note that was not transcribed has no text to echo (ADR 042).
+      if (batch.text.trim() === '') return;
 
       const latest = await tx.message.findFirst({
         where: { tenantId: event.tenantId, conversationId },

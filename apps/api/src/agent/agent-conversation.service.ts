@@ -98,6 +98,48 @@ type TransactionClient = Prisma.TransactionClient;
  */
 @Injectable()
 export class AgentConversationService implements OnModuleInit {
+  /**
+   * ADR 042: whether the answered batch (sequences from `beforeSequence`) has
+   * a voice note that could not be transcribed, and how many failed voice
+   * notes came right before it. Only asked when the batch text is empty.
+   */
+  private async voiceSignal(
+    tenantId: string,
+    conversationId: string,
+    text: string,
+    beforeSequence: number | undefined,
+  ): Promise<{ failed: true; failedBefore: number } | undefined> {
+    if (text.trim() !== '' || beforeSequence === undefined) return undefined;
+    const failedInBatch = await this.prisma.message.count({
+      where: {
+        tenantId,
+        conversationId,
+        direction: 'INBOUND',
+        type: 'VOICE',
+        voiceStatus: 'FAILED',
+        sequence: { gte: beforeSequence },
+      },
+    });
+    if (failedInBatch === 0) return undefined;
+    const earlier = await this.prisma.message.findMany({
+      where: {
+        tenantId,
+        conversationId,
+        direction: 'INBOUND',
+        sequence: { lt: beforeSequence },
+      },
+      orderBy: { sequence: 'desc' },
+      take: 5,
+      select: { type: true, voiceStatus: true },
+    });
+    let failedBefore = 0;
+    for (const message of earlier) {
+      if (message.type !== 'VOICE' || message.voiceStatus !== 'FAILED') break;
+      failedBefore += 1;
+    }
+    return { failed: true, failedBefore };
+  }
+
   private readonly logger = new Logger(AgentConversationService.name);
   private readonly locales = new LocaleRegistry(INITIAL_LOCALE_PACKS);
   private readonly pricing: PricingSnapshot;
@@ -347,9 +389,16 @@ export class AgentConversationService implements OnModuleInit {
         })
       : undefined;
 
+    const voice = await this.voiceSignal(
+      tenantId,
+      conversationId,
+      request.text,
+      request.beforeSequence,
+    );
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
       ...(action ? { action } : {}),
+      ...(voice ? { voice } : {}),
       progress: {
         priorTurns: selectEpisode(
           priorTurns,

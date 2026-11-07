@@ -1,4 +1,9 @@
 import { OperatorIdleReturnService } from '../../handover/operator-idle-return.service.js';
+import {
+  NotConfiguredSpeechToText,
+  type SpeechToText,
+} from '../../core/speech/speech-to-text.js';
+import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 import type { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadEnv } from 'dotenv';
@@ -1057,5 +1062,148 @@ describe('STUCK needs a live dialogue', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     await f.processor.process(await receive(f, greetings[2]));
     expect(await lastOutcome(f)).toBe('ASKED_SLOT');
+  });
+});
+
+describe('voice notes (ADR 042)', () => {
+  const voiceTurn = async (
+    f: Fixture,
+    stt: SpeechToText,
+    download: Uint8Array | null = new Uint8Array(2_048),
+  ): Promise<{ messageId: string }> => {
+    const updateId = ++nextUpdate;
+    const normalized = normalizeTelegramUpdate({
+      update_id: updateId,
+      message: {
+        message_id: updateId,
+        date: Math.floor(Date.now() / 1_000),
+        chat: { id: 4_242 },
+        from: { id: 77 },
+        voice: { file_id: `voice-${updateId}`, duration: 4 },
+      },
+    });
+    if (normalized.kind !== 'text') throw new Error('expected text');
+    expect(await f.webhook.accept(f.channelAccountId, normalized)).toBe(
+      'accepted',
+    );
+    const stored = await prisma.message.findFirstOrThrow({
+      where: { tenantId: f.tenantId, providerMessageId: String(updateId) },
+    });
+    expect(stored).toMatchObject({
+      type: 'VOICE',
+      voiceStatus: 'PENDING',
+      text: '',
+      mediaRef: `voice-${updateId}`,
+      mediaMimeType: 'audio/ogg',
+      mediaDurationSeconds: 4,
+    });
+    const outbox = await prisma.outboxEvent.findFirstOrThrow({
+      where: {
+        tenantId: f.tenantId,
+        idempotencyKey: `telegram.inbound:${f.channelAccountId}:${updateId}`,
+      },
+    });
+    const sender = {
+      sendMessage: f.sender.sendMessage,
+      downloadFile: vi.fn(async () => download),
+    };
+    const voice = new VoiceTranscriptionService(
+      prisma as unknown as PrismaService,
+      config({}),
+      sender as unknown as TelegramSender,
+      stt,
+    );
+    const processor = new TelegramProcessor(
+      prisma as unknown as PrismaService,
+      sender as unknown as TelegramSender,
+      f.pipeline,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      voice,
+    );
+    await processor.process({
+      outboxId: outbox.id,
+      tenantId: f.tenantId,
+      type: outbox.type,
+      payload: outbox.payload,
+    });
+    return { messageId: stored.id };
+  };
+  const sttSaying = (
+    result: Awaited<ReturnType<SpeechToText['transcribe']>>,
+  ): SpeechToText & { calls: number } => {
+    const stt = {
+      providerId: 'fake',
+      model: 'fake',
+      calls: 0,
+      transcribe: async () => {
+        stt.calls += 1;
+        return result;
+      },
+    };
+    return stt;
+  };
+  const lastTurn = async (f: Fixture) =>
+    (await turns(f)).filter((t) => t.status === 'COMMITTED').at(-1);
+
+  it('answers the transcript as the customer text', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = sttSaying({ ok: true, text: 'IELTS kursi kerak' });
+    const { messageId } = await voiceTurn(f, stt);
+    expect(
+      await prisma.message.findUniqueOrThrow({ where: { id: messageId } }),
+    ).toMatchObject({ voiceStatus: 'TRANSCRIBED', text: 'IELTS kursi kerak' });
+    expect(f.provider.customerTexts.at(-1)).toContain('IELTS kursi kerak');
+    expect(await lastTurn(f)).toMatchObject({ mode: 'SHADOW' });
+  });
+
+  it('asks to type without a model call, then hands over the second time', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = sttSaying({ ok: false, code: 'UNINTELLIGIBLE' });
+    const first = await voiceTurn(f, stt);
+    expect(
+      await prisma.message.findUniqueOrThrow({
+        where: { id: first.messageId },
+      }),
+    ).toMatchObject({ voiceStatus: 'FAILED', text: '' });
+    expect(await lastTurn(f)).toMatchObject({
+      outcome: 'CLARIFICATION_REQUIRED',
+    });
+    expect((await lastTurn(f))?.draftText).toContain('yozib yuboring');
+    expect(f.provider.inner.calls).toHaveLength(0);
+
+    await voiceTurn(f, stt);
+    expect(await lastTurn(f)).toMatchObject({
+      outcome: 'HANDOVER',
+      handoverReason: 'VOICE_UNREADABLE',
+    });
+    expect(f.provider.inner.calls).toHaveLength(0);
+  });
+
+  it('without a configured provider nothing is downloaded and the customer is asked to type', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = new NotConfiguredSpeechToText();
+    const { messageId } = await voiceTurn(f, stt);
+    expect(
+      await prisma.message.findUniqueOrThrow({ where: { id: messageId } }),
+    ).toMatchObject({ voiceStatus: 'FAILED' });
+    expect(await lastTurn(f)).toMatchObject({
+      outcome: 'CLARIFICATION_REQUIRED',
+    });
+  });
+
+  it('a failed download is a failed note, never an empty customer message', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = sttSaying({ ok: true, text: 'never used' });
+    await voiceTurn(f, stt, null);
+    expect(stt.calls).toBe(0);
+    expect(await lastTurn(f)).toMatchObject({
+      outcome: 'CLARIFICATION_REQUIRED',
+    });
   });
 });

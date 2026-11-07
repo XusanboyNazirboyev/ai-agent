@@ -556,6 +556,7 @@
   "handover.reason.CONNECTOR_UNAVAILABLE": "Katalog yoki CRM bilan aloqa yo‘q",
   "handover.reason.TOOL_LOOP_LIMIT": "Bot javob topa olmadi (urinishlar soni tugadi)",
   "handover.reason.LOW_LANG_CONFIDENCE": "Mijoz tilini aniq bilib bo‘lmadi",
+  "handover.reason.VOICE_UNREADABLE": "Ovozli xabarlarni tushunib bo‘lmadi",
   "handover.reason.STUCK": "Suhbat oldinga siljimayapti",
   "handover.reason.HIGH_VALUE": "Katta summali so‘rov — operator ko‘rishi kerak",
   "handover.reason.LEGAL_UNVERIFIED": "Huquqiy savol — tekshirilgan javob yo‘q",
@@ -614,5 +615,8 @@
   "fbCallback.title": "Facebook sahifasini ulash",
   "fbCallback.denied": "Facebook’da ruxsat berilmadi, hech narsa ulanmadi.",
   "fbCallback.invalid": "Bu sahifa Facebook’ga kirgandan keyin ochiladi. Kanallar sahifasidan qaytadan boshlang.",
-  "fbCallback.enabled": "Sahifa yoqildi. Messenger xabarlari endi Inbox’ga keladi."
+  "fbCallback.enabled": "Sahifa yoqildi. Messenger xabarlari endi Inbox’ga keladi.",
+  "voice.transcript": "Ovozli xabar (matni)",
+  "voice.pending": "Ovozli xabar, matnga aylantirilmoqda…",
+  "voice.failed": "Ovozli xabar, tushunib bo‘lmadi"
 }

@@ -44,6 +44,64 @@ export class TelegramSender {
     this.request = request ?? fetch;
   }
 
+  /**
+   * ADR 042: downloads a voice note (Bot API, read 2026-11-07): `getFile`
+   * returns `file_path`; the file is then at
+   * `https://api.telegram.org/file/bot<token>/<file_path>`, valid for at least
+   * one hour, at most 20 MB. The URL holds the bot token: it is never logged
+   * or returned. Returns null when the file is missing, too large or the
+   * download fails; the caller treats that as an unreadable voice note.
+   */
+  async downloadFile(
+    fileId: string,
+    maxBytes: number,
+    channelAccountId?: string,
+  ): Promise<Uint8Array | null> {
+    const token =
+      channelAccountId && this.credentials
+        ? await this.credentials.tokenFor(channelAccountId)
+        : this.token;
+    if (!token) throw new Error('Telegram sender is not configured');
+    try {
+      const info = await this.request(
+        `https://api.telegram.org/bot${token}/getFile`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ file_id: fileId }),
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
+      const body = (await info.json()) as {
+        ok?: unknown;
+        result?: { file_path?: unknown; file_size?: unknown };
+      };
+      const path = body?.result?.file_path;
+      const size = body?.result?.file_size;
+      if (
+        !info.ok ||
+        body?.ok !== true ||
+        typeof path !== 'string' ||
+        !/^[A-Za-z0-9_./-]{1,300}$/u.test(path) ||
+        path.includes('..') ||
+        (typeof size === 'number' && size > maxBytes)
+      )
+        return null;
+      const file = await this.request(
+        `https://api.telegram.org/file/bot${token}/${path}`,
+        { method: 'GET', signal: AbortSignal.timeout(20_000) },
+      );
+      const declared = Number(file.headers.get('content-length') ?? '0');
+      if (!file.ok || declared > maxBytes) return null;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return bytes.byteLength > 0 && bytes.byteLength <= maxBytes
+        ? bytes
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** `channelAccountId` selects that account's bot; without it the environment bot is used. */
   async sendMessage(
     chatId: string,
