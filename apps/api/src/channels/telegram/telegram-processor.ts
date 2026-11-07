@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { jsonString, selectInboundBatch } from './inbound-batch.js';
@@ -44,6 +44,8 @@ export type ProcessResult = void | { readonly retryAt: Date };
 
 @Injectable()
 export class TelegramProcessor {
+  private readonly logger = new Logger(TelegramProcessor.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly sender: TelegramSender,
@@ -167,6 +169,8 @@ export class TelegramProcessor {
     if (!inboundEventId || !conversationId) {
       throw new Error('Invalid durable inbound event reference');
     }
+    if (event.type === 'instagram.inbound')
+      await this.fillInstagramName(event.tenantId, conversationId);
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);
       if (mode !== 'OFF') {
@@ -185,6 +189,46 @@ export class TelegramProcessor {
       },
       data: { status: 'PROCESSED', processedAt: new Date() },
     });
+  }
+
+  /**
+   * Instagram webhooks carry only the customer's id, so the inbox showed
+   * "Unnamed". Once per contact without a name, ask the User Profile API;
+   * any failure leaves the name empty and never blocks the reply.
+   */
+  private async fillInstagramName(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<void> {
+    if (!this.instagram) return;
+    try {
+      const conversation = await this.prisma.conversation.findFirst({
+        where: { id: conversationId, tenantId },
+        select: {
+          channelAccountId: true,
+          contact: { select: { id: true, name: true, providerUserId: true } },
+        },
+      });
+      const contact = conversation?.contact;
+      if (!conversation || !contact || contact.name) return;
+      const name = await this.instagram.customerName(
+        tenantId,
+        conversation.channelAccountId,
+        contact.providerUserId,
+      );
+      if (!name) return;
+      await this.prisma.contact.updateMany({
+        where: { id: contact.id, tenantId, name: null },
+        data: { name },
+      });
+    } catch {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'instagram.profile_unavailable',
+          conversationId,
+        }),
+      );
+    }
   }
 
   /** Phase 2 behavior (agent mode OFF): one echo per debounced batch. */

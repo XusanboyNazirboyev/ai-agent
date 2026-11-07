@@ -244,6 +244,30 @@ describe('Unified login: Graph calls on graph.facebook.com', () => {
   });
 });
 
+describe('customer name lookup (User Profile API)', () => {
+  it('asks graph.facebook.com for a Unified login token, and returns null on refusal', async () => {
+    const { request, calls } = fakeFetch([
+      { status: 200, body: { name: '  Ali\u202e  Valiyev ' } },
+      { status: 400, body: { error: { code: 230 } } },
+      { status: 200, body: { username: 'not valid!' } },
+    ]);
+    const graph = new InstagramGraphClient(request);
+    await expect(graph.customerName(IGSID, TOKEN, 'facebook')).resolves.toBe(
+      'Ali Valiyev',
+    );
+    expect(`${calls[0]!.url.origin}${calls[0]!.url.pathname}`).toBe(
+      `${FACEBOOK_GRAPH_BASE_URL}/${IGSID}`,
+    );
+    expect(calls[0]!.url.searchParams.get('fields')).toBe('name,username');
+    await expect(
+      graph.customerName(IGSID, TOKEN, 'facebook'),
+    ).resolves.toBeNull();
+    await expect(
+      graph.customerName(IGSID, TOKEN, 'facebook'),
+    ).resolves.toBeNull();
+  });
+});
+
 describe('RedisOAuthStateLedger', () => {
   class FakeRedis implements LedgerRedis {
     readonly keys = new Map<string, number>();

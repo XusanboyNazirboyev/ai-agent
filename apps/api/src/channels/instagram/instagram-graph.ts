@@ -196,6 +196,52 @@ export class InstagramGraphClient {
       throw new InstagramApiError('rejected', null, 200);
   }
 
+  /**
+   * The customer's display name (User Profile API, read 2026-11-07:
+   * instagram-api-with-instagram-login/messaging-api/user-profile and
+   * business-messaging/instagram-messaging/features/user-profile):
+   * `GET /<IGSID>?fields=name,username`, on graph.instagram.com with an
+   * Instagram User token, on graph.facebook.com otherwise (the Unified login
+   * system-user token there is inferred, not stated). Consent exists once the
+   * customer has messaged the business. Returns null when Meta refuses
+   * (no consent, blocked) or the answer is unusable; never throws for that.
+   */
+  async customerName(
+    igsid: string,
+    token: string,
+    host: 'instagram' | 'facebook',
+  ): Promise<string | null> {
+    const base = host === 'instagram' ? this.base : this.facebookBase;
+    const url = new URL(`${base}/${requireId(igsid, 'Instagram-scoped id')}`);
+    url.searchParams.set('fields', 'name,username');
+    url.searchParams.set('access_token', token);
+    let body: { name?: unknown; username?: unknown } | null;
+    try {
+      body = (await this.call(url.toString(), { method: 'GET' })) as {
+        name?: unknown;
+        username?: unknown;
+      } | null;
+    } catch {
+      return null;
+    }
+    const clean = (value: unknown): string | null => {
+      if (typeof value !== 'string') return null;
+      // Untrusted text: drop control characters, collapse spaces, bound it.
+      const text = value
+        .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+        .replace(/\s+/gu, ' ')
+        .trim()
+        .slice(0, 100);
+      return text.length > 0 ? text : null;
+    };
+    const name = clean(body?.name);
+    if (name) return name;
+    const username = clean(body?.username);
+    return username && /^[A-Za-z0-9._]{1,30}$/u.test(username)
+      ? `@${username}`
+      : null;
+  }
+
   /** Unified login: subscribes the account on graph.facebook.com with the system-user token. */
   async subscribeUnified(
     igUserId: string,

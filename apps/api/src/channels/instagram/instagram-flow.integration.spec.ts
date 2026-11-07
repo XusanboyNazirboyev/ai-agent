@@ -105,6 +105,8 @@ interface Fixture {
   readonly instagram: InstagramSender;
   readonly telegram: { sendMessage: ReturnType<typeof vi.fn> };
   readonly calls: { url: string; init: RequestInit }[];
+  /** User Profile API lookups, kept apart from the send calls. */
+  readonly profileCalls: string[];
   readonly provider: ScriptedLlmProvider;
 }
 
@@ -112,6 +114,7 @@ async function fixture(options: {
   mode: 'OFF' | 'SHADOW' | 'LIVE';
   meta?: Meta;
   storeToken?: boolean;
+  profile?: { status: number; body: unknown };
 }): Promise<Fixture> {
   const suffix = randomUUID();
   const tenant = await db.tenant.create({
@@ -156,8 +159,22 @@ async function fixture(options: {
       TOKEN,
     );
   const calls: { url: string; init: RequestInit }[] = [];
+  const profileCalls: string[] = [];
   const meta = options.meta ?? sentOk;
   const request = vi.fn(async (url: string | URL, init?: RequestInit) => {
+    if (
+      (init?.method ?? 'GET') === 'GET' &&
+      /\/[0-9]+\?fields=name%2Cusername/u.test(String(url))
+    ) {
+      profileCalls.push(String(url));
+      const profile = options.profile ?? {
+        status: 400,
+        body: { error: { code: 230, message: 'User consent is required' } },
+      };
+      return new Response(JSON.stringify(profile.body), {
+        status: profile.status,
+      });
+    }
     calls.push({ url: String(url), init: init ?? {} });
     const reply = meta(String(url), init ?? {});
     return new Response(JSON.stringify(reply.body), { status: reply.status });
@@ -207,6 +224,7 @@ async function fixture(options: {
     instagram,
     telegram,
     calls,
+    profileCalls,
     provider,
   };
 }
@@ -434,6 +452,59 @@ describe('Instagram DM: inbound to agent reply to Graph send', () => {
       }),
     ).toBe(1);
     expect(f.calls).toHaveLength(0);
+  });
+});
+
+describe('Instagram DM: customer name from the User Profile API', () => {
+  it('stores the profile name once and still answers', async () => {
+    const f = await fixture({
+      mode: 'LIVE',
+      profile: {
+        status: 200,
+        body: { name: 'Aziza\u0000 Karimova', username: 'aziza' },
+      },
+    });
+    const { event } = await receive(f, 'IELTS kerak');
+    await f.processor.process(event);
+    const contact = await db.contact.findFirstOrThrow({
+      where: { tenantId: f.tenantId },
+    });
+    expect(contact.name).toBe('Aziza Karimova');
+    expect(f.profileCalls).toHaveLength(1);
+    expect(f.profileCalls[0]).toContain(
+      `https://graph.instagram.com/v26.0/${CUSTOMER_ID}?fields=name%2Cusername`,
+    );
+    // A second message does not ask again.
+    const second = await receive(f, 'Narxi qancha?');
+    await f.processor.process(second.event);
+    expect(f.profileCalls).toHaveLength(1);
+  });
+
+  it('falls back to @username, and leaves the name empty when Meta refuses', async () => {
+    const named = await fixture({
+      mode: 'SHADOW',
+      profile: { status: 200, body: { username: 'aziza.k' } },
+    });
+    await named.processor.process((await receive(named, 'Salom')).event);
+    expect(
+      (
+        await db.contact.findFirstOrThrow({
+          where: { tenantId: named.tenantId },
+        })
+      ).name,
+    ).toBe('@aziza.k');
+
+    const refused = await fixture({ mode: 'LIVE' });
+    await refused.processor.process((await receive(refused, 'Salom')).event);
+    expect(
+      (
+        await db.contact.findFirstOrThrow({
+          where: { tenantId: refused.tenantId },
+        })
+      ).name,
+    ).toBeNull();
+    // The reply was still queued.
+    expect(await sends(refused)).toHaveLength(1);
   });
 });
 
