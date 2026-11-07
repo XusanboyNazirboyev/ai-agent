@@ -20,6 +20,7 @@ import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
 import { PrismaChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
+import { metaInboundKey } from '../meta/meta-event-key.js';
 import { TelegramAgentPipeline } from '../telegram/telegram-agent-pipeline.js';
 import {
   TelegramProcessor,
@@ -245,7 +246,7 @@ async function receive(
     where: {
       tenantId: f.tenantId,
       type: 'instagram.inbound',
-      idempotencyKey: `instagram.inbound:${f.channelAccountId}:${mid}`,
+      idempotencyKey: metaInboundKey('instagram', f.channelAccountId, mid),
     },
   });
   return {
@@ -434,6 +435,58 @@ describe('Instagram DM: inbound to agent reply to Graph send', () => {
     ).toBe(1);
     expect(f.calls).toHaveLength(0);
   });
+});
+
+describe('Instagram DM: real-length message ids', () => {
+  // Real Instagram mids are long base64 strings; the key built from one must
+  // still fit the database columns (staging, 2026-11-07: every delivery
+  // failed with "value too long" on the outbox idempotency key).
+  it.each([150, 199, 200, 201, 480])(
+    'accepts a %i-character mid once and dedupes its redelivery',
+    async (length) => {
+      const f = await fixture({ mode: 'SHADOW' });
+      const mid = `aWdfZAG1f${'x'.repeat(length - 9)}`;
+      expect(mid).toHaveLength(length);
+      const deliver = (): ReturnType<typeof normalizeInstagramWebhook> =>
+        normalizeInstagramWebhook(
+          {
+            object: 'instagram',
+            entry: [
+              {
+                id: f.igUserId,
+                time: Date.now(),
+                messaging: [
+                  {
+                    sender: { id: CUSTOMER_ID },
+                    recipient: { id: f.igUserId },
+                    timestamp: Date.now(),
+                    message: { mid, text: 'Salom' },
+                  },
+                ],
+              },
+            ],
+          },
+          new Date(),
+        );
+      const first = deliver();
+      if (!first.ok || first.events[0]?.kind !== 'text')
+        throw new Error('expected one text event');
+      expect(await f.intake.accept(first.events[0])).toBe('accepted');
+      const again = deliver();
+      if (!again.ok || again.events[0]?.kind !== 'text')
+        throw new Error('expected one text event');
+      expect(await f.intake.accept(again.events[0])).toBe('duplicate');
+      expect(
+        await db.outboxEvent.count({
+          where: { tenantId: f.tenantId, type: 'instagram.inbound' },
+        }),
+      ).toBe(1);
+      const [inbound] = await db.inboundEvent.findMany({
+        where: { tenantId: f.tenantId },
+      });
+      expect(inbound!.providerEventId.length).toBeLessThanOrEqual(200);
+    },
+  );
 });
 
 describe('Instagram DM: inbound payloads that must not reach the agent', () => {

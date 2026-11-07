@@ -20,6 +20,7 @@ import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
 import { PrismaChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
+import { metaInboundKey } from '../meta/meta-event-key.js';
 import { TelegramAgentPipeline } from '../telegram/telegram-agent-pipeline.js';
 import {
   TelegramProcessor,
@@ -242,7 +243,7 @@ async function receive(
     where: {
       tenantId: f.tenantId,
       type: 'facebook.inbound',
-      idempotencyKey: `facebook.inbound:${f.channelAccountId}:${mid}`,
+      idempotencyKey: metaInboundKey('facebook', f.channelAccountId, mid),
     },
   });
   return {
