@@ -12,6 +12,13 @@ import { z } from 'zod';
  * (the docs template shows an array; both are accepted). The receive time is
  * assigned by us, so the messaging window never depends on Meta's clock.
  * Customer text is untrusted data and is only length-bounded here.
+ *
+ * Comments (ADR 043; "Webhook Notification Examples" and the fields matrix,
+ * read 2026-11-07): `entry[].changes[]` with `field: "comments"` and a
+ * `value` holding `comment_id` (Unified Login / Facebook Login; `id` in the
+ * Instagram Login example), `from {id, username}`, `text`, `media {id,
+ * media_product_type}` and `parent_id` when the comment answers a comment.
+ * Each change is validated on its own: a malformed one is ignored.
  */
 const id = z.string().min(1).max(100);
 
@@ -39,6 +46,30 @@ const entry = z
     id,
     time: z.number().nonnegative().optional(),
     messaging: z.array(messagingItem).max(100).optional(),
+    changes: z
+      .array(
+        z
+          .object({ field: z.string().max(100), value: z.unknown() })
+          .passthrough(),
+      )
+      .max(100)
+      .optional(),
+  })
+  .passthrough();
+
+const commentValue = z
+  .object({
+    comment_id: id.optional(),
+    id: id.optional(),
+    text: z.string().max(5_000).optional(),
+    parent_id: id.optional(),
+    from: z
+      .object({ id, username: z.string().max(100).optional() })
+      .passthrough(),
+    media: z
+      .object({ id, media_product_type: z.string().max(50).optional() })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -60,11 +91,34 @@ export type NormalizedInstagramText = {
   readonly receivedAt: Date;
 };
 
+/** ADR 043: a top-level comment on one of our posts. */
+export type NormalizedInstagramComment = {
+  readonly kind: 'comment';
+  readonly commentId: string;
+  /** Our business account (`entry.id`). */
+  readonly accountId: string;
+  /** The commenter, Instagram-scoped. */
+  readonly fromId: string;
+  readonly username: string | null;
+  readonly text: string;
+  readonly mediaId: string | null;
+  readonly mediaProductType: string | null;
+  readonly receivedAt: Date;
+};
+
 export type InstagramIgnoreReason =
-  'echo' | 'self_test' | 'deleted' | 'no_text' | 'not_a_message';
+  | 'echo'
+  | 'self_test'
+  | 'deleted'
+  | 'no_text'
+  | 'not_a_message'
+  | 'own_comment'
+  | 'comment_reply'
+  | 'not_a_comment';
 
 export type NormalizedInstagramEvent =
   | NormalizedInstagramText
+  | NormalizedInstagramComment
   | { readonly kind: 'ignored'; readonly reason: InstagramIgnoreReason };
 
 export type InstagramNormalization =
@@ -103,6 +157,41 @@ export function normalizeInstagramWebhook(
             accountId: e.id,
             customerId: m.sender.id,
             text: message.text,
+            receivedAt,
+          });
+        }
+      }
+  for (const b of bodies)
+    for (const e of b.entry)
+      for (const change of e.changes ?? []) {
+        if (change.field !== 'comments') {
+          events.push({ kind: 'ignored', reason: 'not_a_comment' });
+          continue;
+        }
+        const value = commentValue.safeParse(change.value);
+        const commentId = value.success
+          ? (value.data.comment_id ?? value.data.id)
+          : undefined;
+        if (!value.success || !commentId) {
+          events.push({ kind: 'ignored', reason: 'not_a_comment' });
+        } else if (value.data.from.id === e.id) {
+          // Our own comment or reply: never answer ourselves.
+          events.push({ kind: 'ignored', reason: 'own_comment' });
+        } else if (value.data.parent_id) {
+          // A reply inside a thread (possibly to our reply): no bot loops.
+          events.push({ kind: 'ignored', reason: 'comment_reply' });
+        } else if (!value.data.text || value.data.text.trim() === '') {
+          events.push({ kind: 'ignored', reason: 'no_text' });
+        } else {
+          events.push({
+            kind: 'comment',
+            commentId,
+            accountId: e.id,
+            fromId: value.data.from.id,
+            username: value.data.from.username ?? null,
+            text: value.data.text,
+            mediaId: value.data.media?.id ?? null,
+            mediaProductType: value.data.media?.media_product_type ?? null,
             receivedAt,
           });
         }

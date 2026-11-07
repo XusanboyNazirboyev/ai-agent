@@ -86,7 +86,9 @@ export class InstagramWebhookController {
     let duplicate = 0;
     let ignored = 0;
     for (const event of normalized.events) {
-      if (event.kind === 'ignored') {
+      // ADR 043: comments are recognised; their reply pipeline is a later
+      // slice, so for now they are counted as ignored (no behaviour change).
+      if (event.kind === 'ignored' || event.kind === 'comment') {
         ignored += 1;
         continue;
       }

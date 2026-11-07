@@ -222,3 +222,64 @@ describe('text splitting by bytes', () => {
     expect(parts.join('')).toBe(word);
   });
 });
+
+describe('Instagram comment webhooks (ADR 043)', () => {
+  const ACCOUNT = '17841400000000001';
+  const body = (value: unknown, field = 'comments'): unknown => ({
+    object: 'instagram',
+    entry: [{ id: ACCOUNT, time: 1, changes: [{ field, value }] }],
+  });
+  const at = new Date('2026-11-07T10:00:00Z');
+
+  it('normalizes a top-level comment from the Unified Login example shape', () => {
+    expect(
+      normalizeInstagramWebhook(
+        body({
+          comment_id: '18000000000000001',
+          from: { id: '9876543210', username: 'aziza' },
+          text: 'Narxi qancha?',
+          media: { id: '17900000000000001', media_product_type: 'FEED' },
+        }),
+        at,
+      ),
+    ).toEqual({
+      ok: true,
+      events: [
+        {
+          kind: 'comment',
+          commentId: '18000000000000001',
+          accountId: ACCOUNT,
+          fromId: '9876543210',
+          username: 'aziza',
+          text: 'Narxi qancha?',
+          mediaId: '17900000000000001',
+          mediaProductType: 'FEED',
+          receivedAt: at,
+        },
+      ],
+    });
+  });
+
+  it('ignores our own comments, replies in a thread, empty text, other fields and a malformed change', () => {
+    const reasons = (value: unknown, field?: string): unknown => {
+      const result = normalizeInstagramWebhook(body(value, field), at);
+      return result.ok
+        ? result.events.map((e) => e.kind === 'ignored' && e.reason)
+        : result;
+    };
+    const base = {
+      comment_id: '18000000000000002',
+      from: { id: '9876543210' },
+      text: 'Salom',
+    };
+    expect(reasons({ ...base, from: { id: ACCOUNT } })).toEqual([
+      'own_comment',
+    ]);
+    expect(reasons({ ...base, parent_id: '18000000000000001' })).toEqual([
+      'comment_reply',
+    ]);
+    expect(reasons({ ...base, text: '  ' })).toEqual(['no_text']);
+    expect(reasons(base, 'mentions')).toEqual(['not_a_comment']);
+    expect(reasons({ text: 'no id or sender' })).toEqual(['not_a_comment']);
+  });
+});
