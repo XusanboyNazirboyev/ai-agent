@@ -221,6 +221,7 @@ model Tenant {
   aliases         CatalogAlias[]
   quotes          Quote[]
   leads           Lead[]
+  leadStages      LeadStage[]
   handovers       Handover[]
   bookings        Booking[]
   inboundEvents   InboundEvent[]
@@ -726,6 +727,7 @@ model Lead {
   tenantId        String       @map("tenant_id") @db.Uuid
   contactId       String       @map("contact_id") @db.Uuid
   conversationId  String       @map("conversation_id") @db.Uuid
+  pipelineStageId String?      @map("pipeline_stage_id") @db.Uuid
   score           LeadScore    @default(COLD)
   /// Set by an operator: automatic rescoring keeps it until the operator
   /// returns the lead to automatic scoring.
@@ -746,14 +748,33 @@ model Lead {
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact         Contact      @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
   conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+  pipelineStage   LeadStage?   @relation(fields: [tenantId, pipelineStageId], references: [tenantId, id], onDelete: Restrict)
 
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status, score])
+  @@index([tenantId, pipelineStageId, createdAt])
   @@index([tenantId, crmSyncStatus, updatedAt])
   @@index([tenantId, contactId])
   @@index([tenantId, conversationId])
   @@map("leads")
+}
+
+model LeadStage {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  code      String?  @db.VarChar(40)
+  name      String?  @db.VarChar(80)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
+  @@index([tenantId, position])
+  @@map("lead_stages")
 }
 
 model Handover {

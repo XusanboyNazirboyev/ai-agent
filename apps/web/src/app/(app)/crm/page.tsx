@@ -1,6 +1,6 @@
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { CrmPage } from '@/components/crm-page';
 
 export default function Crm(): ReactNode {
-  return <CrmPage />;
+  redirect('/settings/crm');
 }

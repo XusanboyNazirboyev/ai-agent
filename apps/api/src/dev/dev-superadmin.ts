@@ -16,6 +16,27 @@ export const SUPERADMIN_TENANT_SLUG = 'dev-local-superadmin';
 export const SUPERADMIN_NAME = 'Local Superadmin';
 const DEMO_ACCOUNT = 'dev-local-superadmin-demo';
 
+export interface LocalSuperadminCredentials {
+  readonly email: string;
+  readonly password: string;
+}
+
+export function localSuperadminCredentials(
+  env: Record<string, string | undefined>,
+): LocalSuperadminCredentials | undefined {
+  const login = env.LOGIN;
+  const password = env.PASS;
+  if (login === undefined && password === undefined) return undefined;
+  if (login === undefined || password === undefined)
+    throw new Error('Set both LOGIN and PASS for local login setup');
+  const email = login.trim().toLowerCase();
+  if (email.length < 3 || email.length > 254)
+    throw new Error('LOGIN must be 3 to 254 characters');
+  if (password.length < 1 || password.length > 200)
+    throw new Error('PASS must be 1 to 200 characters');
+  return { email, password };
+}
+
 /** Where the generated password is kept: outside the repository, mode 0600. */
 export function superadminPasswordFile(
   env: Record<string, string | undefined>,
@@ -68,10 +89,14 @@ export async function ensureLocalSuperadmin(
   db: PrismaClient,
   options: {
     reset?: boolean;
+    email?: string;
     password?: string;
     hash?: (password: string) => Promise<string>;
   } = {},
 ): Promise<SuperadminResult> {
+  const email = options.email?.trim().toLowerCase() ?? SUPERADMIN_EMAIL;
+  if (email.length < 3 || email.length > 254)
+    throw new Error('Login must be 3 to 254 characters');
   const tenant = await db.tenant.upsert({
     where: { slug: SUPERADMIN_TENANT_SLUG },
     create: {
@@ -86,7 +111,7 @@ export async function ensureLocalSuperadmin(
     update: {},
   });
   const existing = await db.operatorCredential.findUnique({
-    where: { email: SUPERADMIN_EMAIL },
+    where: { email },
     select: { operatorId: true, tenantId: true },
   });
   if (existing && existing.tenantId !== tenant.id)
@@ -121,11 +146,20 @@ export async function ensureLocalSuperadmin(
       create: {
         tenantId: tenant.id,
         operatorId: operator.id,
-        email: SUPERADMIN_EMAIL,
+        email,
         passwordHash,
       },
       update: { passwordHash, failedAttempts: 0, lockedUntil: null },
     });
+    if (existing)
+      await tx.operatorSession.updateMany({
+        where: {
+          tenantId: tenant.id,
+          operatorId: operator.id,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
     return operator.id;
   });
   return {

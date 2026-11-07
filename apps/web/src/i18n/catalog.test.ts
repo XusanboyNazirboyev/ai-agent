@@ -133,9 +133,10 @@ describe('source uses the catalog', () => {
       author: ['CUSTOMER', 'BOT', 'OPERATOR', 'SYSTEM'],
       delivery: ['PENDING', 'SENT', 'FAILED', 'UNKNOWN'],
       score: ['HOT', 'WARM', 'COLD'],
+      'leads.stage': ['NEW', 'HOT', 'WARM', 'COLD'],
       leadStatus: ['NEW', 'IN_PROGRESS', 'WON', 'LOST'],
       role: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
-      scope: ['waiting', 'mine', 'all', 'closed'],
+      scope: ['all', 'waiting', 'closed'],
       canned: ['greeting', 'wait', 'details', 'thanks', 'bye'],
       connection: ['live', 'connecting', 'reconnecting', 'polling'],
       actionStatus: [
@@ -186,6 +187,7 @@ describe('source uses the catalog', () => {
       'channels.desc': ['telegram', 'instagram', 'whatsapp', 'webchat'],
       theme: ['system', 'light', 'dark'],
       permission: ['granted', 'denied', 'default', 'unsupported'],
+      'settings.section': ['bot', 'channels', 'pipeline', 'general'],
     };
     for (const [family, ids] of Object.entries(families))
       for (const id of ids)

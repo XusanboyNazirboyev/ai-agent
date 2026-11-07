@@ -7,7 +7,7 @@ test('contacts list the tenant customers, search and open their conversation', a
   const f = fixtures();
   const first = f.a.conversations[0];
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
-  await page.goto('/contacts');
+  await page.goto('/leads?view=list');
   const row = page
     .getByTestId('contact-item')
     .filter({ hasText: first.contactName });
@@ -23,7 +23,7 @@ test('contacts list the tenant customers, search and open their conversation', a
 
   // Another tenant's contacts never appear.
   const other = await newSession(browser, f.b.operators.op1.email);
-  await other.page.goto('/contacts');
+  await other.page.goto('/leads?view=list');
   await expect(other.page.getByTestId('contact-item').first()).toBeVisible();
   await expect(
     other.page
@@ -33,7 +33,7 @@ test('contacts list the tenant customers, search and open their conversation', a
   await other.context.close();
 });
 
-test('on a phone the tab bar has four entries and More leads to the rest', async ({
+test('on a phone the tab bar has three entries and settings leads to its sections', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -41,10 +41,11 @@ test('on a phone the tab bar has four entries and More leads to the rest', async
     viewport: { width: 375, height: 667 },
   });
   const bar = page.getByRole('navigation').last();
-  await expect(bar.getByRole('link')).toHaveCount(4);
+  await expect(bar.getByRole('link')).toHaveCount(3);
   await bar.getByRole('link', { name: 'More' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('More');
-  await page.getByRole('link', { name: /AI bot/u }).click();
+  await page.getByRole('link', { name: 'Settings' }).click();
+  await page.getByRole('link', { name: 'AI bot' }).click();
   await expect(page.getByTestId('bot-current').first()).toBeVisible();
   // "More" stays marked as the current section.
   await expect(

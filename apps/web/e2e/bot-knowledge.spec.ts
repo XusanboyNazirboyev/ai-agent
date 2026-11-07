@@ -7,7 +7,7 @@ test.describe('AI bot page', () => {
   }) => {
     const f = fixtures();
     const admin = await newSession(browser, f.a.operators.admin.email);
-    await admin.page.goto('/bot');
+    await admin.page.goto('/settings/bot');
     const current = admin.page.getByTestId('bot-current');
     await expect(current).toHaveAttribute('data-mode', 'OFF');
 
@@ -27,7 +27,7 @@ test.describe('AI bot page', () => {
 
     // An operator sees the state but every choice is disabled.
     const operator = await newSession(browser, f.a.operators.op1.email);
-    await operator.page.goto('/bot');
+    await operator.page.goto('/settings/bot');
     await expect(operator.page.getByTestId('bot-current')).toHaveAttribute(
       'data-mode',
       'LIVE',

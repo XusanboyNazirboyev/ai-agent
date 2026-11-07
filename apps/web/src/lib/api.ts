@@ -18,7 +18,7 @@ export function readCookie(name: string): string | undefined {
 }
 
 interface Options {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Adds a fresh Idempotency-Key (operator commands). */
   command?: boolean;

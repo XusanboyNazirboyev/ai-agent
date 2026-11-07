@@ -1,9 +1,32 @@
 export type ConversationState =
   'BOT_ACTIVE' | 'WAITING_OPERATOR' | 'OPERATOR_ACTIVE' | 'CLOSED';
-export type Scope = 'waiting' | 'mine' | 'all' | 'closed';
+export type Scope = 'all' | 'waiting' | 'closed';
 export type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 export type LeadScore = 'HOT' | 'WARM' | 'COLD';
 export type LeadStatus = 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
+export interface LeadStage {
+  id: string;
+  code: string | null;
+  name: string | null;
+  position: number;
+}
+
+export interface LeadPipelineItem {
+  id: string;
+  pipelineStageId: string | null;
+  score: LeadScore;
+  status: LeadStatus;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+  contact: { name: string | null; phone: string | null };
+  conversation: { id: string; state: ConversationState };
+}
+
+export interface LeadPipelinePage {
+  items: LeadPipelineItem[];
+  nextCursor: string | null;
+}
 export type ActionStatus =
   | 'PROPOSED'
   | 'CONFIRMED'

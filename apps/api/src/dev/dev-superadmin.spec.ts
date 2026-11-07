@@ -6,11 +6,37 @@ import { assertLocalDevelopment } from './dev-guards.js';
 import {
   assertOutsideRepository,
   generatePassword,
+  localSuperadminCredentials,
   superadminPasswordFile,
   writeSecretFile,
 } from './dev-superadmin.js';
 
 describe('local superadmin helpers', () => {
+  it('accepts LOGIN and PASS only as a pair and normalizes the login', () => {
+    expect(localSuperadminCredentials({})).toBeUndefined();
+    expect(
+      localSuperadminCredentials({
+        LOGIN: '  Local.Owner@Example.Test ',
+        PASS: 'local-test-password',
+      }),
+    ).toEqual({
+      email: 'local.owner@example.test',
+      password: 'local-test-password',
+    });
+    expect(() =>
+      localSuperadminCredentials({ LOGIN: 'owner@example.test' }),
+    ).toThrow('Set both LOGIN and PASS for local login setup');
+    expect(() =>
+      localSuperadminCredentials({ PASS: 'local-test-password' }),
+    ).toThrow('Set both LOGIN and PASS for local login setup');
+    expect(() =>
+      localSuperadminCredentials({
+        LOGIN: 'owner@example.test',
+        PASS: '',
+      }),
+    ).toThrow('PASS must be 1 to 200 characters');
+  });
+
   it('generates long random passwords that differ on every call', () => {
     const a = generatePassword();
     expect(a.length).toBeGreaterThanOrEqual(24);

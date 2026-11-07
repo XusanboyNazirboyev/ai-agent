@@ -27,7 +27,7 @@ import { Select } from './ui/select';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 
-const SCOPES: Scope[] = ['waiting', 'mine', 'all', 'closed'];
+const SCOPES: Scope[] = ['all', 'waiting', 'closed'];
 const LANGUAGES = ['uz', 'ru', 'en'];
 const SCORES: LeadScore[] = ['HOT', 'WARM', 'COLD'];
 

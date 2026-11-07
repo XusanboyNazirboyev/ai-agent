@@ -35,7 +35,7 @@ test('operator completes see → take over → reply → return in the browser',
     'Customer prefers evenings',
   );
 
-  await page.getByRole('tab', { name: 'Mine' }).click();
+  await page.getByRole('tab', { name: 'All' }).click();
   await expect(
     page
       .getByTestId('conversation-item')
