@@ -603,5 +603,16 @@
   "mode.label": "Kim javob beradi",
   "mode.ai": "AI",
   "mode.operator": "Operator",
-  "handover.reason.OPERATOR_INITIATED": "Operator suhbatni o‘zi oldi"
+  "handover.reason.OPERATOR_INITIATED": "Operator suhbatni o‘zi oldi",
+  "channels.desc.facebook": "Facebook sahifangizga Messenger orqali kelgan xabarlar; assistent javob beradi.",
+  "channels.connectFacebook": "Facebook orqali davom etish",
+  "channels.facebookNotSetUp": "Bu serverda Facebook sahifasini ulash hali sozlanmagan.",
+  "errors.FACEBOOK_UNREACHABLE": "Facebook bilan bog‘lanib bo‘lmadi. Bir daqiqadan so‘ng qayta urinib ko‘ring.",
+  "errors.FACEBOOK_REJECTED": "Facebook so‘rovni rad etdi. Sahifani qaytadan ulang va so‘ralgan barcha ruxsatlarni bering.",
+  "errors.NO_FACEBOOK_PAGE": "Facebook sahifasi tanlanmadi. Qaytadan ulang va sahifangizni tanlang.",
+  "errors.SEVERAL_FACEBOOK_PAGES": "Bir nechta sahifa tanlandi. Qaytadan ulang va faqat bittasini tanlang.",
+  "fbCallback.title": "Facebook sahifasini ulash",
+  "fbCallback.denied": "Facebook’da ruxsat berilmadi, hech narsa ulanmadi.",
+  "fbCallback.invalid": "Bu sahifa Facebook’ga kirgandan keyin ochiladi. Kanallar sahifasidan qaytadan boshlang.",
+  "fbCallback.enabled": "Sahifa yoqildi. Messenger xabarlari endi Inbox’ga keladi."
 }

@@ -24,6 +24,8 @@ import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
+import { FacebookConnectController } from './facebook-connect.controller.js';
+import { FacebookOAuthClient } from '../channels/facebook/facebook-oauth.js';
 import { EventsController } from './events.controller.js';
 import { TelegramConnectController } from './telegram-connect.controller.js';
 import { InstagramConnectController } from './instagram-connect.controller.js';
@@ -53,12 +55,14 @@ import { SessionService } from './session.service.js';
     LeadsController,
     AnalyticsController,
     LeadPipelineController,
+    FacebookConnectController,
   ],
   providers: [
     AnalyticsService,
     TelegramManagement,
     InstagramGraphClient,
     InstagramOAuthClient,
+    FacebookOAuthClient,
     { provide: OAuthStateLedger, useClass: RedisOAuthStateLedger },
     {
       provide: BITRIX24_CONNECT_TRANSPORT,

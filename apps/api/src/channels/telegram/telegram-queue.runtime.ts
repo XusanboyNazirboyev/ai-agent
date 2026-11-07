@@ -143,6 +143,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
             in: [
               'telegram.inbound',
               'instagram.inbound',
+              'facebook.inbound',
               'telegram.send',
               'handover.notify',
               'handover.forward',
@@ -175,7 +176,8 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
           await this.queue.add(event.type, data, {
             jobId: event.id,
             ...(event.type === 'telegram.inbound' ||
-            event.type === 'instagram.inbound'
+            event.type === 'instagram.inbound' ||
+            event.type === 'facebook.inbound'
               ? { delay: 2_000 }
               : {}),
           });

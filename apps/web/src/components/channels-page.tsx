@@ -18,13 +18,14 @@ import { useToast } from './ui/toast';
 
 /** Product names are not translated. */
 const CHANNELS: {
-  key: 'telegram' | 'instagram' | 'whatsapp' | 'webchat';
+  key: 'telegram' | 'instagram' | 'facebook' | 'whatsapp' | 'webchat';
   name: string;
   icon: IconName;
   available: boolean;
 }[] = [
   { key: 'telegram', name: 'Telegram', icon: 'send', available: true },
   { key: 'instagram', name: 'Instagram', icon: 'message', available: true },
+  { key: 'facebook', name: 'Messenger', icon: 'message', available: true },
   { key: 'whatsapp', name: 'WhatsApp', icon: 'phone', available: false },
   { key: 'webchat', name: 'Web chat', icon: 'globe', available: false },
 ];
@@ -132,9 +133,11 @@ function AccountCard(props: {
   const [dropChoice, setDropChoice] = useState<boolean | null>(null);
   const dropPending = dropChoice ?? !account.everEnabled;
   const manageable = props.canManage && account.credentialSource === 'ui';
-  const instagram = account.channelType === 'instagram';
+  // Instagram and Messenger (Meta) accounts share the connect API shape.
+  const instagram =
+    account.channelType === 'instagram' || account.channelType === 'facebook';
   const base = instagram
-    ? `/api/v1/channels/instagram/${account.id}`
+    ? `/api/v1/channels/${account.channelType}/${account.id}`
     : `/api/v1/channels/${account.id}`;
 
   const act = useMutation({
@@ -552,6 +555,11 @@ export function ChannelsPage(): ReactNode {
                     </Button>
                   ) : null}
                   {channel.key === 'instagram' ? <InstagramGuide /> : null}
+                  {channel.key === 'facebook' && canManage ? (
+                    <ConnectFacebookButton
+                      disabled={!capabilities.secretsConfigured}
+                    />
+                  ) : null}
                 </li>
               );
             })}
@@ -582,6 +590,53 @@ export function ChannelsPage(): ReactNode {
         onClose={() => setGroupFor(null)}
         onChanged={changed}
       />
+    </div>
+  );
+}
+
+/**
+ * Messenger (ADR 040): one click opens Facebook Login for Business; the
+ * callback page finishes the connection. Hidden reasons stay visible: the
+ * button explains when the server is not set up for it.
+ */
+function ConnectFacebookButton(props: { disabled: boolean }): ReactNode {
+  const { t } = useI18n();
+  const setup = useQuery({
+    queryKey: ['facebook-oauth'],
+    queryFn: () => api<{ oauth: boolean }>('/api/v1/channels/facebook/oauth'),
+  });
+  const start = useMutation({
+    mutationFn: () =>
+      api<{ url: string }>('/api/v1/channels/facebook/oauth/start', {
+        method: 'POST',
+      }),
+    onSuccess: (data) => {
+      window.location.assign(data.url);
+    },
+  });
+  const ready = setup.data?.oauth === true;
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        variant="primary"
+        icon="plus"
+        data-testid="connect-facebook"
+        disabled={props.disabled || !ready}
+        loading={start.isPending}
+        onClick={() => {
+          if (!start.isPending) start.mutate();
+        }}
+      >
+        {t('channels.connectFacebook')}
+      </Button>
+      {setup.isSuccess && !ready ? (
+        <p className="text-xs text-muted">{t('channels.facebookNotSetUp')}</p>
+      ) : null}
+      {start.error ? (
+        <p role="alert" className="text-sm text-danger-fg">
+          {t(errorKey(start.error))}
+        </p>
+      ) : null}
     </div>
   );
 }

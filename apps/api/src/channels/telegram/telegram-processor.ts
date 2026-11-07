@@ -22,6 +22,10 @@ import {
 } from '../instagram/instagram-graph.js';
 import { evaluateMessagingWindow } from '../instagram/instagram-messaging-window.js';
 import {
+  FacebookNotConfiguredError,
+  FacebookSender,
+} from '../facebook/facebook-sender.js';
+import {
   InstagramNotConfiguredError,
   InstagramSender,
 } from '../instagram/instagram-sender.js';
@@ -49,13 +53,17 @@ export class TelegramProcessor {
     @Optional() private readonly leadSync?: LeadSyncService,
     @Optional() private readonly actions?: ActionService,
     @Optional() private readonly instagram?: InstagramSender,
+    @Optional() private readonly facebook?: FacebookSender,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
     if (event.type === 'telegram.inbound') {
       return this.processInbound(event);
     }
-    if (event.type === 'instagram.inbound') {
+    if (
+      event.type === 'instagram.inbound' ||
+      event.type === 'facebook.inbound'
+    ) {
       return this.processInstagramInbound(event);
     }
     if (event.type === 'telegram.send') {
@@ -86,7 +94,8 @@ export class TelegramProcessor {
       await this.handovers?.markExhausted(event);
     } else if (
       event.type === 'telegram.inbound' ||
-      event.type === 'instagram.inbound'
+      event.type === 'instagram.inbound' ||
+      event.type === 'facebook.inbound'
     ) {
       const inboundEventId = jsonString(event.payload, 'inboundEventId');
       // An agent turn owned by this job can no longer finish.
@@ -336,7 +345,12 @@ export class TelegramProcessor {
    * operator reply past 24 hours fails instead. Replies are split into
    * 1,000-byte parts; once one part is out, a failure is never resent.
    */
-  private async sendInstagram(
+  /**
+   * Instagram and Messenger replies (ADR 031, ADR 040): the same 24-hour
+   * window, byte-based splitting and "never resend an ambiguous send" rules;
+   * only the transport and the error-code prefix differ.
+   */
+  private async sendMeta(
     tenantId: string,
     message: {
       readonly id: string;
@@ -346,7 +360,9 @@ export class TelegramProcessor {
       readonly authorType: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
       readonly conversation: { readonly lastInboundAt: Date | null };
     },
+    kind: 'instagram' | 'facebook',
   ): Promise<void> {
+    const sender = kind === 'facebook' ? this.facebook : this.instagram;
     const window = evaluateMessagingWindow({
       lastCustomerMessageAt: message.conversation.lastInboundAt ?? undefined,
       now: new Date(),
@@ -356,19 +372,17 @@ export class TelegramProcessor {
       await this.failMessage(
         tenantId,
         message.id,
-        'instagram_window_closed',
+        `${kind}_window_closed`,
         'PENDING',
       );
       return;
     }
     const parts = splitInstagramText(message.text);
-    if (parts.length === 0 || !this.instagram) {
+    if (parts.length === 0 || !sender) {
       await this.failMessage(
         tenantId,
         message.id,
-        parts.length === 0
-          ? 'instagram_send_invalid'
-          : 'instagram_not_configured',
+        parts.length === 0 ? `${kind}_send_invalid` : `${kind}_not_configured`,
         'PENDING',
       );
       return;
@@ -383,7 +397,7 @@ export class TelegramProcessor {
     const sent: string[] = [];
     try {
       for (const part of parts) {
-        const result = await this.instagram.sendText(
+        const result = await sender.sendText(
           tenantId,
           message.channelAccountId,
           message.providerChatId,
@@ -397,7 +411,7 @@ export class TelegramProcessor {
         await this.failMessage(
           tenantId,
           message.id,
-          'instagram_partial_send',
+          `${kind}_partial_send`,
           'UNKNOWN',
         );
         return;
@@ -406,7 +420,7 @@ export class TelegramProcessor {
         // Meta may have delivered it: stay UNKNOWN, never resend blindly.
         await this.prisma.message.updateMany({
           where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
-          data: { deliveryErrorCode: 'instagram_ambiguous_outcome' },
+          data: { deliveryErrorCode: `${kind}_ambiguous_outcome` },
         });
         return;
       }
@@ -415,7 +429,7 @@ export class TelegramProcessor {
           where: { id: message.id, tenantId, deliveryState: 'UNKNOWN' },
           data: {
             deliveryState: 'PENDING',
-            deliveryErrorCode: `instagram_api_${error.kind}`,
+            deliveryErrorCode: `${kind}_api_${error.kind}`,
           },
         });
         throw error;
@@ -424,10 +438,11 @@ export class TelegramProcessor {
         tenantId,
         message.id,
         error instanceof InstagramApiError
-          ? `instagram_api_${error.kind}`
-          : error instanceof InstagramNotConfiguredError
-            ? 'instagram_not_configured'
-            : 'instagram_send_invalid',
+          ? `${kind}_api_${error.kind}`
+          : error instanceof InstagramNotConfiguredError ||
+              error instanceof FacebookNotConfiguredError
+            ? `${kind}_not_configured`
+            : `${kind}_send_invalid`,
         'UNKNOWN',
       );
       return;
@@ -470,8 +485,9 @@ export class TelegramProcessor {
     if (message.deliveryState === 'UNKNOWN') return;
     // One send queue for every channel: the account decides the transport, so
     // a reply to an Instagram customer can never reach the Telegram sender.
-    if (message.channelAccount.channelType === 'instagram') {
-      await this.sendInstagram(event.tenantId, message);
+    const meta = message.channelAccount.channelType;
+    if (meta === 'instagram' || meta === 'facebook') {
+      await this.sendMeta(event.tenantId, message, meta);
       return;
     }
 

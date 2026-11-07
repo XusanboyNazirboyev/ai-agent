@@ -12,6 +12,7 @@ const MAX_REPLAYED = 4;
 const INBOUND_EVENT_TYPE: Record<string, string> = {
   telegram: 'telegram.inbound',
   instagram: 'instagram.inbound',
+  facebook: 'facebook.inbound',
 };
 
 /**

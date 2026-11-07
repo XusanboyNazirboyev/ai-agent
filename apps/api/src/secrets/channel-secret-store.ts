@@ -7,7 +7,9 @@ export type SecretPurpose =
   | 'webhook_secret'
   | 'instagram_access_token'
   /** Business Integration System User token from Instagram Unified login. */
-  | 'instagram_system_user_token';
+  | 'instagram_system_user_token'
+  /** Facebook Page access token for Messenger (ADR 040). */
+  | 'facebook_page_access_token';
 
 export class SecretsNotConfiguredError extends Error {
   constructor() {

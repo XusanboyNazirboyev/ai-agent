@@ -11,6 +11,17 @@ import {
   InstagramApiError,
   type InstagramFetch,
 } from './instagram-graph.js';
+import {
+  openOAuthState,
+  sealOAuthState,
+  type OAuthStarter,
+} from '../meta/meta-oauth-state.js';
+
+export {
+  OAuthStateError,
+  STATE_TTL_MS,
+  type OAuthStarter,
+} from '../meta/meta-oauth-state.js';
 
 /**
  * One-click connect through Instagram API with Unified login (ADR 031
@@ -45,23 +56,7 @@ import {
 const DIALOG_BASE = 'https://www.facebook.com';
 const DIALOG_PATH = '/dialog/oauth';
 const TIMEOUT_MS = 10_000;
-/** An authorization started in tezda must come back within this time. */
-export const STATE_TTL_MS = 10 * 60_000;
 const STATE_AAD = 'instagram-oauth-state';
-
-/** Who started an authorization: it must come back to the same session. */
-export interface OAuthStarter {
-  readonly tenantId: string;
-  readonly operatorId: string;
-  readonly sessionId: string;
-}
-
-export class OAuthStateError extends Error {
-  constructor() {
-    super('Invalid or expired Instagram authorization state');
-    this.name = 'OAuthStateError';
-  }
-}
 
 /** An Instagram professional account the client shared with the app. */
 export interface AssignedInstagramAccount {
@@ -71,7 +66,6 @@ export interface AssignedInstagramAccount {
 
 const TOKEN_SHAPE = /^\S{20,2048}$/u;
 const USERNAME = /^[A-Za-z0-9._]{1,30}$/u;
-const b64url = (data: Buffer): string => data.toString('base64url');
 
 @Injectable()
 export class InstagramOAuthClient {
@@ -122,68 +116,12 @@ export class InstagramOAuthClient {
 
   /** An encrypted, authenticated state bound to the starter and a deadline. */
   state(starter: OAuthStarter, now = Date.now()): string {
-    const sealed = this.cipher!.seal(
-      JSON.stringify({
-        v: 1,
-        t: starter.tenantId,
-        o: starter.operatorId,
-        s: starter.sessionId,
-        e: now + STATE_TTL_MS,
-      }),
-      STATE_AAD,
-    );
-    return b64url(
-      Buffer.from(
-        JSON.stringify({
-          k: sealed.keyId,
-          n: b64url(sealed.nonce),
-          c: b64url(sealed.ciphertext),
-        }),
-      ),
-    );
+    return sealOAuthState(this.cipher!, STATE_AAD, starter, now);
   }
 
   /** Refuses a state that is forged, expired or from another session. */
   checkState(state: string, starter: OAuthStarter, now = Date.now()): void {
-    let claims: {
-      v?: unknown;
-      t?: unknown;
-      o?: unknown;
-      s?: unknown;
-      e?: unknown;
-    };
-    try {
-      const outer = JSON.parse(
-        Buffer.from(state, 'base64url').toString('utf8'),
-      ) as { k?: unknown; n?: unknown; c?: unknown };
-      if (
-        typeof outer.k !== 'string' ||
-        typeof outer.n !== 'string' ||
-        typeof outer.c !== 'string'
-      )
-        throw new OAuthStateError();
-      claims = JSON.parse(
-        this.cipher!.open(
-          {
-            keyId: outer.k,
-            nonce: Buffer.from(outer.n, 'base64url'),
-            ciphertext: Buffer.from(outer.c, 'base64url'),
-          },
-          STATE_AAD,
-        ),
-      ) as typeof claims;
-    } catch {
-      throw new OAuthStateError();
-    }
-    if (
-      claims.v !== 1 ||
-      claims.t !== starter.tenantId ||
-      claims.o !== starter.operatorId ||
-      claims.s !== starter.sessionId ||
-      typeof claims.e !== 'number' ||
-      claims.e < now
-    )
-      throw new OAuthStateError();
+    openOAuthState(this.cipher!, STATE_AAD, state, starter, now);
   }
 
   authorizeUrl(state: string): string {
