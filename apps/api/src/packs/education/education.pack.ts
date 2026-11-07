@@ -20,6 +20,14 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
     'get_quote',
     'knowledge_search',
   ],
+  capabilities: {
+    'uz-Latn':
+      "Men o'quv markazining yordamchisiman: kurslar, ularning narxi, dars jadvali va bo'sh joylar haqida ma'lumot beraman hamda yozilishga yordam beraman.",
+    'uz-Cyrl':
+      'Мен ўқув марказининг ёрдамчисиман: курслар, уларнинг нархи, дарс жадвали ва бўш жойлар ҳақида маълумот бераман ҳамда ёзилишга ёрдам бераман.',
+    ru: 'Я помощник учебного центра: рассказываю о курсах, их стоимости, расписании и свободных местах и помогаю записаться.',
+    en: "I'm the learning centre's assistant: I can tell you about courses, their prices, schedule and free places, and help you enrol.",
+  },
   prompt: {
     businessRole:
       'You are a course consultant for an education center. You help prospective students find a suitable course or group and understand schedules, availability and prices.',

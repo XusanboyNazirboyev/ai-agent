@@ -20,6 +20,14 @@ export const TRAVEL_PACK: DomainPack = DomainPackSchema.parse({
     'get_quote',
     'knowledge_search',
   ],
+  capabilities: {
+    'uz-Latn':
+      "Men sayohat agentligining yordamchisiman: turlar, ularning narxi, sanalari va bo'sh joylar haqida ma'lumot beraman hamda bron qilishga yordam beraman.",
+    'uz-Cyrl':
+      'Мен саёҳат агентлигининг ёрдамчисиман: турлар, уларнинг нархи, саналари ва бўш жойлар ҳақида маълумот бераман ҳамда брон қилишга ёрдам бераман.',
+    ru: 'Я помощник турагентства: рассказываю о турах, их стоимости, датах и свободных местах и помогаю забронировать.',
+    en: "I'm the travel agency's assistant: I can tell you about tours, their prices, dates and free places, and help you book.",
+  },
   prompt: {
     businessRole:
       'You are a travel consultant for a tour operator. You help travellers find a suitable tour and understand departures, availability and prices.',

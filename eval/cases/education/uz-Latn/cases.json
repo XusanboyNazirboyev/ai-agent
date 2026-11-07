@@ -1791,5 +1791,184 @@
         "sun'iy intellekt"
       ]
     }
+  },
+  {
+    "id": "edu-uz-latn-51",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "ADR 041: what can you help with -> capabilities and the next question",
+    "input": {
+      "text": "qanday yordam beraolasan?",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Sizga qanday yordam bera olaman? Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "capabilities",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-uz-latn-52",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "ADR 041: small talk -> short answer and the next question",
+    "input": {
+      "text": "nma gap",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Sizga qanday yordam bera olaman? Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "small_talk",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-uz-latn-53",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "ADR 041: frustration with the bot -> apology once, no handover",
+    "input": {
+      "text": "qandaysiga tusshunmaslik mumkin yordam sozini?",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Sizga qanday yordam bera olaman? Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "frustration",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-uz-latn-54",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "ADR 041: who are you -> capabilities",
+    "input": {
+      "text": "siz kimsiz o'zi?",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Sizga qanday yordam bera olaman? Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "capabilities",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-uz-latn-55",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "complaint",
+    "description": "ADR 041: a real complaint still goes to a person",
+    "input": {
+      "text": "pulimni qaytaring, va'da qilingan dars bo'lmadi",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Sizga qanday yordam bera olaman? Qaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "complaint",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "HANDOVER",
+      "handover": "COMPLAINT",
+      "toolsOk": []
+    }
   }
 ]

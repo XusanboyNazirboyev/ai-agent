@@ -678,5 +678,57 @@
       "handover": "CONNECTOR_UNAVAILABLE"
     },
     "connector": "down"
+  },
+  {
+    "id": "edu-ru-20",
+    "pack": "education",
+    "locale": "ru",
+    "category": "conversational",
+    "description": "ADR 041: what can you help with",
+    "input": {
+      "text": "Чем вы можете помочь?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "capabilities",
+        "language": "ru",
+        "script": "Cyrl"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-ru-21",
+    "pack": "education",
+    "locale": "ru",
+    "category": "conversational",
+    "description": "ADR 041: small talk",
+    "input": {
+      "text": "как дела?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "small_talk",
+        "language": "ru",
+        "script": "Cyrl"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
   }
 ]

@@ -82,6 +82,17 @@ export interface LocaleTemplates {
   /** Truthful answer when the customer asks whether they talk to a bot. */
   readonly aiDisclosure: string;
   /**
+   * ADR 041: short answers rendered by code, never with facts. `smallTalk`
+   * answers "how are you"; `capabilities` is the generic "what I can help
+   * with" when the domain pack has none; `frustration` apologises, promises
+   * to ask differently and says how to reach a person; `anythingElse` closes
+   * an answer when nothing is missing.
+   */
+  readonly smallTalk: string;
+  readonly capabilities: string;
+  readonly frustration: string;
+  readonly anythingElse: string;
+  /**
    * Customer-facing handover notices. They must not claim that a person or
    * the CRM has accepted anything: until operator notification exists they
    * may only say that the message was recorded.
@@ -147,6 +158,18 @@ export interface LocalePack {
    * case-insensitively after apostrophe unification.
    */
   readonly languageRequestPhrases: readonly string[];
+  /**
+   * ADR 041: a few customer messages per intent in THIS language, shown to the
+   * extraction model as examples. They must not appear in the eval cases.
+   */
+  readonly intentExamples?: Readonly<
+    Partial<
+      Record<
+        'capabilities' | 'small_talk' | 'frustration' | 'complaint',
+        readonly string[]
+      >
+    >
+  >;
   /**
    * "In THIS language" forms, in any supported language ("in English",
    * "ingliz tilida"). A request is a name together with any pack's

@@ -189,6 +189,22 @@ export interface AgentTurnResult {
   readonly action?: ActionDecision;
 }
 
+/** Intents that show the customer is engaging (ADR 041, STUCK). */
+const CONVERSATIONAL_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
+  'greeting',
+  'search',
+  'details',
+  'price',
+  'availability',
+  'booking_interest',
+  'ai_question',
+  'capabilities',
+  'small_talk',
+]);
+
+/** Stored as the turn's asked slot so a second frustration in a row is seen. */
+export const FRUSTRATION_MARK = 'apology:frustration';
+
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
   human_request: 'CUSTOMER_REQUEST',
   complaint: 'COMPLAINT',
@@ -344,7 +360,13 @@ export async function runAgentTurn(
           input.progress.stuck ?? DEFAULT_STUCK_POLICY,
         )
       : undefined;
-    if (stuck) {
+    // ADR 041: a customer who asks or talks is not stuck because the bot
+    // repeated its question; only a customer repeating the same message is.
+    const talking =
+      stuck === 'SAME_QUESTION_REPEATED' &&
+      intent !== undefined &&
+      CONVERSATIONAL_INTENTS.has(intent);
+    if (stuck && !talking) {
       return build(locale().templates.handover.STUCK, 'HANDOVER', {
         handover: 'STUCK',
         stuckReason: stuck,
@@ -439,7 +461,7 @@ export async function runAgentTurn(
     const result = await llm.structured({
       tier: 'FAST',
       purpose: 'extract',
-      system: extractionSystemPrompt(pack),
+      system: extractionSystemPrompt(pack, locales.all()),
       messages: [
         {
           role: 'user',
@@ -567,6 +589,31 @@ export async function runAgentTurn(
         },
       },
     );
+  }
+
+  // ADR 041: "what can you do", small talk and mild frustration are answered
+  // by code (no facts), followed by the next missing question. The customer
+  // is talking, so these turns are progress and never count toward STUCK.
+  // Frustration a second time in a row goes to a person.
+  if (
+    intent === 'capabilities' ||
+    intent === 'small_talk' ||
+    intent === 'frustration'
+  ) {
+    const previous = input.progress?.priorTurns.at(-1);
+    if (intent === 'frustration' && previous?.askedSlot === FRUSTRATION_MARK)
+      return handover('COMPLAINT');
+    const lead =
+      intent === 'capabilities'
+        ? (pack.capabilities[localeId] ?? locale().templates.capabilities)
+        : intent === 'small_talk'
+          ? locale().templates.smallTalk
+          : locale().templates.frustration;
+    const next = firstMissing(pack, slots, 'search');
+    const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
+    return finish(`${lead} ${tail}`.trim(), 'ANSWERED', {
+      askedSlot: intent === 'frustration' ? FRUSTRATION_MARK : next?.key,
+    });
   }
 
   // A question about what the law or an authority requires is answered only
