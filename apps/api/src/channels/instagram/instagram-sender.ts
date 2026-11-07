@@ -62,6 +62,20 @@ export class InstagramSender {
     return { igUserId: account.externalAccountId, credential };
   }
 
+  /** The customer's display name, or null (see InstagramGraphClient.customerName). */
+  async customerName(
+    tenantId: string,
+    channelAccountId: string,
+    igsid: string,
+  ): Promise<string | null> {
+    const { credential } = await this.account(tenantId, channelAccountId);
+    return this.graph.customerName(
+      igsid,
+      credential.token,
+      credential.kind === 'unified' ? 'facebook' : 'instagram',
+    );
+  }
+
   async sendText(
     tenantId: string,
     channelAccountId: string,
