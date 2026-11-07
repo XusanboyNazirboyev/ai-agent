@@ -18,6 +18,11 @@ const TAGS = [
 ];
 
 async function audit(page: Page, label: string): Promise<void> {
+  // A toast or dialog still fading in has partial opacity, which reads as a
+  // contrast failure; audit the settled page.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => a.playState !== 'running'),
+  );
   const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const summary = result.violations.map(
     (violation) =>

@@ -253,22 +253,25 @@ function LeadCard(props: {
             </span>
           </span>
         </Link>
-        <label className="flex flex-col gap-1 text-xs text-muted">
-          {t('leads.moveToStage')}
-          <select
-            aria-label={t('leads.moveToStage')}
-            value={props.currentStageId}
-            disabled={move.isPending}
-            onChange={(event) => move.mutate(event.target.value)}
-            className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-          >
-            {props.stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stageName(stage, t)}
-              </option>
-            ))}
-          </select>
-        </label>
+        {canEdit ? (
+          <label className="flex flex-col gap-1 text-xs text-muted">
+            {t('leads.moveToStage')}
+            <select
+              aria-label={t('leads.moveToStage')}
+              data-testid="lead-card-stage"
+              value={props.currentStageId}
+              disabled={move.isPending}
+              onChange={(event) => move.mutate(event.target.value)}
+              className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+            >
+              {props.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stageName(stage, t)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {canEdit ? (
           <div className="grid grid-cols-2 gap-2">
             <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
