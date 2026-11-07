@@ -1,6 +1,7 @@
 # AgentCore — project instructions (lean index)
 
 Full specification lives in `docs/spec/` (index: `docs/spec/README.md`). Do not load it all: read this file, the current phase in `docs/spec/12-roadmap.md`, and only the files the task needs. Current state: top of `docs/PROGRESS.md`.
+Before changing code read `docs/AGENT_LESSONS.md` (mistakes already made and the rule for each); add an entry when a mistake reaches review, CI or staging. For codebase questions use `graphify query` on a graph built in the worktree you change (`graphify update .`, no LLM cost).
 
 ## Product
 - Universal AI sales/support agent platform: one core engine, configured per project.
