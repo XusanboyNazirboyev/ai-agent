@@ -51,6 +51,48 @@ describe('normalizeTelegramUpdate', () => {
     ).toEqual({ kind: 'unsupported', updateId: '3' });
   });
 
+  it('turns a voice note into an empty-text update carrying the voice (ADR 042)', () => {
+    expect(
+      normalizeTelegramUpdate({
+        update_id: 5,
+        message: {
+          message_id: 45,
+          date: 1,
+          chat: { id: 7, type: 'private' },
+          from: { id: 7, first_name: 'Ali' },
+          voice: {
+            file_id: 'AwACAgIAAxkBAAIB',
+            duration: 4,
+            mime_type: 'audio/ogg; codecs=opus',
+            file_size: 12_345,
+          },
+        },
+      }),
+    ).toMatchObject({
+      kind: 'text',
+      text: '',
+      voice: {
+        fileId: 'AwACAgIAAxkBAAIB',
+        durationSeconds: 4,
+        mimeType: 'audio/ogg',
+        fileSize: 12_345,
+      },
+    });
+    // No mime type from the sender: Telegram voice notes are OGG.
+    expect(
+      normalizeTelegramUpdate({
+        update_id: 6,
+        message: {
+          message_id: 46,
+          date: 1,
+          chat: { id: 7 },
+          from: { id: 7 },
+          voice: { file_id: 'x', duration: 2 },
+        },
+      }),
+    ).toMatchObject({ voice: { mimeType: 'audio/ogg' } });
+  });
+
   it('rejects malformed and overlong text updates', () => {
     expect(() => normalizeTelegramUpdate({ update_id: -1 })).toThrow(
       InvalidTelegramUpdateError,

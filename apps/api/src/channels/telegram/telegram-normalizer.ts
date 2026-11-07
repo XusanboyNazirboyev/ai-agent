@@ -5,6 +5,20 @@ const telegramId = z.union([
   z.string().regex(/^-?\d+$/),
 ]);
 
+/**
+ * Voice note (Bot API `Voice`, read 2026-11-07): file_id, duration in seconds
+ * as defined by the sender, optional mime_type and file_size. Downloaded
+ * later with getFile (up to 20 MB).
+ */
+const voiceSchema = z
+  .object({
+    file_id: z.string().min(1).max(512),
+    duration: z.number().int().nonnegative().safe(),
+    mime_type: z.string().max(100).optional(),
+    file_size: z.number().int().nonnegative().safe().optional(),
+  })
+  .passthrough();
+
 const updateSchema = z
   .object({
     update_id: z.number().int().nonnegative().safe(),
@@ -32,15 +46,8 @@ const updateSchema = z
          * in seconds as defined by the sender, optional mime_type and
          * file_size. Downloaded later with getFile (up to 20 MB).
          */
-        voice: z
-          .object({
-            file_id: z.string().min(1).max(512),
-            duration: z.number().int().nonnegative().safe(),
-            mime_type: z.string().max(100).optional(),
-            file_size: z.number().int().nonnegative().safe().optional(),
-          })
-          .passthrough()
-          .optional(),
+        // Checked on its own below: a malformed voice is ignored, not fatal.
+        voice: z.unknown().optional(),
         reply_to_message: z
           .object({
             message_id: z.number().int().positive().safe(),
@@ -141,7 +148,9 @@ export function normalizeTelegramUpdate(
       data: callback.data,
     };
   }
-  if ((!message?.text && !message?.voice) || !message.from) {
+  const voiceParsed = voiceSchema.safeParse(message?.voice);
+  const voice = voiceParsed.success ? voiceParsed.data : undefined;
+  if ((!message?.text && !voice) || !message?.from) {
     return { kind: 'unsupported', updateId: String(updateId) };
   }
 
@@ -159,18 +168,18 @@ export function normalizeTelegramUpdate(
     displayName: displayName || null,
     text: message.text ?? '',
     receivedAt: new Date(message.date * 1_000),
-    ...(message.voice && !message.text
+    ...(voice && !message.text
       ? {
           voice: {
-            fileId: message.voice.file_id,
-            durationSeconds: message.voice.duration,
+            fileId: voice.file_id,
+            durationSeconds: voice.duration,
             // Telegram voice notes are OGG/Opus when the sender gives no type.
-            mimeType: (message.voice.mime_type ?? 'audio/ogg')
+            mimeType: (voice.mime_type ?? 'audio/ogg')
               .split(';')[0]!
               .trim()
               .toLowerCase(),
-            ...(message.voice.file_size !== undefined
-              ? { fileSize: message.voice.file_size }
+            ...(voice.file_size !== undefined
+              ? { fileSize: voice.file_size }
               : {}),
           },
         }
