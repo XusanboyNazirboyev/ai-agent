@@ -1000,11 +1000,13 @@ describe('STUCK needs a live dialogue', () => {
   }
 
   it('fires for the same unanswered question inside one dialogue', async () => {
+    // ADR 041: replies that ignore the question ("hmm") are no progress;
+    // greetings and questions are engaging and do not count.
     const f = await fixture({
       mode: 'SHADOW',
-      responder: () => extraction({}),
+      responder: () => extraction({}, 'other'),
     });
-    for (const text of greetings)
+    for (const text of ['hmm', 'bilmadim', 'xo‘p'])
       await f.processor.process(await receive(f, text));
     const last = (await turns(f))
       .filter((t) => t.status === 'COMMITTED')
