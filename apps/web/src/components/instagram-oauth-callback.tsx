@@ -16,8 +16,13 @@ import { Icon } from './ui/icons';
  * sent with Instagram's redirect itself) and drops both from the address bar
  * at once, because the code is single-use.
  */
-export function InstagramOAuthCallback(): ReactNode {
+export function InstagramOAuthCallback(props: {
+  /** Messenger (ADR 040) reuses this page for Facebook Pages. */
+  channel?: 'instagram' | 'facebook';
+}): ReactNode {
   const { t } = useI18n();
+  const channel = props.channel ?? 'instagram';
+  const copy = channel === 'facebook' ? 'fbCallback' : 'igCallback';
   const params = useSearchParams();
   const [initial] = useState(() => ({
     code: params.get('code'),
@@ -27,14 +32,14 @@ export function InstagramOAuthCallback(): ReactNode {
   const sent = useRef(false);
   const complete = useMutation({
     mutationFn: (body: { code: string; state: string }) =>
-      api<ChannelAccount>('/api/v1/channels/instagram/oauth/complete', {
+      api<ChannelAccount>(`/api/v1/channels/${channel}/oauth/complete`, {
         method: 'POST',
         body,
       }),
   });
   const enable = useMutation({
     mutationFn: (id: string) =>
-      api<ChannelAccount>(`/api/v1/channels/instagram/${id}/enable`, {
+      api<ChannelAccount>(`/api/v1/channels/${channel}/${id}/enable`, {
         method: 'POST',
       }),
   });
@@ -57,11 +62,11 @@ export function InstagramOAuthCallback(): ReactNode {
     <div
       role="region"
       tabIndex={0}
-      aria-label={t('igCallback.title')}
+      aria-label={t(`${copy}.title`)}
       className="min-h-0 flex-1 overflow-y-auto"
     >
       <div className="mx-auto flex w-full max-w-xl flex-col gap-4 p-3 sm:p-6">
-        <h1 className="text-lg font-semibold">{t('igCallback.title')}</h1>
+        <h1 className="text-lg font-semibold">{t(`${copy}.title`)}</h1>
         {denied || missing ? (
           <p
             role="alert"
@@ -69,7 +74,7 @@ export function InstagramOAuthCallback(): ReactNode {
             className="flex items-start gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm"
           >
             <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />
-            {t(denied ? 'igCallback.denied' : 'igCallback.invalid')}
+            {t(denied ? `${copy}.denied` : `${copy}.invalid`)}
           </p>
         ) : null}
         {complete.isPending ? (
@@ -98,7 +103,7 @@ export function InstagramOAuthCallback(): ReactNode {
                 data-testid="ig-callback-enabled"
                 className="text-sm"
               >
-                {t('igCallback.enabled')}
+                {t(`${copy}.enabled`)}
               </p>
             ) : (
               <p className="text-sm text-muted">{t('igConnect.doneNext')}</p>

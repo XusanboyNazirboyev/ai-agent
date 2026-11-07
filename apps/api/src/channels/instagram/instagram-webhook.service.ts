@@ -7,23 +7,33 @@ const EXTERNAL_ID = /^[0-9]{1,100}$/u;
 
 export type InstagramAcceptance = 'accepted' | 'duplicate' | 'unavailable';
 
+/** Meta channels that share this durable intake (Instagram, Messenger). */
+export type MetaChannelType = 'instagram' | 'facebook';
+
 @Injectable()
 export class InstagramWebhookService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async accept(event: NormalizedInstagramText): Promise<InstagramAcceptance> {
+  async accept(
+    event: NormalizedInstagramText,
+    channelType: MetaChannelType = 'instagram',
+  ): Promise<InstagramAcceptance> {
     if (
       !EXTERNAL_ID.test(event.accountId) ||
       !EXTERNAL_ID.test(event.customerId)
     ) {
-      throw new ServiceUnavailableException('Instagram account is unavailable');
+      throw new ServiceUnavailableException(
+        channelType === 'facebook'
+          ? 'Facebook Page is unavailable'
+          : 'Instagram account is unavailable',
+      );
     }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
           where: {
-            channelType: 'instagram',
+            channelType,
             externalAccountId: event.accountId,
             status: 'ACTIVE',
             tenant: { status: 'ACTIVE' },
@@ -32,7 +42,7 @@ export class InstagramWebhookService {
         });
         if (!channel) return 'unavailable';
 
-        await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`instagram-rate:${channel.id}`}, 0))) AS lock_result`;
+        await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`${channelType}-rate:${channel.id}`}, 0))) AS lock_result`;
 
         const duplicate = await tx.inboundEvent.findUnique({
           where: {
@@ -154,15 +164,14 @@ export class InstagramWebhookService {
           },
         });
 
-        // The Instagram processor is intentionally not enabled yet. This
-        // durable outbox record is the hand-off contract for that next stage.
+        // Durable hand-off to the queue processor (telegram-processor.ts).
         await tx.outboxEvent.create({
           data: {
             tenantId: channel.tenantId,
-            type: 'instagram.inbound',
+            type: `${channelType}.inbound`,
             aggregateType: 'conversation',
             aggregateId: conversation.id,
-            idempotencyKey: `instagram.inbound:${channel.id}:${event.messageId}`,
+            idempotencyKey: `${channelType}.inbound:${channel.id}:${event.messageId}`,
 
             payload: {
               inboundEventId: inboundEvent.id,

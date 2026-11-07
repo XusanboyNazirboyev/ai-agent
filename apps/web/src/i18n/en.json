@@ -603,5 +603,16 @@
   "mode.label": "Who answers",
   "mode.ai": "AI",
   "mode.operator": "Operator",
-  "handover.reason.OPERATOR_INITIATED": "An operator took the conversation"
+  "handover.reason.OPERATOR_INITIATED": "An operator took the conversation",
+  "channels.desc.facebook": "Messages to your Facebook Page in Messenger, answered by the assistant.",
+  "channels.connectFacebook": "Continue with Facebook",
+  "channels.facebookNotSetUp": "Connecting a Facebook Page is not set up on this server yet.",
+  "errors.FACEBOOK_UNREACHABLE": "Facebook could not be reached. Try again in a minute.",
+  "errors.FACEBOOK_REJECTED": "Facebook refused the request. Connect the Page again and allow every requested permission.",
+  "errors.NO_FACEBOOK_PAGE": "No Facebook Page was shared. Connect again and choose your Page.",
+  "errors.SEVERAL_FACEBOOK_PAGES": "Several Pages were shared. Connect again and choose only one Page.",
+  "fbCallback.title": "Connect a Facebook Page",
+  "fbCallback.denied": "Access was not allowed on Facebook, so nothing was connected.",
+  "fbCallback.invalid": "This page opens after signing in to Facebook. Start again from the Channels page.",
+  "fbCallback.enabled": "The Page is enabled. Messenger messages now reach the inbox."
 }

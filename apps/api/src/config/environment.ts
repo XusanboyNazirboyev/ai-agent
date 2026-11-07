@@ -95,6 +95,18 @@ const environmentSchema = postgresEnvironmentSchema
       .string()
       .regex(/^[0-9]{1,30}$/u)
       .optional(),
+    /**
+     * Messenger (ADR 040): Configuration ID of a Facebook Login for Business
+     * configuration that grants Pages for Messenger (token type "User access
+     * token"), and the redirect URI registered for it (the web page
+     * `/channels/facebook/callback`). The Meta app's App ID and App Secret
+     * are INSTAGRAM_APP_ID / INSTAGRAM_APP_SECRET (one Meta app).
+     */
+    FACEBOOK_LOGIN_CONFIG_ID: z
+      .string()
+      .regex(/^[0-9]{1,30}$/u)
+      .optional(),
+    FACEBOOK_OAUTH_REDIRECT_URI: z.url().optional(),
     TELEGRAM_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()
       .int()
@@ -466,6 +478,17 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['INSTAGRAM_OAUTH_REDIRECT_URI'],
         message: 'INSTAGRAM_OAUTH_REDIRECT_URI must use https in production',
+      });
+    }
+    if (
+      environment.FACEBOOK_OAUTH_REDIRECT_URI &&
+      environment.NODE_ENV === 'production' &&
+      !environment.FACEBOOK_OAUTH_REDIRECT_URI.startsWith('https://')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['FACEBOOK_OAUTH_REDIRECT_URI'],
+        message: 'FACEBOOK_OAUTH_REDIRECT_URI must use https in production',
       });
     }
     if (

@@ -239,6 +239,58 @@ export class InstagramGraphClient {
     );
   }
 
+  /**
+   * Messenger (ADR 040): subscribes the app to a Facebook Page's webhook
+   * fields with that Page's access token, `POST /<PAGE_ID>/subscribed_apps`.
+   */
+  async subscribeMessengerPage(
+    pageId: string,
+    pageToken: string,
+    fields: readonly string[],
+  ): Promise<void> {
+    const body = new URLSearchParams({
+      subscribed_fields: fields.join(','),
+      access_token: pageToken,
+    });
+    const answer = (await this.call(
+      `${this.facebookBase}/${requireId(pageId, 'Facebook Page id')}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
+    )) as { success?: unknown } | null;
+    if (answer?.success !== true)
+      throw new InstagramApiError('rejected', null, 200);
+  }
+
+  /**
+   * Messenger (ADR 040): one text part as the Page, `POST /<PAGE_ID>/messages`
+   * with the Page access token, `messaging_type: RESPONSE` (a reply inside
+   * the 24-hour window).
+   */
+  async sendMessengerText(
+    pageId: string,
+    pageToken: string,
+    recipientId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    checkText(text);
+    const url = new URL(
+      `${this.facebookBase}/${requireId(pageId, 'Facebook Page id')}/messages`,
+    );
+    url.searchParams.set('access_token', pageToken);
+    return this.send(
+      url.toString(),
+      {},
+      {
+        recipient: { id: requireId(recipientId, 'recipient id') },
+        messaging_type: 'RESPONSE',
+        message: { text },
+      },
+    );
+  }
+
   /** Unified login: sends one text as the account on graph.facebook.com. */
   async sendTextUnified(
     igUserId: string,

@@ -93,6 +93,8 @@ export function credentialSource(
   savedPurposes: ReadonlySet<string>,
   config: ConfigService<AppEnvironment, true>,
 ): CredentialSource {
+  if (row.channelType === 'facebook')
+    return savedPurposes.has('facebook_page_access_token') ? 'ui' : 'none';
   if (row.channelType === 'instagram')
     return savedPurposes.has('instagram_access_token') ||
       savedPurposes.has('instagram_system_user_token')

@@ -1,6 +1,6 @@
 # ADR 040: Facebook Messenger (Page inbox) as a channel adapter
 
-Status: Proposed (2026-11-06). Slice 1 (pure core) is implemented; webhook, sender and connect flow are not.
+Status: Accepted (2026-11-07, owner asked for Facebook integration). Slices 1 and 2 are implemented; a live check with a real Page is pending.
 
 ## Decision
 Messenger is a channel adapter beside Telegram and Instagram (D6); the LLM provider stays separate (D15). What Instagram and Messenger share moved to `apps/api/src/channels/meta/`: webhook signature and GET handshake (`meta-webhook-auth.ts`) and byte-based text splitting (`meta-text.ts`). The Instagram modules re-export them under their old names, so nothing else changed.
@@ -32,3 +32,12 @@ Messenger-specific core in `apps/api/src/channels/facebook/`:
 ## Next slices
 1. Webhook controller and service (raw-body signature, fast 200, queue by `mid`), sender with the window gate and error mapping, `facebook` channel type, mode parity with Telegram and Instagram.
 2. Connect flow: Facebook Login, list the user's Pages, store the Page token in the channel secret store, `subscribed_apps`; a web card.
+
+## Slice 2 (2026-11-07): webhook, sender, connect flow
+- **Webhook:** `POST /webhooks/facebook` (`object: "page"`), signature on the raw bytes with the Meta app's App Secret (`INSTAGRAM_APP_SECRET`), the same verify token as Instagram (`INSTAGRAM_VERIFY_TOKEN`). Accepted events go through the Instagram intake, now parametrised by channel type (`facebook.inbound` outbox events, the same dedupe on `mid`, per-account rate lock and conversation lock).
+- **Send:** the processor's Meta path (`sendMeta`) serves Instagram and Messenger with the same 24-hour window, 1,000-byte parts, "never resend an ambiguous or partial send" rules; Messenger sends `POST graph.facebook.com/v27.0/<PAGE_ID>/messages` with `messaging_type: RESPONSE` and the Page access token. Error codes are prefixed `facebook_`.
+- **Connect:** `api/v1/channels/facebook` (`oauth`, `oauth/start`, `oauth/complete`, `:id/enable`, `:id/disable`), OWNER/ADMIN, rate-limited, audited. Facebook Login for Business with `FACEBOOK_LOGIN_CONFIG_ID` and `FACEBOOK_OAUTH_REDIRECT_URI` (web page `/channels/facebook/callback`); code → User token → long-lived token (`fb_exchange_token`; when Meta refuses the extension the first token is used, for a system-user configuration) → `GET /me/accounts?fields=id,name,access_token` → exactly one granted Page (none: `NO_FACEBOOK_PAGE`, several: `SEVERAL_FACEBOOK_PAGES`). The Page token is stored encrypted (`facebook_page_access_token`); the Page starts DISABLED with the assistant OFF; enable calls `POST /<PAGE_ID>/subscribed_apps` (form data, `subscribed_fields=messages`). The OAuth state is the sealed, session-bound state of ADR 031 with its own AAD (`facebook-oauth-state`), spent once in Redis.
+- **Web:** Settings → Channels shows Messenger with "Continue with Facebook"; the account card uses the same enable/disable actions as Instagram.
+- **Owner steps (Meta App Dashboard):** add the Messenger use case to the same Meta app; create a Facebook Login for Business configuration for Messenger (token type User access token; permissions `pages_messaging`, `pages_manage_metadata`, `pages_show_list`); register `https://<web host>/channels/facebook/callback`; in Webhooks subscribe the **Page** object to `messages` with callback `https://<api host>/webhooks/facebook` and the same verify token.
+- **Unverified until a live connect:** the token type the configuration issues; the exact permission names the configuration lists; real Page delivery and send.
+

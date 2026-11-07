@@ -603,5 +603,16 @@
   "mode.label": "Кто отвечает",
   "mode.ai": "ИИ",
   "mode.operator": "Оператор",
-  "handover.reason.OPERATOR_INITIATED": "Оператор сам взял диалог"
+  "handover.reason.OPERATOR_INITIATED": "Оператор сам взял диалог",
+  "channels.desc.facebook": "Сообщения вашей странице Facebook в Messenger; отвечает ассистент.",
+  "channels.connectFacebook": "Продолжить с Facebook",
+  "channels.facebookNotSetUp": "Подключение страницы Facebook на этом сервере ещё не настроено.",
+  "errors.FACEBOOK_UNREACHABLE": "Facebook недоступен. Попробуйте через минуту.",
+  "errors.FACEBOOK_REJECTED": "Facebook отклонил запрос. Подключите страницу заново и разрешите все запрошенные права.",
+  "errors.NO_FACEBOOK_PAGE": "Не выбрана страница Facebook. Подключите заново и выберите свою страницу.",
+  "errors.SEVERAL_FACEBOOK_PAGES": "Выбрано несколько страниц. Подключите заново и выберите только одну.",
+  "fbCallback.title": "Подключение страницы Facebook",
+  "fbCallback.denied": "Доступ в Facebook не разрешён, ничего не подключено.",
+  "fbCallback.invalid": "Эта страница открывается после входа в Facebook. Начните заново со страницы «Каналы».",
+  "fbCallback.enabled": "Страница включена. Сообщения из Messenger теперь приходят во входящие."
 }
