@@ -50,19 +50,25 @@ async function resetLead(
   );
 }
 
-const cardIn = (column: Locator, name: string): Locator =>
-  column.getByTestId('lead-card').filter({ hasText: name });
+/**
+ * One lead card, found by its conversation link: other specs may create more
+ * leads for the same contact name, so the name alone is not unique.
+ */
+const cardOf = (page: Page, conversationId: string): Locator =>
+  page.getByTestId('lead-card').filter({
+    has: page.locator(`a[href*="c=${conversationId}"]`),
+  });
 
 test('an operator sets score and status and moves a lead between funnel stages', async ({
   browser,
 }) => {
   const f = fixtures();
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
-  const { id: conversationId, contactName } = f.a.conversations[0]!;
+  const { id: conversationId } = f.a.conversations[0]!;
   let newStageId: string | null = null;
   try {
     await page.goto('/leads?view=funnel');
-    const card = cardIn(page.locator('body'), contactName);
+    const card = cardOf(page, conversationId);
     await expect(card).toBeVisible();
     newStageId = await card.getByTestId('lead-card-stage').inputValue();
 
@@ -80,7 +86,7 @@ test('an operator sets score and status and moves a lead between funnel stages',
     await card.getByTestId('lead-card-stage').selectOption(target);
     await expect(card.getByTestId('lead-card-stage')).toHaveValue(target);
     const column = page.locator('[data-testid^="lead-column-"]', {
-      has: page.getByTestId('lead-card').filter({ hasText: contactName }),
+      has: cardOf(page, conversationId),
     });
     await expect(column).toHaveCount(1);
   } finally {
@@ -98,7 +104,7 @@ test('a viewer sees the funnel but cannot change a lead', async ({
     f.a.operators.viewer.email,
   );
   await page.goto('/leads?view=funnel');
-  const card = cardIn(page.locator('body'), f.a.conversations[0]!.contactName);
+  const card = cardOf(page, f.a.conversations[0]!.id);
   await expect(card).toBeVisible();
   await expect(card.getByTestId('lead-card-stage')).toHaveCount(0);
   await expect(card.getByTestId('lead-card-score')).toHaveCount(0);
