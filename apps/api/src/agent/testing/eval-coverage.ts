@@ -41,6 +41,8 @@ const GROUP_OF: Readonly<Record<string, string>> = {
   slot_correction: 'normal_answer',
   explicit_language_request: 'normal_answer',
   ai_disclosure: 'normal_answer',
+  /** ADR 041: capabilities, small talk, first frustration. */
+  conversational: 'follow_up',
   price_not_in_catalog: 'missing_data',
   empty_results: 'missing_data',
   unavailable_offer: 'missing_data',

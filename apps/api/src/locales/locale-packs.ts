@@ -42,6 +42,20 @@ export const UZ_LATN: LocalePack = {
   promptName: 'Uzbek in Latin script',
   toneGuidance:
     "Use polite, formal Uzbek with the 'siz' form. Use the Latin alphabet with oʻ and gʻ; never switch to Cyrillic. Keep messages short and warm.",
+  intentExamples: {
+    capabilities: [
+      'nima qila olasiz?',
+      'qanaqa xizmatlar bor?',
+      'kim bilan yozishyapman?',
+    ],
+    small_talk: ['qalaysiz?', 'ishlar yaxshimi?'],
+    frustration: [
+      'tushunmayapsiz',
+      'nega javob bermayapsiz?',
+      "yana o'sha savolni beryapsiz",
+    ],
+    complaint: ['pulimni qaytaring', 'xizmatingizdan noroziman'],
+  },
   templates: {
     greeting: 'Assalomu alaykum! Sizga qanday yordam bera olaman?',
     error:
@@ -61,6 +75,12 @@ export const UZ_LATN: LocalePack = {
     followUp:
       "Assalomu alaykum! Savolingiz bo'yicha yordam kerak bo'lsa, yozing. Eslatmalarni to'xtatish uchun /stop deb yozing.",
     optOutConfirmation: "Xo'p, endi eslatma yubormaymiz.",
+    smallTalk: 'Rahmat, yaxshi!',
+    capabilities:
+      "Men avtomatik yordamchiman: savollaringizga javob beraman, mos variantni tanlashga yordam beraman va kerak bo'lsa xodim bilan bog'layman.",
+    frustration:
+      "Kechirasiz, tushunarsiz bo'ldi. Boshqacha qilib so'rayman; xohlasangiz, xodim bilan bog'lanishingiz mumkin, \"operator\" deb yozing.",
+    anythingElse: 'Yana nima bilan yordam bera olaman?',
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -190,6 +210,20 @@ export const UZ_CYRL: LocalePack = {
   promptName: 'Uzbek in Cyrillic script',
   toneGuidance:
     "Use polite, formal Uzbek with the 'сиз' form. Use the Uzbek Cyrillic alphabet (ў, қ, ғ, ҳ); never switch to Latin except for product names. Keep messages short and warm.",
+  intentExamples: {
+    capabilities: [
+      'нима қила оласиз?',
+      'қанақа хизматлар бор?',
+      'ким билан ёзишяпман?',
+    ],
+    small_talk: ['қалайсиз?', 'ишлар яхшими?'],
+    frustration: [
+      'тушунмаяпсиз',
+      'нега жавоб бермаяпсиз?',
+      'яна ўша саволни беряпсиз',
+    ],
+    complaint: ['пулимни қайтаринг', 'хизматингиздан норозиман'],
+  },
   templates: {
     greeting: 'Ассалому алайкум! Сизга қандай ёрдам бера оламан?',
     error:
@@ -209,6 +243,12 @@ export const UZ_CYRL: LocalePack = {
     followUp:
       'Ассалому алайкум! Саволингиз бўйича ёрдам керак бўлса, ёзинг. Эслатмаларни тўхтатиш учун /stop деб ёзинг.',
     optOutConfirmation: 'Хўп, энди эслатма юбормаймиз.',
+    smallTalk: 'Раҳмат, яхши!',
+    capabilities:
+      'Мен автоматик ёрдамчиман: саволларингизга жавоб бераман, мос вариантни танлашга ёрдам бераман ва керак бўлса ходим билан боғлайман.',
+    frustration:
+      'Кечирасиз, тушунарсиз бўлди. Бошқача қилиб сўрайман; хоҳласангиз, ходим билан боғланишингиз мумкин, "оператор" деб ёзинг.',
+    anythingElse: 'Яна нима билан ёрдам бера оламан?',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -330,6 +370,20 @@ export const RU: LocalePack = {
   promptName: 'Russian',
   toneGuidance:
     'Use polite Russian with «вы». Keep messages short, friendly and professional.',
+  intentExamples: {
+    capabilities: [
+      'что вы умеете?',
+      'какие у вас услуги?',
+      'с кем я переписываюсь?',
+    ],
+    small_talk: ['как жизнь?', 'что нового?'],
+    frustration: [
+      'вы меня не понимаете',
+      'почему вы не отвечаете нормально?',
+      'опять тот же вопрос',
+    ],
+    complaint: ['верните деньги', 'я недоволен вашим сервисом'],
+  },
   templates: {
     greeting: 'Здравствуйте! Чем могу помочь?',
     error:
@@ -349,6 +403,12 @@ export const RU: LocalePack = {
     followUp:
       'Здравствуйте! Если нужна помощь с вашим вопросом, напишите. Чтобы остановить напоминания, отправьте /stop.',
     optOutConfirmation: 'Хорошо, больше не будем напоминать.',
+    smallTalk: 'Спасибо, всё хорошо!',
+    capabilities:
+      'Я автоматический помощник: отвечаю на вопросы, помогаю подобрать подходящий вариант и при необходимости передаю вас сотруднику.',
+    frustration:
+      'Извините, получилось непонятно. Спрошу иначе; если хотите, можно связаться с сотрудником, напишите "оператор".',
+    anythingElse: 'Чем ещё могу помочь?',
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -472,6 +532,16 @@ export const EN: LocalePack = {
   intlLocale: 'en-US',
   promptName: 'English',
   toneGuidance: 'Use polite, concise, friendly English.',
+  intentExamples: {
+    capabilities: ['what do you offer?', 'who am I talking to?'],
+    small_talk: ["how's it going?", "what's up?"],
+    frustration: [
+      "you don't get it",
+      "why can't you answer properly?",
+      'same question again?',
+    ],
+    complaint: ['I want a refund', 'your service was terrible'],
+  },
   templates: {
     greeting: 'Hello! How can I help you?',
     error:
@@ -491,6 +561,12 @@ export const EN: LocalePack = {
     followUp:
       'Hello! If you still need help with your question, just write. To stop reminders, send /stop.',
     optOutConfirmation: 'Okay, we will not send reminders any more.',
+    smallTalk: 'Thanks, all good!',
+    capabilities:
+      "I'm an automated assistant: I answer questions, help you choose a suitable option and connect you with a person when needed.",
+    frustration:
+      'Sorry, that was unclear. Let me ask differently; if you prefer, you can talk to a person, just write "operator".',
+    anythingElse: 'What else can I help you with?',
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {

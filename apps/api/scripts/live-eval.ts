@@ -204,6 +204,14 @@ async function main(): Promise<void> {
     const host = new URL(baseUrl).host;
     label = `openai-compatible (${host})`;
     const apiKey = process.env.LLM_API_KEY || undefined;
+    const effort = process.env.LLM_REASONING_EFFORT;
+    const reasoningEffort =
+      effort === 'minimal' ||
+      effort === 'low' ||
+      effort === 'medium' ||
+      effort === 'high'
+        ? effort
+        : undefined;
     build = (configuration): LlmProvider =>
       new OpenAiCompatibleLlmProvider({
         baseUrl,
@@ -217,6 +225,9 @@ async function main(): Promise<void> {
           process.env.LLM_MAX_TOKENS_PARAM === 'max_completion_tokens'
             ? 'max_completion_tokens'
             : 'max_tokens',
+        // Same thinking level as the application (LLM_REASONING_EFFORT), so
+        // the evaluation measures what production runs.
+        ...(reasoningEffort ? { reasoningEffort } : {}),
         requestTimeoutMs: 30_000,
         maxRetries: 2,
       });

@@ -177,9 +177,11 @@ describe('STUCK detection', () => {
         priorTurns: [asked('subject'), asked('subject')],
       },
     };
+    // ADR 041: a customer who only talks past the question ("ok", "hmm")
+    // is stuck; one who greets or asks something is engaging, not stuck.
     const stuck = await runTurn({
-      provider: new ScriptedLlmProvider([extraction({}, 'greeting')]),
-      text: 'Hello',
+      provider: new ScriptedLlmProvider([extraction({}, 'other')]),
+      text: 'hmm',
       input: { conversationLocale: 'en', ...stuckInput },
     });
     expect(stuck.result).toMatchObject({
@@ -197,6 +199,12 @@ describe('STUCK detection', () => {
       },
     });
     expect(moving.result.outcome).toBe('ASKED_SLOT');
+    const greeting = await runTurn({
+      provider: new ScriptedLlmProvider([extraction({}, 'greeting')]),
+      text: 'Hello',
+      input: { conversationLocale: 'en', ...stuckInput },
+    });
+    expect(greeting.result.outcome).toBe('ASKED_SLOT');
   });
 });
 

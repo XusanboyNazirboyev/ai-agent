@@ -678,5 +678,56 @@
       "handover": "CONNECTOR_UNAVAILABLE"
     },
     "connector": "down"
+  },
+  {
+    "id": "edu-en-20",
+    "pack": "education",
+    "locale": "en",
+    "category": "conversational",
+    "description": "ADR 041: what can you help with",
+    "input": {
+      "text": "what can you do for me?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "capabilities",
+        "language": "en",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "askedSlot": "subject",
+      "toolsOk": []
+    }
+  },
+  {
+    "id": "edu-en-21",
+    "pack": "education",
+    "locale": "en",
+    "category": "conversational",
+    "description": "ADR 041: frustration once -> apology",
+    "input": {
+      "text": "you are not understanding me at all"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "frustration",
+        "language": "en",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "toolsOk": []
+    }
   }
 ]

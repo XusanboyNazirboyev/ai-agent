@@ -188,6 +188,14 @@ export const DomainPackSchema = z
     leadScoring: LeadScoringSchema.optional(),
     /** Optional business actions (disabled until a tenant enables them). */
     actions: z.array(ActionSpecSchema).max(10).default([]),
+    /**
+     * Code-rendered answer to "what can you help with?" per locale (ADR 041):
+     * what the assistant does for this kind of business. No prices, dates or
+     * other facts. Without one, the locale's generic text is used.
+     */
+    capabilities: z
+      .partialRecord(LocaleIdSchema, z.string().min(1).max(400))
+      .default({}),
     prompt: z
       .object({
         businessRole: z.string().min(1).max(400),
