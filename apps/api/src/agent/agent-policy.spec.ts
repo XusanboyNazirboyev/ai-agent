@@ -27,7 +27,6 @@ import {
   assertAgentModeAllowed,
   effectiveAgentMode,
   liveModeRefusal,
-  modeRefusalCode,
   shadowModeRefusal,
   type AgentModePolicy,
 } from './agent-mode.js';
@@ -41,7 +40,7 @@ import { INJECTED_DESCRIPTION } from './testing/eval-runner.js';
 
 const production: AgentModePolicy = {
   nodeEnv: 'production',
-  operatorNotifierConfigured: false,
+  operatorNotifierConfigured: true,
   providerTrusted: true,
   allowRealCustomerData: false,
 };
@@ -49,20 +48,25 @@ const real = { isTestAccount: false };
 const testBot = { isTestAccount: true };
 
 describe('agent mode policy', () => {
-  it('refuses LIVE without an operator group outside local development', () => {
-    expect(liveModeRefusal(production)).toMatch(/operator group/);
-    expect(() => assertAgentModeAllowed('LIVE', production, real)).toThrow(
-      /operator group on this channel account/,
+  it('allows LIVE with Web Inbox handovers when no Telegram group is configured', () => {
+    expect(liveModeRefusal(production)).toBeUndefined();
+    expect(() =>
+      assertAgentModeAllowed('LIVE', production, real),
+    ).not.toThrow();
+    expect(effectiveAgentMode('LIVE', production, real)).toMatchObject({
+      mode: 'LIVE',
+    });
+  });
+
+  it('refuses LIVE when no operator handover notifier is available', () => {
+    const unavailable: AgentModePolicy = {
+      ...production,
+      operatorNotifierConfigured: false,
+    };
+    expect(liveModeRefusal(unavailable)).toMatch(/operator handover notifier/);
+    expect(() => assertAgentModeAllowed('LIVE', unavailable, real)).toThrow(
+      /operator handover notifier/,
     );
-    expect(() =>
-      assertAgentModeAllowed('LIVE', production, {
-        ...real,
-        operatorChatId: null,
-      }),
-    ).toThrow(/operator group/);
-    expect(() =>
-      assertAgentModeAllowed('LIVE', { ...production, nodeEnv: 'test' }, real),
-    ).toThrow();
     expect(() =>
       assertAgentModeAllowed('SHADOW', production, real),
     ).not.toThrow();
@@ -71,39 +75,21 @@ describe('agent mode policy', () => {
 
   it('allows LIVE in local development or with a notifier', () => {
     expect(
-      liveModeRefusal({ ...production, nodeEnv: 'development' }),
+      liveModeRefusal({
+        ...production,
+        nodeEnv: 'development',
+        operatorNotifierConfigured: false,
+      }),
     ).toBeUndefined();
-    expect(
-      liveModeRefusal({ ...production, operatorNotifierConfigured: true }),
-    ).toBeUndefined();
-  });
-
-  it('allows LIVE in production on an account with an operator group (ADR 036)', () => {
-    const grouped = { ...real, operatorChatId: '-1001234567890' };
-    expect(liveModeRefusal(production, grouped)).toBeUndefined();
-    expect(() =>
-      assertAgentModeAllowed('LIVE', production, grouped),
-    ).not.toThrow();
-    expect(effectiveAgentMode('LIVE', production, grouped)).toEqual({
-      mode: 'LIVE',
-    });
-    expect(modeRefusalCode('LIVE', production, grouped)).toBeUndefined();
-    expect(modeRefusalCode('LIVE', production, real)).toBe(
-      'NO_OPERATOR_NOTIFIER',
-    );
-    // The group never overrides the data-protection guard.
-    const untrusted = { ...production, providerTrusted: false };
-    expect(liveModeRefusal(untrusted, grouped)).toMatch(/untrusted/);
-    expect(modeRefusalCode('LIVE', untrusted, grouped)).toBe(
-      'UNTRUSTED_PROVIDER',
-    );
-    expect(effectiveAgentMode('LIVE', untrusted, grouped).mode).not.toBe(
-      'LIVE',
-    );
+    expect(liveModeRefusal(production)).toBeUndefined();
   });
 
   it('degrades a refused LIVE row to SHADOW at processing time', () => {
-    expect(effectiveAgentMode('LIVE', production, real)).toMatchObject({
+    const unavailable: AgentModePolicy = {
+      ...production,
+      operatorNotifierConfigured: false,
+    };
+    expect(effectiveAgentMode('LIVE', unavailable, real)).toMatchObject({
       mode: 'SHADOW',
       refusal: expect.any(String),
     });
@@ -173,7 +159,7 @@ describe('data-protection guard (untrusted LLM provider)', () => {
     expect(policy).toMatchObject({
       providerTrusted: false,
       allowRealCustomerData: false,
-      operatorNotifierConfigured: false,
+      operatorNotifierConfigured: true,
     });
   });
 });

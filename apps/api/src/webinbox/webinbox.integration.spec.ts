@@ -2,7 +2,7 @@ import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
@@ -16,6 +16,7 @@ import { ChannelsController } from './channels.controller.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { ContactsController } from './contacts.controller.js';
+import { LeadPipelineController } from './lead-pipeline.controller.js';
 import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
 import { KnowledgeFaqController } from './knowledge-faq.controller.js';
 import { KnowledgeService } from '../knowledge/knowledge.service.js';
@@ -26,7 +27,12 @@ import { InboxEventsService, parseEventId } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { LeadsController } from './leads.controller.js';
 import { hashPassword, verifyPassword } from './password.js';
-import { CSRF_HEADER, SESSION_COOKIE, SessionGuard } from './session.guard.js';
+import {
+  CSRF_HEADER,
+  SESSION_COOKIE,
+  SessionGuard,
+  type InboxRequest,
+} from './session.guard.js';
 import {
   DEFAULT_SESSION_POLICY,
   SessionService,
@@ -150,6 +156,29 @@ function context(request: object): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
+function sessionServiceBeforeTransaction(
+  before: () => Promise<void>,
+): SessionService {
+  let armed = true;
+  const transaction = prisma.$transaction.bind(prisma);
+  const racingPrisma = new Proxy(prisma as object, {
+    get(target: object, property: string | symbol): unknown {
+      if (property === '$transaction') {
+        return async (operation: unknown): Promise<unknown> => {
+          if (armed) {
+            armed = false;
+            await before();
+          }
+          return transaction(operation as never);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return new SessionService(racingPrisma as PrismaService, policy);
+}
+
 describe('password hashing', () => {
   it('verifies the right password only and carries its parameters', async () => {
     const hash = await hashPassword('s3cret ü', FAST);
@@ -194,6 +223,113 @@ describe('login and sessions', () => {
     });
     const later = new Date(Date.now() + policy.lockMs + 1000);
     expect((await sessions.login(w.email, 'correct horse', later)).ok).toBe(
+      true,
+    );
+  });
+
+  it('counts simultaneous failures atomically and restarts an expired lock window', async () => {
+    const w = await world();
+    const failures = await Promise.all(
+      Array.from({ length: policy.maxFailedAttempts }, () =>
+        sessions.login(w.email, 'bad'),
+      ),
+    );
+    expect(failures.every((result) => !result.ok)).toBe(true);
+    const credential = await db.operatorCredential.findUniqueOrThrow({
+      where: { operatorId: w.operatorId },
+    });
+    expect(credential.failedAttempts).toBe(0);
+    expect(credential.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
+    expect(await sessions.login(w.email, 'correct horse')).toEqual({
+      ok: false,
+      code: 'LOCKED',
+    });
+
+    await db.operatorCredential.update({
+      where: { operatorId: w.operatorId },
+      data: {
+        failedAttempts: 0,
+        lockedUntil: new Date(Date.now() - 1000),
+      },
+    });
+    expect(await sessions.login(w.email, 'bad')).toEqual({
+      ok: false,
+      code: 'INVALID_CREDENTIALS',
+    });
+    const afterExpiredLock = await db.operatorCredential.findUniqueOrThrow({
+      where: { operatorId: w.operatorId },
+    });
+    expect(afterExpiredLock.failedAttempts).toBe(1);
+    expect(afterExpiredLock.lockedUntil).toBeNull();
+  });
+
+  it('rechecks a successful login when another failure creates a lock first', async () => {
+    const w = await world();
+    const lockedUntil = new Date(Date.now() + policy.lockMs);
+    const racingSessions = sessionServiceBeforeTransaction(async () => {
+      await db.operatorCredential.update({
+        where: { operatorId: w.operatorId },
+        data: { failedAttempts: 0, lockedUntil },
+      });
+    });
+    expect(await racingSessions.login(w.email, 'correct horse')).toEqual({
+      ok: false,
+      code: 'LOCKED',
+    });
+    expect(
+      await db.operatorSession.count({
+        where: { tenantId: w.tenantId, operatorId: w.operatorId },
+      }),
+    ).toBe(0);
+    const credential = await db.operatorCredential.findUniqueOrThrow({
+      where: { operatorId: w.operatorId },
+    });
+    expect(credential.lockedUntil?.getTime()).toBe(lockedUntil.getTime());
+  });
+
+  it('does not let a stale successful login reset a newer credential counter', async () => {
+    const w = await world();
+    const racingSessions = sessionServiceBeforeTransaction(async () => {
+      await sessions.setPassword(
+        w.tenantId,
+        w.operatorId,
+        w.email,
+        'new password',
+      );
+      await sessions.login(w.email, 'bad');
+    });
+    expect(await racingSessions.login(w.email, 'correct horse')).toEqual({
+      ok: false,
+      code: 'INVALID_CREDENTIALS',
+    });
+    const credential = await db.operatorCredential.findUniqueOrThrow({
+      where: { operatorId: w.operatorId },
+    });
+    expect(credential.failedAttempts).toBe(2);
+    expect(credential.lockedUntil).toBeNull();
+  });
+
+  it('changes the password and revokes only that tenant operator’s active sessions', async () => {
+    const w = await world();
+    const other = await world();
+    const existing = await sessions.login(w.email, 'correct horse');
+    const unrelated = await sessions.login(other.email, 'correct horse');
+    if (!existing.ok || !unrelated.ok) throw new Error('login failed');
+
+    await sessions.setPassword(
+      w.tenantId,
+      w.operatorId,
+      w.email,
+      'replacement password',
+    );
+
+    expect(await sessions.resolve(existing.sessionToken)).toBeUndefined();
+    expect(await sessions.resolve(unrelated.sessionToken)).toBeDefined();
+    expect(await sessions.login(w.email, 'correct horse')).toMatchObject({
+      ok: false,
+      code: 'INVALID_CREDENTIALS',
+    });
+    expect((await sessions.login(w.email, 'replacement password')).ok).toBe(
       true,
     );
   });
@@ -903,6 +1039,7 @@ describe('event stream resource accounting', () => {
   class FakeResponse extends EventEmitter {
     status = 0;
     frames: string[] = [];
+    ended = false;
     constructor(private readonly closeOnHead = false) {
       super();
     }
@@ -916,12 +1053,18 @@ describe('event stream resource accounting', () => {
       return true;
     }
     end(): void {
+      this.ended = true;
       this.emit('close');
     }
   }
 
   function controllerWith(bus: InboxEventBus): EventsController {
-    return new EventsController(events, bus, { get: () => 60_000 } as never);
+    return new EventsController(
+      events,
+      bus,
+      { get: () => 60_000 } as never,
+      sessions,
+    );
   }
 
   it('releases the slot, subscription and timers of a client that leaves during setup', async () => {
@@ -956,6 +1099,59 @@ describe('event stream resource accounting', () => {
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     expect(bus.listenerCount(w.tenantId)).toBe(0);
     bus.onModuleDestroy();
+  });
+
+  it('closes streams after logout, expiry, idle expiry, or operator deactivation', async () => {
+    for (const invalidation of [
+      'logout',
+      'expiry',
+      'idle expiry',
+      'deactivation',
+    ] as const) {
+      const w = await world();
+      const s = await signIn(w);
+      const bus = new InboxEventBus(prisma);
+      const response = new FakeResponse();
+      await controllerWith(bus).stream(
+        { principal: s.principal } as never,
+        response as never,
+        undefined,
+        undefined,
+      );
+      expect(response.status).toBe(200);
+
+      if (invalidation === 'logout') {
+        await sessions.logout(s.principal.sessionId, w.tenantId);
+      } else if (invalidation === 'expiry') {
+        await db.operatorSession.update({
+          where: { id: s.principal.sessionId },
+          data: { expiresAt: new Date(Date.now() - 1000) },
+        });
+      } else if (invalidation === 'idle expiry') {
+        await db.operatorSession.update({
+          where: { id: s.principal.sessionId },
+          data: { lastSeenAt: new Date(Date.now() - policy.idleTtlMs - 1000) },
+        });
+      } else {
+        await db.operator.update({
+          where: { id: w.operatorId },
+          data: { isActive: false },
+        });
+      }
+      await db.conversation.update({
+        where: { id: w.conversationId },
+        data: { state: 'BOT_ACTIVE' },
+      });
+      await bus.tick();
+
+      await vi.waitFor(() => expect(response.ended).toBe(true));
+      expect(response.frames.some((frame) => frame.startsWith('event:'))).toBe(
+        false,
+      );
+      expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
+      expect(bus.listenerCount(w.tenantId)).toBe(0);
+      bus.onModuleDestroy();
+    }
   });
 
   it('limits concurrent streams per operator and frees them on close', async () => {
@@ -1113,16 +1309,19 @@ describe('assistant mode', () => {
     ).toBe('OFF');
   });
 
-  it('refuses a mode the policy forbids and says why, in the list too', async () => {
+  it('allows LIVE without a Telegram group and still refuses untrusted providers', async () => {
     const w = await world('ADMIN');
     const s = await signIn(w);
     const production = channelsController({ NODE_ENV: 'production' });
-    await expect(
-      production.setMode({ principal: s.principal } as never, w.accountId, {
-        mode: 'LIVE',
-      }),
-    ).rejects.toMatchObject({
-      response: { code: 'MODE_REFUSED', reason: 'NO_OPERATOR_NOTIFIER' },
+    const enabled = await production.setMode(
+      { principal: s.principal } as never,
+      w.accountId,
+      { mode: 'LIVE' },
+    );
+    expect(enabled).toMatchObject({
+      agentMode: 'LIVE',
+      effectiveMode: 'LIVE',
+      operatorGroupConfigured: false,
     });
     const untrusted = channelsController({
       LLM_PROVIDER: 'gemini',
@@ -1139,7 +1338,7 @@ describe('assistant mode', () => {
           where: { id: w.accountId },
         })
       ).agentMode,
-    ).toBe('OFF');
+    ).toBe('LIVE');
     // Turning the assistant off is always allowed.
     const off = await untrusted.setMode(
       { principal: s.principal } as never,
@@ -1600,6 +1799,115 @@ describe('knowledge documents', () => {
     });
     await expect(docs().remove(asAdmin, faqDoc.id)).rejects.toMatchObject({
       response: { code: 'NOT_FOUND' },
+    });
+  });
+
+  describe('lead pipeline', () => {
+    const controller = new LeadPipelineController(prisma);
+
+    function as(w: World, role: InboxPrincipal['role']): InboxRequest {
+      return {
+        method: 'GET',
+        headers: {},
+        principal: {
+          tenantId: w.tenantId,
+          operatorId: w.operatorId,
+          role,
+          sessionId: randomUUID(),
+        },
+      };
+    }
+
+    it('starts leads in New, keeps score separate, and scopes stages by tenant', async () => {
+      const a = await world('ADMIN');
+      const b = await world('ADMIN');
+      const stagesA = await controller.stages(as(a, 'ADMIN'));
+      const stagesB = await controller.stages(as(b, 'ADMIN'));
+      expect(stagesA.map((stage) => stage.code)).toEqual([
+        'NEW',
+        'HOT',
+        'WARM',
+        'COLD',
+      ]);
+      expect(stagesA[0]?.id).not.toBe(stagesB[0]?.id);
+
+      const added = await controller.createStage(as(a, 'ADMIN'), {
+        name: 'Qualified',
+      });
+      const renamed = await controller.renameStage(as(a, 'ADMIN'), added.id, {
+        name: 'In discussion',
+      });
+      expect(renamed.name).toBe('In discussion');
+
+      await db.lead.create({
+        data: {
+          tenantId: a.tenantId,
+          contactId: a.contactId,
+          conversationId: a.conversationId,
+          pipelineStageId: stagesA[0]!.id,
+          score: 'HOT',
+          summary: 'test',
+          requirements: {},
+          idempotencyKey: `pipeline-${randomUUID()}`,
+        },
+      });
+      const first = await controller.list(as(a, 'ADMIN'), {
+        stageId: stagesA[0]!.id,
+      });
+      expect(first.items).toHaveLength(1);
+      expect(first.items[0]?.score).toBe('HOT');
+
+      const moved = await controller.move(as(a, 'ADMIN'), first.items[0]!.id, {
+        stageId: renamed.id,
+      });
+      expect(moved.pipelineStageId).toBe(renamed.id);
+      expect(
+        (await controller.list(as(a, 'ADMIN'), { stageId: stagesA[0]!.id }))
+          .items,
+      ).toHaveLength(0);
+      expect(
+        (await controller.list(as(a, 'ADMIN'), { stageId: renamed.id })).items,
+      ).toHaveLength(1);
+      expect(
+        (await controller.list(as(b, 'ADMIN'), { stageId: stagesB[0]!.id }))
+          .items,
+      ).toHaveLength(0);
+      await expect(
+        controller.move(as(a, 'ADMIN'), moved.id, {
+          stageId: stagesB[0]!.id,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('restricts stage configuration to managers and lead moves to non-viewers', async () => {
+      const w = await world('OPERATOR');
+      const stages = await controller.stages(as(w, 'OPERATOR'));
+      await expect(
+        controller.createStage(as(w, 'OPERATOR'), { name: 'Follow up' }),
+      ).rejects.toMatchObject({ status: 403 });
+
+      const viewer = await db.operator.create({
+        data: {
+          tenantId: w.tenantId,
+          displayName: 'Viewer',
+          role: 'VIEWER',
+        },
+      });
+      const viewerRequest: InboxRequest = {
+        method: 'PATCH',
+        headers: {},
+        principal: {
+          tenantId: w.tenantId,
+          operatorId: viewer.id,
+          role: 'VIEWER',
+          sessionId: randomUUID(),
+        },
+      };
+      await expect(
+        controller.move(viewerRequest, randomUUID(), {
+          stageId: stages[0]!.id,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
     });
   });
 });

@@ -125,6 +125,8 @@ pbcopy < ~/.config/agentcore/dev-superadmin.password   # macOS: copy the passwor
 
 Login `superadmin@agentcore.local`. **Local development only; change it in any real environment.** The same applies to the Compose database login `agentcore` / `agentcore` in `.env.example`. A second checkout on the same machine overwrites the password file; give it its own directory with `AGENTCORE_DEV_SECRETS_DIR`. This is an `OWNER` of one dedicated local tenant (fake data), not a platform administrator: there is no cross-tenant role ([ADR 025](docs/adr/025-local-development-superadmin.md)). The script refuses anything but `NODE_ENV=development` on a localhost database, stores only an scrypt hash, and writes the password to a 0600 file outside the repository. With the real Telegram bot token in `.env`, do not reply from the local demo conversations: the demo channel account is fake and a reply would try to reach Telegram.
 
+To use a different local web login, set both `LOGIN` and `PASS` in the ignored root `.env`, then run `cd apps/api && pnpm dev:superadmin`. For an already-created account, add `--reset-password` to apply the configured password. These values are used only by this development-only bootstrap script; the API does not authenticate directly from environment variables, and neither value is printed.
+
 ## Running the tests
 
 | Command | What it checks | Needs |

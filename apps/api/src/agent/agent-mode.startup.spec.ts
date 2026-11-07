@@ -35,7 +35,7 @@ function check(
 }
 
 describe('agent mode startup check', () => {
-  it('refuses to start when the served account is LIVE outside development', async () => {
+  it('starts in production with LIVE when the Web Inbox can receive handovers', async () => {
     const { run, findFirst } = check(
       {},
       {
@@ -43,7 +43,7 @@ describe('agent mode startup check', () => {
         isTestAccount: false,
       },
     );
-    await expect(run()).rejects.toThrow(/operator group/);
+    await expect(run()).resolves.toBeUndefined();
     expect(findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: ACCOUNT, status: 'ACTIVE' } }),
     );

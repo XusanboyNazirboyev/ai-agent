@@ -22,6 +22,8 @@ import { AnalyticsController } from './analytics.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
+import { LeadsController } from './leads.controller.js';
+import { LeadPipelineController } from './lead-pipeline.controller.js';
 import { EventsController } from './events.controller.js';
 import { TelegramConnectController } from './telegram-connect.controller.js';
 import { InstagramConnectController } from './instagram-connect.controller.js';
@@ -33,7 +35,6 @@ import { InboxEventsService } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { SessionGuard } from './session.guard.js';
 import { SessionService } from './session.service.js';
-import { LeadsController } from './leads.controller.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
 @Module({
@@ -51,6 +52,7 @@ import { LeadsController } from './leads.controller.js';
     ConnectorsController,
     LeadsController,
     AnalyticsController,
+    LeadPipelineController,
   ],
   providers: [
     AnalyticsService,

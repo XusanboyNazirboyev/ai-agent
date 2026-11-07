@@ -127,7 +127,7 @@ export function InstagramOAuthCallback(): ReactNode {
             </Button>
           ) : null}
           <Link
-            href="/channels"
+            href="/settings/channels"
             data-testid="ig-callback-back"
             className={buttonClass()}
           >

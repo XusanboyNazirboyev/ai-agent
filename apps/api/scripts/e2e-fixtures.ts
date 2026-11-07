@@ -14,6 +14,7 @@ import { config as loadEnv } from 'dotenv';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { createPostgresAdapter } from '../src/persistence/postgres-adapter.js';
 import { hashPassword } from '../src/webinbox/password.js';
+import { ensureLeadStages } from '../src/leads/lead-stage.util.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
@@ -95,6 +96,7 @@ async function tenant(label: string): Promise<{
       packVersion: '1',
     },
   });
+  const newLeadStageId = await ensureLeadStages(db, created.id);
   const account = await db.channelAccount.create({
     data: {
       tenantId: created.id,
@@ -152,6 +154,7 @@ async function tenant(label: string): Promise<{
           })
         ).contactId,
         conversationId: conversations[0].id,
+        pipelineStageId: newLeadStageId,
         score: 'HOT',
         summary: 'e2e lead',
         requirements: {},

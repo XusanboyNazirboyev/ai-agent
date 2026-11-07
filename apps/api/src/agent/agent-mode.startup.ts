@@ -7,8 +7,8 @@ import { agentModePolicyFrom, assertAgentModeAllowed } from './agent-mode.js';
 /**
  * Refuses to start while the channel account this process serves
  * (TELEGRAM_CHANNEL_ACCOUNT_ID; Phase 2 runs one bot per process) is LIVE
- * and LIVE is not allowed (no operator notifier outside local development).
- * Any LIVE row, served or not, is also degraded to SHADOW when processed.
+ * and LIVE is not allowed. Any LIVE row, served or not, is also degraded to
+ * SHADOW when processed.
  */
 @Injectable()
 export class AgentModeStartupCheck implements OnApplicationBootstrap {
@@ -48,15 +48,6 @@ export class AgentModeStartupCheck implements OnApplicationBootstrap {
     // Throws AgentModeRefusedError: the API does not start in a mode it
     // would refuse to run.
     assertAgentModeAllowed(account.agentMode, policy, account);
-    if (account.agentMode === 'LIVE' && !account.operatorChatId) {
-      this.logger.warn(
-        JSON.stringify({
-          event: 'agent.live_mode_development_only',
-          channelAccount: account.id,
-          note: 'LIVE without operator notification; local development only',
-        }),
-      );
-    }
     if (
       !policy.providerTrusted &&
       !account.isTestAccount &&

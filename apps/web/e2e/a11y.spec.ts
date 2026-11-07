@@ -91,6 +91,18 @@ test.describe('inbox', () => {
       );
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
       await expect(page.getByTestId('conversation-list')).toBeVisible();
+      const scopes = page.getByRole('tab');
+      await expect(scopes).toHaveCount(3);
+      const labels =
+        language === 'ru'
+          ? ['Все', 'Ожидают', 'Закрытые']
+          : language === 'uz-Latn'
+            ? ['Hammasi', 'Kutayotganlar', 'Yopilgan']
+            : ['All', 'Waiting', 'Closed'];
+      for (const [index, label] of labels.entries()) {
+        await expect(scopes.nth(index)).toContainText(label);
+      }
+      await expect(scopes.nth(0)).toHaveAttribute('aria-selected', 'true');
       await audit(page, `list ${scheme} ${language} ${viewport.width}`);
 
       await page
@@ -155,22 +167,23 @@ test.describe('leads, settings and status pages', () => {
         { viewport, colorScheme: scheme },
       );
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
-      await page.goto('/leads');
-      await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
+      await page.goto('/leads?view=funnel');
+      await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
       await audit(page, `leads ${scheme} ${language} ${viewport.width}`);
       for (const path of [
-        '/contacts',
+        '/leads?view=list',
         '/more',
-        '/bot',
+        '/settings/bot',
         '/knowledge',
-        '/crm',
+        '/settings/pipeline',
+        '/settings/crm',
         '/analytics',
       ]) {
         await page.goto(path);
         await expect(page.locator('#app-main [role="region"]')).toBeVisible();
         await audit(page, `${path} ${scheme} ${language} ${viewport.width}`);
       }
-      await page.goto('/channels');
+      await page.goto('/settings/channels');
       await expect(page.getByTestId('channel-account').first()).toBeVisible();
       await audit(page, `channels ${scheme} ${language} ${viewport.width}`);
       await page.goto('/settings');
@@ -211,16 +224,16 @@ test('keyboard: the scope tabs follow the arrow keys and a skip link is first', 
     page.getByRole('link', { name: 'Skip to conversations' }),
   ).toBeFocused();
 
-  const waiting = page.getByRole('tab', { name: /^Waiting/u });
-  await waiting.focus();
+  const all = page.getByRole('tab', { name: /^All/u });
+  await all.focus();
   await page.keyboard.press('ArrowRight');
-  const mine = page.getByRole('tab', { name: 'Mine' });
-  await expect(mine).toHaveAttribute('aria-selected', 'true');
-  await expect(mine).toBeFocused();
+  const waiting = page.getByRole('tab', { name: /^Waiting/u });
+  await expect(waiting).toHaveAttribute('aria-selected', 'true');
+  await expect(waiting).toBeFocused();
   await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Closed' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: /^Waiting/u })).toBeFocused();
+  await expect(page.getByRole('tab', { name: /^All/u })).toBeFocused();
   // Only the selected tab is in the tab order.
   await expect(page.getByRole('tab', { name: 'Closed' })).toHaveAttribute(
     'tabindex',
@@ -237,7 +250,7 @@ test('the question form and the assistant switch have no violations', async ({
     browser,
     f.a.operators.admin.email,
   );
-  await page.goto('/bot');
+  await page.goto('/settings/bot');
   await expect(page.getByTestId('bot-account')).toBeVisible();
   await audit(page, 'bot page as admin');
   await page.goto('/knowledge');
@@ -271,7 +284,7 @@ test('the channels page with controls and the connect dialog have no violations'
     browser,
     f.a.operators.admin.email,
   );
-  await page.goto('/channels');
+  await page.goto('/settings/channels');
   await expect(page.getByTestId('connect-telegram')).toBeVisible();
   await audit(page, 'channels as admin');
   await page.getByTestId('connect-telegram').click();

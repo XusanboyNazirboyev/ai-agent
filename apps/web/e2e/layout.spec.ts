@@ -69,19 +69,20 @@ test.describe('no overflow in the signed-in pages', () => {
           [],
         );
 
-        await page.goto('/leads');
-        await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
+        await page.goto('/leads?view=funnel');
+        await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
         await expect(
           page.locator('[data-testid^="lead-column"] [role="status"]'),
         ).toHaveCount(0);
         expect(await findOverflow(page), `leads ${language}`).toEqual([]);
 
         for (const path of [
-          '/contacts',
+          '/leads?view=list',
           '/more',
-          '/bot',
+          '/settings/bot',
           '/knowledge',
-          '/crm',
+          '/settings/pipeline',
+          '/settings/crm',
           '/analytics',
         ]) {
           await page.goto(path);
@@ -89,7 +90,7 @@ test.describe('no overflow in the signed-in pages', () => {
           expect(await findOverflow(page), `${path} ${language}`).toEqual([]);
         }
 
-        await page.goto('/channels');
+        await page.goto('/settings/channels');
         await expect(page.getByTestId('channel-account').first()).toBeVisible();
         expect(await findOverflow(page), `channels ${language}`).toEqual([]);
 
@@ -129,8 +130,8 @@ test.describe('no overflow in the signed-in pages', () => {
         .click();
       await expect(page.getByTestId('conversation-view')).toBeVisible();
       expect(await findOverflow(page), 'conversation').toEqual([]);
-      await page.goto('/leads');
-      await expect(page.getByTestId('lead-column-HOT')).toBeAttached();
+      await page.goto('/leads?view=funnel');
+      await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
       await page.evaluate(() => {
         document.documentElement.style.letterSpacing = '0.07em';
       });

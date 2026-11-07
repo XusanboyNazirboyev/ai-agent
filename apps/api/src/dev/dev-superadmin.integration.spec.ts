@@ -92,6 +92,42 @@ describe('local superadmin bootstrap', () => {
     ).toBe(1);
   });
 
+  it('creates a local account from configured LOGIN and PASS', async () => {
+    const email = 'configured-local-login@example.test';
+    const password = 'configured-local-password';
+    const result = await ensureLocalSuperadmin(db, {
+      email,
+      password,
+      reset: true,
+      hash,
+    });
+    expect(['created', 'password-reset']).toContain(result.status);
+    expect(result.password).toBe(password);
+
+    const credential = await db.operatorCredential.findUniqueOrThrow({
+      where: { email },
+    });
+    expect(credential.passwordHash).not.toContain(password);
+    expect(await verifyPassword(password, credential.passwordHash)).toBe(true);
+
+    const unchanged = await ensureLocalSuperadmin(db, {
+      email,
+      password: 'different-local-password',
+      hash,
+    });
+    expect(unchanged.status).toBe('unchanged');
+    expect(
+      await verifyPassword(
+        password,
+        (
+          await db.operatorCredential.findUniqueOrThrow({
+            where: { email },
+          })
+        ).passwordHash,
+      ),
+    ).toBe(true);
+  });
+
   it('adds demo conversations only to its own tenant, once', async () => {
     const { tenantId } = await ensureLocalSuperadmin(db, { hash });
     const before = await db.conversation.count({ where: { tenantId } });

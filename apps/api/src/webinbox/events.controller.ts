@@ -12,6 +12,7 @@ import type { AppEnvironment } from '../config/environment.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 import { InboxEventBus } from './inbox-event-bus.js';
 import { InboxEventsService, parseEventId } from './inbox-events.service.js';
+import { SessionService } from './session.service.js';
 
 interface StreamResponse {
   writeHead(status: number, headers: Record<string, string>): void;
@@ -40,6 +41,7 @@ export class EventsController {
     private readonly events: InboxEventsService,
     private readonly bus: InboxEventBus,
     private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly sessions: SessionService,
   ) {}
 
   /**
@@ -81,6 +83,20 @@ export class EventsController {
       if (left <= 0) open.delete(key);
       else open.set(key, left);
     };
+    const terminate = (): void => {
+      if (closed) return;
+      release();
+      response.end();
+    };
+    const validateSession = async (): Promise<boolean> => {
+      try {
+        if (await this.sessions.isSessionActive(principal)) return true;
+      } catch {
+        // A session that cannot be revalidated must not receive more events.
+      }
+      terminate();
+      return false;
+    };
     response.on('close', release);
     response.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
@@ -101,18 +117,22 @@ export class EventsController {
       if (closed || busy) return;
       busy = true;
       try {
+        if (!(await validateSession())) return;
         const { events, gap } = await this.events.after(
           principal.tenantId,
           cursor,
         );
+        if (closed) return;
+        if (!(await validateSession())) return;
         if (gap) send(`event: resync\ndata: {}\n\n`);
         for (const event of events) {
+          if (closed) break;
           const { id, type, ...ids } = event;
           send(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(ids)}\n\n`);
           cursor = BigInt(id);
         }
       } catch {
-        // A failed poll is retried on the next tick; the client keeps its cursor.
+        // Failed event reads are retried on the next tick.
       } finally {
         busy = false;
       }

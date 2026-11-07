@@ -8,6 +8,7 @@ import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Icon, type IconName } from './ui/icons';
+import { SettingsSectionNav } from './settings-section-nav';
 
 const THEME_ICON: Record<Theme, IconName> = {
   system: 'monitor',
@@ -75,107 +76,110 @@ export function SettingsPage(): ReactNode {
   }
 
   return (
-    <div
-      role="region"
-      tabIndex={0}
-      aria-label={t('nav.settings')}
-      className="min-h-0 flex-1 overflow-y-auto"
-    >
-      <div className="mx-auto grid w-full max-w-4xl grid-cols-1 items-start gap-3 p-3 sm:gap-4 sm:p-6 lg:grid-cols-2">
-        <p className="text-sm text-muted lg:col-span-2">
-          {t('settings.intro')}
-        </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <SettingsSectionNav active="general" />
+      <div
+        role="region"
+        tabIndex={0}
+        aria-label={t('nav.settings')}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
+        <div className="mx-auto grid w-full max-w-4xl grid-cols-1 items-start gap-3 p-3 sm:gap-4 sm:p-6 lg:grid-cols-2">
+          <p className="text-sm text-muted lg:col-span-2">
+            {t('settings.intro')}
+          </p>
 
-        <Card title={t('settings.account')} icon="user">
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar name={operator.displayName} />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate font-medium">
-                {operator.displayName}
-              </span>
-              <span className="text-sm text-muted">
-                {t(`role.${operator.role}`)}
-              </span>
+          <Card title={t('settings.account')} icon="user">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar name={operator.displayName} />
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">
+                  {operator.displayName}
+                </span>
+                <span className="text-sm text-muted">
+                  {t(`role.${operator.role}`)}
+                </span>
+              </div>
             </div>
-          </div>
-          <dl className="flex flex-col gap-3">
-            <Row label={t('settings.timezone')}>{timeZone ?? '—'}</Row>
-          </dl>
-        </Card>
+            <dl className="flex flex-col gap-3">
+              <Row label={t('settings.timezone')}>{timeZone ?? '—'}</Row>
+            </dl>
+          </Card>
 
-        <Card
-          title={t('settings.notifications')}
-          description={t('settings.notificationsHint')}
-          icon="bell"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm font-medium">{t('settings.sound')}</span>
-            <Button
-              size="sm"
-              icon={sound ? 'volume' : 'volumeOff'}
-              aria-pressed={sound}
-              onClick={() => setSound(!sound)}
-            >
-              {sound ? t('header.soundOn') : t('header.soundOff')}
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-            <span className="flex items-center gap-2 text-sm font-medium">
-              {t('settings.browserAlerts')}
-              <Badge
-                tone={
-                  permission === 'granted'
-                    ? 'success'
-                    : permission === 'denied'
-                      ? 'danger'
-                      : 'neutral'
-                }
-                dot
-              >
-                {t(`permission.${permission}`)}
-              </Badge>
-            </span>
-            {permission === 'default' ? (
+          <Card
+            title={t('settings.notifications')}
+            description={t('settings.notificationsHint')}
+            icon="bell"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm font-medium">{t('settings.sound')}</span>
               <Button
                 size="sm"
-                icon="bell"
-                onClick={() => void enableNotifications()}
+                icon={sound ? 'volume' : 'volumeOff'}
+                aria-pressed={sound}
+                onClick={() => setSound(!sound)}
               >
-                {t('header.notifications')}
+                {sound ? t('header.soundOn') : t('header.soundOff')}
               </Button>
-            ) : null}
-          </div>
-        </Card>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {t('settings.browserAlerts')}
+                <Badge
+                  tone={
+                    permission === 'granted'
+                      ? 'success'
+                      : permission === 'denied'
+                        ? 'danger'
+                        : 'neutral'
+                  }
+                  dot
+                >
+                  {t(`permission.${permission}`)}
+                </Badge>
+              </span>
+              {permission === 'default' ? (
+                <Button
+                  size="sm"
+                  icon="bell"
+                  onClick={() => void enableNotifications()}
+                >
+                  {t('header.notifications')}
+                </Button>
+              ) : null}
+            </div>
+          </Card>
 
-        <Card
-          title={t('settings.appearance')}
-          description={t('settings.appearanceHint')}
-          icon="sun"
-        >
-          <div
-            role="radiogroup"
-            aria-label={t('settings.theme')}
-            className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1"
+          <Card
+            title={t('settings.appearance')}
+            description={t('settings.appearanceHint')}
+            icon="sun"
           >
-            {THEMES.map((id) => (
-              <button
-                key={id}
-                type="button"
-                role="radio"
-                aria-checked={theme === id}
-                onClick={() => setTheme(id)}
-                className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors ${
-                  theme === id
-                    ? 'bg-surface text-fg shadow-card'
-                    : 'text-muted hover:text-fg'
-                }`}
-              >
-                <Icon name={THEME_ICON[id]} />
-                <span className="truncate">{t(`theme.${id}`)}</span>
-              </button>
-            ))}
-          </div>
-        </Card>
+            <div
+              role="radiogroup"
+              aria-label={t('settings.theme')}
+              className="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1"
+            >
+              {THEMES.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === id}
+                  onClick={() => setTheme(id)}
+                  className={`flex min-h-10 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium transition-colors ${
+                    theme === id
+                      ? 'bg-surface text-fg shadow-card'
+                      : 'text-muted hover:text-fg'
+                  }`}
+                >
+                  <Icon name={THEME_ICON[id]} />
+                  <span className="truncate">{t(`theme.${id}`)}</span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

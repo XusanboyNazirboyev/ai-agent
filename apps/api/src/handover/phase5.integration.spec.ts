@@ -641,6 +641,17 @@ describe('leads', () => {
       preferredTime: 'evening',
     });
     expect(warm).toMatchObject({ level: 'WARM', created: true });
+    const newStage = await db.leadStage.findUniqueOrThrow({
+      where: { tenantId_code: { tenantId: w.tenantId, code: 'NEW' } },
+      select: { id: true },
+    });
+    expect(
+      (
+        await db.lead.findFirstOrThrow({
+          where: { conversationId: w.conversationId },
+        })
+      ).pipelineStageId,
+    ).toBe(newStage.id);
     const again = await rescore(w, {
       subject: 'IELTS',
       format: 'online',
@@ -653,6 +664,13 @@ describe('leads', () => {
       'booking_interest',
     );
     expect(hot).toMatchObject({ level: 'HOT', changed: true });
+    expect(
+      (
+        await db.lead.findFirstOrThrow({
+          where: { conversationId: w.conversationId },
+        })
+      ).pipelineStageId,
+    ).toBe(newStage.id);
     expect(
       await db.lead.count({ where: { conversationId: w.conversationId } }),
     ).toBe(1);

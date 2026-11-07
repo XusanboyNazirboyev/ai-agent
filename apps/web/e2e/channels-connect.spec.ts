@@ -66,7 +66,7 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
   const f = fixtures();
   const admin = await newSession(browser, f.a.operators.admin.email);
   const { page } = admin;
-  await page.goto('/channels');
+  await page.goto('/settings/channels');
   await page.getByTestId('connect-telegram').click();
 
   // A wrong token is refused without ever leaving a trace on the page.
@@ -133,7 +133,7 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
 
   // The operator sees the account but has no controls.
   const operator = await newSession(browser, f.a.operators.op1.email);
-  await operator.page.goto('/channels');
+  await operator.page.goto('/settings/channels');
   await expect(
     operator.page
       .getByTestId('channel-account')
@@ -162,7 +162,7 @@ test('the connect dialog fits a 320px screen', async ({ browser }) => {
   const admin = await newSession(browser, f.a.operators.admin.email, {
     viewport: { width: 320, height: 640 },
   });
-  await admin.page.goto('/channels');
+  await admin.page.goto('/settings/channels');
   await admin.page.getByTestId('connect-telegram').click();
   await admin.page.getByTestId('connect-token').fill('x'.repeat(150));
   expect(await findOverflow(admin.page)).toEqual([]);

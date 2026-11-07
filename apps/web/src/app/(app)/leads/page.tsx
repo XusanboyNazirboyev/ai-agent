@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { LeadsBoard } from '@/components/leads-board';
+import { LeadsPage as LeadsHomePage } from '@/components/leads-page';
 
 export default function LeadsPage(): ReactNode {
-  return <LeadsBoard />;
+  return <LeadsHomePage />;
 }

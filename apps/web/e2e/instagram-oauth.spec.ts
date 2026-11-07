@@ -145,7 +145,7 @@ test('an admin connects Instagram with one click through Unified login, then ena
   await page.getByTestId('ig-callback-enable').click();
   await expect(page.getByTestId('ig-callback-enabled')).toBeVisible();
   await page.getByTestId('ig-callback-back').click();
-  await expect(page).toHaveURL(/\/channels$/u);
+  await expect(page).toHaveURL(/\/settings\/channels$/u);
   await expect(
     page.getByTestId('channel-account').filter({ hasText: `@${USERNAME}` }),
   ).toBeVisible();

@@ -45,31 +45,18 @@ export function useShell(): ShellValue {
   return value;
 }
 
-type NavKey =
-  | 'inbox'
-  | 'leads'
-  | 'contacts'
-  | 'analytics'
-  | 'bot'
-  | 'knowledge'
-  | 'channels'
-  | 'crm'
-  | 'settings';
+type NavKey = 'inbox' | 'leads' | 'analytics' | 'knowledge' | 'settings';
 
 const NAV: { key: NavKey; icon: IconName }[] = [
   { key: 'inbox', icon: 'inbox' },
   { key: 'leads', icon: 'target' },
-  { key: 'contacts', icon: 'users' },
   { key: 'analytics', icon: 'chart' },
-  { key: 'bot', icon: 'bot' },
   { key: 'knowledge', icon: 'book' },
-  { key: 'channels', icon: 'link' },
-  { key: 'crm', icon: 'database' },
   { key: 'settings', icon: 'sliders' },
 ];
 
 /** On phones only these fit the tab bar; the rest sit behind "More". */
-const PRIMARY: NavKey[] = ['inbox', 'leads', 'contacts'];
+const PRIMARY: NavKey[] = ['inbox', 'leads'];
 
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';

@@ -18,6 +18,7 @@ import {
   assertOutsideRepository,
   ensureDemoConversations,
   ensureLocalSuperadmin,
+  localSuperadminCredentials,
   SUPERADMIN_EMAIL,
   superadminPasswordFile,
   writeSecretFile,
@@ -31,20 +32,34 @@ assertLocalDevelopment(process.env);
 const args = new Set(process.argv.slice(2));
 const file = superadminPasswordFile(process.env);
 assertOutsideRepository(file, repoRoot);
+const configuredCredentials = localSuperadminCredentials(process.env);
 
 const db = new PrismaClient({ adapter: createPostgresAdapter(process.env) });
 try {
   const result = await ensureLocalSuperadmin(db, {
     reset: args.has('--reset-password'),
+    email: configuredCredentials?.email,
+    password: configuredCredentials?.password,
   });
-  if (result.password) await writeSecretFile(file, result.password);
+  if (result.password && !configuredCredentials)
+    await writeSecretFile(file, result.password);
   const demo = args.has('--demo')
     ? await ensureDemoConversations(db, result.tenantId)
     : 0;
   console.log(`Local Superadmin: ${result.status}`);
-  console.log(`  login:    ${SUPERADMIN_EMAIL}`);
-  console.log(`  password: stored in ${file} (mode 0600, not printed)`);
-  console.log('  copy it:  pbcopy < that file   (macOS)');
+  console.log(
+    `  login:    ${configuredCredentials ? 'configured by LOGIN' : SUPERADMIN_EMAIL}`,
+  );
+  if (configuredCredentials) {
+    console.log('  password: configured by PASS (never printed)');
+    if (result.status === 'unchanged' && !args.has('--reset-password'))
+      console.log(
+        '  existing password kept; use --reset-password to apply PASS',
+      );
+  } else {
+    console.log(`  password: stored in ${file} (mode 0600, not printed)`);
+    console.log('  copy it:  pbcopy < that file   (macOS)');
+  }
   console.log(
     '  scope:    OWNER of one local tenant; no access to any other tenant',
   );

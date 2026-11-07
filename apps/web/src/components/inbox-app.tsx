@@ -9,7 +9,7 @@ import { ConversationList } from './conversation-list';
 import { ConversationViewPane } from './conversation-view';
 import { Icon } from './ui/icons';
 
-const SCOPES: Scope[] = ['waiting', 'mine', 'all', 'closed'];
+const SCOPES: Scope[] = ['all', 'waiting', 'closed'];
 
 /** Conversation list beside the open conversation (one at a time on phones). */
 export function InboxApp(): ReactNode {
@@ -19,7 +19,7 @@ export function InboxApp(): ReactNode {
   const { operator, timeZone, waitingCount } = useShell();
   const scopeParam = params.get('scope') as Scope | null;
   const scope: Scope =
-    scopeParam && SCOPES.includes(scopeParam) ? scopeParam : 'waiting';
+    scopeParam && SCOPES.includes(scopeParam) ? scopeParam : 'all';
   const selected = params.get('c');
 
   function navigate(next: { scope?: Scope; c?: string | null }): void {

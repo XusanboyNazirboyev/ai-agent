@@ -4,6 +4,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import { DOMAIN_PACKS } from '../agent/agent-conversation.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { scoreLead, type LeadLevel } from '../core/leads/scoring.js';
+import { ensureLeadStages } from './lead-stage.util.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -214,11 +215,13 @@ export class LeadService {
       .slice(0, 1_000);
     const requirements = slotValues as Prisma.InputJsonObject;
     if (!existing) {
+      const newStageId = await ensureLeadStages(tx, input.tenantId);
       const created = await tx.lead.create({
         data: {
           tenantId: input.tenantId,
           contactId: conversation.contactId,
           conversationId: input.conversationId,
+          pipelineStageId: newStageId,
           score: result.level,
           reasonCodes: [...result.reasonCodes],
           summary,

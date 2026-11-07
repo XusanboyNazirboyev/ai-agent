@@ -4,7 +4,7 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { AgentConversationService } from '../../agent/agent-conversation.service.js';
-import type { AgentModePolicy } from '../../agent/agent-mode.js';
+import { agentModePolicy } from '../../agent/agent-mode.js';
 import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { LlmUsageStore } from '../../agent/llm-usage.store.js';
 import { extraction } from '../../agent/testing/agent-harness.js';
@@ -47,12 +47,12 @@ const db = new PrismaClient({
 const prisma = db as unknown as PrismaService;
 afterAll(async () => db.$disconnect());
 
-const DEV: AgentModePolicy = {
-  nodeEnv: 'development',
-  operatorNotifierConfigured: false,
-  providerTrusted: true,
-  allowRealCustomerData: false,
-};
+const PRODUCTION = agentModePolicy({
+  NODE_ENV: 'production',
+  LLM_PROVIDER: 'mock',
+  LLM_TRUSTED_PROVIDERS: ['mock'],
+  LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+});
 const settings: Partial<AppEnvironment> = {
   NODE_ENV: 'test',
   LLM_PROVIDER: 'mock',
@@ -189,7 +189,7 @@ async function fixture(options: {
   const processor = new TelegramProcessor(
     prisma,
     telegram as unknown as TelegramSender,
-    new TelegramAgentPipeline(prisma, agent, cfg, DEV),
+    new TelegramAgentPipeline(prisma, agent, cfg, PRODUCTION),
     undefined,
     undefined,
     undefined,
@@ -329,8 +329,15 @@ async function queueReply(
 }
 
 describe('Instagram DM: inbound to agent reply to Graph send', () => {
-  it('LIVE: answers through the agent pipeline and sends once via Instagram, never Telegram', async () => {
+  it('LIVE without a Telegram group: answers via Instagram, never Telegram', async () => {
     const f = await fixture({ mode: 'LIVE' });
+    expect(
+      (
+        await db.channelAccount.findFirstOrThrow({
+          where: { id: f.channelAccountId, tenantId: f.tenantId },
+        })
+      ).operatorChatId,
+    ).toBeNull();
     const { event } = await receive(f, 'IELTS kerak');
     await f.processor.process(event);
     // Duplicate job delivery: nothing left to answer.

@@ -3,8 +3,9 @@ import type { InlineButton } from './telegram-bot-api.js';
 /**
  * Operator notification port (D19). The handover service decides WHAT to
  * tell operators and when; an implementation only delivers it. Telegram
- * group delivery is `TelegramGroupNotifier`; a future web inbox implements
- * the same interface. Nothing here changes conversation ownership.
+ * group delivery uses `TelegramGroupNotifier`; the Web Inbox independently
+ * surfaces persisted handovers through its tenant-scoped change feed.
+ * Nothing here changes conversation ownership.
  */
 export interface NotifierTarget {
   /** Where operators are reached (Telegram group chat id for the first one). */
