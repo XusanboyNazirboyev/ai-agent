@@ -27,6 +27,20 @@ const updateSchema = z
           .passthrough()
           .optional(),
         text: z.string().min(1).max(4_096).optional(),
+        /**
+         * Voice note (Bot API `Voice`, read 2026-11-07): file_id, duration
+         * in seconds as defined by the sender, optional mime_type and
+         * file_size. Downloaded later with getFile (up to 20 MB).
+         */
+        voice: z
+          .object({
+            file_id: z.string().min(1).max(512),
+            duration: z.number().int().nonnegative().safe(),
+            mime_type: z.string().max(100).optional(),
+            file_size: z.number().int().nonnegative().safe().optional(),
+          })
+          .passthrough()
+          .optional(),
         reply_to_message: z
           .object({
             message_id: z.number().int().positive().safe(),
@@ -71,6 +85,16 @@ export type NormalizedTelegramText = {
   chatType?: string;
   /** The message this one replies to (operator-group routing). */
   replyToText?: string;
+  /**
+   * ADR 042: set for a voice note; `text` is then empty until the note is
+   * transcribed by the queue worker.
+   */
+  voice?: {
+    readonly fileId: string;
+    readonly durationSeconds: number;
+    readonly mimeType: string;
+    readonly fileSize?: number;
+  };
 };
 
 export type NormalizedTelegramCallback = {
@@ -117,7 +141,7 @@ export function normalizeTelegramUpdate(
       data: callback.data,
     };
   }
-  if (!message?.text || !message.from) {
+  if ((!message?.text && !message?.voice) || !message.from) {
     return { kind: 'unsupported', updateId: String(updateId) };
   }
 
@@ -133,8 +157,24 @@ export function normalizeTelegramUpdate(
     chatId: message.chat.id,
     userId: message.from.id,
     displayName: displayName || null,
-    text: message.text,
+    text: message.text ?? '',
     receivedAt: new Date(message.date * 1_000),
+    ...(message.voice && !message.text
+      ? {
+          voice: {
+            fileId: message.voice.file_id,
+            durationSeconds: message.voice.duration,
+            // Telegram voice notes are OGG/Opus when the sender gives no type.
+            mimeType: (message.voice.mime_type ?? 'audio/ogg')
+              .split(';')[0]!
+              .trim()
+              .toLowerCase(),
+            ...(message.voice.file_size !== undefined
+              ? { fileSize: message.voice.file_size }
+              : {}),
+          },
+        }
+      : {}),
     ...(message.chat.type !== undefined ? { chatType: message.chat.type } : {}),
     ...(message.reply_to_message?.text !== undefined
       ? { replyToText: message.reply_to_message.text }
