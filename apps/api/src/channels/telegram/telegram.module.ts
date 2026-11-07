@@ -7,6 +7,7 @@ import { InstagramModule } from '../instagram/instagram.module.js';
 import { PersistenceModule } from '../../persistence/persistence.module.js';
 import { TelegramCredentialsModule } from './telegram-credentials.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
+import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 import { TelegramProcessor } from './telegram-processor.js';
 import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
 import { TelegramSender } from './telegram-sender.js';
@@ -30,6 +31,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     TelegramAgentPipeline,
     TelegramProcessor,
     TelegramQueueRuntime,
+    VoiceTranscriptionService,
   ],
 })
 export class TelegramModule {}

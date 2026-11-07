@@ -300,6 +300,7 @@ export class InboxReadService {
             direction: true,
             type: true,
             text: true,
+            voiceStatus: true,
             deliveryState: true,
             createdAt: true,
           },

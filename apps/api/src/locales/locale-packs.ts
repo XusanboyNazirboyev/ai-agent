@@ -81,6 +81,8 @@ export const UZ_LATN: LocalePack = {
     frustration:
       "Kechirasiz, tushunarsiz bo'ldi. Boshqacha qilib so'rayman; xohlasangiz, xodim bilan bog'lanishingiz mumkin, \"operator\" deb yozing.",
     anythingElse: 'Yana nima bilan yordam bera olaman?',
+    voiceNotUnderstood:
+      'Ovozli xabaringizni tushuna olmadim. Iltimos, yozib yuboring.',
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -106,6 +108,8 @@ export const UZ_LATN: LocalePack = {
         'Tekshiruvni yakunlay olmadim. Xabaringiz jamoamiz uchun saqlandi.',
       LOW_LANG_CONFIDENCE:
         "Kechirasiz, sizni to'g'ri tushunganimga ishonchim komil emas. Xabaringiz jamoamiz uchun saqlandi.",
+      VOICE_UNREADABLE:
+        'Ovozli xabarlaringizni tushuna olmadik. Murojaatingiz jamoamiz uchun saqlandi.',
       STUCK:
         "Bir-birimizni to'g'ri tushunmayotgandek. Xabaringiz jamoamiz uchun saqlandi.",
       HIGH_VALUE:
@@ -249,6 +253,8 @@ export const UZ_CYRL: LocalePack = {
     frustration:
       'Кечирасиз, тушунарсиз бўлди. Бошқача қилиб сўрайман; хоҳласангиз, ходим билан боғланишингиз мумкин, "оператор" деб ёзинг.',
     anythingElse: 'Яна нима билан ёрдам бера оламан?',
+    voiceNotUnderstood:
+      'Овозли хабарингизни тушуна олмадим. Илтимос, ёзиб юборинг.',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -274,6 +280,8 @@ export const UZ_CYRL: LocalePack = {
         'Текширувни якунлай олмадим. Хабарингиз жамоамиз учун сақланди.',
       LOW_LANG_CONFIDENCE:
         'Кечирасиз, сизни тўғри тушунганимга ишончим комил эмас. Хабарингиз жамоамиз учун сақланди.',
+      VOICE_UNREADABLE:
+        'Овозли хабарларингизни тушуна олмадик. Мурожаатингиз жамоамиз учун сақланди.',
       STUCK:
         'Бир-биримизни тўғри тушунмаётганга ўхшаймиз. Хабарингиз жамоамиз учун сақланди.',
       HIGH_VALUE:
@@ -409,6 +417,8 @@ export const RU: LocalePack = {
     frustration:
       'Извините, получилось непонятно. Спрошу иначе; если хотите, можно связаться с сотрудником, напишите "оператор".',
     anythingElse: 'Чем ещё могу помочь?',
+    voiceNotUnderstood:
+      'Не получилось разобрать голосовое сообщение. Пожалуйста, напишите текстом.',
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -433,6 +443,8 @@ export const RU: LocalePack = {
         'Не удалось завершить проверку. Ваше сообщение сохранено для нашей команды.',
       LOW_LANG_CONFIDENCE:
         'Извините, возможно, я неправильно вас понял. Ваше сообщение сохранено для нашей команды.',
+      VOICE_UNREADABLE:
+        'Не удалось разобрать ваши голосовые сообщения. Ваше обращение сохранено для нашей команды.',
       STUCK:
         'Кажется, мы не совсем понимаем друг друга. Ваше сообщение сохранено для нашей команды.',
       HIGH_VALUE:
@@ -567,6 +579,8 @@ export const EN: LocalePack = {
     frustration:
       'Sorry, that was unclear. Let me ask differently; if you prefer, you can talk to a person, just write "operator".',
     anythingElse: 'What else can I help you with?',
+    voiceNotUnderstood:
+      "I couldn't understand your voice message. Please type it instead.",
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {
@@ -592,6 +606,8 @@ export const EN: LocalePack = {
         "I couldn't finish checking that. Your message has been recorded for our team.",
       LOW_LANG_CONFIDENCE:
         "Sorry, I'm not sure I understood you. Your message has been recorded for our team.",
+      VOICE_UNREADABLE:
+        "We couldn't understand your voice messages. Your request has been saved for our team.",
       STUCK:
         'We seem to be going in circles. Your message has been saved for our team.',
       HIGH_VALUE:

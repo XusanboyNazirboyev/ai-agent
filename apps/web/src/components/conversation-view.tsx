@@ -425,10 +425,27 @@ export function ConversationViewPane(props: {
                       {t(`author.${message.authorType}`)} ·{' '}
                       {formatDateTime(message.createdAt, props.timeZone)}
                     </p>
+                    {message.type === 'VOICE' ? (
+                      <p
+                        data-testid="voice-label"
+                        className="flex items-center gap-1.5 text-xs font-medium"
+                      >
+                        <span aria-hidden="true">🎤</span>
+                        {t(
+                          message.voiceStatus === 'FAILED'
+                            ? 'voice.failed'
+                            : message.voiceStatus === 'PENDING'
+                              ? 'voice.pending'
+                              : 'voice.transcript',
+                        )}
+                      </p>
+                    ) : null}
                     {/* Customer text is untrusted: plain text only, never HTML. */}
-                    <p className="break-words whitespace-pre-wrap">
-                      {message.text}
-                    </p>
+                    {message.text ? (
+                      <p className="break-words whitespace-pre-wrap">
+                        {message.text}
+                      </p>
+                    ) : null}
                     {offers.map((offer) => (
                       <div
                         key={offer.id}

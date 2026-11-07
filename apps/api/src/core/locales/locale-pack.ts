@@ -34,6 +34,8 @@ export const HANDOVER_REASONS = [
   'CONNECTOR_UNAVAILABLE',
   'TOOL_LOOP_LIMIT',
   'LOW_LANG_CONFIDENCE',
+  /** ADR 042: voice notes could not be understood twice in a row. */
+  'VOICE_UNREADABLE',
   'STUCK',
   'HIGH_VALUE',
   'LEGAL_UNVERIFIED',
@@ -92,6 +94,8 @@ export interface LocaleTemplates {
   readonly capabilities: string;
   readonly frustration: string;
   readonly anythingElse: string;
+  /** ADR 042: a voice note could not be understood; asks to type. */
+  readonly voiceNotUnderstood: string;
   /**
    * Customer-facing handover notices. They must not claim that a person or
    * the CRM has accepted anything: until operator notification exists they

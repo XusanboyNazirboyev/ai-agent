@@ -556,6 +556,7 @@
   "handover.reason.CONNECTOR_UNAVAILABLE": "Нет связи с каталогом или CRM",
   "handover.reason.TOOL_LOOP_LIMIT": "Бот не нашёл ответ (лимит попыток)",
   "handover.reason.LOW_LANG_CONFIDENCE": "Не удалось точно определить язык клиента",
+  "handover.reason.VOICE_UNREADABLE": "Голосовые сообщения не удалось разобрать",
   "handover.reason.STUCK": "Диалог не продвигается",
   "handover.reason.HIGH_VALUE": "Крупная сумма — нужен оператор",
   "handover.reason.LEGAL_UNVERIFIED": "Юридический вопрос без проверенного ответа",
@@ -614,5 +615,8 @@
   "fbCallback.title": "Подключение страницы Facebook",
   "fbCallback.denied": "Доступ в Facebook не разрешён, ничего не подключено.",
   "fbCallback.invalid": "Эта страница открывается после входа в Facebook. Начните заново со страницы «Каналы».",
-  "fbCallback.enabled": "Страница включена. Сообщения из Messenger теперь приходят во входящие."
+  "fbCallback.enabled": "Страница включена. Сообщения из Messenger теперь приходят во входящие.",
+  "voice.transcript": "Голосовое сообщение (расшифровка)",
+  "voice.pending": "Голосовое сообщение, расшифровывается…",
+  "voice.failed": "Голосовое сообщение, не удалось разобрать"
 }

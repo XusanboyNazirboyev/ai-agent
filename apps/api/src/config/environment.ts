@@ -165,6 +165,14 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_ROUTING_POLICY_FILE: z.string().min(1).optional(),
     LLM_BASE_URL: z.url().optional(),
     LLM_API_KEY: z.string().min(1).optional(),
+    /**
+     * ADR 042: speech-to-text for customer voice notes. `none` (default)
+     * answers every voice note with "please type"; `gemini` uses
+     * gemini-3.5-transcribe with STT_API_KEY (a paid-tier Gemini key).
+     */
+    STT_PROVIDER: z.enum(['none', 'gemini']).default('none'),
+    STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
+    STT_API_KEY: z.string().min(1).optional(),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z
@@ -425,6 +433,13 @@ const environmentSchema = postgresEnvironmentSchema
     STUCK_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   })
   .superRefine((environment, context) => {
+    if (environment.STT_PROVIDER === 'gemini' && !environment.STT_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['STT_API_KEY'],
+        message: 'STT_API_KEY is required when STT_PROVIDER=gemini',
+      });
+    }
     if (
       environment.BITRIX24_TEST_BASE_URL &&
       environment.NODE_ENV === 'production'
