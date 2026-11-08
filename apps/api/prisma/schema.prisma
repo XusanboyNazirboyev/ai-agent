@@ -69,6 +69,16 @@ enum MessageDirection {
 enum MessageType {
   TEXT
   VOICE
+  /// ADR 043: a public Instagram comment answered in private.
+  COMMENT
+}
+
+/// ADR 043: what happened to a public Instagram comment.
+enum InstagramCommentStatus {
+  RECEIVED
+  SKIPPED
+  ANSWERED
+  FAILED
 }
 
 /// ADR 042: a customer voice note waits for transcription.
@@ -222,6 +232,7 @@ model Tenant {
   contacts        Contact[]
   conversations  Conversation[]
   messages        Message[]
+  instagramComments InstagramComment[]
   conversationSlots ConversationSlots[]
   agentTurns      AgentTurn[]
   catalogItems    CatalogItem[]
@@ -426,6 +437,7 @@ model ChannelAccount {
   contacts     Contact[]
   conversations Conversation[]
   messages     Message[]
+  instagramComments InstagramComment[]
   inboundEvents InboundEvent[]
   agentTurns   AgentTurn[]
   secrets      ChannelSecret[]
@@ -550,6 +562,8 @@ model Conversation {
   assignedOperator    Operator?        @relation("AssignedOperator", fields: [tenantId, assignedOperatorId], references: [tenantId, id], onDelete: Restrict)
 
   messages Message[]
+
+  instagramComments InstagramComment[]
   notes    InternalNote[]
   followUps FollowUp[]
   shownOffers ShownOffer[]
@@ -1224,4 +1238,37 @@ model ActionProposal {
   @@index([tenantId, conversationId, status])
   @@index([status, expiresAt])
   @@map("action_proposals")
+}
+
+/// ADR 043: a top-level comment on the tenant's Instagram post. The text is
+/// the inbound COMMENT message (untrusted); this row tracks the replies.
+model InstagramComment {
+  id                    String                 @id @default(uuid(7)) @db.Uuid
+  tenantId              String                 @map("tenant_id") @db.Uuid
+  channelAccountId      String                 @map("channel_account_id") @db.Uuid
+  conversationId        String                 @map("conversation_id") @db.Uuid
+  /// The inbound COMMENT message that carries the text.
+  messageId             String                 @map("message_id") @db.Uuid
+  /// Meta's comment id (digits only, checked at intake).
+  commentId             String                 @map("comment_id") @db.VarChar(100)
+  mediaId               String?                @map("media_id") @db.VarChar(100)
+  mediaProductType      String?                @map("media_product_type") @db.VarChar(50)
+  status                InstagramCommentStatus @default(RECEIVED)
+  /// Our outbound message sent as the one private reply.
+  privateReplyMessageId String?                @map("private_reply_message_id") @db.Uuid
+  /// The public reply's comment id returned by Meta.
+  publicReplyId         String?                @map("public_reply_id") @db.VarChar(100)
+  errorCode             String?                @map("error_code") @db.VarChar(100)
+  commentedAt           DateTime               @map("commented_at") @db.Timestamptz(6)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  channelAccount        ChannelAccount         @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+  conversation          Conversation           @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, channelAccountId, commentId])
+  @@unique([tenantId, messageId])
+  @@index([tenantId, channelAccountId, status, createdAt])
+  @@map("instagram_comments")
 }

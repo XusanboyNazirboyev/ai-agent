@@ -618,5 +618,6 @@
   "fbCallback.enabled": "The Page is enabled. Messenger messages now reach the inbox.",
   "voice.transcript": "Voice message (transcript)",
   "voice.pending": "Voice message, transcribing…",
-  "voice.failed": "Voice message, could not be understood"
+  "voice.failed": "Voice message, could not be understood",
+  "comment.label": "Public Instagram comment (answered privately)"
 }

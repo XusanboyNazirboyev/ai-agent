@@ -440,6 +440,15 @@ export function ConversationViewPane(props: {
                         )}
                       </p>
                     ) : null}
+                    {message.type === 'COMMENT' ? (
+                      <p
+                        data-testid="comment-label"
+                        className="flex items-center gap-1.5 text-xs font-medium"
+                      >
+                        <span aria-hidden="true">💬</span>
+                        {t('comment.label')}
+                      </p>
+                    ) : null}
                     {/* Customer text is untrusted: plain text only, never HTML. */}
                     {message.text ? (
                       <p className="break-words whitespace-pre-wrap">

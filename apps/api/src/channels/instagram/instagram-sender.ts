@@ -16,6 +16,17 @@ export class InstagramNotConfiguredError extends Error {
 }
 
 /**
+ * ADR 043: comment replies are implemented only for Unified login accounts;
+ * the pasted-token (Instagram Login) variant is not documented to us.
+ */
+export class InstagramCommentReplyUnsupportedError extends Error {
+  constructor() {
+    super('Comment replies need a Unified login account');
+    this.name = 'InstagramCommentReplyUnsupportedError';
+  }
+}
+
+/**
  * Sends to an Instagram customer as one connected professional account. The
  * account's token (a Unified login system-user token, or a pasted Instagram
  * User access token) lives only in the encrypted channel secret store
@@ -94,5 +105,39 @@ export class InstagramSender {
           text,
         )
       : this.graph.sendText(igUserId, credential.token, recipientId, text);
+  }
+
+  /** ADR 043: the one private reply to a public comment. */
+  async sendPrivateReply(
+    tenantId: string,
+    channelAccountId: string,
+    commentId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    const { igUserId, credential } = await this.account(
+      tenantId,
+      channelAccountId,
+    );
+    if (credential.kind !== 'unified')
+      throw new InstagramCommentReplyUnsupportedError();
+    return this.graph.sendPrivateReplyUnified(
+      igUserId,
+      credential.token,
+      commentId,
+      text,
+    );
+  }
+
+  /** ADR 043: a short public reply under the comment (template text only). */
+  async replyToComment(
+    tenantId: string,
+    channelAccountId: string,
+    commentId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    const { credential } = await this.account(tenantId, channelAccountId);
+    if (credential.kind !== 'unified')
+      throw new InstagramCommentReplyUnsupportedError();
+    return this.graph.replyToCommentUnified(credential.token, commentId, text);
   }
 }

@@ -86,13 +86,19 @@ export class InstagramWebhookController {
     let duplicate = 0;
     let ignored = 0;
     for (const event of normalized.events) {
-      // ADR 043: comments are recognised; their reply pipeline is a later
-      // slice, so for now they are counted as ignored (no behaviour change).
-      if (event.kind === 'ignored' || event.kind === 'comment') {
+      if (event.kind === 'ignored') {
         ignored += 1;
         continue;
       }
-      const result = await this.webhook.accept(event);
+      // ADR 043: a comment is answered (or skipped) by the agent pipeline.
+      const result =
+        event.kind === 'comment'
+          ? await this.webhook.acceptComment(event)
+          : await this.webhook.accept(event);
+      if (result === 'ignored') {
+        ignored += 1;
+        continue;
+      }
       if (result === 'unavailable') {
         throw new ServiceUnavailableException(
           'Instagram channel is unavailable',

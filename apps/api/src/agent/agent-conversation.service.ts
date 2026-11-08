@@ -140,6 +140,30 @@ export class AgentConversationService implements OnModuleInit {
     return { failed: true, failedBefore };
   }
 
+  /**
+   * ADR 043: the answered batch is made only of public comments (no direct
+   * message from the customer among them).
+   */
+  private async fromPublicComment(
+    tenantId: string,
+    conversationId: string,
+    beforeSequence: number | undefined,
+  ): Promise<boolean> {
+    if (beforeSequence === undefined) return false;
+    const batch = await this.prisma.message.findMany({
+      where: {
+        tenantId,
+        conversationId,
+        direction: 'INBOUND',
+        sequence: { gte: beforeSequence },
+      },
+      select: { type: true },
+    });
+    return (
+      batch.length > 0 && batch.every((message) => message.type === 'COMMENT')
+    );
+  }
+
   private readonly logger = new Logger(AgentConversationService.name);
   private readonly locales = new LocaleRegistry(INITIAL_LOCALE_PACKS);
   private readonly pricing: PricingSnapshot;
@@ -395,10 +419,16 @@ export class AgentConversationService implements OnModuleInit {
       request.text,
       request.beforeSequence,
     );
+    const publicComment = await this.fromPublicComment(
+      tenantId,
+      conversationId,
+      request.beforeSequence,
+    );
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
       ...(action ? { action } : {}),
       ...(voice ? { voice } : {}),
+      ...(publicComment ? { origin: 'public_comment' as const } : {}),
       progress: {
         priorTurns: selectEpisode(
           priorTurns,

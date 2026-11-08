@@ -652,7 +652,10 @@ export class TelegramAgentPipeline {
         return 'SUPERSEDED';
       }
 
-      await this.agent.applyTurnState(tx, tenantId, conversationId, computed);
+      // A skipped public comment (ADR 043) changes nothing in the
+      // conversation: not its slots and not its language.
+      if (computed.result.outcome !== 'NO_REPLY')
+        await this.agent.applyTurnState(tx, tenantId, conversationId, computed);
       await tx.inboundEvent.updateMany({
         where: {
           tenantId,
@@ -682,7 +685,38 @@ export class TelegramAgentPipeline {
           replyText = this.agent.localeRegistry.get(result.locale).templates
             .actions.expired;
       }
-      if (claim.mode === 'LIVE') {
+      // ADR 043: the public comments this turn answered (all of the batch,
+      // or none when a direct message is part of it).
+      const batch = await tx.message.findMany({
+        where: {
+          tenantId,
+          conversationId,
+          direction: 'INBOUND',
+          sequence: { gte: claim.firstSequence },
+        },
+        orderBy: { sequence: 'desc' },
+        select: { id: true, type: true },
+      });
+      const comments = batch.every((message) => message.type === 'COMMENT')
+        ? batch.map((message) => message.id)
+        : [];
+      if (result.outcome === 'NO_REPLY' && comments.length > 0) {
+        // Not a question or interest: no answer; it stays in the inbox. A
+        // model or budget failure is FAILED so operators see it.
+        const failed = Boolean(result.llmFailure ?? result.budgetStop);
+        await tx.instagramComment.updateMany({
+          where: {
+            tenantId,
+            conversationId,
+            status: 'RECEIVED',
+            messageId: { in: comments },
+          },
+          data: failed
+            ? { status: 'FAILED', errorCode: 'agent_unavailable' }
+            : { status: 'SKIPPED' },
+        });
+      }
+      if (claim.mode === 'LIVE' && result.outcome !== 'NO_REPLY') {
         const latest = await tx.message.findFirst({
           where: { tenantId, conversationId },
           orderBy: { sequence: 'desc' },
@@ -705,6 +739,17 @@ export class TelegramAgentPipeline {
           select: { id: true },
         });
         replyMessageId = reply.id;
+        if (comments[0]) {
+          // ADR 043: this reply is the latest comment's one private reply.
+          await tx.instagramComment.updateMany({
+            where: {
+              tenantId,
+              messageId: comments[0],
+              privateReplyMessageId: null,
+            },
+            data: { privateReplyMessageId: reply.id },
+          });
+        }
         await tx.outboxEvent.create({
           data: {
             tenantId,
@@ -770,7 +815,7 @@ export class TelegramAgentPipeline {
         }
       }
 
-      if (claim.mode === 'LIVE') {
+      if (claim.mode === 'LIVE' && result.outcome !== 'NO_REPLY') {
         // A phone number the customer wrote is kept on the contact, never
         // guessed; then the lead is re-scored from this turn's evidence.
         const phone = extractPhone(claim.text);

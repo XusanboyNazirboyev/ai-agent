@@ -97,6 +97,11 @@ export interface LocaleTemplates {
   /** ADR 042: a voice note could not be understood; asks to type. */
   readonly voiceNotUnderstood: string;
   /**
+   * ADR 043: the public reply under a comment after the private answer was
+   * sent. Visible to everyone: no facts, prices or personal data.
+   */
+  readonly commentPublicReply: string;
+  /**
    * Customer-facing handover notices. They must not claim that a person or
    * the CRM has accepted anything: until operator notification exists they
    * may only say that the message was recorded.
