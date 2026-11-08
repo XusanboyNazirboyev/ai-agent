@@ -618,5 +618,6 @@
   "fbCallback.enabled": "Sahifa yoqildi. Messenger xabarlari endi Inbox’ga keladi.",
   "voice.transcript": "Ovozli xabar (matni)",
   "voice.pending": "Ovozli xabar, matnga aylantirilmoqda…",
-  "voice.failed": "Ovozli xabar, tushunib bo‘lmadi"
+  "voice.failed": "Ovozli xabar, tushunib bo‘lmadi",
+  "comment.label": "Instagram'dagi ochiq izoh (javob shaxsiy xabarda)"
 }

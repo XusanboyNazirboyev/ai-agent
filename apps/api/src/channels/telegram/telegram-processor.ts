@@ -32,6 +32,10 @@ import {
   InstagramSender,
 } from '../instagram/instagram-sender.js';
 import { splitInstagramText } from '../instagram/instagram-text.js';
+import {
+  COMMENT_PUBLIC_REPLY_EVENT,
+  InstagramCommentReplyService,
+} from '../instagram/instagram-comment-reply.service.js';
 
 export type TelegramQueueEvent = {
   outboxId: string;
@@ -59,6 +63,7 @@ export class TelegramProcessor {
     @Optional() private readonly instagram?: InstagramSender,
     @Optional() private readonly facebook?: FacebookSender,
     @Optional() private readonly voice?: VoiceTranscriptionService,
+    @Optional() private readonly comments?: InstagramCommentReplyService,
   ) {}
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
@@ -73,6 +78,12 @@ export class TelegramProcessor {
     }
     if (event.type === 'telegram.send') {
       await this.processSend(event);
+      return;
+    }
+    if (event.type === COMMENT_PUBLIC_REPLY_EVENT) {
+      const commentRowId = jsonString(event.payload, 'commentRowId');
+      if (commentRowId && this.comments)
+        await this.comments.publishPublicReply(event.tenantId, commentRowId);
       return;
     }
     if (event.type === 'action.execute') {
@@ -413,6 +424,15 @@ export class TelegramProcessor {
     },
     kind: 'instagram' | 'facebook',
   ): Promise<void> {
+    // ADR 043: the answer to a public comment is its one private reply.
+    if (kind === 'instagram' && this.comments) {
+      const viaComment = await this.comments.trySendPrivateReply(
+        tenantId,
+        message.id,
+      );
+      if (viaComment === 'sent') await this.afterDelivery(tenantId, message.id);
+      if (viaComment !== 'not_a_comment') return;
+    }
     const sender = kind === 'facebook' ? this.facebook : this.instagram;
     const window = evaluateMessagingWindow({
       lastCustomerMessageAt: message.conversation.lastInboundAt ?? undefined,

@@ -114,6 +114,12 @@ export interface AgentTurnInput {
    * in a row before it.
    */
   readonly voice?: { readonly failed: true; readonly failedBefore: number };
+  /**
+   * ADR 043: the batch is a public comment. It is answered (in private) only
+   * when it asks something or shows interest; otherwise the turn ends with
+   * NO_REPLY. Opt-out words, confirmations and business actions never apply.
+   */
+  readonly origin?: 'public_comment';
   readonly progress?: {
     readonly priorTurns: readonly PriorTurnSignal[];
     readonly stuck?: StuckPolicy;
@@ -159,7 +165,9 @@ export type TurnOutcome =
   | 'CLARIFICATION_REQUIRED'
   | 'ACTION_PROPOSED'
   | 'ACTION_CONFIRMED'
-  | 'ACTION_DECLINED';
+  | 'ACTION_DECLINED'
+  /** ADR 043: a public comment that gets no answer; nothing is sent. */
+  | 'NO_REPLY';
 
 export interface AgentTurnResult {
   readonly reply: string;
@@ -207,6 +215,21 @@ const CONVERSATIONAL_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   'ai_question',
   'capabilities',
   'small_talk',
+]);
+
+/**
+ * ADR 043 (owner decision 2026-11-07): a public comment is answered only when
+ * it asks something or shows interest. Praise, emoji, abuse, complaints and
+ * requests for a person are left to operators.
+ */
+const COMMENT_REPLY_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
+  'search',
+  'details',
+  'price',
+  'availability',
+  'booking_interest',
+  'capabilities',
+  'regulated_info',
 ]);
 
 /** Stored as the turn's asked slot so a second frustration in a row is seen. */
@@ -388,14 +411,26 @@ export async function runAgentTurn(
     }
     return build(reply, outcome, extra);
   };
+  // ADR 043: a skipped public comment keeps the conversation as it was.
+  const fromComment = input.origin === 'public_comment';
+  const noReply = (extra: Partial<AgentTurnResult> = {}): AgentTurnResult =>
+    build('', 'NO_REPLY', {
+      ...(extra.llmFailure ? { llmFailure: extra.llmFailure } : {}),
+      ...(extra.budgetStop ? { budgetStop: extra.budgetStop } : {}),
+      slots: input.slots,
+    });
   const handover = (
     reason: HandoverReason,
     extra: Partial<AgentTurnResult> = {},
   ): AgentTurnResult =>
-    finish(locale().templates.handover[reason], 'HANDOVER', {
-      handover: reason,
-      ...extra,
-    });
+    // A comment that is not (yet) known to be a question is never answered,
+    // not even with a handover notice; operators still see it in the inbox.
+    fromComment && (intent === undefined || !COMMENT_REPLY_INTENTS.has(intent))
+      ? noReply(extra)
+      : finish(locale().templates.handover[reason], 'HANDOVER', {
+          handover: reason,
+          ...extra,
+        });
 
   // ADR 042: an unreadable voice note is never a customer message. Without
   // other text it is answered by code: ask to type, or after repeated
@@ -417,6 +452,7 @@ export async function runAgentTurn(
     decision: LanguageDecision,
   ): AgentTurnResult | undefined => {
     if (decision.action === 'PROCEED') return undefined;
+    if (fromComment) return noReply();
     if (decision.action === 'CLARIFY') {
       return finish(
         locale().templates.languageClarification,
@@ -445,14 +481,14 @@ export async function runAgentTurn(
   };
   // Tier-0: a whole-message opt-out ("/stop") is honoured before any model
   // call, in any supported language, and answered with a fixed template.
-  if (isOptOutMessage(input.customerText, locales.all())) {
+  if (!fromComment && isOptOutMessage(input.customerText, locales.all())) {
     return build(locale().templates.optOutConfirmation, 'ANSWERED', {
       optOut: true,
     });
   }
   // Tier-0: an exact confirmation or decline of the open proposal is decided
   // by code, before any model call. A model-classified "yes" never confirms.
-  const pending = input.action?.pending;
+  const pending = fromComment ? undefined : input.action?.pending;
   if (pending) {
     const answer = confirmationOf(input.customerText, locales.all());
     if (answer === 'CONFIRM')
@@ -530,6 +566,11 @@ export async function runAgentTurn(
     extractionFailure = error.code;
     return handover('LLM_UNAVAILABLE', { llmFailure: error.code });
   }
+  if (
+    fromComment &&
+    (intent === undefined || !COMMENT_REPLY_INTENTS.has(intent))
+  )
+    return noReply();
   const merged = mergeSlots(pack, slots, proposed);
   slots = merged.state;
   const invalid = merged.invalid;
@@ -564,7 +605,7 @@ export async function runAgentTurn(
 
   // Business action: started by a trigger intent or continued while its
   // fields are being collected. Questions and the proposal are code-rendered.
-  const actionContext = input.action;
+  const actionContext = fromComment ? undefined : input.action;
   const candidate = actionContext?.available.find(
     (entry) =>
       (intent !== undefined &&

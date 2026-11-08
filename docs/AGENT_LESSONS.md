@@ -17,6 +17,8 @@ Read this before changing code. Each entry: what went wrong, how it was caught, 
 11. **Committed with a failing test, and made a whole update invalid.** A `pnpm test && git commit` style chain printed a failing normalizer test but still committed; the new strict `voice` schema turned a malformed voice object into an invalid update (before: ignored). **Rule:** check test exit codes before committing (`set -e` or an explicit check); validate an optional sub-object on its own so a bad part is ignored, not fatal to the whole payload.
 12. **Hid a lint failure behind a check chain.** Ran `(... pnpm lint >/dev/null && ...)` with `set -e` in a compound command; the lint errors (missing return types in a new test helper) were not seen, CI failed and skipped the deploy. **Rule:** run each gate on its own line and print its exit code (`pnpm -s lint; echo lint=$?`), never through `>/dev/null` or a pipe that hides it.
 
+13. **Ran a formatter without the repo config.** `pnpm exec prettier --write` inside `apps/api` used Prettier defaults (double quotes) and rewrote 1,000+ lines; `prisma format` realigned the whole schema. Caught in `git diff --stat` before commit. **Rule:** format only through the package scripts (`pnpm format`, or `prettier --config ../../packages/config/prettier.json`); never run `prisma format` on the shared schema; check `git diff --stat` after any formatter.
+
 ## Standing practices
 - Port, don't rewrite: another agent's work is reviewed, reconciled with newer decisions (ADRs), tested, then committed with a note of what changed.
 - Never print or commit secret values; check presence and length only.

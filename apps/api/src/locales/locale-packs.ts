@@ -83,6 +83,8 @@ export const UZ_LATN: LocalePack = {
     anythingElse: 'Yana nima bilan yordam bera olaman?',
     voiceNotUnderstood:
       'Ovozli xabaringizni tushuna olmadim. Iltimos, yozib yuboring.',
+    commentPublicReply:
+      "Rahmat! Batafsil ma'lumotni sizga shaxsiy xabarda yubordik.",
     aiDisclosure:
       "Men avtomatlashtirilgan sun'iy intellekt yordamchisiman. Sizga mos variantni tanlash va dolzarb ma'lumotni tekshirishda yordam bera olaman; istalgan vaqtda xodim bilan bog'lanishni so'rashingiz mumkin.",
     handover: {
@@ -255,6 +257,8 @@ export const UZ_CYRL: LocalePack = {
     anythingElse: 'Яна нима билан ёрдам бера оламан?',
     voiceNotUnderstood:
       'Овозли хабарингизни тушуна олмадим. Илтимос, ёзиб юборинг.',
+    commentPublicReply:
+      'Раҳмат! Батафсил маълумотни сизга шахсий хабарда юбордик.',
     aiDisclosure:
       'Мен автоматлаштирилган сунъий интеллект ёрдамчисиман. Сизга мос вариантни танлаш ва долзарб маълумотни текширишда ёрдам бера оламан; исталган вақтда ходим билан боғланишни сўрашингиз мумкин.',
     handover: {
@@ -419,6 +423,8 @@ export const RU: LocalePack = {
     anythingElse: 'Чем ещё могу помочь?',
     voiceNotUnderstood:
       'Не получилось разобрать голосовое сообщение. Пожалуйста, напишите текстом.',
+    commentPublicReply:
+      'Спасибо! Подробности отправили вам в личные сообщения.',
     aiDisclosure:
       'Я автоматический ИИ-ассистент. Я могу помочь подобрать вариант и проверить актуальную информацию; в любой момент можно попросить связать вас с сотрудником.',
     handover: {
@@ -581,6 +587,8 @@ export const EN: LocalePack = {
     anythingElse: 'What else can I help you with?',
     voiceNotUnderstood:
       "I couldn't understand your voice message. Please type it instead.",
+    commentPublicReply:
+      'Thank you! We have sent you the details in a private message.',
     aiDisclosure:
       "I'm an automated AI assistant. I can help you choose an option and check current information, and you can ask for a team member at any time.",
     handover: {

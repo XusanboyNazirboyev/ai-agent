@@ -2,7 +2,10 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
-import type { NormalizedInstagramText } from './instagram-normalizer.js';
+import type {
+  NormalizedInstagramComment,
+  NormalizedInstagramText,
+} from './instagram-normalizer.js';
 
 const EXTERNAL_ID = /^[0-9]{1,100}$/u;
 
@@ -179,6 +182,201 @@ export class InstagramWebhookService {
               event.messageId,
             ),
 
+            payload: {
+              inboundEventId: inboundEvent.id,
+              conversationId: conversation.id,
+              messageId: message.id,
+            } satisfies Prisma.InputJsonObject,
+          },
+        });
+
+        return 'accepted';
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return 'duplicate';
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * ADR 043: a top-level comment enters the commenter's DM conversation as an
+   * inbound COMMENT message (its text is untrusted customer text) and runs
+   * through the same agent pipeline. It never opens the 24-hour messaging
+   * window (`lastInboundAt` is left alone): the only allowed answer is one
+   * private reply to the comment, sent by the processor. Comment ids that
+   * are not plain digits are not accepted.
+   */
+  async acceptComment(
+    event: NormalizedInstagramComment,
+  ): Promise<InstagramAcceptance | 'ignored'> {
+    if (
+      !EXTERNAL_ID.test(event.accountId) ||
+      !EXTERNAL_ID.test(event.fromId) ||
+      !EXTERNAL_ID.test(event.commentId)
+    ) {
+      return 'ignored';
+    }
+    const mediaId =
+      event.mediaId && EXTERNAL_ID.test(event.mediaId) ? event.mediaId : null;
+    const providerKey = `comment:${event.commentId}`;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const channel = await tx.channelAccount.findFirst({
+          where: {
+            channelType: 'instagram',
+            externalAccountId: event.accountId,
+            status: 'ACTIVE',
+            tenant: { status: 'ACTIVE' },
+          },
+          select: { id: true, tenantId: true },
+        });
+        if (!channel) return 'unavailable';
+
+        await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`instagram-rate:${channel.id}`}, 0))) AS lock_result`;
+
+        const duplicate = await tx.instagramComment.findUnique({
+          where: {
+            tenantId_channelAccountId_commentId: {
+              tenantId: channel.tenantId,
+              channelAccountId: channel.id,
+              commentId: event.commentId,
+            },
+          },
+          select: { id: true },
+        });
+        if (duplicate) return 'duplicate';
+
+        const inboundEvent = await tx.inboundEvent.create({
+          data: {
+            tenantId: channel.tenantId,
+            channelAccountId: channel.id,
+            providerEventId: providerKey,
+            receivedAt: event.receivedAt,
+            redactedPayload: {
+              providerAccountId: event.accountId,
+              providerUserId: event.fromId,
+            } satisfies Prisma.InputJsonObject,
+          },
+        });
+
+        const contact = await tx.contact.upsert({
+          where: {
+            tenantId_channelAccountId_providerUserId: {
+              tenantId: channel.tenantId,
+              channelAccountId: channel.id,
+              providerUserId: event.fromId,
+            },
+          },
+          create: {
+            tenantId: channel.tenantId,
+            channelAccountId: channel.id,
+            providerUserId: event.fromId,
+          },
+          update: {},
+          select: { id: true },
+        });
+
+        const conversation = await tx.conversation.upsert({
+          where: {
+            tenantId_channelAccountId_providerChatId: {
+              tenantId: channel.tenantId,
+              channelAccountId: channel.id,
+              providerChatId: event.fromId,
+            },
+          },
+          create: {
+            tenantId: channel.tenantId,
+            channelAccountId: channel.id,
+            contactId: contact.id,
+            providerChatId: event.fromId,
+          },
+          update: { contactId: contact.id },
+          select: { id: true },
+        });
+
+        await tx.conversation.updateMany({
+          where: {
+            tenantId: channel.tenantId,
+            id: conversation.id,
+            state: 'CLOSED',
+          },
+          data: {
+            state: 'BOT_ACTIVE',
+            assignedOperatorId: null,
+            version: { increment: 1 },
+          },
+        });
+
+        await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`agentcore:${channel.tenantId}:${conversation.id}`}, 0))) AS lock_result`;
+        const latest = await tx.message.findFirst({
+          where: {
+            tenantId: channel.tenantId,
+            conversationId: conversation.id,
+          },
+          orderBy: { sequence: 'desc' },
+          select: { sequence: true },
+        });
+
+        const message = await tx.message.create({
+          data: {
+            tenantId: channel.tenantId,
+            conversationId: conversation.id,
+            channelAccountId: channel.id,
+            authorType: 'CUSTOMER',
+            direction: 'INBOUND',
+            type: 'COMMENT',
+            text: event.text,
+            sequence: (latest?.sequence ?? 0) + 1,
+            providerChatId: event.fromId,
+            providerMessageId: providerKey,
+            createdAt: event.receivedAt,
+          },
+          select: { id: true, sequence: true },
+        });
+
+        await tx.instagramComment.create({
+          data: {
+            tenantId: channel.tenantId,
+            channelAccountId: channel.id,
+            conversationId: conversation.id,
+            messageId: message.id,
+            commentId: event.commentId,
+            mediaId,
+            mediaProductType: event.mediaProductType,
+            commentedAt: event.receivedAt,
+          },
+        });
+
+        await tx.inboundEvent.update({
+          where: { id: inboundEvent.id },
+          data: {
+            redactedPayload: {
+              providerAccountId: event.accountId,
+              providerUserId: event.fromId,
+              conversationId: conversation.id,
+              messageId: message.id,
+              providerMessageId: providerKey,
+              orderKey: String(message.sequence),
+            } satisfies Prisma.InputJsonObject,
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            tenantId: channel.tenantId,
+            type: 'instagram.inbound',
+            aggregateType: 'conversation',
+            aggregateId: conversation.id,
+            idempotencyKey: metaInboundKey(
+              'instagram',
+              channel.id,
+              providerKey,
+            ),
             payload: {
               inboundEventId: inboundEvent.id,
               conversationId: conversation.id,

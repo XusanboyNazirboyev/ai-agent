@@ -359,10 +359,62 @@ export class InstagramGraphClient {
     );
   }
 
+  /**
+   * ADR 043: the one private reply to a public comment, as the connected
+   * account with its Unified login token. Documented with a Page token on
+   * `graph.facebook.com/<PAGE_ID>/messages`, body `recipient: { comment_id }`,
+   * within 7 days, one message
+   * (https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/private-replies.md,
+   * read 2026-11-07). The Unified token on `<IG_ID>/messages` is NOT
+   * documented for this: verified live before any tenant uses it.
+   */
+  async sendPrivateReplyUnified(
+    igUserId: string,
+    token: string,
+    commentId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    checkText(text);
+    const url = new URL(
+      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}/messages`,
+    );
+    url.searchParams.set('access_token', token);
+    return this.send(
+      url.toString(),
+      {},
+      {
+        recipient: { comment_id: requireId(commentId, 'comment id') },
+        message: { text },
+      },
+    );
+  }
+
+  /**
+   * ADR 043: a public reply under a top-level comment,
+   * `POST graph.facebook.com/{ig-comment-id}/replies?message=...`, answered
+   * with `{ id }`; not for hidden comments or live video
+   * (https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-comment/replies,
+   * read 2026-11-07). Unified token use is not documented: verified live.
+   */
+  async replyToCommentUnified(
+    token: string,
+    commentId: string,
+    text: string,
+  ): Promise<{ readonly messageId: string }> {
+    checkText(text);
+    const url = new URL(
+      `${this.facebookBase}/${requireId(commentId, 'comment id')}/replies`,
+    );
+    url.searchParams.set('message', text);
+    url.searchParams.set('access_token', token);
+    return this.send(url.toString(), {}, {}, 'id');
+  }
+
   private async send(
     url: string,
     headers: Record<string, string>,
     payload: unknown,
+    idField: 'message_id' | 'id' = 'message_id',
   ): Promise<{ readonly messageId: string }> {
     let response: Response;
     let body: unknown;
@@ -384,7 +436,7 @@ export class InstagramGraphClient {
     }
     if (!response.ok || (body && typeof body === 'object' && 'error' in body))
       throw errorOf(body, response.status);
-    const messageId = (body as { message_id?: unknown } | null)?.message_id;
+    const messageId = (body as Record<string, unknown> | null)?.[idField];
     if (typeof messageId !== 'string' || messageId === '')
       throw new InstagramAmbiguousSendError();
     return { messageId };
