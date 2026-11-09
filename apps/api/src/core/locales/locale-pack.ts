@@ -153,6 +153,20 @@ export interface LocaleTemplates {
     /** ADR 044: a card button label ("more about this item"). */
     readonly details: string;
   };
+  /**
+   * ADR 045: spoken phrases of a voice call. Rendered by code and sent to
+   * text-to-speech; plain sentences, no markup.
+   */
+  readonly voice: {
+    /** Said first on every call, before anything else (recording consent). */
+    readonly consentPrompt: string;
+    /** Short filler while a tool call or slow step runs. */
+    readonly oneMoment: string;
+    /** Said right before a SIP transfer to an operator. */
+    readonly transferNotice: string;
+    /** Said outside working hours when a callback request is recorded. */
+    readonly afterHoursCallback: string;
+  };
   readonly availability: Readonly<Record<AvailabilityStatus, string>>;
 }
 
