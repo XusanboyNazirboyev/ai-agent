@@ -40,6 +40,11 @@ export interface TranscriptEvent {
 export interface SttSessionOptions {
   readonly locale: LocaleId;
   readonly callId: string;
+  /**
+   * Text context for the recogniser (e.g. the agent's last question), where
+   * the provider supports it; ElevenLabs takes it once, with the first audio.
+   */
+  readonly previousText?: string;
 }
 
 export interface SttSession {

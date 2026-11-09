@@ -5,8 +5,9 @@
  *   https://elevenlabs.io/docs/api-reference/speech-to-text/v-1-speech-to-text-realtime
  *   (read 2026-11-09): `wss://api.elevenlabs.io/v1/speech-to-text/realtime`,
  *   header `xi-api-key`, query `model_id`, `audio_format`, `language_code`,
- *   `commit_strategy`; client `input_audio_chunk` {audio_base_64, commit,
- *   sample_rate}; server `partial_transcript` / `committed_transcript` {text}
+ *   `commit_strategy`, `keyterms`; client `input_audio_chunk` {audio_base_64,
+ *   commit, sample_rate, previous_text (first chunk only, else an error)};
+ *   server `partial_transcript` / `committed_transcript` {text}
  *   and error messages carrying `error`.
  * TTS: `eleven_v4_turbo` over the Text to Dialogue WebSocket, the only socket
  *   that accepts v3/v4 models.
@@ -139,7 +140,11 @@ export class ElevenLabsRealtimeStt implements StreamingSpeechToText {
       url: `${base(this.options)}/v1/speech-to-text/realtime?${params.toString()}`,
       headers: { 'xi-api-key': this.options.apiKey },
     });
-    const session = new ElevenLabsSttSession(socket, this.options.clock);
+    const session = new ElevenLabsSttSession(
+      socket,
+      this.options.clock,
+      options.previousText,
+    );
     await waitForOpen(socket, this.options.openTimeoutMs ?? 5_000);
     return session;
   }
@@ -158,6 +163,8 @@ export class ElevenLabsSttSession implements SttSession {
   constructor(
     private readonly socket: SocketLike,
     private readonly clock: Clock,
+    /** Sent once, with the first audio chunk (the provider refuses it later). */
+    private previousText?: string,
   ) {
     socket.onMessage((text) => this.onMessage(text));
     socket.onClose((code, reason, error) => {
@@ -184,8 +191,10 @@ export class ElevenLabsSttSession implements SttSession {
         audio_base_64: Buffer.from(frame.data).toString('base64'),
         commit,
         sample_rate: PCM_SAMPLE_RATE,
+        ...(this.previousText ? { previous_text: this.previousText } : {}),
       }),
     );
+    this.previousText = undefined;
     this.audioMsSent += frame.durationMs;
     this.uncommittedAudio = !commit;
   }

@@ -47,6 +47,28 @@ describe('ElevenLabs Scribe v2 Realtime STT', () => {
     expect(sockets[0]!.request.url).not.toContain(KEY);
   });
 
+  it('sends previous_text only with the first audio chunk of the session', async () => {
+    const { factory, sockets } = fakeSocketFactory();
+    const stt = new ElevenLabsRealtimeStt({
+      apiKey: KEY,
+      clock: new VirtualClock(),
+      socketFactory: factory,
+    });
+    const session = await stt.open({
+      locale: 'uz-Latn',
+      callId: 'c1',
+      previousText: 'Qanday yordam bera olaman?',
+    });
+    session.pushAudio(frame(0));
+    session.pushAudio(frame(20, { speech: false, end: true }));
+    const sent = sockets[0]!.sent;
+    expect(sent[0]).toMatchObject({
+      previous_text: 'Qanday yordam bera olaman?',
+    });
+    // The provider refuses previous_text on any later chunk.
+    expect(sent[1]).not.toHaveProperty('previous_text');
+  });
+
   it('streams base64 PCM chunks and commits on the end-of-utterance frame', async () => {
     const { factory, sockets } = fakeSocketFactory();
     const clock = new VirtualClock();
