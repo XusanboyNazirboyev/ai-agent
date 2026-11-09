@@ -4,7 +4,10 @@
  * customer data. Owner allowed paid gemini-3.8-flash for this, under $0.05.
  *
  *   pnpm exec tsx --env-file=<path to .env> scripts/llm-stream-live.ts \
- *     [--text 5] [--tools 3]
+ *     [--text 5] [--tools 3] [--preset groq|gemini|mistral] [--model <id>]
+ *
+ * `--preset` uses a provider preset (its base URL, key variable and FAST
+ * model; `--model` overrides the model) instead of the LLM_* variables.
  *
  * Env: LLM_BASE_URL, LLM_API_KEY, LLM_MODEL_FAST, optional
  * LLM_REASONING_EFFORT, LLM_MAX_TOKENS_PARAM, LLM_PRICING_VERSION (values
@@ -26,6 +29,7 @@ import type {
 import { costOfUsage, nanoToUsd, pricingFor } from '../src/core/llm/pricing.js';
 import { OpenAiCompatibleLlmProvider } from '../src/llm/openai-compatible/openai-compatible-provider.js';
 import { PRICING_CATALOG } from '../src/llm/pricing-catalog.js';
+import { resolvePreset } from '../src/llm/provider-presets.js';
 
 const SYSTEM =
   'Siz o‘quv markazining telefon operatorisiz. Faqat o‘zbek tilida (lotin), ' +
@@ -70,6 +74,10 @@ const FAKE_RESULT = JSON.stringify({
 function arg(name: string, fallback: number): number {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? Number(process.argv[i + 1]) : fallback;
+}
+function text(name: string): string | undefined {
+  const i = process.argv.indexOf(`--${name}`);
+  return i >= 0 ? process.argv[i + 1] : undefined;
 }
 function env(name: string): string {
   const value = process.env[name];
@@ -125,16 +133,26 @@ function p(values: number[], q: number): number {
 }
 
 async function main(): Promise<void> {
-  const model = env('LLM_MODEL_FAST');
+  const presetId = text('preset');
+  const modelOverride = text('model');
+  const resolved = presetId
+    ? resolvePreset(
+        presetId,
+        process.env,
+        modelOverride ? { FAST: modelOverride, STRONG: modelOverride } : {},
+      )
+    : undefined;
+  const model = resolved?.models.FAST ?? modelOverride ?? env('LLM_MODEL_FAST');
   const llm = new OpenAiCompatibleLlmProvider({
-    baseUrl: env('LLM_BASE_URL'),
-    apiKey: env('LLM_API_KEY'),
+    baseUrl: resolved?.preset.baseUrl ?? env('LLM_BASE_URL'),
+    apiKey: resolved ? resolved.apiKey : env('LLM_API_KEY'),
     models: { FAST: model, STRONG: model },
     structuredOutput: 'json_object',
     maxTokensParam:
-      process.env.LLM_MAX_TOKENS_PARAM === 'max_completion_tokens'
+      resolved?.preset.maxTokensParam ??
+      (process.env.LLM_MAX_TOKENS_PARAM === 'max_completion_tokens'
         ? 'max_completion_tokens'
-        : 'max_tokens',
+        : 'max_tokens'),
     ...(process.env.LLM_REASONING_EFFORT
       ? {
           reasoningEffort: process.env.LLM_REASONING_EFFORT as
@@ -144,7 +162,7 @@ async function main(): Promise<void> {
     requestTimeoutMs: 30_000,
     maxRetries: 1,
   });
-  const pricingVersion = process.env.LLM_PRICING_VERSION;
+  const pricingVersion = resolved ? undefined : process.env.LLM_PRICING_VERSION;
   const pricing = pricingVersion
     ? pricingFor(PRICING_CATALOG.snapshot(pricingVersion), model)
     : undefined;
@@ -157,7 +175,7 @@ async function main(): Promise<void> {
   };
 
   console.log(
-    `model ${model}, reasoning ${process.env.LLM_REASONING_EFFORT ?? 'default'}`,
+    `${presetId ?? 'LLM_*'} model ${model}, reasoning ${process.env.LLM_REASONING_EFFORT ?? 'default'}`,
   );
   console.log('\nText turns');
   const firstText: number[] = [];
@@ -233,7 +251,7 @@ async function main(): Promise<void> {
     `  usage reported by provider: ${all.filter((m) => !m.result.usage.estimated).length}/${all.length}`,
   );
   console.log(
-    `  cost ${pricing ? `$${nanoToUsd(costNano)} (${pricingVersion})` : 'unknown (no LLM_PRICING_VERSION)'}`,
+    `  cost ${pricing ? `$${nanoToUsd(costNano)} (${pricingVersion})` : resolved ? 'free-tier preset (not priced)' : 'unknown (no LLM_PRICING_VERSION)'}`,
   );
   if (failures > 0) {
     console.log(`  ${failures} check(s) failed`);
