@@ -514,6 +514,15 @@ export class ActionService {
         data: {
           status: done.ok ? 'SUCCEEDED' : 'FAILED',
           outcomeAt: now,
+          // The success check requires evidence: the appointment id.
+          ...(done.ok
+            ? {
+                externalId: String(
+                  (proposal.payload as { appointmentId?: string } | null)
+                    ?.appointmentId ?? '',
+                ).slice(0, 200),
+              }
+            : {}),
           errorCode: done.ok ? null : `scheduling_${done.reason}`,
           payload: Prisma.DbNull,
           payloadClearedAt: now,

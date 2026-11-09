@@ -3,6 +3,8 @@
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
 ## Current state (updated 2026-10-27, after the Phase 6A–7.2 and design merges into `main`)
+
+- **Appointment scheduling step 2, ADR 046 (2026-11-09, `feat/integration-2026-11-07`):** the agent can `find_slots`, `book_slot`, `cancel_booking` and `reschedule_booking` (packs opt in via `tools`; offered only when the tenant has active service types and staff, never in SHADOW). Core gets a neutral `SchedulingPort`; the adapter is in `src/scheduling/`. Slot ids are code-issued opaque hashes (not composable by the model); times and staff names are facts (`agentcore-scheduling`). Confirmation reuses the ADR 024 proposal lifecycle: operations `scheduling.book|cancel|reschedule` are applied by code in the commit transaction on the code-detected yes (reschedule confirms the new hold and cancels the old in one transaction); a lapsed hold answers with a locale template. Locale texts in all 4 packs. Tests: unit (5) and integration (7, real pipeline). No demo pack data, no CRM sync, no reminders yet (steps 3-5).
 - **Appointment scheduling step 1, ADR 046 (2026-11-09, `feat/integration-2026-11-07`, not wired into the app or the agent):** new tables `service_types`, `staff_members`, `availability_rules`, `availability_exceptions`, `appointments` (migration `20261114090000_appointment_scheduling`; DDL from `prisma migrate diff`, plus `btree_gist`, an exclusion constraint on `(tenant, staff, tstzrange(blocked_from, blocked_until))` for HELD/CONFIRMED rows and CHECKs). Pure slot engine (`apps/api/src/scheduling/slot-engine.ts`, Intl-based, DST-correct) and `AppointmentService` (`findSlots`, idempotent `hold`, `confirm`, `cancel`; the 23P01 violation maps to `SlotTakenError`). `SchedulingModule` exists but is not registered in `AppModule`; no agent tools, CRM sync or UI yet (steps 2-4). Gates: tsc and lint clean, format:check clean, unit 2011 pass (only the known live-eval env failure), scheduling integration 9/9 pass on `agentcore_test` (btree_gist verified locally).
 - **Instagram carousel, ADR 044 (2026-11-09, `feat/integration-2026-11-07`):** an Instagram reply that showed 2+ catalog items is followed by one code-built generic template (title facts with item ids, optional https `imageUrl`, one postback button "Batafsil"/"Батафсил"/"Подробнее"/"Details"), stored on the reply (`messages.rich_content`, migration `20261113090000`) and sent once right after the text is SENT; a failure never fails or resends the text. Carousel taps (`messaging[].postback`) count only for an item of a carousel we sent in that conversation and enter as the text `<label>: <title>` rebuilt from our spec. New connections subscribe `messages,messaging_postbacks` (owner approved 2026-11-09). `CatalogItem.imageUrl` + generic REST `fieldMappings.item.imageUrl`. Bitrix24 image field identified from official docs (`catalog.productImage.list` `detailUrl`) but not mapped: the Bitrix24 connector reads no catalog yet, and public access to `detailUrl` is unverified. Gates: unit 1984 pass, integration 542 pass (only the known live-eval env and dev-superadmin leftovers fail). Pending: live check with an app-role account (template send with each login kind, postback delivery, re-subscribe of already connected accounts).
 - **STT metering, audit REV-03 (2026-11-09, `feat/integration-2026-11-07`, ADR 042 amendment):** voice transcription reserves its worst case on the tenant LLM budget ledger before audio leaves the server (refused = no provider call, customer asked to type) and records the provider-reported tokens at the paid-tier prices read 2026-11-09 (`llm_usage_records`, purpose `transcribe`). Lead cards (funnel unchanged, owner 2026-11-09) show a bot/person icon on the state badge and a channel badge. Gates: unit 1975 pass, integration 538 pass, e2e 96/96 (lead cards); only the known live-eval env and dev-superadmin leftovers fail. REV-01: owner 2026-11-09 keeps transcription in OFF mode (operators read it). Pushed to `feat/production-pilot` 2026-11-09 (`83b1aea..4532e15`). Next: Instagram carousel per [ADR 044](adr/044-instagram-carousel.md).
@@ -93,12 +95,15 @@ History, audit and per-phase verification records: [progress-archive.md](progres
 - **Earlier baseline (main `11c35fb`, before Stage C):** unit 672 passed/7 skipped, integration 64 passed. No live model call has ever been made.
 
 ## Open decisions (owner)
+
 - Q1 first project/CRM API; Q2 monetary budgets (provisional: $0.02/turn, $0.25/conversation); Q9 data residency/retention (blocks trusting any provider with real data).
 - Trusting a provider for real customer data (`LLM_TRUSTED_PROVIDERS`) is an explicit owner decision.
 - Native-speaker review of locale wording; free-tier rate limits for Gemini/Groq/etc. (account-specific).
 
 ## Stage D — hygiene (checklist; the repository had no written criteria beyond "drop the scratch DB")
+
 Derived from AGENTS.md, ADR 011 and `docs/CLAUDE_CODE_SETUP.md`. Merged from branch `stage-d/hygiene` (CI green on `0b95ee3`).
+
 1. Claude Code config consistent and checkable: `.claude/settings.json`, four subagents, four path rules; model ceiling stated identically in AGENTS.md and the setup doc. **Done:** `apps/api/src/config/claude-config.spec.ts` (5 tests).
 2. Model-restriction documentation verified against the official page (2026-10-23): `availableModels` accepts `fable` as a family, `best` is not documented there, `deniedModels` alias matching is undocumented and managed-settings only. **Done:** setup doc rewritten; recommends an allowlist; states that the repository cannot enforce the ceiling.
 3. Stale active docs corrected: AGENTS.md ADR index (latest 014), README spec pointer, CI seed-twice comment. **Done.**
@@ -107,9 +112,11 @@ Derived from AGENTS.md, ADR 011 and `docs/CLAUDE_CODE_SETUP.md`. Merged from bra
 6. CI covers Node 24 only while `engines` allows 20.19/22.12/24: documented, not changed (adding a matrix is a separate decision).
 
 ## Next step
+
 Phase 5 only on instruction. Owner decisions still open: scratch DB drop, `ts-node`, Node matrix, managed settings.
 
 ## Known risks
+
 - Model quality on Claude/Gemini/Ollama unmeasured (no live eval run).
 - Live-quote flow (model calls `get_quote` before stating a price) is enforced by the gate but its quality is unmeasured live; a listed price on a live-quote connector now ends in a regeneration or handover.
 - Client rate limiter is per process (Redis limiter = Phase 9).

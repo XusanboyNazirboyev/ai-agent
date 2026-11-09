@@ -43,3 +43,12 @@ Generic scheduling vocabulary, no vertical words (rule 1). Lives in `apps/api/sr
 3. CRM sync (mock + generic REST first, then Bitrix24 deal + calendar event).
 4. Admin UI for services, staff and availability.
 5. Cancel / reschedule tools and reminders (24 h and 2 h before).
+
+## Step 2 design notes (agent tools, 2026-11-09)
+
+- **Confirmation reuses ADR 024.** Scheduling proposals are `action_proposals` rows with operation `scheduling.book|cancel|reschedule` and payload `{appointmentId, replacesAppointmentId?}`. Unlike connector actions they are applied in the commit transaction (no outbox, no connector write) by `SchedulingActionsService.execute`; the proposal ends `SUCCEEDED` (external id = appointment id) or `FAILED`.
+- **Hold at tool time.** `book_slot` / `reschedule_booking` create the short HELD appointment during compute (idempotent per turn; the conversation's own earlier holds are released first). A declined, superseded or lapsed proposal frees the hold. Not offered in SHADOW runs (they must not write).
+- **Slot ids** are `<serviceTypeId>.<local date>.<sha256 prefix over tenant, conversation, service, staff, start>`; resolved by re-running the slot engine for that day, so no table and no secret are needed. A forged id fails resolution.
+- **Late "yes".** Scheduling proposals stay answerable for one hour after expiry so a late confirmation gets the `holdExpired` template instead of reaching the model.
+- **Scheduling turns** start on the `booking_interest` intent and continue while the previous reply carried the scheduling mark; the catalog search is skipped and the prompt gets the service list and the customer's own upcoming appointments as facts.
+- Open: a tenant without any catalog-capable connector gets no agent tools at all (the tools object needs a connector); scheduling-only tenants are not covered yet.
