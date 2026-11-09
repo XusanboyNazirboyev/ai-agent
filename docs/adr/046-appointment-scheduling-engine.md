@@ -4,14 +4,17 @@
 - **Context:** owner Stage 2 asks for "FieldPulse-style" booking: during a chat or call the agent finds a free slot that fits the service and a qualified staff member, confirms it with the customer and creates the job at once. Target: a universal pack for field services, repair/service centres, clinics and other appointment businesses. The existing `bookings` table is offer-based (a seat in a course group) and has no time or staff; it stays for that use.
 
 ## Owner decisions (2026-11-09)
+
 1. Slots respect: service duration, travel buffer, preparation/lead time; staff skills/tags; a day-by-day availability matrix per staff member; live confirmation creates the booking.
 2. Source of truth is hybrid: AgentCore's database books the slot immediately; the tenant CRM (Bitrix24) is synced asynchronously.
 3. `createBooking` / D-9 restriction lifted.
 
 ## Design
+
 Generic scheduling vocabulary, no vertical words (rule 1). Lives in `apps/api/src/scheduling/`.
 
 **Data (all tenant-owned, `tenantId` on every row):**
+
 - `ServiceType`: key, title, `durationMinutes`, `bufferBeforeMinutes`, `bufferAfterMinutes` (travel/preparation), `leadTimeMinutes` (minimum notice), `requiredSkills[]`, optional link to a catalog item, active flag.
 - `StaffMember`: display name, `skills[]` (tags), timezone (default tenant), active flag. Not an operator account (an operator may be linked later).
 - `AvailabilityRule`: staff member, weekday (1–7), local `startTime`/`endTime` (several per day allowed), optional `validFrom`/`validUntil`.
@@ -27,12 +30,14 @@ Generic scheduling vocabulary, no vertical words (rule 1). Lives in `apps/api/sr
 **CRM sync (hybrid):** on `CONFIRMED`, an outbox job calls the connector's booking write with an idempotency key (ADR 023). A sync failure never cancels the appointment; it is visible to operators (`crmSyncStatus = FAILED`) and retried. The canonical write input gains the time, service and staff fields.
 
 ## OPEN (do not block step 1)
+
 - **OPEN-B1 Bitrix24 target entity** for an appointment (deal with dates, calendar event, or Bitrix24's booking module): read from the official docs and confirmed by the owner before the Bitrix24 mapping.
 - **OPEN-B2 travel time:** v1 uses fixed buffers per service. Address-based travel time needs a maps provider and customer addresses (personal data): a later decision.
 - **OPEN-B3 who edits staff, skills and availability:** Tenant Admin UI (D19) vs. import from the CRM; step 1 ships a seed/API only.
 - **OPEN-B4 cancellation/reschedule by the customer** through the agent, and reminder timing (also used by ADR 045 outbound calls).
 
 ## Steps
+
 1. Schema + migration (with the exclusion constraint), slot engine, hold/confirm/expire service, tests (unit + integration, including concurrent booking of the same slot).
 2. Agent tools and confirmation flow; education/clinic-like demo pack data.
 3. CRM sync (mock + generic REST first, Bitrix24 after OPEN-B1).
