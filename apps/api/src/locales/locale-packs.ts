@@ -144,6 +144,15 @@ export const UZ_LATN: LocalePack = {
       availability: 'holati',
       details: 'Batafsil',
     },
+    // uz-Latn consent text is the owner's wording (ADR 045).
+    voice: {
+      consentPrompt:
+        'Sifatni oshirish va xavfsizlik maqsadida suhbat yozib olinadi.',
+      oneMoment: 'Bir daqiqa, tekshiryapman.',
+      transferNotice: 'Sizni operatorimizga ulayman, iltimos, kuting.',
+      afterHoursCallback:
+        "Hozir ish vaqti emas. So'rovingizni qayd etdim, operatorimiz ish vaqtida sizga qo'ng'iroq qiladi.",
+    },
     availability: {
       AVAILABLE: 'joy bor',
       LIMITED: 'joy kam qoldi',
@@ -319,6 +328,15 @@ export const UZ_CYRL: LocalePack = {
       availability: 'ҳолати',
       details: 'Батафсил',
     },
+    // Native review pending for this wording (D18).
+    voice: {
+      consentPrompt:
+        'Сифатни ошириш ва хавфсизлик мақсадида суҳбат ёзиб олинади.',
+      oneMoment: 'Бир дақиқа, текшираяпман.',
+      transferNotice: 'Сизни операторимизга уляпман, илтимос, кутинг.',
+      afterHoursCallback:
+        'Ҳозир иш вақти эмас. Сўровингизни қайд этдим, операторимиз иш вақтида сизга қўнғироқ қилади.',
+    },
     availability: {
       AVAILABLE: 'жой бор',
       LIMITED: 'жой кам қолди',
@@ -485,6 +503,15 @@ export const RU: LocalePack = {
       availability: 'наличие',
       details: 'Подробнее',
     },
+    // Native review pending for this wording (D18).
+    voice: {
+      consentPrompt:
+        'В целях повышения качества и безопасности разговор записывается.',
+      oneMoment: 'Одну минуту, проверяю.',
+      transferNotice: 'Соединяю вас с оператором, пожалуйста, подождите.',
+      afterHoursCallback:
+        'Сейчас нерабочее время. Ваша заявка записана, оператор перезвонит вам в рабочее время.',
+    },
     availability: {
       AVAILABLE: 'места есть',
       LIMITED: 'мест осталось мало',
@@ -649,6 +676,14 @@ export const EN: LocalePack = {
       starts: 'starts',
       availability: 'availability',
       details: 'Details',
+    },
+    // Native review pending for this wording (D18).
+    voice: {
+      consentPrompt: 'This call is recorded for quality and security purposes.',
+      oneMoment: 'One moment, I am checking.',
+      transferNotice: 'I am connecting you to an operator, please hold.',
+      afterHoursCallback:
+        'We are closed right now. Your request is recorded and an operator will call you back during working hours.',
     },
     availability: {
       AVAILABLE: 'available',
