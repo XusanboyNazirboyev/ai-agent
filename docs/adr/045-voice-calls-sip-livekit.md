@@ -140,3 +140,7 @@ Code in `apps/api/src/voice/`: `voice-turn-engine.ts` (the `TurnResponder`), `sp
   - _Spoken rendering._ Facts are rendered as for text ("150 US$", "2-noy, 2026, 18:00"); a voice rendering (words for money, date and time) is not written and a TTS pass was not heard.
   - _Quality of the 20B model._ Mixed-language slips and clumsy phrasing remain ("seshte"); no native review (D18). The data terms of the free provider are unverified: no real caller speech may reach it until the owner decides.
   - _End to end._ STT + LLM + TTS together was not measured; only the LLM part of the turn.
+
+## Owner decision: voice replies paused (fifth decision, 2026-11-09)
+
+Voice replies and calls are paused: a customer who asks by voice gets a text answer, and speech to text of voice notes is the priority (ADR 042 amendment of the same day). Slice 3 stops after step 2: the Nest `VoiceModule`, the LiveKit webhook, call persistence, the S3 recording store and the spoken-fact rendering are parked, and nothing in the voice-call code is wired into the running API. The voice turn engine, the spoken guardrail and the streaming `LlmProvider` port stay in the repository as tested building blocks; the streaming port and the WER tooling are reused for voice notes.
