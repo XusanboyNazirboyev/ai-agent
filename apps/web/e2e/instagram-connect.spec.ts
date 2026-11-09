@@ -99,7 +99,7 @@ test('an admin connects an Instagram account with its token, enables and disable
     .getByTestId('channel-account')
     .filter({ hasText: `@${USERNAME}` });
   await expect(card).toContainText('Active');
-  expect(subscribed).toEqual(['messages']);
+  expect(subscribed).toEqual(['messages,messaging_postbacks']);
   // Telegram-only actions are not offered for Instagram.
   await expect(card.getByTestId('account-test')).toHaveCount(0);
   await expect(card.getByTestId('account-group')).toHaveCount(0);
@@ -109,7 +109,10 @@ test('an admin connects an Instagram account with its token, enables and disable
   await expect(card).toContainText('Disabled');
   await card.getByTestId('account-enable').click();
   await expect(card).toContainText('Active');
-  expect(subscribed).toEqual(['messages', 'messages']);
+  expect(subscribed).toEqual([
+    'messages,messaging_postbacks',
+    'messages,messaging_postbacks',
+  ]);
   expect(await page.content()).not.toContain(TOKEN);
   await admin.context.close();
 });
