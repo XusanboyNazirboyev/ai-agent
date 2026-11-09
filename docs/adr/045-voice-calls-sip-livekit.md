@@ -75,3 +75,21 @@ Branch `feat/voice-adapters` (stacked on `feat/voice-ports`). Code in `apps/api/
 - **Quality seen in the live run (not a WER test):** on synthetic TTS audio Scribe returned e.g. "Ertaqiy saat" for "Ertaga soat" and "Sanbakhuni" for "Shanba kuni". A WER check on real recorded Uzbek speech is still required before any tenant goes live (ADR order above).
 
 Still open: Nest wiring (config validation, webhook route, call record persistence), the streaming LLM turn engine and its real latency, Deepgram/Cartesia adapters, recording egress to S3, a real SIP trunk test, the output script of STT for `uz-Cyrl` callers (not checked; D17).
+
+## Owner answers for slice 3 (2026-11-09, third decision)
+
+- **Recording storage (V5):** provider and region still deferred. Write the `CallRecordingStore` adapter on AWS SDK v3 S3 with a configurable endpoint (S3-compatible), SSE-KMS by key id, 90-day retention, OWNER/ADMIN playback; test with a fake store only. Live verification waits for a named bucket, region and KMS key.
+- **Migration:** an additive Prisma migration is approved for voice call records (call, direction, numbers, tenant, conversation, consent time, handover/callback outcome) and recording metadata (object key, retention date, KMS key id, never key material). Schema goes into this ADR before the migration is written. No existing table changes.
+- **LLM cost:** paid `gemini-3.8-flash` (current `LLM_MODEL_FAST` via `openai-compatible`) may be used for synthetic latency runs, about 20–40 short calls, under $0.05, dev key only, no customer data.
+- **WER:** the owner records the 20 lines of [wer-recording-script-uz.md](../voice/wer-recording-script-uz.md); recordings stay local and gitignored. WER is measured without context, with `keyterms`, and with `keyterms` + `previous_text`; only measured differences are reported.
+
+## Slice 3 plan (branch `feat/voice-nest`, from `feat/production-pilot` `451c33f`)
+
+1. **Streaming in the LLM port (ADR amendment to D15):** an optional `streamWithTools` on `LlmProvider` (text deltas, tool calls, usage at the end), implemented for `openai-compatible` first (SSE); metered through the same budget ledger before the call. Providers without streaming fall back to `generateWithTools` (whole reply, then sentence split).
+2. **Voice turn engine (`TurnResponder` implementation):** one streaming call per turn with the same tools and guardrails as text turns; facts only from tool results rendered by code (D5): the model speaks templates with slots, code fills price/date/seats; the `oneMoment` filler is spoken when a tool call starts; handover intents map to the existing handover path. Measured live end to end (STT + LLM + TTS) with `scripts/voice-latency-live.ts`.
+3. **Nest wiring:** `VoiceModule` (config validation for `ELEVENLABS_*` / `LIVEKIT_*`, providers for STT/TTS/gateway/meter), `POST /api/v1/voice/livekit/webhook` (raw body, `WebhookReceiver` signature check, idempotent on event id), tenant resolved from an active `ChannelAccount` with `channelType = 'voice'` and `externalAccountId` = the trunk phone number (no enum migration: the column is text), call orchestration started per incoming call. Owner step later: set the webhook URL in the LiveKit project.
+4. **Persistence:** migration for call records and recording metadata (see above); callback requests become lead tasks for operators (V4).
+5. **Recording store:** S3 adapter as above, consent prompt first (already spoken by the orchestrator), recording only after it.
+6. **WER tuning:** tenant keyterms (catalog titles, branch names, brand) and `previous_text`; WER runner over the owner's recordings.
+
+Open and blocking: S3 bucket/region/KMS (blocks live check of 5 only); owner recordings (block the WER numbers of 6 only); LiveKit webhook URL on staging (blocks a live inbound call only).

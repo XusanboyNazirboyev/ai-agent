@@ -15,3 +15,6 @@ next-env.d.ts
 test-results/
 playwright-report/
 .e2e/
+
+# Owner WER recordings (ADR 045 slice 3): local only, never committed
+voice-recordings/
