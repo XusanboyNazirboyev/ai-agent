@@ -18,3 +18,4 @@ playwright-report/
 
 # Owner WER recordings (ADR 045 slice 3): local only, never committed
 voice-recordings/
+/voices/
