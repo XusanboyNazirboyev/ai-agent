@@ -226,6 +226,30 @@ describe('facts and guardrail', () => {
       },
     });
 
+  // AUD-10 (main path): a title fact is rendered as written, so a title that
+  // states a price or availability is blocked like model text that does.
+  it.each([
+    ["IELTS Intensive 500 000 so'm", 'UNSOURCED_CURRENCY'],
+    ['IELTS Evening joy bor', 'UNSOURCED_AVAILABILITY'],
+  ] as const)('blocks a referenced title %s (%s)', (title, violation) => {
+    const facts = new FactStore();
+    facts.add({ kind: 'title', text: title }, provenance);
+    const result = checkDraft('{{F1}} sizga mos keladi.', {
+      facts,
+      locale: UZ_LATN,
+      customerTexts: [],
+      timeZone: 'Asia/Tashkent',
+      now,
+      evidence: {
+        tenantId: 't1',
+        conversationId: 'c1',
+        policy: displayPolicyFor({ liveQuote: true, availability: true }),
+      },
+    });
+    expect(result.violations).toContain(violation);
+    expect(result.rendered).toBeUndefined();
+  });
+
   it('renders referenced facts with locale formatting', () => {
     const result = check(
       '{{F1}} kursining narxi {{F2}}. Qachon boshlamoqchisiz?',
