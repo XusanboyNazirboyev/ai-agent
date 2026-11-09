@@ -237,7 +237,9 @@ export class AppointmentSchedulingPort implements SchedulingPort {
   }
 
   /** The customer's own confirmed future appointment, or undefined. */
-  private ownConfirmed(bookingId: string) {
+  private ownConfirmed(
+    bookingId: string,
+  ): Promise<import('../generated/prisma/client.js').Appointment | null> {
     return this.db.appointment.findFirst({
       where: {
         id: bookingId,

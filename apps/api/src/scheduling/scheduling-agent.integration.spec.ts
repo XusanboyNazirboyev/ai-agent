@@ -322,7 +322,9 @@ const lastReply = async (tenantId: string): Promise<string> =>
     })
   )[0].text;
 
-const appointments = (tenantId: string) =>
+const appointments = (
+  tenantId: string,
+): Promise<import('../generated/prisma/client.js').Appointment[]> =>
   db.appointment.findMany({
     where: { tenantId },
     orderBy: { createdAt: 'asc' },

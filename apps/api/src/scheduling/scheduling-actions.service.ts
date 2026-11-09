@@ -99,7 +99,7 @@ export class SchedulingActionsService {
         contactId: conversation.contactId,
         turnKey: input.turnKey,
         timeZone: input.timeZone,
-        now: input.now ?? (() => new Date()),
+        now: input.now ?? ((): Date => new Date()),
       },
       services,
     );

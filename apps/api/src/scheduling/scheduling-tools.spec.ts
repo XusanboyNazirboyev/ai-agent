@@ -70,7 +70,7 @@ function tools(withPort = true): { t: AgentTools; facts: FactStore } {
       tenantMonthSpentNano: 0,
     }),
     timeoutMs: 500,
-    now: () => NOW,
+    now: (): Date => NOW,
     scope: { tenantId: 't', conversationId: 'c' },
     ...(withPort ? { scheduling: port() } : {}),
   });
