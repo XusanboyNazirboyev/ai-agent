@@ -87,7 +87,7 @@ test.beforeAll(async () => {
         const form = new URLSearchParams(body);
         if (
           form.get('access_token') === SYSTEM_TOKEN &&
-          form.get('subscribed_fields') === 'messages'
+          form.get('subscribed_fields') === 'messages,messaging_postbacks'
         )
           return json(response, 200, { success: true });
         json(response, 400, { error: { code: 190 } });
