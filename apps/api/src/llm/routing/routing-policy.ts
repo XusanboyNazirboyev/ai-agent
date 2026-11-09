@@ -49,6 +49,51 @@ export type CandidateRef = z.infer<typeof CandidateRefSchema>;
  * starting point for testing on fake data, NOT a production recommendation;
  * every provider here is untrusted by default.
  */
+/**
+ * Owner decision 2026-11-09: the paid Gemini answers first; when it fails
+ * (outage, rate limit, quota, timeout) the free Groq, then Mistral, then
+ * OpenRouter answer instead. Price it with `routing-gemini-paid-2026-11-09`.
+ * Selected with `LLM_ROUTING_POLICY_FILE=builtin:gemini-primary`.
+ */
+export const GEMINI_PRIMARY_ROUTING_POLICY: RoutingPolicy =
+  RoutingPolicySchema.parse({
+    version: 'gemini-primary-2026-11-09',
+    tiers: {
+      FAST: [
+        { provider: 'gemini', model: 'gemini-3.8-flash' },
+        { provider: 'groq', model: 'openai/gpt-oss-20b' },
+        { provider: 'mistral', model: 'mistral-large-4' },
+        {
+          provider: 'openrouter',
+          model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        },
+        { provider: 'openrouter', model: 'google/gemma-4-31b-it:free' },
+      ],
+      STRONG: [
+        { provider: 'gemini', model: 'gemini-3.8-flash' },
+        { provider: 'groq', model: 'openai/gpt-oss-120b' },
+        { provider: 'mistral', model: 'mistral-large-4' },
+        {
+          provider: 'openrouter',
+          model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        },
+        { provider: 'openrouter', model: 'google/gemma-4-31b-it:free' },
+      ],
+    },
+    breaker: {
+      rateLimitCooldownMs: 60_000,
+      providerCooldownMs: 900_000,
+      transientCooldownMs: 30_000,
+      transientFailures: 3,
+    },
+  });
+
+/** Policies selectable by name (`builtin:<name>`) instead of a file. */
+export const BUILTIN_ROUTING_POLICIES: Readonly<Record<string, RoutingPolicy>> =
+  {
+    'gemini-primary': GEMINI_PRIMARY_ROUTING_POLICY,
+  };
+
 export const DEFAULT_ROUTING_POLICY: RoutingPolicy = RoutingPolicySchema.parse({
   version: 'routing-2026-10-23',
   tiers: {

@@ -12,6 +12,7 @@ import {
   RateLimitedLlmProvider,
 } from '../rate-limited-provider.js';
 import {
+  BUILTIN_ROUTING_POLICIES,
   DEFAULT_ROUTING_POLICY,
   RoutingPolicySchema,
   type RoutingPolicy,
@@ -30,6 +31,11 @@ export class RoutingConfigError extends Error {
 
 export function loadRoutingPolicy(file: string | undefined): RoutingPolicy {
   if (!file) return DEFAULT_ROUTING_POLICY;
+  if (file.startsWith('builtin:')) {
+    const policy = BUILTIN_ROUTING_POLICIES[file.slice('builtin:'.length)];
+    if (!policy) throw new RoutingConfigError(`Unknown routing policy ${file}`);
+    return policy;
+  }
   return RoutingPolicySchema.parse(JSON.parse(readFileSync(file, 'utf8')));
 }
 

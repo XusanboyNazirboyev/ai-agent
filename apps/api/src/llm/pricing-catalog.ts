@@ -177,12 +177,57 @@ const ROUTING_FREE_2026_10_23: PricingConfig = {
   },
 };
 
+/**
+ * Owner decision 2026-11-09: the paid Gemini answers customers first; the
+ * free Groq, Mistral and OpenRouter keys are its fallbacks (routing policy
+ * `builtin:gemini-primary`). Every entry is verified, nothing is guessed:
+ * - `gemini-3.8-flash`: Paid Tier prices as in `gemini-paid-2026-10-29`
+ *   (https://ai.google.dev/gemini-api/docs/pricing, read 2026-10-29, valid
+ *   through 2026-12-31).
+ * - Groq `openai/gpt-oss-20b` / `-120b`: run on the free plan, cost 0 to the
+ *   account, as in `routing-free-2026-10-23`. If the key is moved to a paid
+ *   Groq plan, add its prices here first.
+ * - Mistral `mistral-large-4`: https://mistral.ai/pricing read 2026-11-09
+ *   says "Mistral Large costs $0.5 /M tokens in and $1.5 /M tokens out"
+ *   (the page lists no Small or Medium price); `mistral-large-4` is the only
+ *   Large id the key's /v1/models returned on 2026-11-09, with function
+ *   calling. No cache price is published: cached tokens are billed at the
+ *   input price (an upper bound).
+ * - OpenRouter `nvidia/nemotron-3-ultra-550b-a55b:free` and
+ *   `google/gemma-4-31b-it:free`: /api/v1/models on 2026-11-09 gave prompt
+ *   and completion price "0" and `tools` support (free models are often
+ *   rate limited upstream, hence two).
+ * LLM7 is not listed: its site states no per-token prices, so it cannot be
+ * priced and is never routed.
+ */
+const ROUTING_GEMINI_PAID_2026_11_09: PricingConfig = {
+  version: 'routing-gemini-paid-2026-11-09',
+  provider: 'multi',
+  asOf: '2026-11-09',
+  sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+  models: {
+    'gemini-3.8-flash': GEMINI_PAID_2026_10_29.models['gemini-3.8-flash']!,
+    'openai/gpt-oss-20b': { free: true },
+    'openai/gpt-oss-120b': { free: true },
+    'mistral-large-4': {
+      inputPerMTok: '0.5',
+      outputPerMTok: '1.5',
+      cacheReadPerMTok: '0.5',
+      cacheWrite5mPerMTok: '0.5',
+      cacheWrite1hPerMTok: '0.5',
+    },
+    'nvidia/nemotron-3-ultra-550b-a55b:free': { free: true },
+    'google/gemma-4-31b-it:free': { free: true },
+  },
+};
+
 export const PRICING_CATALOG = new PricingCatalog([
   ANTHROPIC_2026_10_23,
   GEMINI_FREE_2026_10_23,
   GEMINI_PAID_2026_10_29,
   LOCAL_FREE_2026_10_23,
   ROUTING_FREE_2026_10_23,
+  ROUTING_GEMINI_PAID_2026_11_09,
 ]);
 
 export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';
