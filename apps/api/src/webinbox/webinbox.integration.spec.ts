@@ -1901,6 +1901,7 @@ describe('knowledge documents', () => {
       });
       expect(first.items).toHaveLength(1);
       expect(first.items[0]?.score).toBe('HOT');
+      expect(first.items[0]?.conversation.channelType).toBe('telegram');
 
       const moved = await controller.move(as(a, 'ADMIN'), first.items[0]!.id, {
         stageId: renamed.id,

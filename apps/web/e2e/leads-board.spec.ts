@@ -70,6 +70,8 @@ test('an operator sets score and status and moves a lead between funnel stages',
     await page.goto('/leads?view=funnel');
     const card = cardOf(page, conversationId);
     await expect(card).toBeVisible();
+    // The card names the customer's channel.
+    await expect(card.getByTestId('lead-card-channel')).toHaveText('Telegram');
     newStageId = await card.getByTestId('lead-card-stage').inputValue();
 
     await card.getByTestId('lead-card-score').selectOption('WARM');

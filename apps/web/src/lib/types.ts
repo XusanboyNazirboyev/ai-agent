@@ -20,7 +20,11 @@ export interface LeadPipelineItem {
   createdAt: string;
   updatedAt: string;
   contact: { name: string | null; phone: string | null };
-  conversation: { id: string; state: ConversationState };
+  conversation: {
+    id: string;
+    state: ConversationState;
+    channelType: string;
+  };
 }
 
 export interface LeadPipelinePage {

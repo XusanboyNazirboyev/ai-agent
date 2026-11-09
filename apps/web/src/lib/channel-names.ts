@@ -6,6 +6,7 @@
 const NAMES: Readonly<Record<string, string>> = {
   telegram: 'Telegram',
   instagram: 'Instagram',
+  facebook: 'Messenger',
   whatsapp: 'WhatsApp',
   webchat: 'Web chat',
 };
