@@ -147,6 +147,39 @@ describe('CallOrchestrator', () => {
     expect(summary.turns[0].isComplete()).toBe(true);
   });
 
+  it('barge-in also stops audio still playing out after generation finished', async () => {
+    const s = setup({});
+    const callId = s.gateway.simulateInbound('+998901112233', '+998712000000');
+    const inner = await s.gateway.acceptInbound(callId);
+    let playingOut = false;
+    // A real leg (LiveKit) keeps queued audio after the turn has ended.
+    const leg = Object.assign(Object.create(inner) as CallLeg, {
+      isPlayingOut: (): boolean => playingOut,
+      clearPlayback: (): void => {
+        playingOut = false;
+        inner.clearPlayback();
+      },
+    });
+    const caller = new ScriptedCaller(s.clock, s.gateway.endpoint(callId));
+    const call = s.orchestrator.handleCall(leg);
+    const script = (async (): Promise<void> => {
+      await caller.waitForReply();
+      await caller.say('Kurs narxi qancha?');
+      await caller.waitForReply();
+      await s.clock.sleep(5000); // the turn is over; its audio still plays
+      playingOut = true;
+      await caller.interrupt('To’xtang', 200);
+      await caller.waitForReply();
+      caller.hangUp();
+    })();
+    const [summary] = await s.clock.runUntil(Promise.all([call, script]));
+    expect(summary.bargeIns).toBe(1);
+    expect(playingOut).toBe(false);
+    expect(s.gateway.endpoint(callId).clearCount()).toBeGreaterThan(0);
+    // Nothing was being generated: the only cancel is the one close() does.
+    expect(s.tts.sessions[0].cancelCount).toBe(1);
+  });
+
   it('transfers to the operator during working hours', async () => {
     const s = setup({ handoverOnTurns: [0] }); // 12:00 Tashkent
     const { caller, call } = await startInbound(s);

@@ -112,17 +112,17 @@ export class CallOrchestrator {
     });
     const offAudio = leg.onAudio((frame) => {
       if (frame.endOfUtterance) lastEosAt = deps.clock.now();
-      if (
-        frame.speech &&
-        interruptible &&
-        turnRunning &&
-        turnAbort &&
-        !turnAbort.signal.aborted
-      ) {
+      const generating =
+        turnRunning && turnAbort !== undefined && !turnAbort.signal.aborted;
+      // A real leg keeps playing queued audio after generation has finished.
+      const playingOut = leg.isPlayingOut?.() ?? false;
+      if (frame.speech && interruptible && (generating || playingOut)) {
         bargeIns += 1;
         playing = false;
-        turnAbort.abort();
-        tts.cancel();
+        if (generating) {
+          turnAbort?.abort();
+          tts.cancel();
+        }
         leg.clearPlayback();
       }
       stt.pushAudio(frame);
