@@ -29,16 +29,17 @@ Generic scheduling vocabulary, no vertical words (rule 1). Lives in `apps/api/sr
 
 **CRM sync (hybrid):** on `CONFIRMED`, an outbox job calls the connector's booking write with an idempotency key (ADR 023). A sync failure never cancels the appointment; it is visible to operators (`crmSyncStatus = FAILED`) and retried. The canonical write input gains the time, service and staff fields.
 
-## OPEN (do not block step 1)
+## Owner answers to the open items (2026-11-09, second decision)
 
-- **OPEN-B1 Bitrix24 target entity** for an appointment (deal with dates, calendar event, or Bitrix24's booking module): read from the official docs and confirmed by the owner before the Bitrix24 mapping.
-- **OPEN-B2 travel time:** v1 uses fixed buffers per service. Address-based travel time needs a maps provider and customer addresses (personal data): a later decision.
-- **OPEN-B3 who edits staff, skills and availability:** Tenant Admin UI (D19) vs. import from the CRM; step 1 ships a seed/API only.
-- **OPEN-B4 cancellation/reschedule by the customer** through the agent, and reminder timing (also used by ADR 045 outbound calls).
+- **B1:** a confirmed appointment is written to Bitrix24 as both a deal (stage "Booking Confirmed") and a calendar event. Method names and fields are taken from the official Bitrix24 docs at step 3, and the deal stage is matched by the tenant's configured stage, never invented.
+- **B2:** fixed travel buffers per service type for now.
+- **B3:** staff and schedules are entered in the AgentCore admin panel first; CRM import later.
+- **B4:** the customer may cancel (`cancel_booking`) and reschedule (`reschedule_booking`) through the agent; reminders go out automatically 24 hours and 2 hours before the appointment.
 
 ## Steps
 
 1. Schema + migration (with the exclusion constraint), slot engine, hold/confirm/expire service, tests (unit + integration, including concurrent booking of the same slot).
 2. Agent tools and confirmation flow; education/clinic-like demo pack data.
-3. CRM sync (mock + generic REST first, Bitrix24 after OPEN-B1).
-4. Admin UI for services, staff and availability (after OPEN-B3).
+3. CRM sync (mock + generic REST first, then Bitrix24 deal + calendar event).
+4. Admin UI for services, staff and availability.
+5. Cancel / reschedule tools and reminders (24 h and 2 h before).

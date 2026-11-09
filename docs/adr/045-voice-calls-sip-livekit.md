@@ -1,6 +1,6 @@
 # ADR 045: Voice calls over SIP with LiveKit
 
-- **Status:** Accepted in principle (owner decision 2026-11-09). Vendor choices marked OPEN below are not assumed; every vendor sits behind a port. Not implemented.
+- **Status:** Accepted (owner decisions 2026-11-09, open items answered the same day). Every vendor sits behind a port. Not implemented.
 - **Context:** owner Stage 2: an AI voice agent on real phone lines, inbound (24/7 virtual receptionist) and outbound (speed-to-lead call-back, appointment reminders). Voice calls were not in the spec; this ADR adds them.
 
 ## Owner decisions (2026-11-09)
@@ -34,15 +34,16 @@ Consequence: the owner's STT options (Deepgram, Gemini Live) and the first TTS o
 5. **Outbound:** only to contacts who gave a phone number to this tenant and did not opt out; call windows (local time) and a per-tenant daily cap. Speed-to-lead and reminders are queue jobs (BullMQ, D7) with idempotency per lead / booking.
 6. **Metering:** STT/TTS seconds and LLM tokens reserved on the tenant budget ledger before a call is answered or placed; a call that cannot be afforded is not started (inbound: transfer or polite refusal).
 
-## OPEN (blocks voice implementation beyond the ports and fakes)
+## Owner answers to the open items (2026-11-09, second decision)
 
-- **OPEN-V1 STT/TTS vendor for Uzbek:** ElevenLabs is the only verified option; approve it (with Deepgram/Cartesia for ru/en or not)? Gemini Live needs its language list checked first.
-- **OPEN-V2 LiveKit Cloud or self-hosted**, and the account (keys go to the staging secret store, never the repo).
-- **OPEN-V3 SIP trunk:** which carrier first, a test number, and whether it can reach LiveKit (public SIP, IP allow-list, codecs). Not tested by LiveKit; verified live.
-- **OPEN-V4 handover target:** transfer to which number, and in what hours.
-- **OPEN-V5 recordings:** S3 provider/region (data residency for Uzbekistan), retention period, who may listen.
-- **OPEN-V6 outbound policy:** allowed hours, daily cap, and the legal basis for calling a lead (consent wording).
-- Agents runtime: Node.js (`@livekit/agents`) fits the TypeScript stack; package and version checked from the docs at implementation.
+- **V1:** Uzbek = ElevenLabs (STT Scribe v2 Realtime, TTS `eleven_v4_turbo`). Deepgram Nova-2/3 and Cartesia Sonic 3.6 are kept as fallback adapters for `ru`/`en` only. The streaming single-LLM-call turn engine with sentence-by-sentence TTS and D5 guardrails is approved.
+- **V2:** LiveKit Cloud first; the adapter keeps the server URL and keys configurable so a self-hosted LiveKit server can replace it.
+- **V3:** a standard SIP trunk adapter (PSTN / SIP URI). Tests use a mock SIP endpoint and a WebRTC test client; a real carrier comes later.
+- **V4:** during working hours (09:00–18:00, tenant time) a SIP call transfer to the tenant's operator number; outside them a voicemail / callback request is created (a lead task for operators).
+- **V5:** recordings in an encrypted S3 bucket, kept 90 days, playable only by OWNER and ADMIN roles. The S3 provider/region is still to be named at deployment (data residency).
+- **V6:** outbound calls only 09:00–19:00 tenant time, a per-tenant daily cap, and only to customers who asked for a call-back (opt-in lead callback).
+
+Still to verify from official docs at implementation (rule 7): `@livekit/agents` Node package and version, LiveKit egress-to-S3 options, ElevenLabs realtime STT/TTS streaming endpoints, model ids and prices.
 
 ## Order
 
