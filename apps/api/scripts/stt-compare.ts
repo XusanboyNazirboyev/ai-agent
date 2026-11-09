@@ -16,6 +16,9 @@
  *   gemini           gemini-3.5-transcribe (ADR 042), languages uz/ru/en offered
  *   gemini-uz        the same, offered languages narrowed to uz and ru
  *   gemini-vocab     gemini plus the tenant words as custom_vocabulary
+ *   groq-v3          Groq whisper-large-v3, language detected (GROQ_API_KEY)
+ *   groq-v3-uz       the same, language forced to uz
+ *   groq-turbo       Groq whisper-large-v3-turbo, language detected
  *
  * Env: ELEVENLABS_API_KEY, and STT_API_KEY or GEMINI_API_KEY for `gemini`
  * (values never printed). Recordings, references and transcripts stay local.
@@ -33,6 +36,7 @@ import type {
   TranscriptionResult,
 } from '../src/core/speech/speech-to-text.js';
 import { ElevenLabsSpeechToText } from '../src/speech/elevenlabs-speech-to-text.js';
+import { WhisperSpeechToText } from '../src/speech/whisper-speech-to-text.js';
 import {
   GeminiSpeechToText,
   sdkTranscribeCall,
@@ -68,7 +72,10 @@ type Mode =
   | 'eleven-keyterms'
   | 'gemini'
   | 'gemini-uz'
-  | 'gemini-vocab';
+  | 'gemini-vocab'
+  | 'groq-v3'
+  | 'groq-v3-uz'
+  | 'groq-turbo';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -117,6 +124,21 @@ function adapterFor(
   mode: Mode,
   keyterms: readonly string[],
 ): { stt: SpeechToText; hint?: string } {
+  if (mode.startsWith('groq')) {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) throw new Error('GROQ_API_KEY is not set');
+    return {
+      stt: new WhisperSpeechToText({
+        providerId: 'groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        apiKey,
+        model:
+          mode === 'groq-turbo' ? 'whisper-large-v3-turbo' : 'whisper-large-v3',
+        timeoutMs: 30_000,
+      }),
+      ...(mode === 'groq-v3-uz' ? { hint: 'uz-Latn' } : {}),
+    };
+  }
   if (mode.startsWith('gemini')) {
     const key = process.env.STT_API_KEY || process.env.GEMINI_API_KEY;
     if (!key) throw new Error('STT_API_KEY or GEMINI_API_KEY is not set');
