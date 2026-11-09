@@ -1070,6 +1070,7 @@ describe('voice notes (ADR 042)', () => {
     f: Fixture,
     stt: SpeechToText,
     download: Uint8Array | null = new Uint8Array(2_048),
+    metering?: { readonly env: Record<string, unknown> },
   ): Promise<{ messageId: string }> => {
     const updateId = ++nextUpdate;
     const normalized = normalizeTelegramUpdate({
@@ -1109,9 +1110,12 @@ describe('voice notes (ADR 042)', () => {
     };
     const voice = new VoiceTranscriptionService(
       prisma as unknown as PrismaService,
-      config({}),
+      config(metering?.env ?? {}),
       sender as unknown as TelegramSender,
       stt,
+      metering
+        ? new LlmBudgetLedger(prisma as unknown as PrismaService)
+        : undefined,
     );
     const processor = new TelegramProcessor(
       prisma as unknown as PrismaService,
@@ -1196,6 +1200,85 @@ describe('voice notes (ADR 042)', () => {
     expect(
       await prisma.message.findUniqueOrThrow({ where: { id: messageId } }),
     ).toMatchObject({ voiceStatus: 'FAILED' });
+    expect(await lastTurn(f)).toMatchObject({
+      outcome: 'CLARIFICATION_REQUIRED',
+    });
+  });
+
+  // REV-03: transcription is metered on the tenant's LLM budget.
+  const metered = {
+    env: {
+      STT_WORST_CASE_USD_PER_MINUTE: '0.02',
+      LLM_CONVERSATION_BUDGET_USD: '0.25',
+    },
+  };
+  const pricedStt = (
+    result: Awaited<ReturnType<SpeechToText['transcribe']>>,
+  ): SpeechToText & { calls: number } =>
+    // Same object: `calls` is counted on it.
+    Object.assign(sttSaying(result), {
+      pricing: {
+        version: 'test-pricing',
+        inputNanoPerToken: 2_000,
+        outputNanoPerToken: 12_000,
+      },
+    });
+  const voiceUsage = (
+    f: Fixture,
+    messageId: string,
+  ): Promise<{ costNano: bigint } | null> =>
+    prisma.llmUsageRecord.findFirst({
+      where: { tenantId: f.tenantId, turnKey: `voice:${messageId}` },
+    });
+
+  it('records the reported tokens of a transcription as spend (REV-03)', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = pricedStt({
+      ok: true,
+      text: 'IELTS kursi kerak',
+      responseId: 'stt-response-1',
+      usage: { inputTokens: 100, outputTokens: 10 },
+    });
+    const { messageId } = await voiceTurn(f, stt, undefined, metered);
+    expect(await voiceUsage(f, messageId)).toMatchObject({
+      purpose: 'transcribe',
+      responseId: 'stt-response-1',
+      inputTokens: 100,
+      outputTokens: 10,
+      costNano: 320_000n,
+      pricingVersion: 'test-pricing',
+    });
+    const reservation = await prisma.llmBudgetReservation.findFirstOrThrow({
+      where: { tenantId: f.tenantId, baseInvocationId: `voice:${messageId}:0` },
+    });
+    expect(reservation.state).toBe('SETTLED');
+  });
+
+  it('keeps the worst case counted when the provider reports no usage (REV-03)', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = pricedStt({ ok: true, text: 'IELTS kursi kerak' });
+    const { messageId } = await voiceTurn(f, stt, undefined, metered);
+    const reservation = await prisma.llmBudgetReservation.findFirstOrThrow({
+      where: { tenantId: f.tenantId, baseInvocationId: `voice:${messageId}:0` },
+    });
+    // 4 s at $0.02/min, rounded up to whole nano-USD.
+    expect(reservation).toMatchObject({
+      state: 'UNKNOWN',
+      reservedNano: 1_333_334n,
+    });
+    expect(await voiceUsage(f, messageId)).toMatchObject({ costNano: 0n });
+  });
+
+  it('sends no audio once the tenant budget is spent and asks to type (REV-03)', async () => {
+    const f = await fixture({ mode: 'SHADOW' });
+    const stt = pricedStt({ ok: true, text: 'never used' });
+    const { messageId } = await voiceTurn(f, stt, undefined, {
+      env: { ...metered.env, LLM_TENANT_MONTHLY_BUDGET_USD: '0.000001' },
+    });
+    expect(stt.calls).toBe(0);
+    expect(
+      await prisma.message.findUniqueOrThrow({ where: { id: messageId } }),
+    ).toMatchObject({ voiceStatus: 'FAILED', text: '' });
     expect(await lastTurn(f)).toMatchObject({
       outcome: 'CLARIFICATION_REQUIRED',
     });

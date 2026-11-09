@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AudioClip } from '../core/speech/speech-to-text.js';
+import { transcriptionCostNano } from '../core/speech/speech-to-text.js';
 import {
+  GEMINI_TRANSCRIBE_PRICING,
   GeminiSpeechToText,
   type TranscribeCall,
 } from './gemini-speech-to-text.js';
@@ -65,5 +67,44 @@ describe('GeminiSpeechToText (ADR 042)', () => {
         throw Object.assign(new Error('aborted'), { name: 'AbortError' });
       }).transcribe(clip),
     ).resolves.toEqual({ ok: false, code: 'TIMEOUT' });
+  });
+
+  it('returns the reported usage and id, thought tokens billed as output (REV-03)', async () => {
+    const call = vi.fn<TranscribeCall>(async () => ({
+      id: 'interaction-1',
+      output_text: 'Salom',
+      usage: {
+        total_input_tokens: 80,
+        total_output_tokens: 5,
+        total_thought_tokens: 3,
+      },
+    }));
+    const result = await new GeminiSpeechToText(call).transcribe(clip);
+    expect(result).toMatchObject({
+      ok: true,
+      responseId: 'interaction-1',
+      usage: { inputTokens: 80, outputTokens: 8 },
+    });
+    // $2.00 and $12.00 per 1M tokens (pricing page, read 2026-11-09).
+    expect(
+      transcriptionCostNano(GEMINI_TRANSCRIBE_PRICING, {
+        inputTokens: 80,
+        outputTokens: 8,
+      }),
+    ).toBe(80 * 2_000 + 8 * 12_000);
+  });
+
+  it('keeps the usage of a billed call whose transcript is empty (REV-03)', async () => {
+    const call = vi.fn<TranscribeCall>(async () => ({
+      output_text: '  ',
+      usage: { total_input_tokens: 80, total_output_tokens: 0 },
+    }));
+    await expect(
+      new GeminiSpeechToText(call).transcribe(clip),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'UNINTELLIGIBLE',
+      usage: { inputTokens: 80, outputTokens: 0 },
+    });
   });
 });

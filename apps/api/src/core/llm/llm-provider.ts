@@ -9,7 +9,13 @@ import type { z } from 'zod';
 export type LlmTier = 'FAST' | 'STRONG';
 
 /** Why a model call was made; recorded for cost attribution. */
-export type LlmPurpose = 'extract' | 'respond' | 'evaluate' | 'embed';
+export type LlmPurpose =
+  | 'extract'
+  | 'respond'
+  | 'evaluate'
+  | 'embed'
+  /** Speech-to-text of a voice note (metered on the same ledger, REV-03). */
+  | 'transcribe';
 
 export type LlmStopReason =
   'end' | 'tool_calls' | 'max_tokens' | 'refusal' | 'other';

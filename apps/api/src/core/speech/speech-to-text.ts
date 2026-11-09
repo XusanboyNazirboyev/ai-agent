@@ -18,6 +18,35 @@ export type TranscriptionFailure =
   | 'PROVIDER_ERROR'
   | 'TIMEOUT';
 
+/**
+ * Provider-reported token usage of one transcription call. A call that
+ * reached the provider is billed even when its result is a failure (empty
+ * transcript), so failures can carry usage too (REV-03).
+ */
+export interface TranscriptionUsage {
+  readonly inputTokens: number;
+  /** Output tokens including any thinking tokens (billed at the output rate). */
+  readonly outputTokens: number;
+}
+
+/** Per-token prices of a provider, from its official pricing page. */
+export interface TranscriptionPricing {
+  readonly version: string;
+  readonly inputNanoPerToken: number;
+  readonly outputNanoPerToken: number;
+}
+
+/** Billed cost in nano-USD of a reported usage. */
+export function transcriptionCostNano(
+  pricing: TranscriptionPricing,
+  usage: TranscriptionUsage,
+): number {
+  return (
+    usage.inputTokens * pricing.inputNanoPerToken +
+    usage.outputTokens * pricing.outputNanoPerToken
+  );
+}
+
 export type TranscriptionResult =
   | {
       readonly ok: true;
@@ -28,12 +57,21 @@ export type TranscriptionResult =
       readonly confidence?: number;
       /** Seconds of audio the provider bills, when it says so. */
       readonly billedSeconds?: number;
+      readonly usage?: TranscriptionUsage;
+      readonly responseId?: string;
     }
-  | { readonly ok: false; readonly code: TranscriptionFailure };
+  | {
+      readonly ok: false;
+      readonly code: TranscriptionFailure;
+      readonly usage?: TranscriptionUsage;
+      readonly responseId?: string;
+    };
 
 export interface SpeechToText {
   readonly providerId: string;
   readonly model: string;
+  /** Token prices when the provider bills by token (REV-03 metering). */
+  readonly pricing?: TranscriptionPricing;
   transcribe(
     clip: AudioClip,
     options?: { languageHint?: string; signal?: AbortSignal },
