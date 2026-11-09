@@ -34,6 +34,6 @@ import { LlmUsageStore } from './llm-usage.store.js';
         createLlmProvider(llmEnvironment(config)),
     },
   ],
-  exports: [AgentConversationService],
+  exports: [AgentConversationService, LlmBudgetLedger],
 })
 export class AgentModule {}

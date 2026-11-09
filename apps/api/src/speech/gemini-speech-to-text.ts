@@ -2,7 +2,9 @@ import { GoogleGenAI } from '@google/genai';
 import type {
   AudioClip,
   SpeechToText,
+  TranscriptionPricing,
   TranscriptionResult,
+  TranscriptionUsage,
 } from '../core/speech/speech-to-text.js';
 
 /**
@@ -38,7 +40,43 @@ export interface TranscribeCall {
       };
     },
     options: { timeout_ms: number; fetch_options?: { signal?: AbortSignal } },
-  ): Promise<{ output_text?: string | undefined }>;
+  ): Promise<TranscribeAnswer>;
+}
+
+/** The fields of the SDK `Interaction` this adapter reads. */
+export interface TranscribeAnswer {
+  id?: string | undefined;
+  output_text?: string | undefined;
+  usage?:
+    | {
+        total_input_tokens?: number | undefined;
+        total_output_tokens?: number | undefined;
+        total_thought_tokens?: number | undefined;
+      }
+    | undefined;
+}
+
+/**
+ * https://aistudio.google.com/docs/pricing.md, read 2026-11-09, paid tier of
+ * `gemini-3.5-transcribe`: input (audio) $2.00 and output (text, including
+ * thinking tokens) $12.00 per 1M tokens (the page's per-minute figures are
+ * estimates from 25 audio tokens per second).
+ */
+export const GEMINI_TRANSCRIBE_PRICING: TranscriptionPricing = {
+  version: 'gemini-3.5-transcribe@2026-11-09',
+  inputNanoPerToken: 2_000,
+  outputNanoPerToken: 12_000,
+};
+
+/** Reported usage; output and thought tokens are both billed as output. */
+function usageOf(answer: TranscribeAnswer): TranscriptionUsage | undefined {
+  const usage = answer.usage;
+  if (usage?.total_input_tokens === undefined) return undefined;
+  return {
+    inputTokens: usage.total_input_tokens,
+    outputTokens:
+      (usage.total_output_tokens ?? 0) + (usage.total_thought_tokens ?? 0),
+  };
 }
 
 export function sdkTranscribeCall(apiKey: string): TranscribeCall {
@@ -60,6 +98,7 @@ const LANGUAGE_CODES: Readonly<Record<string, string>> = {
 
 export class GeminiSpeechToText implements SpeechToText {
   readonly providerId = 'gemini';
+  readonly pricing = GEMINI_TRANSCRIBE_PRICING;
 
   constructor(
     private readonly call: TranscribeCall,
@@ -80,7 +119,7 @@ export class GeminiSpeechToText implements SpeechToText {
     const languageCodes = hinted
       ? [...new Set([hinted, 'uz-UZ', 'ru-RU'])]
       : ['uz-UZ', 'ru-RU', 'en-US'];
-    let answer: { output_text?: string | undefined };
+    let answer: TranscribeAnswer;
     try {
       answer = await this.call(
         {
@@ -118,8 +157,18 @@ export class GeminiSpeechToText implements SpeechToText {
             : 'PROVIDER_ERROR',
       };
     }
+    const usage = usageOf(answer);
+    const billing = {
+      ...(usage ? { usage } : {}),
+      ...(answer.id ? { responseId: answer.id } : {}),
+    };
     const text = (answer.output_text ?? '').replace(/\s+/gu, ' ').trim();
-    if (!text) return { ok: false, code: 'UNINTELLIGIBLE' };
-    return { ok: true, text, billedSeconds: Math.ceil(clip.durationSeconds) };
+    if (!text) return { ok: false, code: 'UNINTELLIGIBLE', ...billing };
+    return {
+      ok: true,
+      text,
+      billedSeconds: Math.ceil(clip.durationSeconds),
+      ...billing,
+    };
   }
 }

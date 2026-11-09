@@ -1,13 +1,19 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../../config/environment.js';
+import type { LlmUsageEntry } from '../../core/llm/metered-llm.js';
+import { usdToNano } from '../../core/llm/pricing.js';
 import {
   checkClip,
   DEFAULT_VOICE_POLICY,
   NotConfiguredSpeechToText,
+  transcriptionCostNano,
+  worstCaseTranscriptionNano,
+  type AudioClip,
   type SpeechToText,
   type TranscriptionResult,
 } from '../../core/speech/speech-to-text.js';
+import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import {
   GeminiSpeechToText,
@@ -34,9 +40,10 @@ export class VoiceTranscriptionService {
 
   constructor(
     private readonly prisma: PrismaService,
-    config: ConfigService<AppEnvironment, true>,
+    private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() private readonly telegram?: TelegramSender,
     @Optional() @Inject(SPEECH_TO_TEXT) stt?: SpeechToText,
+    @Optional() private readonly ledger?: LlmBudgetLedger,
   ) {
     const provider = config.get('STT_PROVIDER', { infer: true });
     const key = config.get('STT_API_KEY', { infer: true });
@@ -75,7 +82,11 @@ export class VoiceTranscriptionService {
       },
     });
     for (const message of pending) {
-      const outcome = await this.transcribeOne(message);
+      const outcome = await this.transcribeOne(
+        tenantId,
+        conversationId,
+        message,
+      );
       const text = outcome.ok ? outcome.text.slice(0, 4_000) : '';
       const usable =
         outcome.ok && text.length >= DEFAULT_VOICE_POLICY.minTranscriptChars;
@@ -98,13 +109,18 @@ export class VoiceTranscriptionService {
     }
   }
 
-  private async transcribeOne(message: {
-    readonly channelAccountId: string;
-    readonly mediaRef: string | null;
-    readonly mediaMimeType: string | null;
-    readonly mediaDurationSeconds: number | null;
-    readonly channelAccount: { readonly channelType: string };
-  }): Promise<TranscriptionResult | { ok: false; code: string }> {
+  private async transcribeOne(
+    tenantId: string,
+    conversationId: string,
+    message: {
+      readonly id: string;
+      readonly channelAccountId: string;
+      readonly mediaRef: string | null;
+      readonly mediaMimeType: string | null;
+      readonly mediaDurationSeconds: number | null;
+      readonly channelAccount: { readonly channelType: string };
+    },
+  ): Promise<TranscriptionResult | { ok: false; code: string }> {
     if (this.stt.providerId === 'none')
       return { ok: false, code: 'NOT_CONFIGURED' };
     const mimeType = message.mediaMimeType ?? 'audio/ogg';
@@ -130,6 +146,127 @@ export class VoiceTranscriptionService {
       size: data.byteLength,
     });
     if (!checked.ok) return checked;
-    return this.stt.transcribe({ data, mimeType, durationSeconds });
+    return this.meteredTranscribe(tenantId, conversationId, message.id, {
+      data,
+      mimeType,
+      durationSeconds,
+    });
+  }
+
+  /**
+   * REV-03: the worst case is reserved on the tenant's LLM budget before the
+   * audio leaves the server; a refused reservation means no provider call
+   * (the customer is asked to type). Reported tokens are recorded as spend;
+   * without a report the worst case stays counted.
+   */
+  private async meteredTranscribe(
+    tenantId: string,
+    conversationId: string,
+    messageId: string,
+    clip: AudioClip,
+  ): Promise<TranscriptionResult | { ok: false; code: string }> {
+    if (!this.ledger) return this.stt.transcribe(clip);
+    // The same caps as model calls: tenant month and conversation lifetime.
+    const monthly = this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', {
+      infer: true,
+    });
+    const conversation = this.config.get('LLM_CONVERSATION_BUDGET_USD', {
+      infer: true,
+    });
+    const worstCaseNano = worstCaseTranscriptionNano(
+      usdToNano(
+        this.config.get('STT_WORST_CASE_USD_PER_MINUTE', { infer: true }),
+      ),
+      clip,
+    );
+    const turnKey = `voice:${messageId}`;
+    const reservation = await this.ledger.reserve({
+      tenantId,
+      conversationId,
+      baseInvocationId: `${turnKey}:0`,
+      worstCaseNano,
+      worstCaseTokens: 0,
+      ...(monthly ? { monthlyCapNano: usdToNano(monthly) } : {}),
+      ...(conversation ? { conversationCapNano: usdToNano(conversation) } : {}),
+    });
+    if (!reservation.granted) return { ok: false, code: 'BUDGET_EXHAUSTED' };
+    const started = Date.now();
+    let result: TranscriptionResult;
+    try {
+      result = await this.stt.transcribe(clip);
+    } catch (error) {
+      await this.ledger.markUnknown(
+        tenantId,
+        reservation.reservationId,
+        this.usageEntry(tenantId, conversationId, turnKey, {
+          worstCaseNano,
+          started,
+          outcome: 'unknown_usage:THROWN',
+        }),
+      );
+      throw error;
+    }
+    const usage = result.usage;
+    const entry = this.usageEntry(tenantId, conversationId, turnKey, {
+      worstCaseNano,
+      started,
+      outcome: result.ok ? 'ok' : result.code,
+      ...(result.responseId ? { responseId: result.responseId } : {}),
+      ...(usage && this.stt.pricing
+        ? {
+            usage,
+            costNano: transcriptionCostNano(this.stt.pricing, usage),
+          }
+        : {}),
+    });
+    if (entry.usageBasis === 'reported')
+      await this.ledger.settle(tenantId, reservation.reservationId, entry);
+    else
+      await this.ledger.markUnknown(tenantId, reservation.reservationId, {
+        ...entry,
+        outcome: `unknown_usage:${entry.outcome}`,
+      });
+    return result;
+  }
+
+  private usageEntry(
+    tenantId: string,
+    conversationId: string,
+    turnKey: string,
+    details: {
+      readonly worstCaseNano: number;
+      readonly started: number;
+      readonly outcome: string;
+      readonly responseId?: string;
+      readonly usage?: { inputTokens: number; outputTokens: number };
+      readonly costNano?: number;
+    },
+  ): LlmUsageEntry {
+    return {
+      tenantId,
+      conversationId,
+      turnKey,
+      callIndex: 0,
+      purpose: 'transcribe',
+      tier: 'FAST',
+      providerId: this.stt.providerId,
+      model: this.stt.model,
+      // Unique per tenant and provider: one record per voice note.
+      responseId: details.responseId ?? turnKey,
+      usage: {
+        inputTokens: details.usage?.inputTokens ?? 0,
+        outputTokens: details.usage?.outputTokens ?? 0,
+        cacheReadTokens: 0,
+        cacheWrite5mTokens: 0,
+        cacheWrite1hTokens: 0,
+      },
+      costNano: details.costNano ?? 0,
+      reservedNano: details.worstCaseNano,
+      usageBasis: details.costNano !== undefined ? 'reported' : 'unknown',
+      pricingVersion: this.stt.pricing?.version ?? 'none',
+      durationMs: Date.now() - details.started,
+      attempts: 1,
+      outcome: details.outcome,
+    };
   }
 }

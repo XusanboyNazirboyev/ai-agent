@@ -173,6 +173,12 @@ const environmentSchema = postgresEnvironmentSchema
     STT_PROVIDER: z.enum(['none', 'gemini']).default('none'),
     STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
     STT_API_KEY: z.string().min(1).optional(),
+    /**
+     * REV-03: worst-case cost per audio minute reserved on the tenant's LLM
+     * budget before each transcription (4x the provider's own ~$0.005/min
+     * estimate); the reported tokens are recorded afterwards.
+     */
+    STT_WORST_CASE_USD_PER_MINUTE: usdAmount.default('0.02'),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z

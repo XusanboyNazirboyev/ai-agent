@@ -13,3 +13,8 @@
 
 ## Before enabling `gemini`
 Measure word error rate on the owner's recordings (10 scripted Uzbek/Russian phrases); record the result here; then decide with the owner whether transcripts without a confidence need confirmation (`decideVoice` treats unknown confidence as unconfirmed; today it is only logged).
+
+## Amendment 2026-11-09: metering (audit REV-03)
+- Before audio leaves the server, the worst case (`STT_WORST_CASE_USD_PER_MINUTE`, default $0.02/min, 4x the pricing page's own ~$0.005/min estimate) is reserved on the same ledger as model calls (tenant monthly cap `LLM_TENANT_MONTHLY_BUDGET_USD`, conversation cap `LLM_CONVERSATION_BUDGET_USD`). A refused reservation means no provider call: the note is FAILED (`BUDGET_EXHAUSTED`) and the customer is asked to type.
+- Spend is the provider-reported tokens at the paid-tier prices of https://aistudio.google.com/docs/pricing.md read 2026-11-09: input (audio) $2.00, output (text, including thinking) $12.00 per 1M tokens; thought tokens are billed as output. The record is an `llm_usage_records` row with purpose `transcribe` and turn key `voice:<messageId>`. Without reported usage, or on a timeout or error, the worst case stays counted (reservation UNKNOWN).
+- Not done here: REV-01 (transcribing before the account's agent mode is checked) is a separate decision.
