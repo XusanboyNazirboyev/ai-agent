@@ -230,6 +230,11 @@ model Tenant {
   connectorSecrets ConnectorSecret[]
   operators       Operator[]
   contacts        Contact[]
+  serviceTypes    ServiceType[]
+  staffMembers    StaffMember[]
+  availabilityRules AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  appointments    Appointment[]
   conversations  Conversation[]
   messages        Message[]
   instagramComments InstagramComment[]
@@ -535,6 +540,7 @@ model Contact {
   conversations Conversation[]
   leads         Lead[]
   bookings      Booking[]
+  appointments  Appointment[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerUserId])
@@ -573,6 +579,7 @@ model Conversation {
   handovers Handover[]
   agentTurns AgentTurn[]
   actionProposals ActionProposal[]
+  appointments Appointment[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerChatId])
@@ -1274,4 +1281,130 @@ model InstagramComment {
   @@unique([tenantId, messageId])
   @@index([tenantId, channelAccountId, status, createdAt])
   @@map("instagram_comments")
+}
+
+enum AppointmentStatus {
+  HELD
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  EXPIRED
+}
+
+/// ADR 046: a bookable service with duration, buffers and required skills.
+model ServiceType {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  key                 String   @db.VarChar(100)
+  title               String   @db.VarChar(200)
+  durationMinutes     Int      @map("duration_minutes")
+  bufferBeforeMinutes Int      @default(0) @map("buffer_before_minutes")
+  bufferAfterMinutes  Int      @default(0) @map("buffer_after_minutes")
+  leadTimeMinutes     Int      @default(0) @map("lead_time_minutes")
+  requiredSkills      String[] @default([]) @map("required_skills")
+  catalogItemId       String?  @map("catalog_item_id") @db.Uuid
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  appointments Appointment[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, key])
+  @@map("service_types")
+}
+
+/// ADR 046: a person who performs services. Not an operator account.
+model StaffMember {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  displayName String   @map("display_name") @db.VarChar(200)
+  skills      String[] @default([])
+  /// IANA zone; null means the tenant timezone.
+  timezone    String?  @db.VarChar(64)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  rules        AvailabilityRule[]
+  exceptions   AvailabilityException[]
+  appointments Appointment[]
+
+  @@unique([tenantId, id])
+  @@map("staff_members")
+}
+
+/// Weekly working window in the staff member's local time (weekday 1=Mon..7=Sun).
+model AvailabilityRule {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  staffMemberId String      @map("staff_member_id") @db.Uuid
+  weekday       Int
+  startTime     String      @map("start_time") @db.VarChar(5)
+  endTime       String      @map("end_time") @db.VarChar(5)
+  validFrom     DateTime?   @map("valid_from") @db.Date
+  validUntil    DateTime?   @map("valid_until") @db.Date
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffMember   StaffMember @relation(fields: [tenantId, staffMemberId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, staffMemberId, weekday])
+  @@map("availability_rules")
+}
+
+/// Local date range that removes (leave, holiday) or adds working time.
+model AvailabilityException {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  staffMemberId String      @map("staff_member_id") @db.Uuid
+  startDate     DateTime    @map("start_date") @db.Date
+  endDate       DateTime    @map("end_date") @db.Date
+  /// Local time of day; both null means the whole day(s).
+  startTime     String?     @map("start_time") @db.VarChar(5)
+  endTime       String?     @map("end_time") @db.VarChar(5)
+  unavailable   Boolean     @default(true)
+  reason        String?     @db.VarChar(200)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffMember   StaffMember @relation(fields: [tenantId, staffMemberId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, staffMemberId, startDate])
+  @@map("availability_exceptions")
+}
+
+/// ADR 046. The exclusion constraint on (tenant, staff, blocked range) for
+/// HELD/CONFIRMED rows and the CHECK constraints are in the migration SQL.
+model Appointment {
+  id             String            @id @default(uuid(7)) @db.Uuid
+  tenantId       String            @map("tenant_id") @db.Uuid
+  serviceTypeId  String            @map("service_type_id") @db.Uuid
+  staffMemberId  String            @map("staff_member_id") @db.Uuid
+  contactId      String            @map("contact_id") @db.Uuid
+  conversationId String?           @map("conversation_id") @db.Uuid
+  startsAt       DateTime          @map("starts_at") @db.Timestamptz(6)
+  endsAt         DateTime          @map("ends_at") @db.Timestamptz(6)
+  blockedFrom    DateTime          @map("blocked_from") @db.Timestamptz(6)
+  blockedUntil   DateTime          @map("blocked_until") @db.Timestamptz(6)
+  status         AppointmentStatus @default(HELD)
+  holdExpiresAt  DateTime?         @map("hold_expires_at") @db.Timestamptz(6)
+  idempotencyKey String            @map("idempotency_key") @db.VarChar(200)
+  crmSyncStatus  CrmSyncStatus     @default(NOT_REQUIRED) @map("crm_sync_status")
+  crmExternalId  String?           @map("crm_external_id") @db.VarChar(200)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  serviceType    ServiceType       @relation(fields: [tenantId, serviceTypeId], references: [tenantId, id], onDelete: Restrict)
+  staffMember    StaffMember       @relation(fields: [tenantId, staffMemberId], references: [tenantId, id], onDelete: Restrict)
+  contact        Contact           @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
+  conversation   Conversation?     @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, staffMemberId, blockedFrom])
+  @@index([tenantId, status, holdExpiresAt])
+  @@map("appointments")
 }
