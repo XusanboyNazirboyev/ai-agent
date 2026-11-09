@@ -196,7 +196,12 @@ export interface CallRecordingStore {
 
 /** One utterance event the responder emits while a turn is generated. */
 export type ResponderEvent =
+  /** Streamed text; the orchestrator cuts it into sentences. */
   | { readonly type: 'text'; readonly text: string }
+  /** One sentence already checked and rendered; spoken as it is. */
+  | { readonly type: 'sentence'; readonly text: string }
+  /** "One moment" while the reply waits on a tool or a slow model. */
+  | { readonly type: 'filler'; readonly text: string }
   | { readonly type: 'handover'; readonly reason: string };
 
 export interface TurnInput {

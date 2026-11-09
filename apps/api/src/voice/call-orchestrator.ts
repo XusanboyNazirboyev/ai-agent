@@ -59,17 +59,25 @@ type Item =
 export class SentenceSplitter {
   private buffer = '';
 
+  /**
+   * A sentence ends at . ! ? … followed by whitespace. A period inside a word
+   * or number ("www.markaz.uz", "12.5") does not end it, and no text is ever
+   * dropped: everything before the end is part of the sentence. A period at
+   * the very end of the buffer waits for the next text (or `flush`).
+   */
   push(text: string): string[] {
     this.buffer += text;
     const out: string[] = [];
-    const re = /[^.!?…]+[.!?…]+(?=\s|$)/g;
-    let consumed = 0;
-    for (const m of this.buffer.matchAll(re)) {
-      out.push(m[0].trim());
-      consumed = (m.index ?? 0) + m[0].length;
+    const end = /[.!?…]+(?=\s)/gu;
+    let start = 0;
+    for (const m of this.buffer.matchAll(end)) {
+      const stop = (m.index ?? 0) + m[0].length;
+      const sentence = this.buffer.slice(start, stop).trim();
+      if (sentence.length > 0) out.push(sentence);
+      start = stop;
     }
-    this.buffer = this.buffer.slice(consumed);
-    return out.filter((s) => s.length > 0);
+    this.buffer = this.buffer.slice(start);
+    return out;
   }
 
   flush(): string | undefined {
@@ -241,7 +249,11 @@ export class CallOrchestrator {
     const { deps } = this;
     const abort = new AbortController();
     args.setAbort(abort);
-    const sentences = new AsyncQueue<string | null>();
+    // A filler is spoken but kept out of the turn's latency timeline.
+    const sentences = new AsyncQueue<{
+      readonly text: string;
+      readonly filler?: boolean;
+    } | null>();
     const splitter = new SentenceSplitter();
     let handoverRequested = false;
 
@@ -262,16 +274,30 @@ export class CallOrchestrator {
             handoverRequested = true;
             return;
           }
+          if (ev.type === 'filler') {
+            // Heard while the reply waits; not counted as the reply's latency.
+            sentences.push({ text: ev.text, filler: true });
+            continue;
+          }
           args.timeline.mark('llmFirstToken', deps.clock.now());
+          if (ev.type === 'sentence') {
+            // Already checked and rendered by the responder: spoken as is.
+            for (const s of [splitter.flush(), ev.text]) {
+              if (!s) continue;
+              args.timeline.mark('firstSentenceReady', deps.clock.now());
+              sentences.push({ text: s });
+            }
+            continue;
+          }
           for (const s of splitter.push(ev.text)) {
             args.timeline.mark('firstSentenceReady', deps.clock.now());
-            sentences.push(s);
+            sentences.push({ text: s });
           }
         }
         const rest = splitter.flush();
         if (rest) {
           args.timeline.mark('firstSentenceReady', deps.clock.now());
-          sentences.push(rest);
+          sentences.push({ text: rest });
         }
       } finally {
         sentences.push(null);
@@ -284,7 +310,10 @@ export class CallOrchestrator {
         const s = await sentences.next();
         if (s === null) return;
         if (abort.signal.aborted) continue; // drain
-        const ok = await args.speak(s, args.timeline);
+        const ok = await args.speak(
+          s.text,
+          s.filler ? undefined : args.timeline,
+        );
         if (!ok) abort.abort();
       }
     };

@@ -6,7 +6,13 @@ import {
   SentenceSplitter,
   type CallSummary,
 } from './call-orchestrator.js';
-import type { CallLeg, PlaybackRequest } from './ports.js';
+import type {
+  Clock,
+  CallLeg,
+  PlaybackRequest,
+  ResponderEvent,
+  TurnResponder,
+} from './ports.js';
 import type { HeardAudio } from './fakes.js';
 import {
   FakeStreamingResponder,
@@ -36,6 +42,7 @@ function setup(opts: {
   handoverOnTurns?: number[];
   answer?: string;
   chunkIntervalMs?: number;
+  responder?: (clock: Clock) => TurnResponder;
 }): Setup {
   const clock = new VirtualClock();
   const locale = opts.locale ?? 'uz-Latn';
@@ -45,11 +52,13 @@ function setup(opts: {
     clock,
     chunkIntervalMs: opts.chunkIntervalMs,
   });
-  const responder = new FakeStreamingResponder({
-    clock,
-    answer: opts.answer,
-    handoverOnTurns: opts.handoverOnTurns,
-  });
+  const responder =
+    opts.responder?.(clock) ??
+    new FakeStreamingResponder({
+      clock,
+      answer: opts.answer,
+      handoverOnTurns: opts.handoverOnTurns,
+    });
   const pack = INITIAL_LOCALE_PACKS.find((p) => p.id === locale)!;
   const orchestrator = new CallOrchestrator({
     clock,
@@ -88,6 +97,16 @@ describe('SentenceSplitter', () => {
     expect(sp.flush()).toBe('Yaxshi');
     expect(sp.flush()).toBeUndefined();
   });
+
+  it('never drops text before a period inside a word or number', () => {
+    const sp = new SentenceSplitter();
+    expect(sp.push('Sayt: www.markaz.uz.')).toEqual([]);
+    expect(sp.push(' Narx 12.5 ming. Ha')).toEqual([
+      'Sayt: www.markaz.uz.',
+      'Narx 12.5 ming.',
+    ]);
+    expect(sp.flush()).toBe('Ha');
+  });
 });
 
 describe('CallOrchestrator', () => {
@@ -112,6 +131,37 @@ describe('CallOrchestrator', () => {
     expect(summary.endedBy).toBe('caller');
     expect(summary.turns).toHaveLength(1);
     expect(summary.turns[0].isComplete()).toBe(true);
+  });
+
+  it('speaks a filler and checked sentences as given, filler outside the latency', async () => {
+    const s = setup({
+      responder: (clock) => ({
+        async *respond(): AsyncIterable<ResponderEvent> {
+          yield { type: 'filler', text: 'Bir daqiqa, tekshiryapman.' };
+          await clock.sleep(400);
+          yield { type: 'sentence', text: 'Ha, kurs bor' };
+          yield { type: 'sentence', text: 'Yana savol bormi?' };
+        },
+      }),
+    });
+    const { caller, call } = await startInbound(s);
+    const script = (async (): Promise<void> => {
+      await caller.waitForReply();
+      await caller.say('Ingliz tili kursi bormi?');
+      await caller.waitForReply();
+      caller.hangUp();
+    })();
+    const [summary] = await s.clock.runUntil(Promise.all([call, script]));
+    expect(summary.spoken.slice(1)).toEqual([
+      'Bir daqiqa, tekshiryapman.',
+      'Ha, kurs bor',
+      'Yana savol bormi?',
+    ]);
+    // First audio of the turn is the answer's, not the filler's.
+    const turn = summary.turns[0]!;
+    expect(turn.at('ttsFirstAudio')!).toBeGreaterThanOrEqual(
+      turn.at('llmFirstToken')!,
+    );
   });
 
   it('does not let the caller interrupt the consent prompt', async () => {
