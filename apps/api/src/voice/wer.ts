@@ -7,6 +7,7 @@
  * folded, so "to‘lasa", "to'lasa" and "toʻlasa" are one word. Numbers are
  * compared as written; no number normaliser yet.
  */
+import { uzCyrlToLatn } from '@agentcore/shared';
 
 /** U+2018, U+2019, U+0027, U+0060, U+02BB, U+02BC → U+02BB. */
 const APOSTROPHES = /[‘’'`ʻʼ]/gu;
@@ -162,4 +163,33 @@ export function matchToReferences(
     chosen.push(pair);
   }
   return chosen.sort((a, b) => a.recordingIndex - b.recordingIndex);
+}
+
+export type WerLanguage = 'uz-Latn' | 'uz-Cyrl' | 'ru';
+
+/**
+ * Language of a reference line, by its letters: Cyrillic with any of
+ * ў қ ғ ҳ is Uzbek Cyrillic, other Cyrillic is Russian, the rest Uzbek
+ * Latin. Good enough for grouping a WER report, not for routing.
+ */
+export function languageOfReference(text: string): WerLanguage {
+  if (!/[\u0400-\u04FF]/u.test(text)) return 'uz-Latn';
+  return /[ўқғҳЎҚҒҲ]/u.test(text) ? 'uz-Cyrl' : 'ru';
+}
+
+/**
+ * Uzbek word errors with both sides transliterated to Latin first, so a
+ * transcript in the wrong script is not counted as wrong words. The script
+ * mismatch itself is reported separately (D17). Uzbek lines only.
+ */
+export function scriptFoldedErrors(
+  reference: string,
+  hypothesis: string,
+): WordErrors {
+  return wordErrors(uzCyrlToLatn(reference), uzCyrlToLatn(hypothesis));
+}
+
+/** True when the text contains Cyrillic letters. */
+export function hasCyrillic(text: string): boolean {
+  return /[\u0400-\u04FF]/u.test(text);
 }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  languageOfReference,
   matchToReferences,
+  scriptFoldedErrors,
   normalizeForWer,
   parseWerScript,
   summarizeWer,
@@ -95,5 +97,35 @@ describe('matchToReferences', () => {
       refs,
     );
     expect(new Set(result.map((m) => m.referenceId)).size).toBe(2);
+  });
+});
+
+describe('languageOfReference', () => {
+  it('tells Uzbek Latin, Uzbek Cyrillic and Russian apart', () => {
+    expect(languageOfReference('Ingliz tili kursining narxi qancha?')).toBe(
+      'uz-Latn',
+    );
+    expect(languageOfReference('Ассалому алайкум, курслар қаерда?')).toBe(
+      'uz-Cyrl',
+    );
+    expect(languageOfReference('Можно записаться на пробный урок?')).toBe('ru');
+  });
+});
+
+describe('scriptFoldedErrors', () => {
+  it('scores Uzbek words regardless of the script they came back in', () => {
+    expect(
+      scriptFoldedErrors(
+        'Assalomu alaykum, IELTS kursi bormi?',
+        'Ассалому алайкум, IELTS курси борми?',
+      ),
+    ).toMatchObject({ substitutions: 0, deletions: 0, insertions: 0 });
+    // Exact scoring still counts the script mismatch as wrong words.
+    expect(
+      wordErrors(
+        'Assalomu alaykum, kursi bormi?',
+        'Ассалому алайкум, курси борми?',
+      ).substitutions,
+    ).toBe(4);
   });
 });

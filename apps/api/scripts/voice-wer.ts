@@ -36,7 +36,11 @@ import {
 import type { Clock } from '../src/voice/ports.js';
 import {
   errorCount,
+  hasCyrillic,
+  languageOfReference,
   matchToReferences,
+  scriptFoldedErrors,
+  type WerLanguage,
   parseWerScript,
   summarizeWer,
   type WerReference,
@@ -259,15 +263,24 @@ async function main(): Promise<void> {
 
   const results = files.map((file, i) => {
     const ref = mapping[i]!;
+    const language = languageOfReference(ref.text);
     const perRun = Object.fromEntries(
       runs.map((run) => {
-        const errors = wordErrors(ref.text, transcripts[run][i]!);
-        return [run, { transcript: transcripts[run][i]!, errors }];
+        const transcript = transcripts[run][i]!;
+        const errors = wordErrors(ref.text, transcript);
+        // Uzbek only: the same words in the other script are not wrong words.
+        const folded =
+          language === 'ru' ? errors : scriptFoldedErrors(ref.text, transcript);
+        const wrongScript =
+          language !== 'ru' &&
+          hasCyrillic(transcript) !== (language === 'uz-Cyrl');
+        return [run, { transcript, errors, folded, wrongScript }];
       }),
     );
     return {
       file,
       line: ref.id,
+      language,
       noisy: ref.noisy,
       reference: ref.text,
       perRun,
@@ -277,16 +290,30 @@ async function main(): Promise<void> {
 
   for (const r of results) {
     console.log(
-      `\n[${r.line}${r.noisy ? ' noise' : ''}] ${r.file} (${(r.durationMs / 1000).toFixed(1)} s)\n  ref: ${r.reference}`,
+      `\n[${r.line} ${r.language}${r.noisy ? ' noise' : ''}] ${r.file} (${(r.durationMs / 1000).toFixed(1)} s)\n  ref: ${r.reference}`,
     );
     for (const run of runs) {
-      const { transcript, errors } = r.perRun[run]!;
+      const { transcript, errors, folded, wrongScript } = r.perRun[run]!;
       console.log(
-        `  ${run.padEnd(18)} ${pct(werOf(errors)).padStart(6)} (${errorCount(errors)}/${errors.referenceWords})  ${transcript}`,
+        `  ${run.padEnd(18)} ${pct(werOf(errors)).padStart(6)} (${errorCount(errors)}/${errors.referenceWords}) script-folded ${pct(werOf(folded)).padStart(6)}${wrongScript ? ' WRONG-SCRIPT' : ''}  ${transcript}`,
       );
     }
   }
   console.log('\nSummary (corpus WER = all errors / all reference words)');
+  const groups: readonly WerLanguage[] = ['uz-Latn', 'uz-Cyrl', 'ru'];
+  for (const run of runs) {
+    for (const language of groups) {
+      const lines = results.filter((r) => r.language === language);
+      if (lines.length === 0) continue;
+      const exact = summarizeWer(lines.map((r) => r.perRun[run]!.errors));
+      const folded = summarizeWer(lines.map((r) => r.perRun[run]!.folded));
+      const wrong = lines.filter((r) => r.perRun[run]!.wrongScript).length;
+      console.log(
+        `  ${run.padEnd(18)} ${language.padEnd(7)} n=${lines.length} exact ${pct(exact.wer)} (S${exact.substitutions} D${exact.deletions} I${exact.insertions} / ${exact.referenceWords})${language === 'ru' ? '' : `  script-folded ${pct(folded.wer)}  wrong script ${wrong}/${lines.length}`}`,
+      );
+    }
+  }
+  console.log('Totals');
   for (const run of runs) {
     const all = summarizeWer(results.map((r) => r.perRun[run]!.errors));
     const quiet = summarizeWer(
