@@ -44,7 +44,8 @@ interface LeadPipelineItem {
   createdAt: Date;
   updatedAt: Date;
   contact: { name: string | null; phone: string | null };
-  conversation: { id: string; state: string };
+  /** `channelType` of the conversation's channel account (card badge). */
+  conversation: { id: string; state: string; channelType: string };
 }
 
 @Controller('api/v1/leads')
@@ -181,10 +182,26 @@ export class LeadPipelineController {
         createdAt: true,
         updatedAt: true,
         contact: { select: { name: true, phone: true } },
-        conversation: { select: { id: true, state: true } },
+        conversation: {
+          select: {
+            id: true,
+            state: true,
+            channelAccount: { select: { channelType: true } },
+          },
+        },
       },
     });
-    const items = rows.slice(0, limit);
+    const items = rows
+      .slice(0, limit)
+      .map(
+        ({ conversation: { channelAccount, ...conversation }, ...lead }) => ({
+          ...lead,
+          conversation: {
+            ...conversation,
+            channelType: channelAccount.channelType,
+          },
+        }),
+      );
     return {
       items,
       nextCursor: rows.length > limit ? items[items.length - 1].id : null,

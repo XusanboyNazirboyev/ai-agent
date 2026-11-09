@@ -10,6 +10,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { channelName } from '@/lib/channel-names';
 import type {
   ConversationState,
   LeadPipelineItem,
@@ -30,6 +31,13 @@ const STATE_TONE: Record<ConversationState, Tone> = {
   WAITING_OPERATOR: 'warning',
   OPERATOR_ACTIVE: 'accent',
   CLOSED: 'neutral',
+};
+/** Who answers the customer now (bot or a person); none once closed. */
+const OWNER_ICON: Record<ConversationState, string> = {
+  BOT_ACTIVE: '🤖',
+  WAITING_OPERATOR: '👤',
+  OPERATOR_ACTIVE: '👤',
+  CLOSED: '',
 };
 const SCORE_TONE: Record<LeadScore, Tone> = {
   HOT: 'danger',
@@ -243,7 +251,17 @@ function LeadCard(props: {
                 {t(`score.${props.item.score}`)}
               </Badge>
               <Badge tone={STATE_TONE[props.item.conversation.state]} dot>
+                {OWNER_ICON[props.item.conversation.state] ? (
+                  <span aria-hidden="true" data-testid="lead-card-owner">
+                    {OWNER_ICON[props.item.conversation.state]}
+                  </span>
+                ) : null}
                 {t(`state.${props.item.conversation.state}`)}
+              </Badge>
+              <Badge tone="neutral">
+                <span data-testid="lead-card-channel">
+                  {channelName(props.item.conversation.channelType)}
+                </span>
               </Badge>
             </span>
             <span className="text-xs text-muted">
