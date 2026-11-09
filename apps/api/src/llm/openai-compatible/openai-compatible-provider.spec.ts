@@ -283,6 +283,27 @@ describe('OpenAI-compatible adapter: request mapping', () => {
 });
 
 describe('OpenAI-compatible adapter: response mapping', () => {
+  it('reads text chunks of a reasoning reply and never returns the thinking (Mistral, observed 2026-11-09)', async () => {
+    const { llm } = provider([
+      {
+        body: completion({
+          content: [
+            {
+              type: 'thinking',
+              thinking: [{ type: 'text', text: 'secret plan' }],
+              closed: true,
+            },
+            { type: 'text', text: 'Assalomu alaykum!' },
+            { type: 'text', text: ' Yordam beraman.' },
+          ],
+        }),
+      },
+    ]);
+    const result = await llm.generateWithTools(toolRequest);
+    expect(result.text).toBe('Assalomu alaykum! Yordam beraman.');
+    expect(JSON.stringify(result)).not.toContain('secret plan');
+  });
+
   it('maps tool calls, ids, finish reasons and usage (cached tokens split out)', async () => {
     const { llm } = provider([
       {
@@ -596,6 +617,39 @@ describe('OpenAI-compatible adapter: errors and retries', () => {
       retryable: false,
     });
     expect(requests).toHaveLength(1);
+  });
+
+  it("treats Gemini's invalid-key 400 as an authentication failure, other 400s as invalid requests", () => {
+    // Observed live 2026-11-09 on the Gemini OpenAI-compatible endpoint: an
+    // invalid key answers HTTP 400, status INVALID_ARGUMENT, no details.
+    const geminiBody = [
+      {
+        error: {
+          code: 400,
+          message: 'API key not valid. Please pass a valid API key.',
+          status: 'INVALID_ARGUMENT',
+        },
+      },
+    ];
+    expect(errorFromResponse(400, geminiBody, null).code).toBe(
+      'LLM_AUTHENTICATION',
+    );
+    expect(errorFromResponse(400, geminiBody[0], null).code).toBe(
+      'LLM_AUTHENTICATION',
+    );
+    // A payload defect stays an invalid request (ADR 012: no failover).
+    expect(
+      errorFromResponse(
+        400,
+        {
+          error: {
+            message: 'messages[0] is invalid',
+            status: 'INVALID_ARGUMENT',
+          },
+        },
+        null,
+      ).code,
+    ).toBe('LLM_INVALID_REQUEST');
   });
 
   it('keeps error messages free of credentials', () => {

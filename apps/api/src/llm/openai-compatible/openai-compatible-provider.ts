@@ -93,6 +93,30 @@ const ToolCallSchema = z.object({
   }),
 });
 
+/**
+ * Message content: a string, or (reasoning models, e.g. Mistral
+ * `mistral-large-4`, observed 2026-11-09) an array of chunks such as
+ * `{type: 'thinking', thinking, closed}` and `{type: 'text', text}`. Only text
+ * chunks are the reply; thinking is never returned or shown.
+ */
+const ContentSchema = z.union([
+  z.string(),
+  z.array(
+    z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
+  ),
+]);
+
+function textOf(
+  content: z.infer<typeof ContentSchema> | null | undefined,
+): string {
+  if (content === null || content === undefined) return '';
+  if (typeof content === 'string') return content;
+  return content
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text)
+    .join('');
+}
+
 const ResponseSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
@@ -101,7 +125,7 @@ const ResponseSchema = z.object({
       z.object({
         finish_reason: z.string().nullable().optional(),
         message: z.object({
-          content: z.string().nullable().optional(),
+          content: ContentSchema.nullable().optional(),
           refusal: z.string().nullable().optional(),
           tool_calls: z.array(ToolCallSchema).nullable().optional(),
         }),
@@ -143,7 +167,7 @@ const ChunkSchema = z.object({
         finish_reason: z.string().nullable().optional(),
         delta: z
           .object({
-            content: z.string().nullable().optional(),
+            content: ContentSchema.nullable().optional(),
             refusal: z.string().nullable().optional(),
             tool_calls: z
               .array(
@@ -232,11 +256,24 @@ export function errorFromResponse(
   retryAfter: string | null,
   now: Date = new Date(),
 ): LlmError {
-  const parsed = ErrorBodySchema.safeParse(body);
+  // Google wraps the error object in an array on some endpoints.
+  const parsed = ErrorBodySchema.safeParse(
+    Array.isArray(body) ? body[0] : body,
+  );
   const error = parsed.success ? parsed.data.error : undefined;
   const label = describe(status, body);
   const wait = parseRetryAfterMs(retryAfter, now);
-  if (status === 401 || status === 403) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    // Gemini (OpenAI-compatible endpoint, observed 2026-11-09) answers an
+    // invalid key with 400 INVALID_ARGUMENT "API key not valid" and no
+    // structured reason. It is a credential failure, so the router may fail
+    // over (ADR 012); any other 400 stays an invalid request.
+    (status === 400 &&
+      error?.status === 'INVALID_ARGUMENT' &&
+      /\bAPI key\b/u.test(error.message ?? ''))
+  ) {
     return new LlmError(
       'LLM_AUTHENTICATION',
       `Provider rejected credentials (${label})`,
@@ -616,7 +653,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       request.signal,
     );
     const choice = data.choices[0];
-    const text = choice.message.content ?? '';
+    const text = textOf(choice.message.content);
     const base = {
       providerId: this.providerId,
       model: data.model ?? model,
@@ -773,9 +810,10 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       if (!choice) return false;
       if (choice.finish_reason) finish = choice.finish_reason;
       const delta = choice.delta;
-      if (delta?.content) {
-        text += delta.content;
-        onEvent({ type: 'text', delta: delta.content });
+      const piece = textOf(delta?.content);
+      if (piece) {
+        text += piece;
+        onEvent({ type: 'text', delta: piece });
       }
       if (delta?.refusal) refusal += delta.refusal;
       for (const part of delta?.tool_calls ?? []) {
@@ -879,7 +917,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         };
       },
     );
-    const text = choice.message.content ?? '';
+    const text = textOf(choice.message.content);
     const stopReason = choice.message.refusal
       ? 'refusal'
       : toolCalls.length > 0

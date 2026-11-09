@@ -176,6 +176,35 @@ describe('OpenAiCompatibleLlmProvider.streamWithTools', () => {
     expect(result.usage.estimated).toBeUndefined();
   });
 
+  it('streams only text, never thinking chunks (Mistral, observed 2026-11-09)', async () => {
+    const { llm } = provider([
+      {
+        events: sse(
+          chunk({
+            content: [
+              {
+                type: 'thinking',
+                thinking: [{ type: 'text', text: 'secret plan' }],
+              },
+            ],
+          }),
+          chunk({ content: 'Assalomu ' }),
+          chunk({ content: [{ type: 'text', text: 'alaykum!' }] }),
+          chunk({}, 'stop'),
+          '[DONE]',
+        ),
+      },
+    ]);
+    const events: LlmStreamEvent[] = [];
+    const result = await llm.streamWithTools(REQUEST, (e) => events.push(e));
+    expect(events).toEqual([
+      { type: 'text', delta: 'Assalomu ' },
+      { type: 'text', delta: 'alaykum!' },
+    ]);
+    expect(result.text).toBe('Assalomu alaykum!');
+    expect(JSON.stringify(result)).not.toContain('secret plan');
+  });
+
   it('assembles tool-call arguments split across chunks and signals the call once', async () => {
     const { llm } = provider([
       {
