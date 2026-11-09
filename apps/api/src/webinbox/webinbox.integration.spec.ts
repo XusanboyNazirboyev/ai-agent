@@ -1191,6 +1191,51 @@ describe('event stream resource accounting', () => {
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     bus.onModuleDestroy();
   });
+
+  it('streams only its own tenant’s events, also with a Last-Event-ID taken from another tenant', async () => {
+    const a = await world();
+    const b = await world();
+    const sa = await signIn(a);
+    const bus = new InboxEventBus(prisma);
+    const before = await events.latestId(a.tenantId);
+    await db.conversation.update({
+      where: { id: b.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    const bEvents = (await events.after(b.tenantId, before)).events;
+    expect(bEvents.length).toBeGreaterThan(0);
+    // Adversarial resume: tenant A replays from 0 and from B's own event id.
+    const streams: FakeResponse[] = [];
+    for (const lastEventId of ['0', String(bEvents[0]!.id)]) {
+      const response = new FakeResponse();
+      await controllerWith(bus).stream(
+        { principal: sa.principal } as never,
+        response as never,
+        lastEventId,
+        undefined,
+      );
+      expect(response.status).toBe(200);
+      streams.push(response);
+    }
+    await db.conversation.update({
+      where: { id: a.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    await db.conversation.update({
+      where: { id: b.conversationId },
+      data: { state: 'CLOSED' },
+    });
+    await bus.tick();
+    for (const response of streams)
+      await vi.waitFor(() =>
+        expect(response.frames.join('')).toContain(a.conversationId),
+      );
+    for (const response of streams) {
+      expect(response.frames.join('')).not.toContain(b.conversationId);
+      response.emit('close');
+    }
+    bus.onModuleDestroy();
+  });
 });
 
 describe('channels list', () => {

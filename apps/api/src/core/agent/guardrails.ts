@@ -48,6 +48,24 @@ const CURRENCY =
 const LEAK =
   /system prompt|<\/?(?:system|instructions?|tool_result|catalog_context|customer_message)>|\b(?:search_catalog|get_item_details|list_offers|check_availability|get_quote|knowledge_search)\b|\{\{(?!\s*F\d)/iu;
 
+/**
+ * AUD-10: a CRM item title is shown as written. A title that carries a
+ * currency or an availability phrase would state a price or availability
+ * without a typed, live fact, so a code-rendered list leaves it out.
+ */
+export function titleCarriesHardFact(
+  title: string,
+  locale: LocalePack,
+): boolean {
+  const text = unifyApostrophes(title).toLowerCase();
+  return (
+    CURRENCY.test(text) ||
+    Object.values(locale.templates.availability).some((phrase) =>
+      text.includes(unifyApostrophes(phrase).toLowerCase()),
+    )
+  );
+}
+
 export function checkDraft(
   draft: string,
   context: {
@@ -82,6 +100,15 @@ export function checkDraft(
       context.now,
     );
     if (value !== undefined) rendered.set(id, value);
+    // AUD-10: a title is shown as written; one that states a price or
+    // availability would bypass the typed, live price/availability facts.
+    const fact = context.facts.get(id);
+    if (fact?.value.kind === 'title') {
+      const title = unifyApostrophes(fact.value.text).toLowerCase();
+      if (CURRENCY.test(title)) violations.add('UNSOURCED_CURRENCY');
+      else if (titleCarriesHardFact(title, context.locale))
+        violations.add('UNSOURCED_AVAILABILITY');
+    }
   }
 
   // Everything below inspects only what the model wrote itself.

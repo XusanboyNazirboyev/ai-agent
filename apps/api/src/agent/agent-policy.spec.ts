@@ -31,6 +31,7 @@ import {
   type AgentModePolicy,
 } from './agent-mode.js';
 import {
+  educationConnector,
   extraction,
   LOCALES,
   runTurn,
@@ -358,6 +359,51 @@ describe('agent turn: disclosure, empty drafts, interrupted turns', () => {
     expect(result.outcome).toBe('FALLBACK');
     expect(result.reply).toContain('• IELTS Preparation');
     expect(result.regenerated).toBe(false);
+  });
+
+  // AUD-10: the fallback list is code-rendered from title facts and passes
+  // the same guardrail; a CRM title that carries a price or an availability
+  // claim is not shown (prices come only from typed, live price facts).
+  const emptyDraftTurn = (
+    titles: readonly string[],
+  ): ReturnType<typeof runTurn> =>
+    runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({ subject: 'IELTS' }),
+        { kind: 'tools', text: '' },
+      ]),
+      text: 'IELTS',
+      connector: educationConnector({
+        items: titles.map((title, i) => item(`aud10-${i}`, title)),
+      }),
+    });
+
+  it('drops a fallback title that carries a price, keeps the others (AUD-10)', async () => {
+    const { result } = await emptyDraftTurn([
+      "IELTS Intensive 500 000 so'm",
+      'IELTS General',
+    ]);
+    expect(result.outcome).toBe('FALLBACK');
+    expect(result.reply).toContain('• IELTS General');
+    expect(result.reply).not.toContain('500 000');
+    expect(result.reply).not.toMatch(/so'm/u);
+  });
+
+  it('drops a fallback title that claims availability (AUD-10)', async () => {
+    const { result } = await emptyDraftTurn([
+      'IELTS Evening joy bor',
+      'IELTS General',
+    ]);
+    expect(result.reply).toContain('• IELTS General');
+    expect(result.reply).not.toContain('joy bor');
+  });
+
+  it('shows no option list when every title is unsafe (AUD-10)', async () => {
+    const { result } = await emptyDraftTurn(['IELTS $300']);
+    expect(result.outcome).toBe('FALLBACK');
+    expect(result.reply).not.toContain('$');
+    expect(result.reply).not.toContain(UZ_LATN.templates.optionsIntro);
+    expect(result.reply.trim()).not.toBe('');
   });
 
   it('builds a LLM_UNAVAILABLE handover for a turn cut off by its deadline', () => {

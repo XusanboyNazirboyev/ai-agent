@@ -35,7 +35,11 @@ import {
 } from '../actions/actions.js';
 import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
 import { FactStore, type Fact } from './facts.js';
-import { checkDraft, type GuardrailViolation } from './guardrails.js';
+import {
+  checkDraft,
+  titleCarriesHardFact,
+  type GuardrailViolation,
+} from './guardrails.js';
 import {
   chooseLocale,
   detectLanguage,
@@ -789,20 +793,63 @@ export async function runAgentTurn(
     );
   }
 
+  // 6. Guardrail (also for the code-rendered fallback below), one
+  // regeneration, then a safe code-rendered fallback.
+  const guard = (text: string): ReturnType<typeof checkDraft> =>
+    checkDraft(text, {
+      facts,
+      locale: locale(),
+      customerTexts: [
+        input.customerText,
+        ...input.history
+          .filter((h) => h.role === 'customer')
+          .map((h) => h.text),
+      ],
+      timeZone: input.timeZone,
+      now: now(),
+      evidence: {
+        tenantId: deps.scope.tenantId,
+        conversationId: deps.scope.conversationId,
+        policy: displayPolicyFor(
+          // Strictest policy when no connector is wired (cannot happen here:
+          // a draft exists only after a connector search).
+          deps.connector?.capabilities ?? {
+            liveQuote: true,
+            availability: true,
+          },
+          deps.displayPolicy,
+        ),
+      },
+    });
   const quoteMissing = firstMissing(pack, slots, 'quote');
   const nextQuestion = quoteMissing?.questions[localeId];
   const fallback = (extra: Partial<AgentTurnResult> = {}): AgentTurnResult => {
-    const lines = search.ok
-      ? search.items
-          .slice(0, pack.maxOptionsShown)
-          .map((item) => `• ${item.title}`)
-      : [];
     const tail = nextQuestion ?? locale().templates.offerOperator;
-    return finish(
-      [locale().templates.optionsIntro, ...lines, tail].join('\n'),
-      'FALLBACK',
-      extra,
-    );
+    // AUD-10: options are title-fact references rendered by code and passed
+    // through the same guardrail and display gate as a model draft; a title
+    // that states a price or availability is left out.
+    const lines = search.ok
+      ? search.items.slice(0, pack.maxOptionsShown).flatMap((item) => {
+          if (titleCarriesHardFact(item.title, locale())) return [];
+          const fact = [...facts.list()]
+            .reverse()
+            .find(
+              (f) =>
+                f.value.kind === 'title' &&
+                f.value.text === item.title &&
+                f.provenance.sourceEntityId === item.sourceEntityId,
+            );
+          return fact ? [`• {{${fact.id}}}`] : [];
+        })
+      : [];
+    const checked =
+      lines.length > 0
+        ? guard([locale().templates.optionsIntro, ...lines, tail].join('\n'))
+        : undefined;
+    return finish(checked?.rendered ?? tail, 'FALLBACK', {
+      ...extra,
+      shownFactIds: [...(checked?.references ?? [])],
+    });
   };
 
   // 5. Model-proposed tool calls and the reply draft. Items the code found
@@ -830,33 +877,6 @@ export async function runAgentTurn(
   // option list, which contains only connector facts.
   if (draft.kind !== 'draft' || draft.text.trim() === '') return fallback();
 
-  // 6. Guardrail, one regeneration, then a safe code-rendered fallback.
-  const guard = (text: string): ReturnType<typeof checkDraft> =>
-    checkDraft(text, {
-      facts,
-      locale: locale(),
-      customerTexts: [
-        input.customerText,
-        ...input.history
-          .filter((h) => h.role === 'customer')
-          .map((h) => h.text),
-      ],
-      timeZone: input.timeZone,
-      now: now(),
-      evidence: {
-        tenantId: deps.scope.tenantId,
-        conversationId: deps.scope.conversationId,
-        policy: displayPolicyFor(
-          // Strictest policy when no connector is wired (cannot happen here:
-          // a draft exists only after a connector search).
-          deps.connector?.capabilities ?? {
-            liveQuote: true,
-            availability: true,
-          },
-          deps.displayPolicy,
-        ),
-      },
-    });
   let checked = guard(draft.text);
   const firstViolations = checked.violations;
   let regenerated = false;
