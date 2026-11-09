@@ -191,6 +191,12 @@ const environmentSchema = postgresEnvironmentSchema
      * transcript; `accept`: transcripts are used like typed text.
      */
     VOICE_DIGITS_POLICY: z.enum(['typed', 'accept']).default('typed'),
+    /**
+     * ADR 042: backup speech-to-text when Gemini errors or times out.
+     * `elevenlabs` (default) is active only when ELEVENLABS_API_KEY is set.
+     */
+    STT_FALLBACK: z.enum(['none', 'elevenlabs']).default('elevenlabs'),
+    ELEVENLABS_API_KEY: z.string().min(1).optional(),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z

@@ -15,6 +15,8 @@ import {
 } from '../../core/speech/speech-to-text.js';
 import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { ElevenLabsSpeechToText } from '../../speech/elevenlabs-speech-to-text.js';
+import { FallbackSpeechToText } from '../../speech/fallback-speech-to-text.js';
 import {
   GeminiSpeechToText,
   sdkTranscribeCall,
@@ -30,6 +32,39 @@ export function sttApiKey(env: {
   readonly GEMINI_API_KEY?: string | undefined;
 }): string | undefined {
   return env.STT_API_KEY || env.GEMINI_API_KEY || undefined;
+}
+
+/**
+ * The voice-note STT the environment asks for: Gemini (the best measured on
+ * the owner's recordings), with ElevenLabs Scribe as backup when its key is
+ * set and STT_FALLBACK is not `none`; otherwise not configured.
+ */
+export function buildSpeechToText(env: {
+  readonly STT_PROVIDER?: string | undefined;
+  readonly STT_MODEL?: string | undefined;
+  readonly STT_API_KEY?: string | undefined;
+  readonly GEMINI_API_KEY?: string | undefined;
+  readonly STT_FALLBACK?: string | undefined;
+  readonly ELEVENLABS_API_KEY?: string | undefined;
+}): SpeechToText {
+  const key = sttApiKey(env);
+  if (env.STT_PROVIDER !== 'gemini' || !key)
+    return new NotConfiguredSpeechToText();
+  const gemini = new GeminiSpeechToText(
+    sdkTranscribeCall(key),
+    env.STT_MODEL ?? 'gemini-3.5-transcribe',
+    DEFAULT_VOICE_POLICY.timeoutMs,
+  );
+  if (env.STT_FALLBACK === 'none' || !env.ELEVENLABS_API_KEY) return gemini;
+  return new FallbackSpeechToText(
+    gemini,
+    new ElevenLabsSpeechToText({
+      apiKey: env.ELEVENLABS_API_KEY,
+      timeoutMs: DEFAULT_VOICE_POLICY.timeoutMs,
+    }),
+    // ElevenLabs' own language detection mislabelled Uzbek as Turkish.
+    'uz-Latn',
+  );
 }
 
 /** Optional override of the speech-to-text adapter (tests). */
@@ -56,20 +91,16 @@ export class VoiceTranscriptionService {
     @Optional() @Inject(SPEECH_TO_TEXT) stt?: SpeechToText,
     @Optional() private readonly ledger?: LlmBudgetLedger,
   ) {
-    const provider = config.get('STT_PROVIDER', { infer: true });
-    const key = sttApiKey({
-      STT_API_KEY: config.get('STT_API_KEY', { infer: true }),
-      GEMINI_API_KEY: config.get('GEMINI_API_KEY', { infer: true }),
-    });
     this.stt =
       stt ??
-      (provider === 'gemini' && key
-        ? new GeminiSpeechToText(
-            sdkTranscribeCall(key),
-            config.get('STT_MODEL', { infer: true }),
-            DEFAULT_VOICE_POLICY.timeoutMs,
-          )
-        : new NotConfiguredSpeechToText());
+      buildSpeechToText({
+        STT_PROVIDER: config.get('STT_PROVIDER', { infer: true }),
+        STT_MODEL: config.get('STT_MODEL', { infer: true }),
+        STT_API_KEY: config.get('STT_API_KEY', { infer: true }),
+        GEMINI_API_KEY: config.get('GEMINI_API_KEY', { infer: true }),
+        STT_FALLBACK: config.get('STT_FALLBACK', { infer: true }),
+        ELEVENLABS_API_KEY: config.get('ELEVENLABS_API_KEY', { infer: true }),
+      });
   }
 
   async resolvePending(
