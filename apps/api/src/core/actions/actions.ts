@@ -6,6 +6,10 @@ import {
 } from '@agentcore/shared';
 import type { LocaleId, LocalePack } from '../locales/locale-pack.js';
 import type { SlotState } from '../agent/slots.js';
+import type {
+  PendingScheduling,
+  SchedulingOperation,
+} from '../scheduling/scheduling-render.js';
 
 /**
  * Business actions in the agent turn (ADR 022/024). Pure and generic: the
@@ -25,6 +29,8 @@ export interface PendingProposal {
   readonly id: string;
   readonly actionKey: string;
   readonly digest: string;
+  /** ADR 046: set when the proposal is a scheduling change (no connector write). */
+  readonly scheduling?: PendingScheduling;
 }
 
 export interface ActionTurnContext {
@@ -58,6 +64,16 @@ export type ActionDecision =
       readonly kind: 'CONFIRM';
       readonly proposalId: string;
       readonly digest: string;
+    }
+  | {
+      /** ADR 046: a booking, cancellation or reschedule awaiting confirmation. */
+      readonly kind: 'PROPOSE_SCHEDULED';
+      readonly operation: SchedulingOperation;
+      readonly appointmentId: string;
+      readonly replacesAppointmentId?: string;
+      readonly digest: string;
+      readonly expiresAtIso: string;
+      readonly supersedes?: string;
     }
   | { readonly kind: 'DECLINE'; readonly proposalId: string }
   | { readonly kind: 'SUPERSEDE'; readonly proposalId: string };

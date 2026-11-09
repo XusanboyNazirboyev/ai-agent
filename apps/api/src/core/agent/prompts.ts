@@ -33,7 +33,8 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
   details: 'asks about details of an item',
   price: 'asks about price or cost',
   availability: 'asks about free places, dates or schedule',
-  booking_interest: 'wants to enrol, book or sign up',
+  booking_interest:
+    'wants to enrol, book, reserve or sign up, or to change or cancel such a booking or appointment',
   human_request: 'asks for a human, operator or manager',
   complaint:
     'complains about the business itself (service, money, quality, a broken promise) or wants to file a complaint',
@@ -148,6 +149,39 @@ export function responseUserMessage(input: {
     input.nextQuestion
       ? `If you need one more detail, ask exactly this: ${input.nextQuestion}`
       : 'Do not ask for more details unless the customer needs to choose between options.',
+  ].join('\n');
+}
+
+/**
+ * ADR 046: the reply prompt of a scheduling turn. It extends the standard
+ * rules; times and staff names stay fact references, and the system (not the
+ * model) asks the customer to confirm any hold, cancellation or move.
+ */
+export function schedulingSystemPrompt(
+  pack: DomainPack,
+  locale: LocalePack,
+  today: { readonly date: string; readonly weekday: string },
+): string {
+  return [
+    responseSystemPrompt(pack, locale),
+    'Appointment scheduling:',
+    '- Use knowledge_search for policies and rules (for example the cancellation policy) and the scheduling tools for times. Never take a time from a knowledge passage, and never write a time yourself.',
+    '- To offer times call find_slots with a serviceKey from <scheduling_context>; write each slot only as its whenFact and staffFact references. Offer at most 5 slots and ask which one suits.',
+    '- When the customer picks a slot, call book_slot with its slotId exactly as returned by find_slots. To cancel or move an appointment of theirs use cancel_booking or reschedule_booking with a bookingId from <scheduling_context>.',
+    '- After book_slot, cancel_booking or reschedule_booking succeeds, stop: the system asks the customer to confirm. Never say that an appointment is booked, cancelled or moved yourself.',
+    `- Today is ${today.date} (${today.weekday}) in the business time zone; use it only to fill preferredDate as YYYY-MM-DD.`,
+  ].join('\n');
+}
+
+export function schedulingUserMessage(input: {
+  readonly history: readonly HistoryEntry[];
+  readonly latest: string;
+  readonly schedulingContext: string;
+}): string {
+  return [
+    historyBlock(input.history),
+    `<latest_customer_message>${sanitize(input.latest)}</latest_customer_message>`,
+    `<scheduling_context>${input.schedulingContext}</scheduling_context>`,
   ].join('\n');
 }
 

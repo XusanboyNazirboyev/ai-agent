@@ -125,6 +125,26 @@ export interface LocaleTemplates {
     /** The confirmed proposal had expired or changed; nothing was sent. */
     readonly expired: string;
   };
+  /**
+   * ADR 046: appointment scheduling texts, rendered by code. Placeholders
+   * `{service}`, `{when}`, `{staff}` and `{previous}` are replaced with
+   * values from the scheduling facts (never typed by the model).
+   */
+  readonly scheduling: {
+    readonly bookProposal: string;
+    readonly cancelProposal: string;
+    readonly rescheduleProposal: string;
+    readonly booked: string;
+    readonly cancelled: string;
+    readonly rescheduled: string;
+    /** The customer declined a booking or reschedule; the held time is released. */
+    readonly released: string;
+    /** The customer declined a cancellation. */
+    readonly kept: string;
+    /** The hold lapsed before the customer confirmed; new times are offered. */
+    readonly holdExpired: string;
+    readonly notAvailableAnymore: string;
+  };
   readonly labels: {
     readonly price: string;
     readonly seats: string;

@@ -241,10 +241,16 @@ const item = (
 });
 
 describe('tool outcomes, side effects and untrusted data', () => {
-  it('declares every tool READ-only', () => {
-    expect(new Set(Object.values(TOOL_SIDE_EFFECTS))).toEqual(
-      new Set(['READ']),
-    );
+  it('declares every connector tool READ-only; only scheduling tools hold or prepare changes', () => {
+    const notRead = Object.entries(TOOL_SIDE_EFFECTS)
+      .filter(([, effect]) => effect !== 'READ')
+      .map(([name]) => name)
+      .sort();
+    expect(notRead).toEqual([
+      'book_slot',
+      'cancel_booking',
+      'reschedule_booking',
+    ]);
   });
 
   it('reports typed outcomes with redacted input', async () => {

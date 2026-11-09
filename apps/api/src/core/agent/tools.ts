@@ -28,7 +28,12 @@ import type {
   KnowledgeSearchResult,
 } from '../knowledge/passage.js';
 import type { LlmToolDefinition } from '../llm/llm-provider.js';
-import type { FactProvenance, FactStore } from './facts.js';
+import type {
+  SchedulingChange,
+  SchedulingFailure,
+  SchedulingPort,
+} from '../scheduling/scheduling-port.js';
+import type { FactProvenance, FactStore, FactValue } from './facts.js';
 import { redactedSummary } from './redaction.js';
 import type { SlotState } from './slots.js';
 import { searchQuery } from './slots.js';
@@ -63,6 +68,12 @@ export const TOOL_SIDE_EFFECTS: Readonly<
   check_availability: 'READ',
   get_quote: 'READ',
   knowledge_search: 'READ',
+  find_slots: 'READ',
+  // Hold a slot / prepare a change only; the customer's confirmation (code
+  // detected, ADR 024) is what makes it real.
+  book_slot: 'WRITE_IDEMPOTENT',
+  cancel_booking: 'WRITE_IDEMPOTENT',
+  reschedule_booking: 'WRITE_IDEMPOTENT',
 };
 
 /**
@@ -84,6 +95,7 @@ export type ToolErrorCode =
   | 'UNKNOWN_REFERENCE'
   | 'DUPLICATE_CALL'
   | 'TIMEOUT'
+  | 'SLOT_TAKEN'
   | 'NOT_FOUND'
   | 'STALE'
   | 'INVALID_OUTPUT'
@@ -96,6 +108,7 @@ const OUTCOME_OF_ERROR: Readonly<Record<ToolErrorCode, ToolOutcomeType>> = {
   UNKNOWN_REFERENCE: 'REJECTED',
   DUPLICATE_CALL: 'REJECTED',
   TIMEOUT: 'UNAVAILABLE',
+  SLOT_TAKEN: 'STALE',
   UNAVAILABLE: 'UNAVAILABLE',
   NOT_FOUND: 'NOT_FOUND',
   STALE: 'STALE',
@@ -143,6 +156,8 @@ export interface ToolContext {
   readonly now: () => Date;
   /** Retrieval over textual knowledge; absent = the tool is not offered. */
   readonly knowledge?: KnowledgeSearch;
+  /** Appointment scheduling (ADR 046); absent = the four tools are not offered. */
+  readonly scheduling?: SchedulingPort;
   /** Turn scope stamped on every fact; checked again by the display gate. */
   readonly scope: {
     readonly tenantId: string;
@@ -151,6 +166,8 @@ export interface ToolContext {
 }
 
 const ID = z.string().min(1).max(300);
+/** Opaque slot reference issued by the scheduling port. */
+const SLOT_ID = z.string().min(8).max(200);
 const INPUTS = {
   search_catalog: z.object({ query: z.string().min(1).max(120) }).strict(),
   get_item_details: z.object({ itemId: ID }).strict(),
@@ -158,7 +175,31 @@ const INPUTS = {
   check_availability: z.object({ offerId: ID }).strict(),
   get_quote: z.object({ offerId: ID }).strict(),
   knowledge_search: z.object({ query: z.string().min(2).max(200) }).strict(),
+  find_slots: z
+    .object({
+      serviceKey: z.string().min(1).max(80),
+      preferredDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/u)
+        .optional(),
+      partOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
+    })
+    .strict(),
+  book_slot: z.object({ slotId: SLOT_ID }).strict(),
+  cancel_booking: z.object({ bookingId: ID }).strict(),
+  reschedule_booking: z.object({ bookingId: ID, slotId: SLOT_ID }).strict(),
 } as const;
+
+const SCHEDULING_TOOLS: ReadonlySet<AgentToolName> = new Set<AgentToolName>([
+  'find_slots',
+  'book_slot',
+  'cancel_booking',
+  'reschedule_booking',
+]);
+
+const SCHEDULING_SOURCE = 'agentcore-scheduling';
+const MAX_SLOTS_SHOWN = 5;
+const CANCEL_PROPOSAL_MINUTES = 10;
 
 const idSchema = (
   name: string,
@@ -222,6 +263,66 @@ const DEFINITIONS: Readonly<Record<AgentToolName, LlmToolDefinition>> = {
     description: 'Get a live, confirmed price quote for one offer.',
     inputSchema: idSchema('offerId', 'offerId exactly as given by list_offers'),
   },
+  find_slots: {
+    name: 'find_slots',
+    description:
+      'Find free appointment times for one service. Returns at most 5 slots with time and staff fact references. Never use it for anything but appointment times.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['serviceKey'],
+      properties: {
+        serviceKey: {
+          type: 'string',
+          description: 'serviceKey exactly as listed in the scheduling context',
+        },
+        preferredDate: {
+          type: 'string',
+          description: 'Optional local date, YYYY-MM-DD',
+        },
+        partOfDay: {
+          type: 'string',
+          enum: ['morning', 'afternoon', 'evening'],
+          description: 'Optional part of the day',
+        },
+      },
+    },
+  },
+  book_slot: {
+    name: 'book_slot',
+    description:
+      'Hold one slot returned by find_slots for the customer. The customer must still confirm in their next message; the system asks them.',
+    inputSchema: idSchema('slotId', 'slotId exactly as returned by find_slots'),
+  },
+  cancel_booking: {
+    name: 'cancel_booking',
+    description:
+      "Prepare the cancellation of one of the customer's own upcoming appointments. The customer must still confirm; the system asks them.",
+    inputSchema: idSchema(
+      'bookingId',
+      'bookingId exactly as listed in the scheduling context',
+    ),
+  },
+  reschedule_booking: {
+    name: 'reschedule_booking',
+    description:
+      "Move one of the customer's own upcoming appointments to a new slot returned by find_slots. The customer must still confirm; the system asks them.",
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['bookingId', 'slotId'],
+      properties: {
+        bookingId: {
+          type: 'string',
+          description: 'bookingId exactly as listed in the scheduling context',
+        },
+        slotId: {
+          type: 'string',
+          description: 'slotId exactly as returned by find_slots',
+        },
+      },
+    },
+  },
 };
 
 function supported(connector: CrmConnector, name: AgentToolName): boolean {
@@ -247,6 +348,11 @@ function supported(connector: CrmConnector, name: AgentToolName): boolean {
       );
     case 'knowledge_search':
       return false; // offered only when a retrieval port is present
+    case 'find_slots':
+    case 'book_slot':
+    case 'cancel_booking':
+    case 'reschedule_booking':
+      return false; // offered only when a scheduling port is present
   }
 }
 
@@ -256,6 +362,8 @@ export class AgentTools {
   private readonly seenCalls = new Set<string>();
   readonly trace: ToolTraceEntry[] = [];
   private readonly withheld = new Set<AgentToolName>();
+  private readonly knownBookings = new Set<string>();
+  private pendingChange: SchedulingChange | undefined;
 
   constructor(private readonly context: ToolContext) {}
 
@@ -266,7 +374,9 @@ export class AgentTools {
         ? false
         : name === 'knowledge_search'
           ? this.context.knowledge !== undefined
-          : supported(this.context.connector, name),
+          : SCHEDULING_TOOLS.has(name)
+            ? this.context.scheduling !== undefined
+            : supported(this.context.connector, name),
     );
   }
 
@@ -281,6 +391,15 @@ export class AgentTools {
 
   definitions(): LlmToolDefinition[] {
     return this.available().map((name) => DEFINITIONS[name]);
+  }
+
+  /**
+   * The change (booking, cancellation, reschedule) a scheduling tool prepared
+   * this turn. When set, code asks the customer to confirm it; the model's own
+   * wording is not used.
+   */
+  get schedulingChange(): SchedulingChange | undefined {
+    return this.pendingChange;
   }
 
   private provenance(
@@ -569,6 +688,8 @@ export class AgentTools {
 
     if (tool === 'knowledge_search')
       return this.runKnowledge(input.query, started);
+    if (SCHEDULING_TOOLS.has(tool))
+      return this.runScheduling(tool, input, started);
     const { connector, pack } = this.context;
     switch (tool) {
       case 'search_catalog':
@@ -612,6 +733,269 @@ export class AgentTools {
           'quote',
           input.offerId,
         );
+      case 'find_slots':
+      case 'book_slot':
+      case 'cancel_booking':
+      case 'reschedule_booking':
+        return this.fail(name, 'model', 'UNSUPPORTED', started, input);
+    }
+  }
+
+  private schedulingFact(
+    tool: string,
+    entityId: string,
+    value: FactValue,
+  ): string {
+    return this.context.facts.add(
+      value,
+      this.provenance(tool, entityId, SCHEDULING_SOURCE, undefined, {
+        offerId: entityId,
+      }),
+    );
+  }
+
+  private appointmentFacts(
+    tool: string,
+    view: {
+      readonly bookingId: string;
+      readonly serviceTitle: string;
+      readonly staffName: string;
+      readonly startsAtIso: string;
+    },
+  ): { serviceFact: string; whenFact: string; staffFact: string } {
+    return {
+      serviceFact: this.schedulingFact(tool, view.bookingId, {
+        kind: 'title',
+        text: view.serviceTitle,
+      }),
+      whenFact: this.schedulingFact(tool, view.bookingId, {
+        kind: 'datetime',
+        iso: view.startsAtIso,
+      }),
+      staffFact: this.schedulingFact(tool, view.bookingId, {
+        kind: 'title',
+        text: view.staffName,
+      }),
+    };
+  }
+
+  /**
+   * Code-initiated: the services the tenant offers and the customer's own
+   * upcoming appointments, as facts for the prompt. Booking ids listed here
+   * are the only ones cancel_booking / reschedule_booking accept.
+   */
+  async schedulingContext(): Promise<string> {
+    const port = this.context.scheduling;
+    if (!port) return promptSafeJson({ services: [], myBookings: [] });
+    const started = Date.now();
+    this.context.budget.countToolCall();
+    let upcoming: Awaited<ReturnType<SchedulingPort['upcoming']>> = [];
+    let status: 'ok' | 'error' = 'ok';
+    try {
+      upcoming = await this.withTimeout(port.upcoming());
+    } catch {
+      status = 'error';
+    }
+    this.trace.push({
+      name: 'list_bookings',
+      origin: 'code',
+      status,
+      outcome: status === 'ok' ? 'FOUND' : 'UNAVAILABLE',
+      ...(status === 'error' ? { code: 'UNAVAILABLE' as const } : {}),
+      input: {},
+      durationMs: Date.now() - started,
+    });
+    return promptSafeJson({
+      services: port.serviceTypes.map((service) => ({
+        serviceKey: service.key,
+        serviceFact: this.context.facts.add(
+          { kind: 'title', text: service.title },
+          this.provenance(
+            'find_slots',
+            `service:${service.key}`,
+            SCHEDULING_SOURCE,
+          ),
+        ),
+      })),
+      myBookings: upcoming.map((booking) => {
+        this.knownBookings.add(booking.bookingId);
+        return {
+          bookingId: booking.bookingId,
+          ...this.appointmentFacts('list_bookings', booking),
+        };
+      }),
+    });
+  }
+
+  private schedulingFailure(
+    name: string,
+    failure: SchedulingFailure,
+    started: number,
+    input: Readonly<Record<string, unknown>>,
+  ): ToolOutcome {
+    const code: ToolErrorCode =
+      failure === 'SLOT_TAKEN'
+        ? 'SLOT_TAKEN'
+        : failure === 'SLOT_UNAVAILABLE'
+          ? 'UNKNOWN_REFERENCE'
+          : failure === 'NOT_FOUND'
+            ? 'NOT_FOUND'
+            : 'UNAVAILABLE';
+    return this.fail(name, 'model', code, started, input);
+  }
+
+  /** The four scheduling tools; the port is already tenant- and customer-scoped. */
+  private async runScheduling(
+    tool: AgentToolName,
+    input: Record<string, string>,
+    started: number,
+  ): Promise<ToolOutcome> {
+    const port = this.context.scheduling!;
+    // One prepared change per turn: the customer confirms exactly one thing.
+    if (tool !== 'find_slots' && this.pendingChange)
+      return this.fail(tool, 'model', 'DUPLICATE_CALL', started, input);
+    if (
+      tool === 'find_slots' &&
+      !port.serviceTypes.some((service) => service.key === input.serviceKey)
+    )
+      return this.fail(tool, 'model', 'UNKNOWN_REFERENCE', started, input);
+    if (
+      (tool === 'cancel_booking' || tool === 'reschedule_booking') &&
+      !this.knownBookings.has(input.bookingId)
+    )
+      return this.fail(tool, 'model', 'UNKNOWN_REFERENCE', started, input);
+    this.context.budget.countToolCall();
+    const ok = (outcome: ToolOutcomeType, summary: string): ToolOutcome => {
+      this.trace.push({
+        name: tool,
+        origin: 'model',
+        status: 'ok',
+        outcome,
+        input: redactedSummary(input),
+        durationMs: Date.now() - started,
+      });
+      return { ok: true, outcome, summary, items: [] };
+    };
+    const expiry = (minutes: number): string =>
+      new Date(this.context.now().getTime() + minutes * 60_000).toISOString();
+    try {
+      if (tool === 'find_slots') {
+        const found = await this.withTimeout(
+          port.findSlots({
+            serviceKey: input.serviceKey,
+            ...(input.preferredDate
+              ? { preferredDate: input.preferredDate }
+              : {}),
+            ...(input.partOfDay
+              ? { partOfDay: input.partOfDay as 'morning' }
+              : {}),
+            limit: MAX_SLOTS_SHOWN,
+          }),
+        );
+        if (!found.ok)
+          return this.schedulingFailure(tool, found.code, started, input);
+        const slots = found.value.slice(0, MAX_SLOTS_SHOWN);
+        return ok(
+          slots.length > 0 ? 'FOUND' : 'NOT_FOUND',
+          promptSafeJson({
+            slots: slots.map((slot) => ({
+              slotId: slot.slotId,
+              whenFact: this.schedulingFact(tool, slot.slotId, {
+                kind: 'datetime',
+                iso: slot.startsAtIso,
+              }),
+              staffFact: this.schedulingFact(tool, slot.slotId, {
+                kind: 'title',
+                text: slot.staffName,
+              }),
+            })),
+          }),
+        );
+      }
+      if (tool === 'book_slot') {
+        const held = await this.withTimeout(port.hold(input.slotId));
+        if (!held.ok)
+          return this.schedulingFailure(tool, held.code, started, input);
+        const { appointment, holdExpiresAtIso } = held.value;
+        this.pendingChange = {
+          operation: 'book',
+          appointmentId: appointment.bookingId,
+          view: {
+            serviceTitle: appointment.serviceTitle,
+            staffName: appointment.staffName,
+            startsAtIso: appointment.startsAtIso,
+          },
+          expiresAtIso: holdExpiresAtIso,
+        };
+        return ok(
+          'FOUND',
+          promptSafeJson({
+            status: 'AWAITING_CUSTOMER_CONFIRMATION',
+            ...this.appointmentFacts(tool, appointment),
+          }),
+        );
+      }
+      if (tool === 'cancel_booking') {
+        const target = await this.withTimeout(
+          port.prepareCancel(input.bookingId),
+        );
+        if (!target.ok)
+          return this.schedulingFailure(tool, target.code, started, input);
+        const view = target.value;
+        this.pendingChange = {
+          operation: 'cancel',
+          appointmentId: view.bookingId,
+          view: {
+            serviceTitle: view.serviceTitle,
+            staffName: view.staffName,
+            startsAtIso: view.startsAtIso,
+          },
+          expiresAtIso: expiry(CANCEL_PROPOSAL_MINUTES),
+        };
+        return ok(
+          'FOUND',
+          promptSafeJson({
+            status: 'AWAITING_CUSTOMER_CONFIRMATION',
+            ...this.appointmentFacts(tool, view),
+          }),
+        );
+      }
+      const moved = await this.withTimeout(
+        port.holdReplacement(input.bookingId, input.slotId),
+      );
+      if (!moved.ok)
+        return this.schedulingFailure(tool, moved.code, started, input);
+      const { hold, replaces } = moved.value;
+      this.pendingChange = {
+        operation: 'reschedule',
+        appointmentId: hold.appointment.bookingId,
+        replacesAppointmentId: replaces.bookingId,
+        view: {
+          serviceTitle: hold.appointment.serviceTitle,
+          staffName: hold.appointment.staffName,
+          startsAtIso: hold.appointment.startsAtIso,
+          previousStartsAtIso: replaces.startsAtIso,
+        },
+        expiresAtIso: hold.holdExpiresAtIso,
+      };
+      return ok(
+        'FOUND',
+        promptSafeJson({
+          status: 'AWAITING_CUSTOMER_CONFIRMATION',
+          ...this.appointmentFacts(tool, hold.appointment),
+        }),
+      );
+    } catch (error: unknown) {
+      if (error instanceof BudgetExhaustedError) throw error;
+      return this.fail(
+        tool,
+        'model',
+        error instanceof Error && error.message === 'TOOL_TIMEOUT'
+          ? 'TIMEOUT'
+          : 'UNAVAILABLE',
+        started,
+        input,
+      );
     }
   }
 

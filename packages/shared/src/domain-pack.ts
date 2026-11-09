@@ -22,6 +22,11 @@ export const AGENT_TOOL_NAMES = [
   'check_availability',
   'get_quote',
   'knowledge_search',
+  /** ADR 046: appointment scheduling; offered only when the tenant has service types. */
+  'find_slots',
+  'book_slot',
+  'cancel_booking',
+  'reschedule_booking',
 ] as const;
 export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
 

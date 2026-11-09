@@ -63,6 +63,8 @@ import {
   regenerationMessage,
   responseSystemPrompt,
   responseUserMessage,
+  schedulingSystemPrompt,
+  schedulingUserMessage,
   type HistoryEntry,
 } from './prompts.js';
 import type { SafetyOutcome } from './safety.js';
@@ -75,6 +77,14 @@ import {
   type SlotState,
 } from './slots.js';
 import { AgentTools, type ToolOutcome, type ToolTraceEntry } from './tools.js';
+import type { SchedulingPort } from '../scheduling/scheduling-port.js';
+import {
+  renderSchedulingDeclined,
+  renderSchedulingDone,
+  renderSchedulingProposal,
+  SCHEDULING_MARK,
+  schedulingPayload,
+} from '../scheduling/scheduling-render.js';
 import { verifiedQuoteDraft } from './verified-answer.js';
 
 /**
@@ -158,6 +168,8 @@ export interface AgentDependencies {
   readonly languagePolicy?: LanguagePolicy;
   /** Retrieval over textual knowledge; absent = knowledge_search is not offered. */
   readonly knowledge?: KnowledgeSearch;
+  /** Appointment scheduling (ADR 046); absent = the scheduling tools are not offered. */
+  readonly scheduling?: SchedulingPort;
 }
 
 export type TurnOutcome =
@@ -343,6 +355,7 @@ export async function runAgentTurn(
         now,
         scope: deps.scope,
         ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
+        ...(deps.scheduling ? { scheduling: deps.scheduling } : {}),
       })
     : undefined;
 
@@ -495,18 +508,37 @@ export async function runAgentTurn(
   const pending = fromComment ? undefined : input.action?.pending;
   if (pending) {
     const answer = confirmationOf(input.customerText, locales.all());
+    // A scheduling change is applied at commit; the reply names exactly what
+    // was stored (and is replaced there if the change no longer applies).
+    const marked = pending.scheduling
+      ? { askedSlot: SCHEDULING_MARK }
+      : undefined;
     if (answer === 'CONFIRM')
-      return build(locale().templates.actions.received, 'ACTION_CONFIRMED', {
-        action: {
-          kind: 'CONFIRM',
-          proposalId: pending.id,
-          digest: pending.digest,
+      return build(
+        pending.scheduling
+          ? renderSchedulingDone(pending.scheduling, locale(), input.timeZone)
+          : locale().templates.actions.received,
+        'ACTION_CONFIRMED',
+        {
+          ...marked,
+          action: {
+            kind: 'CONFIRM',
+            proposalId: pending.id,
+            digest: pending.digest,
+          },
         },
-      });
+      );
     if (answer === 'DECLINE')
-      return build(locale().templates.actions.declined, 'ACTION_DECLINED', {
-        action: { kind: 'DECLINE', proposalId: pending.id },
-      });
+      return build(
+        pending.scheduling
+          ? renderSchedulingDeclined(pending.scheduling, locale())
+          : locale().templates.actions.declined,
+        'ACTION_DECLINED',
+        {
+          ...marked,
+          action: { kind: 'DECLINE', proposalId: pending.id },
+        },
+      );
     supersede = { kind: 'SUPERSEDE', proposalId: pending.id };
   }
   const early = languageStop(
@@ -578,6 +610,14 @@ export async function runAgentTurn(
   const merged = mergeSlots(pack, slots, proposed);
   slots = merged.state;
   const invalid = merged.invalid;
+  // ADR 046: a scheduling turn starts on a booking intent and continues while
+  // the previous reply was part of the same scheduling exchange.
+  const schedulingTurn =
+    !fromComment &&
+    intent !== 'regulated_info' &&
+    tools?.available().includes('find_slots') === true &&
+    (intent === 'booking_interest' ||
+      input.progress?.priorTurns.at(-1)?.askedSlot === SCHEDULING_MARK);
 
   // 3. Handover intents and missing search information.
   const reason = intent ? HANDOVER_INTENTS[intent] : undefined;
@@ -612,9 +652,10 @@ export async function runAgentTurn(
   const actionContext = fromComment ? undefined : input.action;
   const candidate = actionContext?.available.find(
     (entry) =>
-      (intent !== undefined &&
+      !schedulingTurn &&
+      ((intent !== undefined &&
         (entry.spec.triggerIntents as readonly string[]).includes(intent)) ||
-      entry.spec.key === actionContext.collecting,
+        entry.spec.key === actionContext.collecting),
   );
   if (actionContext && candidate) {
     const plan = planAction(candidate.spec, slots, actionContext.contact);
@@ -685,7 +726,10 @@ export async function runAgentTurn(
   // from verified, recent regulated knowledge; otherwise nobody answers it but
   // a person. No search slots are asked for it.
   const regulated = intent === 'regulated_info';
-  const missing = regulated ? undefined : firstMissing(pack, slots, 'search');
+  const missing =
+    regulated || schedulingTurn
+      ? undefined
+      : firstMissing(pack, slots, 'search');
   if (missing) {
     const prefix = invalid.includes(missing.key)
       ? `${locale().templates.notUnderstood} `
@@ -753,23 +797,37 @@ export async function runAgentTurn(
       !verified
     )
       return handover('LEGAL_UNVERIFIED');
-  } else if (!tools || !tools.available().includes('search_catalog')) {
+  } else if (
+    !schedulingTurn &&
+    (!tools || !tools.available().includes('search_catalog'))
+  ) {
     return handover('NO_DATA');
   }
-  let search: ToolOutcome;
+  // A scheduling turn needs no catalog search: its context is the service
+  // list and the customer's own appointments (facts), loaded below.
+  let search: ToolOutcome = {
+    ok: true,
+    outcome: 'NOT_FOUND',
+    summary: '',
+    items: [],
+  };
   try {
-    search = knowledgeOutcome ?? (await tools!.searchBySlots(slots));
-    if (!knowledgeOutcome && search.ok && search.items.length === 0) {
-      // Same words, canonical Uzbek spelling: only the query is rewritten.
-      const variant = tools!.searchByOrthographicVariant(slots);
-      if (variant) {
-        const alt = await variant;
-        if (alt.ok && alt.items.length > 0) search = alt;
+    if (schedulingTurn) {
+      search = { ...search, summary: await tools!.schedulingContext() };
+    } else {
+      search = knowledgeOutcome ?? (await tools!.searchBySlots(slots));
+      if (!knowledgeOutcome && search.ok && search.items.length === 0) {
+        // Same words, canonical Uzbek spelling: only the query is rewritten.
+        const variant = tools!.searchByOrthographicVariant(slots);
+        if (variant) {
+          const alt = await variant;
+          if (alt.ok && alt.items.length > 0) search = alt;
+        }
       }
-    }
-    if (!knowledgeOutcome && search.ok && search.items.length === 0) {
-      const relaxed = await tools!.searchBySlots(slots, true);
-      if (relaxed.ok) search = relaxed;
+      if (!knowledgeOutcome && search.ok && search.items.length === 0) {
+        const relaxed = await tools!.searchBySlots(slots, true);
+        if (relaxed.ok) search = relaxed;
+      }
     }
   } catch (error: unknown) {
     if (error instanceof BudgetExhaustedError) {
@@ -785,7 +843,7 @@ export async function runAgentTurn(
       CONNECTOR_FAILURES.has(search.code) ? 'CONNECTOR_UNAVAILABLE' : 'NO_DATA',
     );
   }
-  if (!knowledgeOutcome && search.items.length === 0) {
+  if (!schedulingTurn && !knowledgeOutcome && search.items.length === 0) {
     return finish(
       `${locale().templates.noResults} ${locale().templates.offerOperator}`,
       'NO_RESULTS',
@@ -858,16 +916,68 @@ export async function runAgentTurn(
   // (on staging a reply took four rounds and 25 s, two of them repeats).
   if (!knowledgeOutcome && search.ok && search.items.length > 0)
     tools!.withhold(['search_catalog', 'get_item_details']);
+  const nowDate = now();
+  const systemPrompt = schedulingTurn
+    ? schedulingSystemPrompt(pack, locale(), {
+        date: localDateIn(nowDate, input.timeZone),
+        weekday: new Intl.DateTimeFormat('en', {
+          weekday: 'long',
+          timeZone: input.timeZone,
+        }).format(nowDate),
+      })
+    : responseSystemPrompt(pack, locale());
   const draft = await respond(deps, tools!, {
-    system: responseSystemPrompt(pack, locale()),
-    user: responseUserMessage({
-      history: input.history,
-      latest: input.customerText,
-      slots,
-      searchResults: search.summary,
-      nextQuestion,
-    }),
+    system: systemPrompt,
+    user: schedulingTurn
+      ? schedulingUserMessage({
+          history: input.history,
+          latest: input.customerText,
+          schedulingContext: search.summary,
+        })
+      : responseUserMessage({
+          history: input.history,
+          latest: input.customerText,
+          slots,
+          searchResults: search.summary,
+          nextQuestion,
+        }),
   });
+  // ADR 046: a tool prepared a booking, cancellation or move. Code asks the
+  // customer to confirm it (D4); the model's own wording is dropped.
+  const change = tools!.schedulingChange;
+  if (change) {
+    const scope = {
+      tenantId: deps.scope.tenantId,
+      conversationId: deps.scope.conversationId,
+      packRef: `${pack.key}@${pack.version}`,
+    };
+    return finish(
+      renderSchedulingProposal(
+        { operation: change.operation, view: change.view },
+        locale(),
+        input.timeZone,
+      ),
+      'ACTION_PROPOSED',
+      {
+        askedSlot: SCHEDULING_MARK,
+        action: {
+          kind: 'PROPOSE_SCHEDULED',
+          operation: change.operation,
+          appointmentId: change.appointmentId,
+          ...(change.replacesAppointmentId
+            ? { replacesAppointmentId: change.replacesAppointmentId }
+            : {}),
+          digest: proposalDigest(
+            scope,
+            `scheduling.${change.operation}`,
+            schedulingPayload(change),
+          ),
+          expiresAtIso: change.expiresAtIso,
+          ...(pending ? { supersedes: pending.id } : {}),
+        },
+      },
+    );
+  }
   if (draft.kind === 'refusal') return handover('GUARDRAIL');
   if (draft.kind === 'budget')
     return handover(budgetHandoverReason(llm.budget.snapshot.stopReason));
@@ -893,7 +1003,7 @@ export async function runAgentTurn(
         // A price that is not live needs a tool call (get_quote), so this retry
         // keeps the tools; the same rounds, budget and guardrail apply.
         const again = await respond(deps, tools, {
-          system: responseSystemPrompt(pack, locale()),
+          system: systemPrompt,
           messages: correction,
         });
         if (again.kind === 'budget')
@@ -915,7 +1025,7 @@ export async function runAgentTurn(
         const retry = await llm.withTools({
           tier: 'STRONG',
           purpose: 'respond',
-          system: responseSystemPrompt(pack, locale()),
+          system: systemPrompt,
           messages: correction,
           tools: [],
           maxOutputTokens: deps.maxOutputTokens.respond,
@@ -1006,6 +1116,7 @@ export async function runAgentTurn(
     'ANSWERED',
     {
       shownFactIds: [...(checked.references ?? [])],
+      ...(schedulingTurn ? { askedSlot: SCHEDULING_MARK } : {}),
       ...(askPhone ? { phoneRequested: true } : {}),
       regenerated,
       ...(firstViolations.length > 0
@@ -1019,6 +1130,16 @@ export async function runAgentTurn(
         : {}),
     },
   );
+}
+
+/** Local calendar date `YYYY-MM-DD` of an instant in a time zone. */
+function localDateIn(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant);
 }
 
 /** Bounded tool loop: every round and call is checked against the budget. */
@@ -1070,6 +1191,9 @@ async function respond(
         });
       }
       messages.push({ role: 'tool_results', results });
+      // A prepared scheduling change ends the turn: code asks for confirmation.
+      if (tools.schedulingChange)
+        return { kind: 'draft', text: '', messages: [...messages] };
     }
   } catch (error: unknown) {
     if (error instanceof BudgetExhaustedError) return { kind: 'budget' };

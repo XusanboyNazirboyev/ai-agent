@@ -137,6 +137,24 @@ export const UZ_LATN: LocalePack = {
       expired:
         "Bu so'rovning muddati o'tgan, hech narsa yuborilmadi. Davom ettirish uchun so'rovni qaytadan yozing.",
     },
+    scheduling: {
+      bookProposal:
+        'Qabulni tasdiqlang: {service}, {when}, mutaxassis: {staff}.',
+      cancelProposal:
+        'Qabulni bekor qilamizmi: {service}, {when}, mutaxassis: {staff}?',
+      rescheduleProposal:
+        "Qabulni ko'chiramizmi: {service}, {previous} o'rniga {when}, mutaxassis: {staff}?",
+      booked: 'Qabul tasdiqlandi: {service}, {when}, mutaxassis: {staff}.',
+      cancelled: 'Qabul bekor qilindi: {service}, {when}.',
+      rescheduled:
+        "Qabul ko'chirildi: yangi vaqt {when}, mutaxassis: {staff}. Oldingi vaqt ({previous}) bo'shatildi.",
+      released: "Xo'p, qabul band qilinmadi, vaqt bo'shatildi.",
+      kept: "Xo'p, qabulingiz o'zgarishsiz qoladi.",
+      holdExpired:
+        "Siz uchun ushlab turilgan vaqt o'tib ketdi, shu sababli qabul band qilinmadi. Qaysi vaqt qulay ekanini yozing, yangi vaqtlarni qidiraman.",
+      notAvailableAnymore:
+        "Bu o'zgarishni endi bajarib bo'lmaydi: qabul holati o'zgargan. Nima kerakligini yozing, qaytadan tekshiraman.",
+    },
     labels: {
       price: 'narxi',
       seats: "bo'sh o'rinlar",
@@ -312,6 +330,24 @@ export const UZ_CYRL: LocalePack = {
       expired:
         'Бу сўровнинг муддати ўтган, ҳеч нарса юборилмади. Давом эттириш учун сўровни қайтадан ёзинг.',
     },
+    scheduling: {
+      bookProposal:
+        'Қабулни тасдиқланг: {service}, {when}, мутахассис: {staff}.',
+      cancelProposal:
+        'Қабулни бекор қиламизми: {service}, {when}, мутахассис: {staff}?',
+      rescheduleProposal:
+        'Қабулни кўчирамизми: {service}, {previous} ўрнига {when}, мутахассис: {staff}?',
+      booked: 'Қабул тасдиқланди: {service}, {when}, мутахассис: {staff}.',
+      cancelled: 'Қабул бекор қилинди: {service}, {when}.',
+      rescheduled:
+        'Қабул кўчирилди: янги вақт {when}, мутахассис: {staff}. Олдинги вақт ({previous}) бўшатилди.',
+      released: 'Хўп, қабул банд қилинмади, вақт бўшатилди.',
+      kept: 'Хўп, қабулингиз ўзгаришсиз қолади.',
+      holdExpired:
+        'Сиз учун ушлаб турилган вақт ўтиб кетди, шу сабабли қабул банд қилинмади. Қайси вақт қулай эканини ёзинг, янги вақтларни қидираман.',
+      notAvailableAnymore:
+        'Бу ўзгаришни энди бажариб бўлмайди: қабул ҳолати ўзгарган. Нима кераклигини ёзинг, қайтадан текшираман.',
+    },
     labels: {
       price: 'нархи',
       seats: 'бўш ўринлар',
@@ -478,6 +514,24 @@ export const RU: LocalePack = {
       expired:
         'Срок этого запроса истёк, ничего не отправлено. Чтобы продолжить, напишите запрос ещё раз.',
     },
+    scheduling: {
+      bookProposal:
+        'Подтвердите запись: {service}, {when}, специалист: {staff}.',
+      cancelProposal:
+        'Отменить запись: {service}, {when}, специалист: {staff}?',
+      rescheduleProposal:
+        'Перенести запись: {service}, с {previous} на {when}, специалист: {staff}?',
+      booked: 'Запись подтверждена: {service}, {when}, специалист: {staff}.',
+      cancelled: 'Запись отменена: {service}, {when}.',
+      rescheduled:
+        'Запись перенесена: новое время {when}, специалист: {staff}. Прежнее время ({previous}) освобождено.',
+      released: 'Хорошо, запись не оформлена, время освобождено.',
+      kept: 'Хорошо, ваша запись остаётся без изменений.',
+      holdExpired:
+        'Время, которое я держал для вас, истекло, поэтому запись не оформлена. Напишите, когда вам удобно, и я подберу новые варианты.',
+      notAvailableAnymore:
+        'Это изменение больше нельзя выполнить: запись изменилась. Напишите, что вам нужно, и я проверю заново.',
+    },
     labels: {
       price: 'стоимость',
       seats: 'свободных мест',
@@ -642,6 +696,24 @@ export const EN: LocalePack = {
       askName: 'Please write your name.',
       expired:
         'This request has expired and nothing was sent. To continue, please write your request again.',
+    },
+    scheduling: {
+      bookProposal:
+        'Please confirm your appointment: {service}, {when}, with {staff}.',
+      cancelProposal:
+        'Cancel your appointment: {service}, {when}, with {staff}?',
+      rescheduleProposal:
+        'Move your appointment {service} from {previous} to {when}, with {staff}?',
+      booked: 'Your appointment is confirmed: {service}, {when}, with {staff}.',
+      cancelled: 'Your appointment is cancelled: {service}, {when}.',
+      rescheduled:
+        'Your appointment is moved to {when}, with {staff}. The earlier time ({previous}) is released.',
+      released: 'All right, nothing was booked and the time is released.',
+      kept: 'All right, your appointment stays as it is.',
+      holdExpired:
+        'The time I held for you has passed, so nothing was booked. Tell me what suits you and I will look for new times.',
+      notAvailableAnymore:
+        'This change can no longer be made because the appointment has changed. Tell me what you need and I will check again.',
     },
     labels: {
       price: 'price',

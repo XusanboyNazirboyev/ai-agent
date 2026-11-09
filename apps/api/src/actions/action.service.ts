@@ -40,6 +40,11 @@ import { extractPhone } from '../leads/phone.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import {
+  isSchedulingOperation,
+  SchedulingActionsService,
+} from '../scheduling/scheduling-actions.service.js';
+import { schedulingPayload } from '../core/scheduling/scheduling-render.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -77,6 +82,7 @@ export class ActionService {
     private readonly loader: TenantConnectorLoader,
     private readonly handovers: HandoverService,
     @Optional() private readonly config?: ConfigService<AppEnvironment, true>,
+    @Optional() private readonly scheduling?: SchedulingActionsService,
   ) {
     this.operations = new ConnectorOperations(prisma);
   }
@@ -161,10 +167,33 @@ export class ActionService {
         tenantId: input.tenantId,
         conversationId: input.conversationId,
         status: 'PROPOSED',
-        expiresAt: { gt: now },
+        OR: [
+          { expiresAt: { gt: now } },
+          // A lapsed scheduling hold still gets its own reply to a late "yes".
+          {
+            operation: { startsWith: 'scheduling.' },
+            expiresAt: { gt: new Date(now.getTime() - 3_600_000) },
+          },
+        ],
       },
-      select: { id: true, actionKey: true, digest: true },
+      select: {
+        id: true,
+        actionKey: true,
+        digest: true,
+        operation: true,
+        payload: true,
+      },
     });
+    // ADR 046: a scheduling proposal needs no connector action; its stored
+    // details are what the customer's "yes" is answered with.
+    const scheduled =
+      pending && isSchedulingOperation(pending.operation) && this.scheduling
+        ? await this.scheduling.pendingView(
+            input.tenantId,
+            pending.operation,
+            pending.payload,
+          )
+        : undefined;
     if (candidates.length === 0 && !pending) return undefined;
     const last = await this.prisma.agentTurn.findFirst({
       where: {
@@ -192,9 +221,24 @@ export class ActionService {
     return {
       available: candidates,
       // A pending proposal of an action that is no longer available is not offered for confirmation.
-      ...(pending && candidates.some((c) => c.spec.key === pending.actionKey)
-        ? { pending }
-        : {}),
+      ...(pending && scheduled && isSchedulingOperation(pending.operation)
+        ? {
+            pending: {
+              id: pending.id,
+              actionKey: pending.actionKey,
+              digest: pending.digest,
+              scheduling: scheduled,
+            },
+          }
+        : pending && candidates.some((c) => c.spec.key === pending.actionKey)
+          ? {
+              pending: {
+                id: pending.id,
+                actionKey: pending.actionKey,
+                digest: pending.digest,
+              },
+            }
+          : {}),
       ...(collecting ? { collecting } : {}),
       contact: {
         ...(name ? { name } : {}),
@@ -280,9 +324,27 @@ export class ActionService {
       turnKey: string;
       now: Date;
     },
-  ): Promise<{ expired?: true }> {
+  ): Promise<{
+    expired?: true;
+    schedulingFailure?: 'holdExpired' | 'notAvailableAnymore';
+  }> {
     const { tenantId, conversationId, decision, now } = input;
+    // A replaced or declined scheduling proposal frees the time it held.
+    const releaseHold = async (proposalId: string): Promise<void> => {
+      if (!this.scheduling) return;
+      const row = await tx.actionProposal.findFirst({
+        where: { tenantId, conversationId, id: proposalId, status: 'PROPOSED' },
+        select: { operation: true, payload: true },
+      });
+      if (row && isSchedulingOperation(row.operation))
+        await this.scheduling.release(tx, {
+          tenantId,
+          operation: row.operation,
+          payload: row.payload,
+        });
+    };
     const supersede = async (proposalId: string): Promise<void> => {
+      await releaseHold(proposalId);
       const changed = await tx.actionProposal.updateMany({
         where: { tenantId, conversationId, id: proposalId, status: 'PROPOSED' },
         data: {
@@ -299,6 +361,7 @@ export class ActionService {
       return {};
     }
     if (decision.kind === 'DECLINE') {
+      await releaseHold(decision.proposalId);
       const changed = await tx.actionProposal.updateMany({
         where: {
           tenantId,
@@ -356,6 +419,33 @@ export class ActionService {
       });
       return {};
     }
+    if (decision.kind === 'PROPOSE_SCHEDULED') {
+      const open = await tx.actionProposal.findMany({
+        where: { tenantId, conversationId, status: 'PROPOSED' },
+        select: { id: true },
+      });
+      for (const row of open) await supersede(row.id);
+      const key = `scheduling.${decision.operation}`;
+      const created = await tx.actionProposal.create({
+        data: {
+          tenantId,
+          conversationId,
+          actionKey: key,
+          operation: key,
+          packRef: input.packRef,
+          payload: schedulingPayload(decision) as Prisma.InputJsonObject,
+          digest: decision.digest,
+          expiresAt: new Date(decision.expiresAtIso),
+          proposedTurnKey: input.turnKey,
+        },
+        select: { id: true },
+      });
+      await this.audit(tx, tenantId, created.id, 'action.proposed', {
+        actionKey: key,
+        fields: ['appointmentId'],
+      });
+      return {};
+    }
     // CONFIRM: only the exact open proposal, same digest, not expired.
     const confirmed = await tx.actionProposal.updateMany({
       where: {
@@ -368,11 +458,76 @@ export class ActionService {
       },
       data: { status: 'CONFIRMED', confirmedAt: now },
     });
-    if (confirmed.count !== 1) return { expired: true };
+    if (confirmed.count !== 1) {
+      // A lapsed scheduling hold: free the time and say so with its own text.
+      const lapsed = await tx.actionProposal.findFirst({
+        where: {
+          tenantId,
+          conversationId,
+          id: decision.proposalId,
+          status: 'PROPOSED',
+          digest: decision.digest,
+        },
+        select: { operation: true, payload: true },
+      });
+      if (lapsed && isSchedulingOperation(lapsed.operation)) {
+        await this.scheduling?.release(tx, {
+          tenantId,
+          operation: lapsed.operation,
+          payload: lapsed.payload,
+        });
+        await tx.actionProposal.updateMany({
+          where: { tenantId, id: decision.proposalId, status: 'PROPOSED' },
+          data: {
+            status: 'EXPIRED',
+            payload: Prisma.DbNull,
+            payloadClearedAt: now,
+          },
+        });
+        return {
+          expired: true,
+          schedulingFailure:
+            lapsed.operation === 'scheduling.cancel'
+              ? 'notAvailableAnymore'
+              : 'holdExpired',
+        };
+      }
+      return { expired: true };
+    }
     const proposal = await tx.actionProposal.findFirstOrThrow({
       where: { tenantId, id: decision.proposalId },
-      select: { operation: true, actionKey: true },
+      select: { operation: true, actionKey: true, payload: true },
     });
+    if (isSchedulingOperation(proposal.operation)) {
+      // Applied here, by code, in the commit transaction: no connector write.
+      const done = this.scheduling
+        ? await this.scheduling.execute(tx, {
+            tenantId,
+            conversationId,
+            operation: proposal.operation,
+            payload: proposal.payload,
+            now,
+          })
+        : ({ ok: false, reason: 'notAvailableAnymore' } as const);
+      await tx.actionProposal.updateMany({
+        where: { tenantId, id: decision.proposalId },
+        data: {
+          status: done.ok ? 'SUCCEEDED' : 'FAILED',
+          outcomeAt: now,
+          errorCode: done.ok ? null : `scheduling_${done.reason}`,
+          payload: Prisma.DbNull,
+          payloadClearedAt: now,
+        },
+      });
+      await this.audit(
+        tx,
+        tenantId,
+        decision.proposalId,
+        done.ok ? 'action.succeeded' : 'action.failed',
+        { actionKey: proposal.actionKey },
+      );
+      return done.ok ? {} : { expired: true, schedulingFailure: done.reason };
+    }
     const ref = this.ref(tenantId, decision.proposalId, proposal.operation);
     await tx.connectorOperation.createMany({
       data: [{ ...ref, idempotencyKey: ConnectorOperations.keyFor(ref) }],

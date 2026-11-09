@@ -240,6 +240,7 @@ export class TelegramAgentPipeline {
           turnKey: claim.turnId,
           text: claim.text,
           beforeSequence: claim.firstSequence,
+          readOnly: claim.mode !== 'LIVE',
         });
       } catch (error: unknown) {
         stopTyping?.();
@@ -682,9 +683,14 @@ export class TelegramAgentPipeline {
           turnKey: claim.idempotencyKey,
           now,
         });
-        if (applied.expired)
-          replyText = this.agent.localeRegistry.get(result.locale).templates
-            .actions.expired;
+        if (applied.expired) {
+          const templates = this.agent.localeRegistry.get(
+            result.locale,
+          ).templates;
+          replyText = applied.schedulingFailure
+            ? templates.scheduling[applied.schedulingFailure]
+            : templates.actions.expired;
+        }
       }
       // ADR 043: the public comments this turn answered (all of the batch,
       // or none when a direct message is part of it).

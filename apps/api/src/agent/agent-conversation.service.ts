@@ -42,6 +42,7 @@ import { budgetLimits, llmEnvironment } from './llm.factory.js';
 import type { BudgetLedger } from '../core/llm/budget-ledger.js';
 import type { EmbeddingProvider } from '../core/knowledge/embedding.js';
 import { EMBEDDING_PROVIDER } from '../knowledge/embedding.factory.js';
+import { SchedulingActionsService } from '../scheduling/scheduling-actions.service.js';
 import { KnowledgeRetriever } from '../knowledge/knowledge-retriever.js';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ActionService } from '../actions/action.service.js';
@@ -71,6 +72,11 @@ export interface TurnRequest {
    * answered messages are not repeated as history. Omit to use all.
    */
   readonly beforeSequence?: number;
+  /**
+   * SHADOW and other non-LIVE runs must not write anything (ADR 024): the
+   * scheduling tools, which hold appointment slots, are then not offered.
+   */
+  readonly readOnly?: boolean;
 }
 
 /** Everything a commit needs; computing it has no side effects but usage. */
@@ -180,6 +186,7 @@ export class AgentConversationService implements OnModuleInit {
     @Inject(EMBEDDING_PROVIDER)
     private readonly embedder?: EmbeddingProvider,
     @Optional() private readonly actions?: ActionService,
+    @Optional() private readonly scheduling?: SchedulingActionsService,
   ) {
     this.pricing = PRICING_CATALOG.snapshot(
       this.config.get('LLM_PRICING_VERSION', { infer: true }),
@@ -413,6 +420,18 @@ export class AgentConversationService implements OnModuleInit {
         })
       : undefined;
 
+    // Appointment scheduling (ADR 046): only when the tenant has service
+    // types and staff, and never in a run that must not write.
+    const schedulingPort =
+      this.scheduling && !request.readOnly
+        ? await this.scheduling.portFor({
+            tenantId,
+            conversationId,
+            turnKey: request.turnKey,
+            timeZone: tenant.timezone,
+          })
+        : undefined;
+
     const voice = await this.voiceSignal(
       tenantId,
       conversationId,
@@ -466,6 +485,7 @@ export class AgentConversationService implements OnModuleInit {
         llm,
         scope: { tenantId, conversationId },
         ...(knowledge ? { knowledge } : {}),
+        ...(schedulingPort ? { scheduling: schedulingPort } : {}),
         toolTimeoutMs: this.config.get('AGENT_TOOL_TIMEOUT_MS', {
           infer: true,
         }),
