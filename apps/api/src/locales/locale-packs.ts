@@ -142,6 +142,7 @@ export const UZ_LATN: LocalePack = {
       seats: "bo'sh o'rinlar",
       starts: 'boshlanishi',
       availability: 'holati',
+      details: 'Batafsil',
     },
     availability: {
       AVAILABLE: 'joy bor',
@@ -316,6 +317,7 @@ export const UZ_CYRL: LocalePack = {
       seats: 'бўш ўринлар',
       starts: 'бошланиши',
       availability: 'ҳолати',
+      details: 'Батафсил',
     },
     availability: {
       AVAILABLE: 'жой бор',
@@ -481,6 +483,7 @@ export const RU: LocalePack = {
       seats: 'свободных мест',
       starts: 'начало',
       availability: 'наличие',
+      details: 'Подробнее',
     },
     availability: {
       AVAILABLE: 'места есть',
@@ -645,6 +648,7 @@ export const EN: LocalePack = {
       seats: 'seats left',
       starts: 'starts',
       availability: 'availability',
+      details: 'Details',
     },
     availability: {
       AVAILABLE: 'available',

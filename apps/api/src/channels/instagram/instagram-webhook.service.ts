@@ -2,10 +2,15 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
+import { parseCarouselPayload, readCarousel } from './instagram-carousel.js';
 import type {
   NormalizedInstagramComment,
+  NormalizedInstagramPostback,
   NormalizedInstagramText,
 } from './instagram-normalizer.js';
+
+/** How many recent carousels a tap is matched against. */
+const RECENT_CAROUSELS = 20;
 
 const EXTERNAL_ID = /^[0-9]{1,100}$/u;
 
@@ -201,6 +206,71 @@ export class InstagramWebhookService {
       }
       throw error;
     }
+  }
+
+  /**
+   * ADR 044: a carousel tap becomes an ordinary inbound text message. The
+   * payload is untrusted: it counts only when it names an item of a carousel
+   * we sent in this customer's conversation (tenant- and conversation-
+   * scoped, from our own stored spec). The text is rebuilt from that spec
+   * ("<button label>: <item title>", both code-rendered from facts), so
+   * nothing from the tap reaches the agent except the matched item. Any
+   * other tap is ignored. Dedupe is the postback `mid`, like a message.
+   */
+  async acceptPostback(
+    event: NormalizedInstagramPostback,
+  ): Promise<InstagramAcceptance | 'ignored'> {
+    const itemId = parseCarouselPayload(event.payload);
+    if (
+      !itemId ||
+      !EXTERNAL_ID.test(event.accountId) ||
+      !EXTERNAL_ID.test(event.customerId)
+    )
+      return 'ignored';
+    const channel = await this.prisma.channelAccount.findFirst({
+      where: {
+        channelType: 'instagram',
+        externalAccountId: event.accountId,
+        status: 'ACTIVE',
+        tenant: { status: 'ACTIVE' },
+      },
+      select: { id: true, tenantId: true },
+    });
+    if (!channel) return 'unavailable';
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        tenantId: channel.tenantId,
+        channelAccountId: channel.id,
+        providerChatId: event.customerId,
+      },
+      select: { id: true },
+    });
+    if (!conversation) return 'ignored';
+    const sent = await this.prisma.message.findMany({
+      where: {
+        tenantId: channel.tenantId,
+        conversationId: conversation.id,
+        direction: 'OUTBOUND',
+        richContent: { not: Prisma.DbNull },
+      },
+      orderBy: { sequence: 'desc' },
+      take: RECENT_CAROUSELS,
+      select: { richContent: true },
+    });
+    for (const row of sent) {
+      const spec = readCarousel(row.richContent);
+      const item = spec?.items.find((candidate) => candidate.id === itemId);
+      if (spec && item)
+        return this.accept({
+          kind: 'text',
+          messageId: event.messageId,
+          accountId: event.accountId,
+          customerId: event.customerId,
+          text: `${spec.label}: ${item.title}`,
+          receivedAt: event.receivedAt,
+        });
+    }
+    return 'ignored';
   }
 
   /**

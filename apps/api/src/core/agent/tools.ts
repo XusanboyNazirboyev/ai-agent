@@ -315,7 +315,12 @@ export class AgentTools {
       items: items.map((item) => {
         this.knownItems.add(item.id);
         const titleFact = this.context.facts.add(
-          { kind: 'title', text: item.title },
+          {
+            kind: 'title',
+            text: item.title,
+            itemId: item.id,
+            ...(item.imageUrl ? { imageUrl: item.imageUrl } : {}),
+          },
           this.provenance(tool, item.sourceEntityId, item.sourceSystem),
         );
         return {

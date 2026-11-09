@@ -32,6 +32,7 @@ import {
   InstagramSender,
 } from '../instagram/instagram-sender.js';
 import { splitInstagramText } from '../instagram/instagram-text.js';
+import { readCarousel } from '../instagram/instagram-carousel.js';
 import {
   COMMENT_PUBLIC_REPLY_EVENT,
   InstagramCommentReplyService,
@@ -421,6 +422,7 @@ export class TelegramProcessor {
       readonly channelAccountId: string;
       readonly authorType: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
       readonly conversation: { readonly lastInboundAt: Date | null };
+      readonly richContent?: unknown;
     },
     kind: 'instagram' | 'facebook',
   ): Promise<void> {
@@ -526,7 +528,56 @@ export class TelegramProcessor {
         deliveryErrorCode: null,
       },
     });
+    if (kind === 'instagram')
+      await this.sendCarousel(tenantId, message, message.richContent);
     await this.afterDelivery(tenantId, message.id);
+  }
+
+  /**
+   * ADR 044: the carousel follows the text reply that already listed the
+   * items (desktop has no carousels). The message is SENT before this runs,
+   * so a crash or failure here never resends anything: at most once, and a
+   * failed carousel never blocks or fails the text reply.
+   */
+  private async sendCarousel(
+    tenantId: string,
+    message: {
+      readonly id: string;
+      readonly providerChatId: string;
+      readonly channelAccountId: string;
+    },
+    richContent: unknown,
+  ): Promise<void> {
+    const spec = readCarousel(richContent);
+    if (!spec || !this.instagram) return;
+    try {
+      await this.instagram.sendCarousel(
+        tenantId,
+        message.channelAccountId,
+        message.providerChatId,
+        spec,
+      );
+      this.logger.log(
+        JSON.stringify({
+          event: 'instagram.carousel_sent',
+          messageId: message.id,
+          items: spec.items.length,
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'instagram.carousel_failed',
+          messageId: message.id,
+          code:
+            error instanceof InstagramApiError
+              ? `api_${error.kind}`
+              : error instanceof InstagramAmbiguousSendError
+                ? 'ambiguous'
+                : 'unavailable',
+        }),
+      );
+    }
   }
 
   private async processSend(event: TelegramQueueEvent): Promise<void> {
@@ -544,6 +595,7 @@ export class TelegramProcessor {
         authorType: true,
         channelAccount: { select: { channelType: true } },
         conversation: { select: { lastInboundAt: true } },
+        richContent: true,
       },
     });
     if (

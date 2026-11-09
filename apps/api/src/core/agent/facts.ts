@@ -17,7 +17,14 @@ import {
  */
 
 export type FactValue =
-  | { readonly kind: 'title'; readonly text: string }
+  | {
+      readonly kind: 'title';
+      readonly text: string;
+      /** ADR 044: the canonical catalog item id (rich channel cards). */
+      readonly itemId?: string;
+      /** ADR 044: the item's https image, for channels that show cards. */
+      readonly imageUrl?: string;
+    }
   | {
       readonly kind: 'price';
       readonly money: Money;

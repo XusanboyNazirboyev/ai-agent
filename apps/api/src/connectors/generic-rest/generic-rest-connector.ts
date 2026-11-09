@@ -5,6 +5,7 @@ import {
   BookingInputSchema,
   CanonicalQuerySchema,
   CatalogItemSchema,
+  safeImageUrl,
   LeadInputSchema,
   OfferSchema,
   QuoteSchema,
@@ -552,6 +553,7 @@ export class GenericRestConnector implements CrmConnector {
           [mapping.description ?? 'description'],
           { max: 10_000 },
         ),
+        imageUrl: imageOf(record, mapping.imageUrl ?? 'imageUrl'),
         attributes: reader.attributes(mapping.attributes),
       }),
       'item',
@@ -1222,5 +1224,14 @@ function mapPricingBasis(normalized: string): PricingBasis | undefined {
       return 'TOTAL';
     default:
       return undefined;
+  }
+}
+
+/** ADR 044: an image is optional decoration; a bad one is dropped, never fatal. */
+function imageOf(record: unknown, path: string): string | undefined {
+  try {
+    return safeImageUrl(getByPath(record, path));
+  } catch {
+    return undefined;
   }
 }

@@ -197,7 +197,7 @@ function setup(
       ) {
         const form = new URLSearchParams(body);
         return form.get('access_token') === tokenOf(CODE) &&
-          form.get('subscribed_fields') === 'messages'
+          form.get('subscribed_fields') === 'messages,messaging_postbacks'
           ? reply(HTTP_OK, { success: true })
           : reply(HTTP_BAD_REQUEST, { error: { code: META_TOKEN_EXPIRED } });
       }
@@ -319,7 +319,7 @@ describe('connecting an Instagram professional account from the web API', () => 
     expect(subscribe.method).toBe('POST');
     expect(subscribe.url.pathname).toBe(`/v26.0/${s.igUserId}/subscribed_apps`);
     expect(subscribe.url.searchParams.get('subscribed_fields')).toBe(
-      'messages',
+      'messages,messaging_postbacks',
     );
 
     const disabled = await s.controller.disable(t.request, row.id);
