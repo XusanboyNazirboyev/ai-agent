@@ -1,6 +1,8 @@
 import {
   LlmError,
+  streamToolsWithFallback,
   type AmbiguityHooks,
+  type LlmStreamListener,
   type LlmMessage,
   type LlmProvider,
   type LlmTier,
@@ -354,6 +356,38 @@ export class RoutingLlmProvider implements LlmProvider {
           messages: this.messagesFor(c, request.messages),
         }),
     );
+    return this.wrapToolResult(result, candidate);
+  }
+
+  /**
+   * Streams from the first healthy candidate. Failover happens only before
+   * any output: LLM_STREAM_INTERRUPTED is not a failover code, so a reply
+   * that started is never repeated by another provider.
+   */
+  async streamWithTools(
+    request: ToolGenerationRequest,
+    onEvent: LlmStreamListener,
+  ): Promise<ToolGenerationResult> {
+    const needs = request.tools.length > 0 ? 'tools' : 'text';
+    const { result, candidate } = await this.route(
+      request.tier,
+      needs,
+      request.signal,
+      request.ambiguity,
+      (c) =>
+        streamToolsWithFallback(
+          c.provider,
+          { ...request, messages: this.messagesFor(c, request.messages) },
+          onEvent,
+        ),
+    );
+    return this.wrapToolResult(result, candidate);
+  }
+
+  private wrapToolResult(
+    result: ToolGenerationResult,
+    candidate: RoutedCandidate,
+  ): ToolGenerationResult {
     return {
       ...result,
       providerContent:

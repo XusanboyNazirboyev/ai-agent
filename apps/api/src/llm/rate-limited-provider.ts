@@ -1,6 +1,8 @@
 import {
   LlmError,
+  streamToolsWithFallback,
   type LlmProvider,
+  type LlmStreamListener,
   type LlmTier,
   type StructuredGenerationRequest,
   type StructuredGenerationResult,
@@ -141,5 +143,13 @@ export class RateLimitedLlmProvider implements LlmProvider {
   ): Promise<ToolGenerationResult> {
     await this.limiter.acquire(estimateRequest(request).tokens);
     return this.inner.generateWithTools(request);
+  }
+
+  async streamWithTools(
+    request: ToolGenerationRequest,
+    onEvent: LlmStreamListener,
+  ): Promise<ToolGenerationResult> {
+    await this.limiter.acquire(estimateRequest(request).tokens);
+    return streamToolsWithFallback(this.inner, request, onEvent);
   }
 }

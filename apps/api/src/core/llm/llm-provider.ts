@@ -145,6 +145,17 @@ export interface ToolGenerationResult extends LlmResultBase {
   readonly providerContent: unknown;
 }
 
+/**
+ * Streamed output of a tool-calling generation (ADR 045 amendment to D15):
+ * text as it is generated, and a signal when the model starts a tool call
+ * (a voice turn speaks its "one moment" filler then). Untrusted model output.
+ */
+export type LlmStreamEvent =
+  | { readonly type: 'text'; readonly delta: string }
+  | { readonly type: 'tool_call_started'; readonly name: string };
+
+export type LlmStreamListener = (event: LlmStreamEvent) => void;
+
 export interface LlmProvider {
   readonly providerId: string;
   /** Model id serving a tier (for pricing and budgeting before a call). */
@@ -155,6 +166,36 @@ export interface LlmProvider {
   generateWithTools(
     request: ToolGenerationRequest,
   ): Promise<ToolGenerationResult>;
+  /**
+   * Optional: the same generation, streamed. Events arrive while the call
+   * runs; the promise resolves with the whole result (usage included) once
+   * the stream ends. A failure after any event is `LLM_STREAM_INTERRUPTED`:
+   * output already left, so it is never retried or failed over. Callers use
+   * `streamToolsWithFallback` so providers without it still work.
+   */
+  streamWithTools?(
+    request: ToolGenerationRequest,
+    onEvent: LlmStreamListener,
+  ): Promise<ToolGenerationResult>;
+}
+
+/**
+ * Streams when the provider can; otherwise generates the whole reply and
+ * replays it as events (text first, then tool calls, the order a stream
+ * would show them).
+ */
+export async function streamToolsWithFallback(
+  provider: LlmProvider,
+  request: ToolGenerationRequest,
+  onEvent: LlmStreamListener,
+): Promise<ToolGenerationResult> {
+  if (provider.streamWithTools)
+    return provider.streamWithTools(request, onEvent);
+  const result = await provider.generateWithTools(request);
+  if (result.text) onEvent({ type: 'text', delta: result.text });
+  for (const call of result.toolCalls)
+    onEvent({ type: 'tool_call_started', name: call.name });
+  return result;
 }
 
 export type LlmErrorCode =
@@ -168,7 +209,12 @@ export type LlmErrorCode =
   /** Billing or daily quota exhausted: retrying does not help. */
   | 'LLM_QUOTA_EXHAUSTED'
   /** The endpoint or model lacks a required feature (e.g. tool calling). */
-  | 'LLM_UNSUPPORTED_FEATURE';
+  | 'LLM_UNSUPPORTED_FEATURE'
+  /**
+   * A streamed response failed after it started: output may already have
+   * been used and billed, so it is neither retried nor failed over.
+   */
+  | 'LLM_STREAM_INTERRUPTED';
 
 /** Provider failure with no billable response (nothing to account for). */
 export class LlmError extends Error {

@@ -7,7 +7,9 @@ import type { EmbeddingProvider } from '../knowledge/embedding.js';
 import { SinkBudgetLedger, type BudgetLedger } from './budget-ledger.js';
 import {
   isLlmError,
+  streamToolsWithFallback,
   type AmbiguityHooks,
+  type LlmStreamListener,
   type AmbiguousAttempt,
   type LlmMessage,
   LlmProvider,
@@ -499,6 +501,28 @@ export class MeteredLlm {
       request,
       prep,
       (extras) => this.provider.generateWithTools({ ...request, ...extras }),
+      (result) => result.stopReason,
+    );
+  }
+
+  /**
+   * `withTools`, streamed (voice turns). Reserved and settled exactly like
+   * `withTools`; an interrupted stream is accounted as unknown usage.
+   */
+  async streamWithTools(
+    request: ToolGenerationRequest,
+    onEvent: LlmStreamListener,
+  ): Promise<ToolGenerationResult> {
+    const prep = this.prepare(request);
+    return this.execute(
+      request,
+      prep,
+      (extras) =>
+        streamToolsWithFallback(
+          this.provider,
+          { ...request, ...extras },
+          onEvent,
+        ),
       (result) => result.stopReason,
     );
   }

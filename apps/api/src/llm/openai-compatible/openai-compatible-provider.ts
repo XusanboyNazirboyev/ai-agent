@@ -4,6 +4,7 @@ import {
   LlmError,
   type LlmMessage,
   type LlmProvider,
+  type LlmStreamListener,
   type LlmStopReason,
   type LlmTier,
   type LlmToolCall,
@@ -124,6 +125,64 @@ const ResponseSchema = z.object({
     .optional(),
 });
 type ChatResponse = z.infer<typeof ResponseSchema>;
+
+/**
+ * One `chat.completion.chunk` of a streamed response (OpenAI chat streaming
+ * reference, read 2026-11-09). Lenient: vendors omit fields freely; the
+ * Gemini OpenAI-compatibility page (read 2026-11-09) documents streaming and
+ * `stream_options.include_usage` but not streamed tool calls, so tool-call
+ * deltas are accepted whole or in pieces.
+ */
+const ChunkSchema = z.object({
+  id: z.string().optional(),
+  model: z.string().optional(),
+  error: z.unknown().optional(),
+  choices: z
+    .array(
+      z.object({
+        finish_reason: z.string().nullable().optional(),
+        delta: z
+          .object({
+            content: z.string().nullable().optional(),
+            refusal: z.string().nullable().optional(),
+            tool_calls: z
+              .array(
+                z.object({
+                  index: z.number().int().min(0).optional(),
+                  id: z.string().optional(),
+                  type: z.string().optional(),
+                  extra_content: z.record(z.string(), z.unknown()).optional(),
+                  function: z
+                    .object({
+                      name: z.string().optional(),
+                      arguments: z
+                        .union([z.string(), z.record(z.string(), z.unknown())])
+                        .optional(),
+                    })
+                    .optional(),
+                }),
+              )
+              .nullable()
+              .optional(),
+          })
+          .optional(),
+      }),
+    )
+    .nullable()
+    .optional(),
+  usage: ResponseSchema.shape.usage,
+});
+
+interface StreamedToolCall {
+  id?: string;
+  name: string;
+  arguments: string | Record<string, unknown>;
+  extra_content?: Record<string, unknown>;
+}
+
+function interrupted(message: string): LlmError {
+  return new LlmError('LLM_STREAM_INTERRUPTED', message, false);
+}
 
 const ErrorBodySchema = z.object({
   error: z
@@ -360,11 +419,22 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     signal: AbortSignal | undefined,
   ): Promise<{ data: ChatResponse; durationMs: number; attempts: number }> {
     const started = Date.now();
+    const { value, attempts } = await this.retrying(
+      () => this.exchange(body, signal),
+      signal,
+    );
+    return { data: value, durationMs: Date.now() - started, attempts };
+  }
+
+  /** Runs `once` with bounded retries of transient failures only. */
+  private async retrying<T>(
+    once: () => Promise<T>,
+    signal: AbortSignal | undefined,
+  ): Promise<{ value: T; attempts: number }> {
     for (let attempt = 1; ; attempt++) {
       let error: LlmError;
       try {
-        const data = await this.exchange(body, signal);
-        return { data, durationMs: Date.now() - started, attempts: attempt };
+        return { value: await once(), attempts: attempt };
       } catch (caught: unknown) {
         error =
           caught instanceof LlmError
@@ -398,6 +468,32 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
     body: Record<string, unknown>,
     signal: AbortSignal | undefined,
   ): Promise<ChatResponse> {
+    const { response } = await this.send(body, signal);
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = undefined;
+    }
+    const parsed = ResponseSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new LlmError(
+        'LLM_UNAVAILABLE',
+        'Provider returned a malformed response',
+        false,
+      );
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Sends the request; resolves with a 2xx response whose body is unread,
+   * or throws the mapped error. The timeout covers reading the body too.
+   */
+  private async send(
+    body: Record<string, unknown>,
+    signal: AbortSignal | undefined,
+  ): Promise<{ response: Response; timeout: AbortSignal }> {
     const timeout = AbortSignal.timeout(this.options.requestTimeoutMs);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     let response: Response;
@@ -420,28 +516,20 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         throw new LlmError('LLM_TIMEOUT', 'Provider request timed out', true);
       throw new LlmError('LLM_UNAVAILABLE', 'Provider connection failed', true);
     }
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = undefined;
-    }
     if (!response.ok) {
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = undefined;
+      }
       throw errorFromResponse(
         response.status,
         payload,
         response.headers.get('retry-after'),
       );
     }
-    const parsed = ResponseSchema.safeParse(payload);
-    if (!parsed.success) {
-      throw new LlmError(
-        'LLM_UNAVAILABLE',
-        'Provider returned a malformed response',
-        false,
-      );
-    }
-    return parsed.data;
+    return { response, timeout };
   }
 
   private usageOf(
@@ -556,9 +644,11 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       : { ...base, value: undefined, failure: 'malformed' };
   }
 
-  async generateWithTools(
-    request: ToolGenerationRequest,
-  ): Promise<ToolGenerationResult> {
+  /** Model and request body of a tool-calling generation. */
+  private toolRequest(request: ToolGenerationRequest): {
+    model: string;
+    body: Record<string, unknown>;
+  } {
     const model = this.modelFor(request.tier);
     if (
       request.tools.length > 0 &&
@@ -570,8 +660,9 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
         false,
       );
     }
-    const { data, durationMs, attempts } = await this.post(
-      {
+    return {
+      model,
+      body: {
         model,
         messages: this.wireMessages(request.system, request.messages),
         ...this.outputCeiling(request.maxOutputTokens),
@@ -589,8 +680,184 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
             }
           : {}),
       },
+    };
+  }
+
+  async generateWithTools(
+    request: ToolGenerationRequest,
+  ): Promise<ToolGenerationResult> {
+    const { model, body } = this.toolRequest(request);
+    const { data, durationMs, attempts } = await this.post(
+      body,
       request.signal,
     );
+    return this.toolResult(data, model, request, durationMs, attempts);
+  }
+
+  /**
+   * Streams a tool-calling generation over SSE. Connection and HTTP errors
+   * before the body starts are retried like a plain call; any failure while
+   * reading the body is LLM_STREAM_INTERRUPTED (not retried: output may
+   * already be in use, and the attempt may be billed).
+   */
+  async streamWithTools(
+    request: ToolGenerationRequest,
+    onEvent: LlmStreamListener,
+  ): Promise<ToolGenerationResult> {
+    const { model, body } = this.toolRequest(request);
+    const started = Date.now();
+    const {
+      value: { response, timeout },
+      attempts,
+    } = await this.retrying(
+      () =>
+        this.send(
+          { ...body, stream: true, stream_options: { include_usage: true } },
+          request.signal,
+        ),
+      request.signal,
+    );
+    const data = await this.readStream(response, onEvent).catch(
+      (error: unknown) => {
+        if (request.signal?.aborted)
+          throw new LlmError('LLM_CANCELLED', 'Request cancelled', false);
+        if (error instanceof LlmError) throw error;
+        throw interrupted(
+          timeout.aborted
+            ? 'Provider stream timed out'
+            : 'Provider stream broke off',
+        );
+      },
+    );
+    return this.toolResult(
+      data,
+      model,
+      request,
+      Date.now() - started,
+      attempts,
+    );
+  }
+
+  /** Reads the SSE body into the shape of a whole (non-streamed) response. */
+  private async readStream(
+    response: Response,
+    onEvent: LlmStreamListener,
+  ): Promise<ChatResponse> {
+    if (!response.body) throw interrupted('Provider stream has no body');
+    let id: string | undefined;
+    let model: string | undefined;
+    let usage: ChatResponse['usage'];
+    let finish: string | null | undefined;
+    let text = '';
+    let refusal = '';
+    const calls: StreamedToolCall[] = [];
+
+    const apply = (raw: string): boolean => {
+      if (raw === '[DONE]') return true;
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        throw interrupted('Provider sent a malformed stream chunk');
+      }
+      const parsed = ChunkSchema.safeParse(json);
+      if (!parsed.success)
+        throw interrupted('Provider sent a malformed stream chunk');
+      const chunk = parsed.data;
+      if (chunk.error !== undefined)
+        throw interrupted('Provider reported an error inside the stream');
+      id ??= chunk.id;
+      model ??= chunk.model;
+      if (chunk.usage) usage = chunk.usage;
+      const choice = chunk.choices?.[0];
+      if (!choice) return false;
+      if (choice.finish_reason) finish = choice.finish_reason;
+      const delta = choice.delta;
+      if (delta?.content) {
+        text += delta.content;
+        onEvent({ type: 'text', delta: delta.content });
+      }
+      if (delta?.refusal) refusal += delta.refusal;
+      for (const part of delta?.tool_calls ?? []) {
+        const index = part.index ?? calls.length;
+        let call = calls[index];
+        if (!call) {
+          call = { name: '', arguments: '' };
+          calls[index] = call;
+        }
+        if (part.id) call.id = part.id;
+        if (part.extra_content)
+          call.extra_content = { ...call.extra_content, ...part.extra_content };
+        const name = part.function?.name;
+        if (name && !call.name) {
+          call.name = name;
+          onEvent({ type: 'tool_call_started', name });
+        }
+        const args = part.function?.arguments;
+        if (typeof args === 'string' && typeof call.arguments === 'string')
+          call.arguments += args;
+        else if (args !== undefined && typeof args !== 'string')
+          call.arguments = args;
+      }
+      return false;
+    };
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let done = false;
+    const reader = response.body.getReader();
+    try {
+      while (!done) {
+        const { value, done: ended } = await reader.read();
+        if (ended) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newline: number;
+        while (!done && (newline = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newline).replace(/\r$/u, '');
+          buffer = buffer.slice(newline + 1);
+          if (line.startsWith('data:')) done = apply(line.slice(5).trim());
+        }
+      }
+      const rest = buffer.trim();
+      if (!done && rest.startsWith('data:')) apply(rest.slice(5).trim());
+    } finally {
+      if (done) await reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
+
+    return {
+      id,
+      model,
+      usage,
+      choices: [
+        {
+          finish_reason: finish,
+          message: {
+            content: text,
+            refusal: refusal || undefined,
+            tool_calls: calls
+              .filter((call) => call.name)
+              .map((call) => ({
+                id: call.id,
+                type: 'function',
+                ...(call.extra_content
+                  ? { extra_content: call.extra_content }
+                  : {}),
+                function: { name: call.name, arguments: call.arguments },
+              })),
+          },
+        },
+      ],
+    };
+  }
+
+  private toolResult(
+    data: ChatResponse,
+    model: string,
+    request: ToolGenerationRequest,
+    durationMs: number,
+    attempts: number,
+  ): ToolGenerationResult {
     const choice = data.choices[0];
     const toolCalls: LlmToolCall[] = (choice.message.tool_calls ?? []).map(
       (call) => {
