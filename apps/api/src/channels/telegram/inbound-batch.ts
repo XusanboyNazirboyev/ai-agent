@@ -32,7 +32,11 @@ export interface InboundBatch {
     readonly id: string;
     readonly text: string;
     readonly sequence: number;
+    /** `TRANSCRIBED` for a voice note whose text is a speech transcript. */
+    readonly voiceStatus: string | null;
   }>;
+  /** True when any message of the batch is a speech transcript (ADR 042). */
+  readonly fromSpeech: boolean;
   /** Message texts joined with newlines (at most 4,096 characters). */
   readonly text: string;
 }
@@ -130,7 +134,7 @@ export async function selectInboundBatch(
       tenantId,
       direction: 'INBOUND',
     },
-    select: { id: true, text: true, sequence: true },
+    select: { id: true, text: true, sequence: true, voiceStatus: true },
   });
   const messageById = new Map(messages.map((message) => [message.id, message]));
   const orderedMessages = batch
@@ -152,10 +156,12 @@ export async function selectInboundBatch(
   if (batch.length === 0)
     throw new Error('Inbound text exceeds Telegram reply limit');
 
+  const kept = orderedMessages.slice(0, fitCount);
   return {
     eventIds: batch.map((candidate) => candidate.event.id),
     lastProviderMessageId: batch.at(-1)!.messageId,
-    messages: orderedMessages.slice(0, fitCount),
+    messages: kept,
+    fromSpeech: kept.some((message) => message.voiceStatus === 'TRANSCRIBED'),
     text,
   };
 }

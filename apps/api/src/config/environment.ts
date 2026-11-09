@@ -179,6 +179,12 @@ const environmentSchema = postgresEnvironmentSchema
      * estimate); the reported tokens are recorded afterwards.
      */
     STT_WORST_CASE_USD_PER_MINUTE: usdAmount.default('0.02'),
+    /**
+     * ADR 042: digits a machine heard. `typed` (default): a phone number is
+     * taken only from text the customer typed, never from a voice-note
+     * transcript; `accept`: transcripts are used like typed text.
+     */
+    VOICE_DIGITS_POLICY: z.enum(['typed', 'accept']).default('typed'),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z

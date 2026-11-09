@@ -1159,6 +1159,28 @@ describe('voice notes (ADR 042)', () => {
   ): Promise<Awaited<ReturnType<typeof turns>>[number] | undefined> =>
     (await turns(f)).filter((t) => t.status === 'COMMITTED').at(-1);
 
+  const phoneOf = async (f: Fixture): Promise<string | null> =>
+    (await prisma.contact.findFirstOrThrow({ where: { tenantId: f.tenantId } }))
+      .phone;
+
+  it('does not keep a phone number heard in a voice note, but keeps the typed one', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    await voiceTurn(f, sttSaying({ ok: true, text: '77 025 07 14' }));
+    expect(await phoneOf(f)).toBeNull();
+    // The customer types it: now it is stored (never replaced afterwards).
+    await f.processor.process(await receive(f, '90 123 45 67'));
+    expect(await phoneOf(f)).toBe('901234567');
+  });
+
+  it('keeps a phone heard in a voice note when the owner chose to accept speech digits', async () => {
+    const f = await fixture({
+      mode: 'LIVE',
+      overrides: { VOICE_DIGITS_POLICY: 'accept' },
+    });
+    await voiceTurn(f, sttSaying({ ok: true, text: '77 025 07 14' }));
+    expect(await phoneOf(f)).toBe('770250714');
+  });
+
   it('answers the transcript as the customer text', async () => {
     const f = await fixture({ mode: 'SHADOW' });
     const stt = sttSaying({ ok: true, text: 'IELTS kursi kerak' });

@@ -15,3 +15,25 @@ export function extractPhone(text: string): string | undefined {
   const plus = /\+\s*\(?\d/u.test(text) ? '+' : '';
   return `${plus}${digits}`;
 }
+
+/**
+ * What happens to digits that a machine heard (ADR 042). `typed` (default):
+ * a phone number is taken only from text the customer typed; one in a
+ * speech transcript waits until the customer writes it (the first stored
+ * phone is never replaced, so a misheard one would stay). `accept`: the
+ * transcript is used like typed text (the behaviour before this setting).
+ */
+export type SpeechDigitsPolicy = 'typed' | 'accept';
+
+export function phoneFromCustomerText(
+  text: string,
+  options: {
+    /** The text is, or contains, a speech-to-text transcript. */
+    readonly fromSpeech: boolean;
+    readonly speechDigits: SpeechDigitsPolicy;
+  },
+): string | undefined {
+  // Fail safe: only an explicit `accept` lets speech digits through.
+  if (options.fromSpeech && options.speechDigits !== 'accept') return undefined;
+  return extractPhone(text);
+}

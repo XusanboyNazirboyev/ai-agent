@@ -68,6 +68,11 @@ export interface TurnRequest {
   /** The customer text being answered (one or more merged messages). */
   readonly text: string;
   /**
+   * The text contains a speech-to-text transcript (ADR 042): digits in it
+   * are not taken as a phone number while `VOICE_DIGITS_POLICY` is `typed`.
+   */
+  readonly fromSpeech?: boolean;
+  /**
    * History is read from messages strictly below this sequence, so the
    * answered messages are not repeated as history. Omit to use all.
    */
@@ -417,6 +422,10 @@ export class AgentConversationService implements OnModuleInit {
           packRef,
           contact: { name: contactRow?.name, phone: contactRow?.phone },
           customerText: request.text,
+          phoneFromText: !(
+            request.fromSpeech &&
+            this.config.get('VOICE_DIGITS_POLICY', { infer: true }) !== 'accept'
+          ),
         })
       : undefined;
 

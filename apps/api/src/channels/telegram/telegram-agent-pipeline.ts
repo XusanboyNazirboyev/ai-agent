@@ -22,7 +22,7 @@ import { PrismaService } from '../../persistence/prisma.service.js';
 import { HandoverService } from '../../handover/handover.service.js';
 import { LeadService } from '../../leads/lead.service.js';
 import { ActionService } from '../../actions/action.service.js';
-import { extractPhone } from '../../leads/phone.js';
+import { phoneFromCustomerText } from '../../leads/phone.js';
 import { selectInboundBatch } from './inbound-batch.js';
 import { startTyping } from './typing-indicator.js';
 import { TelegramBotApi } from '../../handover/telegram-bot-api.js';
@@ -51,6 +51,8 @@ interface Claim {
   readonly answeredSequence: number;
   readonly idempotencyKey: string;
   readonly text: string;
+  /** The text contains a voice-note transcript (ADR 042). */
+  readonly fromSpeech: boolean;
 }
 
 type ClaimResult =
@@ -239,6 +241,7 @@ export class TelegramAgentPipeline {
           conversationId: input.conversationId,
           turnKey: claim.turnId,
           text: claim.text,
+          fromSpeech: claim.fromSpeech,
           beforeSequence: claim.firstSequence,
           readOnly: claim.mode !== 'LIVE',
         });
@@ -530,6 +533,7 @@ export class TelegramAgentPipeline {
           answeredSequence,
           idempotencyKey,
           text: batch.text,
+          fromSpeech: batch.fromSpeech,
         },
       };
     });
@@ -850,7 +854,10 @@ export class TelegramAgentPipeline {
       if (claim.mode === 'LIVE' && result.outcome !== 'NO_REPLY') {
         // A phone number the customer wrote is kept on the contact, never
         // guessed; then the lead is re-scored from this turn's evidence.
-        const phone = extractPhone(claim.text);
+        const phone = phoneFromCustomerText(claim.text, {
+          fromSpeech: claim.fromSpeech,
+          speechDigits: this.config.get('VOICE_DIGITS_POLICY', { infer: true }),
+        });
         const conversationRow = await tx.conversation.findFirst({
           where: { tenantId, id: conversationId },
           select: { contactId: true },

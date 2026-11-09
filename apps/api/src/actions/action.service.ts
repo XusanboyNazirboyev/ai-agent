@@ -158,6 +158,8 @@ export class ActionService {
     packRef: string;
     contact: { name?: string | null; phone?: string | null };
     customerText: string;
+    /** False when the text is a speech transcript and its digits must not become a phone (ADR 042). */
+    phoneFromText?: boolean;
     now?: Date;
   }): Promise<ActionTurnContext | undefined> {
     const now = input.now ?? new Date();
@@ -208,7 +210,11 @@ export class ActionService {
       ? last.askedSlot.slice(ACTION_SLOT_PREFIX.length).split(':')
       : undefined;
     const collecting = asked?.[0];
-    const phone = input.contact.phone ?? extractPhone(input.customerText);
+    const phone =
+      input.contact.phone ??
+      (input.phoneFromText === false
+        ? undefined
+        : extractPhone(input.customerText));
     // A reply to the action's own name question is the name, if it looks like
     // one (letters, spaces, apostrophes, hyphens; 2-60 characters). It is used
     // for this proposal only and not stored on the contact.

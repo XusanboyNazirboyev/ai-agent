@@ -192,6 +192,8 @@ async function say(
   f: Awaited<ReturnType<typeof fixture>>,
   text: string,
   duplicate = false,
+  /** The text is a speech transcript (ADR 042): the message row says so. */
+  heard = false,
 ): Promise<void> {
   const updateId = duplicate ? nextUpdate : ++nextUpdate;
   const normalized = normalizeTelegramUpdate({
@@ -210,6 +212,11 @@ async function say(
     expect(accepted).toBe('duplicate');
     return;
   }
+  if (heard)
+    await db.message.updateMany({
+      where: { tenantId: f.tenantId, providerMessageId: String(updateId) },
+      data: { type: 'VOICE', voiceStatus: 'TRANSCRIBED' },
+    });
   const outbox = await db.outboxEvent.findFirstOrThrow({
     where: {
       tenantId: f.tenantId,
@@ -295,6 +302,31 @@ describe('business action through the real pipeline (LIVE, development policy, m
     expect(
       all.filter((text) => text === UZ_LATN.templates.actions.succeeded),
     ).toHaveLength(1);
+  });
+
+  it('does not take the phone for a booking from a voice transcript: it asks again, and the typed number works', async () => {
+    const f = await fixture('LIVE');
+    await say(f, 'IELTS ertalab yozilmoqchiman');
+    expect((await replies(f.tenantId)).at(-1)).toBe(
+      UZ_LATN.templates.phoneRequest,
+    );
+
+    // The number was heard by a machine: no proposal, the phone is asked again.
+    await say(f, '+998 77 025 07 14', false, true);
+    expect(
+      await db.actionProposal.count({ where: { tenantId: f.tenantId } }),
+    ).toBe(0);
+    expect((await replies(f.tenantId)).at(-1)).toBe(
+      UZ_LATN.templates.phoneRequest,
+    );
+
+    await say(f, '+998 90 123 45 67');
+    const proposal = await db.actionProposal.findFirstOrThrow({
+      where: { tenantId: f.tenantId, status: 'PROPOSED' },
+    });
+    expect(proposal.payload).toMatchObject({
+      'contact.phone': '+998901234567',
+    });
   });
 
   it('SHADOW proposes and executes nothing, and sends nothing', async () => {
