@@ -21,6 +21,17 @@ import {
 } from '../../speech/gemini-speech-to-text.js';
 import { TelegramSender } from '../telegram/telegram-sender.js';
 
+/**
+ * The key for voice-note STT: a dedicated STT_API_KEY, else the project's
+ * paid GEMINI_API_KEY (owner, 2026-11-09). Values are never logged.
+ */
+export function sttApiKey(env: {
+  readonly STT_API_KEY?: string | undefined;
+  readonly GEMINI_API_KEY?: string | undefined;
+}): string | undefined {
+  return env.STT_API_KEY || env.GEMINI_API_KEY || undefined;
+}
+
 /** Optional override of the speech-to-text adapter (tests). */
 export const SPEECH_TO_TEXT = Symbol('SPEECH_TO_TEXT');
 
@@ -46,7 +57,10 @@ export class VoiceTranscriptionService {
     @Optional() private readonly ledger?: LlmBudgetLedger,
   ) {
     const provider = config.get('STT_PROVIDER', { infer: true });
-    const key = config.get('STT_API_KEY', { infer: true });
+    const key = sttApiKey({
+      STT_API_KEY: config.get('STT_API_KEY', { infer: true }),
+      GEMINI_API_KEY: config.get('GEMINI_API_KEY', { infer: true }),
+    });
     this.stt =
       stt ??
       (provider === 'gemini' && key

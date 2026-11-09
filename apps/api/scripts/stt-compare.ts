@@ -265,7 +265,7 @@ async function main(): Promise<void> {
   }
   if (suspect.size > 0) {
     console.log(
-      `\nReference may differ from what was said (providers agree with each other, not with the text): ${[...suspect].map((i) => i + 1).join(', ')}. Re-listen and correct the file if so.`,
+      `\nProviders agree with each other but not with the reference on lines ${[...suspect].map((i) => i + 1).join(', ')}: a shared recognition error, or a reference that differs from what was said (the speaker decides).`,
     );
   }
 

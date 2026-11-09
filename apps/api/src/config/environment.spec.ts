@@ -24,6 +24,19 @@ describe('validateEnvironment', () => {
     });
   });
 
+  it('lets voice-note STT use GEMINI_API_KEY when STT_API_KEY is not set (ADR 042)', () => {
+    expect(() =>
+      validateEnvironment({ ...postgresEnvironment, STT_PROVIDER: 'gemini' }),
+    ).toThrow(/STT_API_KEY or GEMINI_API_KEY/u);
+    const parsed = validateEnvironment({
+      ...postgresEnvironment,
+      STT_PROVIDER: 'gemini',
+      GEMINI_API_KEY: 'test-placeholder',
+    });
+    expect(parsed.STT_PROVIDER).toBe('gemini');
+    expect(parsed.VOICE_DIGITS_POLICY).toBe('typed');
+  });
+
   it('coerces a valid port and rejects an invalid port', () => {
     expect(
       validateEnvironment({ ...postgresEnvironment, PORT: '8080' }).PORT,

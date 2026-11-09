@@ -174,6 +174,12 @@ const environmentSchema = postgresEnvironmentSchema
     STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
     STT_API_KEY: z.string().min(1).optional(),
     /**
+     * The project's Gemini key (also read by the `gemini` provider preset).
+     * Voice-note STT uses it when STT_API_KEY is not set; it must be a
+     * paid-tier key (the free tier may use content to improve products).
+     */
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    /**
      * REV-03: worst-case cost per audio minute reserved on the tenant's LLM
      * budget before each transcription (4x the provider's own ~$0.005/min
      * estimate); the reported tokens are recorded afterwards.
@@ -445,11 +451,16 @@ const environmentSchema = postgresEnvironmentSchema
     STUCK_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   })
   .superRefine((environment, context) => {
-    if (environment.STT_PROVIDER === 'gemini' && !environment.STT_API_KEY) {
+    if (
+      environment.STT_PROVIDER === 'gemini' &&
+      !environment.STT_API_KEY &&
+      !environment.GEMINI_API_KEY
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['STT_API_KEY'],
-        message: 'STT_API_KEY is required when STT_PROVIDER=gemini',
+        message:
+          'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
       });
     }
     if (
