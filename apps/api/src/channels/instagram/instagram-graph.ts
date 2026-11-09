@@ -286,6 +286,35 @@ export class InstagramGraphClient {
   }
 
   /**
+   * ADR 044: one generic template (carousel) to a customer, built by
+   * `genericTemplateMessage`. Same host and auth as the text send of the
+   * account's login kind; a lost response is ambiguous, never retried.
+   */
+  async sendTemplate(
+    igUserId: string,
+    token: string,
+    recipientId: string,
+    message: { readonly attachment: unknown },
+    login: 'instagram' | 'unified',
+  ): Promise<{ readonly messageId: string }> {
+    const payload = {
+      recipient: { id: requireId(recipientId, 'recipient id') },
+      message,
+    };
+    if (login === 'instagram')
+      return this.send(
+        `${this.base}/${requireId(igUserId, 'Instagram account id')}/messages`,
+        { authorization: `Bearer ${token}` },
+        payload,
+      );
+    const url = new URL(
+      `${this.facebookBase}/${requireId(igUserId, 'Instagram account id')}/messages`,
+    );
+    url.searchParams.set('access_token', token);
+    return this.send(url.toString(), {}, payload);
+  }
+
+  /**
    * Messenger (ADR 040): subscribes the app to a Facebook Page's webhook
    * fields with that Page's access token, `POST /<PAGE_ID>/subscribed_apps`.
    */

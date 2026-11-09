@@ -5,6 +5,10 @@ import {
   readInstagramCredential,
   type InstagramCredential,
 } from './instagram-credential.js';
+import {
+  genericTemplateMessage,
+  type CarouselSpec,
+} from './instagram-carousel.js';
 import { InstagramGraphClient } from './instagram-graph.js';
 
 /** No usable access token for the account: connect it again from the web. */
@@ -105,6 +109,26 @@ export class InstagramSender {
           text,
         )
       : this.graph.sendText(igUserId, credential.token, recipientId, text);
+  }
+
+  /** ADR 044: the carousel that follows a text reply listing items. */
+  async sendCarousel(
+    tenantId: string,
+    channelAccountId: string,
+    recipientId: string,
+    spec: CarouselSpec,
+  ): Promise<{ readonly messageId: string }> {
+    const { igUserId, credential } = await this.account(
+      tenantId,
+      channelAccountId,
+    );
+    return this.graph.sendTemplate(
+      igUserId,
+      credential.token,
+      recipientId,
+      genericTemplateMessage(spec),
+      credential.kind === 'unified' ? 'unified' : 'instagram',
+    );
   }
 
   /** ADR 043: the one private reply to a public comment. */

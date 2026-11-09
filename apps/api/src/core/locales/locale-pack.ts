@@ -130,6 +130,8 @@ export interface LocaleTemplates {
     readonly seats: string;
     readonly starts: string;
     readonly availability: string;
+    /** ADR 044: a card button label ("more about this item"). */
+    readonly details: string;
   };
   readonly availability: Readonly<Record<AvailabilityStatus, string>>;
 }

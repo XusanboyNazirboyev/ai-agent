@@ -238,6 +238,8 @@ export const FieldMappingsSchema = z
         sourceEntityId: JsonPathSchema,
         title: JsonPathSchema,
         description: JsonPathSchema,
+        /** ADR 044: an https image URL; anything else is dropped. */
+        imageUrl: JsonPathSchema,
         attributes: AttributeMappingSchema,
       })
       .partial()

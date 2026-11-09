@@ -91,10 +91,13 @@ export class InstagramWebhookController {
         continue;
       }
       // ADR 043: a comment is answered (or skipped) by the agent pipeline.
+      // ADR 044: a carousel tap counts only for an item we sent.
       const result =
         event.kind === 'comment'
           ? await this.webhook.acceptComment(event)
-          : await this.webhook.accept(event);
+          : event.kind === 'postback'
+            ? await this.webhook.acceptPostback(event)
+            : await this.webhook.accept(event);
       if (result === 'ignored') {
         ignored += 1;
         continue;

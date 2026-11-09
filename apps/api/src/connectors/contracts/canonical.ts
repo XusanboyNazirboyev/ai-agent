@@ -49,6 +49,16 @@ export const CatalogItemSchema = z
     itemType: z.string().min(1),
     title: z.string().min(1),
     description: z.string().optional(),
+    /**
+     * ADR 044: a public image of the item, shown only in the Instagram
+     * carousel. Untrusted CRM data: https only, bounded, never fetched by us.
+     */
+    imageUrl: z
+      .string()
+      .max(2_000)
+      .url()
+      .refine((value) => value.startsWith('https://'), 'https only')
+      .optional(),
     attributes: z.record(z.string(), z.unknown()).default({}),
   })
   .strict();
@@ -132,6 +142,15 @@ export type BookingInput = z.infer<typeof BookingInputSchema>;
 
 export function parseCanonicalQuery(input: unknown): CanonicalQuery {
   return CanonicalQuerySchema.parse(input);
+}
+
+/**
+ * ADR 044: an untrusted image URL from a CRM, or undefined when it is not a
+ * bounded https URL. A bad image never fails the item itself.
+ */
+export function safeImageUrl(value: unknown): string | undefined {
+  const parsed = CatalogItemSchema.shape.imageUrl.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function parseCatalogItem(input: unknown): CatalogItem {

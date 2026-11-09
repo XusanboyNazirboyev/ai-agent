@@ -27,6 +27,7 @@ export interface MockItemFixture {
   itemType: string;
   title: string;
   description?: string;
+  imageUrl?: string;
   attributes: Record<string, unknown>;
   offers: readonly MockOfferFixture[];
 }
@@ -55,6 +56,7 @@ export function toCatalogItem(
     itemType: fixture.itemType,
     title: fixture.title,
     description: fixture.description,
+    ...(fixture.imageUrl ? { imageUrl: fixture.imageUrl } : {}),
     attributes: fixture.attributes,
   };
 }

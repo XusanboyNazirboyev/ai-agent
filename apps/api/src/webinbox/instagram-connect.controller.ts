@@ -67,7 +67,10 @@ const CompleteBody = z.object({
 });
 
 /** Webhook field for direct messages (subscribed per account at enable). */
-const WEBHOOK_FIELDS = ['messages'] as const;
+// ADR 044 (owner approved 2026-11-09): carousel taps arrive as
+// `messaging_postbacks`, listed for Instagram Login and Unified login in the
+// webhook fields matrix (webhooks/fields.md, read 2026-11-09).
+const WEBHOOK_FIELDS = ['messages', 'messaging_postbacks'] as const;
 
 const REFUSAL = {
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },

@@ -38,6 +38,18 @@ const messagingItem = z
       })
       .passthrough()
       .optional(),
+    /**
+     * ADR 044: a carousel button tap, `postback { mid, title, payload }`
+     * ("Webhook Notification Examples", read 2026-11-09). Untrusted.
+     */
+    postback: z
+      .object({
+        mid: z.string().min(1).max(500),
+        title: z.string().max(1_000).optional(),
+        payload: z.string().max(1_000),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -91,6 +103,19 @@ export type NormalizedInstagramText = {
   readonly receivedAt: Date;
 };
 
+/**
+ * ADR 044: a carousel button tap. The payload is untrusted; Meta's button
+ * `title` is not kept (the service rebuilds the text from what we sent).
+ */
+export type NormalizedInstagramPostback = {
+  readonly kind: 'postback';
+  readonly messageId: string;
+  readonly accountId: string;
+  readonly customerId: string;
+  readonly payload: string;
+  readonly receivedAt: Date;
+};
+
 /** ADR 043: a top-level comment on one of our posts. */
 export type NormalizedInstagramComment = {
   readonly kind: 'comment';
@@ -119,6 +144,7 @@ export type InstagramIgnoreReason =
 export type NormalizedInstagramEvent =
   | NormalizedInstagramText
   | NormalizedInstagramComment
+  | NormalizedInstagramPostback
   | { readonly kind: 'ignored'; readonly reason: InstagramIgnoreReason };
 
 export type InstagramNormalization =
@@ -139,7 +165,16 @@ export function normalizeInstagramWebhook(
     for (const e of b.entry)
       for (const m of e.messaging ?? []) {
         const message = m.message;
-        if (!message) {
+        if (!message && m.postback) {
+          events.push({
+            kind: 'postback',
+            messageId: m.postback.mid,
+            accountId: e.id,
+            customerId: m.sender.id,
+            payload: m.postback.payload,
+            receivedAt,
+          });
+        } else if (!message) {
           events.push({ kind: 'ignored', reason: 'not_a_message' });
         } else if (message.is_echo) {
           // Our own outgoing message echoed back: never answer ourselves.

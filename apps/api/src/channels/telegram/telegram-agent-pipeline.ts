@@ -1,3 +1,4 @@
+import { buildCarousel } from '../instagram/instagram-carousel.js';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { HandoverSummary } from '@agentcore/shared';
@@ -722,6 +723,30 @@ export class TelegramAgentPipeline {
           orderBy: { sequence: 'desc' },
           select: { sequence: true },
         });
+        // ADR 044: an Instagram reply that showed two or more catalog items
+        // is followed by a code-built carousel (not for handovers or the
+        // one private reply to a comment).
+        const carousel =
+          result.outcome !== 'HANDOVER' && comments.length === 0
+            ? buildCarousel(
+                result.facts,
+                result.shownFactIds,
+                this.agent.localeRegistry.get(result.locale).templates.labels
+                  .details,
+              )
+            : null;
+        const richContent =
+          carousel &&
+          (await tx.channelAccount.findFirst({
+            where: {
+              tenantId,
+              id: claim.channelAccountId,
+              channelType: 'instagram',
+            },
+            select: { id: true },
+          }))
+            ? carousel
+            : undefined;
         const reply = await tx.message.create({
           data: {
             tenantId,
@@ -735,6 +760,7 @@ export class TelegramAgentPipeline {
             providerChatId: claim.providerChatId,
             deliveryState: 'PENDING',
             sendIdempotencyKey: claim.idempotencyKey,
+            ...(richContent ? { richContent } : {}),
           },
           select: { id: true },
         });
