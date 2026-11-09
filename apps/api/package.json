@@ -49,6 +49,7 @@
     "@agentcore/shared": "workspace:*",
     "@anthropic-ai/sdk": "^1.1.0",
     "@google/genai": "2.32.0",
+    "@livekit/rtc-node": "1.2.1",
     "@nestjs/common": "^12.2.0",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^12.2.0",
@@ -57,10 +58,12 @@
     "@prisma/client": "7.10.0",
     "bullmq": "^6.4.0",
     "ioredis": "^6.0.0",
+    "livekit-server-sdk": "2.19.2",
     "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "undici": "^7.30.1",
+    "ws": "8.22.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -70,6 +73,7 @@
     "@types/express": "^5.0.5",
     "@types/node": "^24.19.2",
     "@types/pg": "^8.23.1",
+    "@types/ws": "8.18.2",
     "dotenv": "^18.0.8",
     "prisma": "7.10.0",
     "ts-node": "^10.9.2",

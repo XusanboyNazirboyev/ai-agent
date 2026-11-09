@@ -15,7 +15,9 @@ export type LlmPurpose =
   | 'evaluate'
   | 'embed'
   /** Speech-to-text of a voice note (metered on the same ledger, REV-03). */
-  | 'transcribe';
+  | 'transcribe'
+  /** Text-to-speech of a voice-call reply (ADR 045, same ledger). */
+  | 'speak';
 
 export type LlmStopReason =
   'end' | 'tool_calls' | 'max_tokens' | 'refusal' | 'other';

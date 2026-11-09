@@ -126,6 +126,11 @@ export interface CallLeg {
   sendAudio(chunk: TtsAudioChunk): AudioSendReceipt;
   /** Drop audio queued for playout (barge-in). */
   clearPlayback(): void;
+  /**
+   * True while sent audio is still queued or playing at the far end. Real
+   * legs implement it so barge-in also works after generation has finished.
+   */
+  isPlayingOut?(): boolean;
 }
 
 export type TelephonyFailure =
