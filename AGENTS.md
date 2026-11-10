@@ -29,7 +29,7 @@ ADR 002 (`docs/adr/002-specification-reconciliation.md`) > addendum (`docs/spec/
 Limit command output (`| tail -n 60`, quiet reporters, grep for failures). Never paste whole logs or files into chat. Read files with offset/limit and do not re-read. Reports at most 40 lines. If context passes ~60%, finish the step, commit, update PROGRESS, and tell the user to `/clear`.
 
 ## Model policy (summary; details in `docs/adr/011-spec-layout-and-model-policy.md`)
-- Ceiling is Opus 5.5. Never use or pin fable, best, or any Mythos model; decline offers to switch to them.
+- Main session: the owner chooses the model with `/model` (Fable 5.1 since 2026-11-10, ADR 011 amendment); an agent never switches models or pins fable/best/Mythos on its own. Subagents: ceiling Opus 5.5.
 - Pin only aliases `haiku`/`sonnet`/`opus` or full IDs (e.g. `claude-opus-5-5`). Project default: `sonnet`.
 - Subagents in `.claude/agents/`: `mechanical` (haiku), `builder` (sonnet), `architect` (opus, read-only, one call per stage), `reviewer` (sonnet, read-only). Two failures of the same step by builder → architect once → then stop and report.
 

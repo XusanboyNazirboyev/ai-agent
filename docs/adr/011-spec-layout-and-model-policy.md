@@ -11,7 +11,7 @@
 
 **Intentional wording changes** (all other lines are verbatim in `docs/spec/`): the rule "read this entire file at the start of every session" (§0.1) is replaced in `AGENTS.md` by "read the index, the current phase, and relevant files only"; §16 step 1 ("summarize in 20 lines") is not required each session; the spec file text itself still contains the original wording.
 
-**Model policy.** Ceiling Opus 5.5; never fable/best/Mythos. Project default `sonnet`. Four subagents (`mechanical` haiku, `builder` sonnet, `architect` opus read-only ≤1 call per stage, `reviewer` sonnet read-only). Builder failing a step twice escalates to architect once, then stops. Managed-settings enforcement is documented in `docs/CLAUDE_CODE_SETUP.md` for the owner to apply.
+**Model policy.** Ceiling Opus 5.5; never fable/best/Mythos. *Amended 2026-11-10 (owner decision):* the owner runs the main session on Fable 5.1 ("faster, more precise, stronger"); the ceiling for the main session is therefore Fable 5.1, chosen by the owner with `/model`, never by an agent on its own. Subagent pins are unchanged (haiku/sonnet/opus). Project default `sonnet`. Four subagents (`mechanical` haiku, `builder` sonnet, `architect` opus read-only ≤1 call per stage, `reviewer` sonnet read-only). Builder failing a step twice escalates to architect once, then stops. Managed-settings enforcement is documented in `docs/CLAUDE_CODE_SETUP.md` for the owner to apply.
 
 **Instructions file.** `AGENTS.md` is the canonical file and `CLAUDE.md` only imports it; see the Amendment (2026-10-26) at the end of this ADR.
 
