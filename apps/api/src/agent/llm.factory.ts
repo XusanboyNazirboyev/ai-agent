@@ -46,6 +46,7 @@ export type LlmEnvironment = Pick<
   | 'LLM_STRUCTURED_OUTPUT'
   | 'LLM_MAX_TOKENS_PARAM'
   | 'LLM_REASONING_EFFORT'
+  | 'LLM_FAST_REASONING_EFFORT'
   | 'LLM_RATE_LIMIT_RPM'
   | 'LLM_RATE_LIMIT_TPM'
   | 'LLM_RATE_LIMIT_RPD'
@@ -80,6 +81,8 @@ const LLM_KEYS = [
   'LLM_MODEL_STRONG',
   'LLM_STRUCTURED_OUTPUT',
   'LLM_MAX_TOKENS_PARAM',
+  'LLM_REASONING_EFFORT',
+  'LLM_FAST_REASONING_EFFORT',
   'LLM_RATE_LIMIT_RPM',
   'LLM_RATE_LIMIT_TPM',
   'LLM_RATE_LIMIT_RPD',
@@ -97,6 +100,18 @@ export function llmEnvironment(
   return Object.fromEntries(
     LLM_KEYS.map((key) => [key, config.get(key, { infer: true })]),
   ) as unknown as LlmEnvironment;
+}
+
+/**
+ * FAST-only effort per routed provider: Gemini takes every level; Groq
+ * rejects `minimal` (HTTP 400), so it keeps LLM_REASONING_EFFORT then.
+ */
+export function fastEffortByProvider(
+  effort: 'minimal' | 'low' | 'medium' | 'high',
+): Record<string, 'minimal' | 'low' | 'medium' | 'high'> {
+  return effort === 'minimal'
+    ? { gemini: effort }
+    : { gemini: effort, groq: effort };
 }
 
 /**
@@ -130,6 +145,13 @@ function baseProvider(
             },
           }
         : {}),
+      ...(environment.LLM_FAST_REASONING_EFFORT
+        ? {
+            fastReasoningEffortByProvider: fastEffortByProvider(
+              environment.LLM_FAST_REASONING_EFFORT,
+            ),
+          }
+        : {}),
       ...(transport ? { fetch: transport } : {}),
     });
     return build.provider;
@@ -157,6 +179,13 @@ function baseProvider(
       maxTokensParam: environment.LLM_MAX_TOKENS_PARAM,
       ...(environment.LLM_REASONING_EFFORT
         ? { reasoningEffort: environment.LLM_REASONING_EFFORT }
+        : {}),
+      ...(environment.LLM_FAST_REASONING_EFFORT
+        ? {
+            reasoningEffortByTier: {
+              FAST: environment.LLM_FAST_REASONING_EFFORT,
+            },
+          }
         : {}),
       requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
       maxRetries: environment.LLM_MAX_RETRIES,

@@ -215,6 +215,15 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_REASONING_EFFORT: z
       .enum(['minimal', 'low', 'medium', 'high'])
       .optional(),
+    /**
+     * Latency experiment 2026-11-10: `reasoning_effort` for FAST (extraction)
+     * calls only; replies keep LLM_REASONING_EFFORT. Unset = no change. In
+     * routed mode it goes to Gemini, and to Groq unless it is `minimal`
+     * (Groq rejects `minimal`).
+     */
+    LLM_FAST_REASONING_EFFORT: z
+      .enum(['minimal', 'low', 'medium', 'high'])
+      .optional(),
     /** Client-side limits to stay inside a provider quota (any provider). */
     LLM_RATE_LIMIT_RPM: z.coerce.number().int().min(1).max(100_000).optional(),
     LLM_RATE_LIMIT_TPM: z.coerce

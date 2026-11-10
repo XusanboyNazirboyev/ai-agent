@@ -16,6 +16,7 @@ import {
   RateLimitedLlmProvider,
 } from '../src/llm/rate-limited-provider.js';
 import { PRICING_CATALOG } from '../src/llm/pricing-catalog.js';
+import { fastEffortByProvider } from '../src/agent/llm.factory.js';
 import { loadCases } from '../src/agent/testing/eval-runner.js';
 import {
   buildReport,
@@ -52,8 +53,9 @@ import {
  *   (default 900000), LIVE_EVAL_MAX_OUTPUT_TOKENS (default 200, at most
  *   1024, the application's default LLM_MAX_OUTPUT_TOKENS: the per-call
  *   output ceiling of every request).
- * - routed mode sends LLM_REASONING_EFFORT to Gemini and Groq, as the
- *   application does (llm.factory.ts).
+ * - routed mode sends LLM_REASONING_EFFORT to Gemini and Groq, and
+ *   LLM_FAST_REASONING_EFFORT for extraction only, as the application does
+ *   (llm.factory.ts).
  * - Per-case outcomes, with stage timings and every model call's model,
  *   duration and tokens, are written next to the report
  *   (`live-<stamp>.outcomes.json`).
@@ -135,6 +137,14 @@ async function main(): Promise<void> {
     effort === 'high'
       ? effort
       : undefined;
+  const fastRaw = process.env.LLM_FAST_REASONING_EFFORT;
+  const fastEffort =
+    fastRaw === 'minimal' ||
+    fastRaw === 'low' ||
+    fastRaw === 'medium' ||
+    fastRaw === 'high'
+      ? fastRaw
+      : undefined;
   const listed = process.env.LIVE_EVAL_MODELS?.split(',')
     .map((model) => model.trim())
     .filter(Boolean);
@@ -199,6 +209,9 @@ async function main(): Promise<void> {
             },
           }
         : {}),
+      ...(fastEffort
+        ? { fastReasoningEffortByProvider: fastEffortByProvider(fastEffort) }
+        : {}),
     });
     label = `routed (${routed.policy.version})`;
     process.stdout.write(
@@ -247,6 +260,7 @@ async function main(): Promise<void> {
         // Same thinking level as the application (LLM_REASONING_EFFORT), so
         // the evaluation measures what production runs.
         ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(fastEffort ? { reasoningEffortByTier: { FAST: fastEffort } } : {}),
         requestTimeoutMs: 30_000,
         maxRetries: 2,
       });

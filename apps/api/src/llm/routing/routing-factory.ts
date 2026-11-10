@@ -70,6 +70,13 @@ export function buildRoutedProvider(options: {
   readonly reasoningEffortByProvider?: Readonly<
     Record<string, 'minimal' | 'low' | 'medium' | 'high'>
   >;
+  /**
+   * `reasoning_effort` for FAST (extraction) calls only, per provider id
+   * (LLM_FAST_REASONING_EFFORT); STRONG keeps `reasoningEffortByProvider`.
+   */
+  readonly fastReasoningEffortByProvider?: Readonly<
+    Record<string, 'minimal' | 'low' | 'medium' | 'high'>
+  >;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
   readonly onFailover?: ConstructorParameters<typeof RoutingLlmProvider>[4];
@@ -126,6 +133,13 @@ export function buildRoutedProvider(options: {
             ? {
                 reasoningEffort:
                   options.reasoningEffortByProvider[ref.provider]!,
+              }
+            : {}),
+          ...(options.fastReasoningEffortByProvider?.[ref.provider]
+            ? {
+                reasoningEffortByTier: {
+                  FAST: options.fastReasoningEffortByProvider[ref.provider]!,
+                },
               }
             : {}),
           requestTimeoutMs: options.requestTimeoutMs,
