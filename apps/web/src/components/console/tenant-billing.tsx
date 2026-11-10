@@ -86,6 +86,12 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
     // Only when a dialog opens or closes.
   }, [dialog]);
 
+  useEffect(() => {
+    // Plans may arrive after the dialog opened.
+    if ((dialog === 'start' || dialog === 'change') && !planId && plans[0])
+      setPlanId(plans[0].id);
+  }, [dialog, planId, plans]);
+
   const current = query.data?.current ?? null;
   const trial = trialDays === '' ? undefined : Number(trialDays);
   const trialValid =
