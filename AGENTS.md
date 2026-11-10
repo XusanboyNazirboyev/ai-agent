@@ -31,6 +31,7 @@ Limit command output (`| tail -n 60`, quiet reporters, grep for failures). Never
 ## Model policy (summary; details in `docs/adr/011-spec-layout-and-model-policy.md`)
 - Main session: the owner chooses the model with `/model` (Fable 5.1 since 2026-11-10, ADR 011 amendment); an agent never switches models or pins fable/best/Mythos on its own. Subagents: ceiling Opus 5.5.
 - Pin only aliases `haiku`/`sonnet`/`opus` or full IDs (e.g. `claude-opus-5-5`). Project default: `sonnet`.
+- Spawning discipline (owner 2026-11-10, after `/usage`: `general-purpose` was 21% of usage because an unset model inherits the main session's): implementation goes to `builder`; a `general-purpose` spawn always passes `model: sonnet` (or `haiku` for mechanical work); `opus` only through `architect`. Larger work is split into steps that fit `builder`'s turn limit, not moved to a bigger model.
 - Subagents in `.claude/agents/`: `mechanical` (haiku), `builder` (sonnet), `architect` (opus, read-only, one call per stage), `reviewer` (sonnet, read-only). Two failures of the same step by builder → architect once → then stop and report.
 
 ## Decisions D1–D22 (one line each; rationale in `docs/spec/02-decisions-D1-D22.md`)
