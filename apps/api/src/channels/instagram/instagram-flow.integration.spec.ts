@@ -1143,6 +1143,51 @@ describe('Instagram voice messages (ADR 042)', () => {
     }
   });
 
+  it('trusts the bytes over a wrong Content-Type: Ogg/Opus labelled video/mp4 (seen on staging)', async () => {
+    const ogg = new Uint8Array(4_096);
+    ogg.set([0x4f, 0x67, 0x67, 0x53], 0); // "OggS"
+    const speech = stt({ ok: true, text: 'IELTS kursi kerak' });
+    const f = await fixture({
+      mode: 'LIVE',
+      voice: {
+        stt: speech,
+        download: downloads({ ok: true, data: ogg, contentType: 'video/mp4' })
+          .fn,
+      },
+    });
+    await f.processor.process((await receiveVoice(f, VOICE_URL)).event);
+    expect(speech.clips).toEqual([
+      { size: 4_096, mimeType: 'audio/ogg', durationSeconds: 60 },
+    ]);
+    expect(
+      await db.message.findFirstOrThrow({
+        where: { tenantId: f.tenantId, type: 'VOICE' },
+      }),
+    ).toMatchObject({ voiceStatus: 'TRANSCRIBED' });
+  });
+
+  it('refuses a video/mp4 whose bytes are not an audio container', async () => {
+    const speech = stt({ ok: true, text: 'x' });
+    const f = await fixture({
+      mode: 'LIVE',
+      voice: {
+        stt: speech,
+        download: downloads({
+          ok: true,
+          data: new Uint8Array(4_096),
+          contentType: 'video/mp4',
+        }).fn,
+      },
+    });
+    await f.processor.process((await receiveVoice(f, VOICE_URL)).event);
+    expect(speech.clips).toHaveLength(0);
+    expect(
+      await db.message.findFirstOrThrow({
+        where: { tenantId: f.tenantId, type: 'VOICE' },
+      }),
+    ).toMatchObject({ voiceStatus: 'FAILED' });
+  });
+
   it('with no STT configured, the voice message is answered with "please type"', async () => {
     const f = await fixture({
       mode: 'LIVE',

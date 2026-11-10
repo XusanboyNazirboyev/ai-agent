@@ -71,3 +71,16 @@ Owner: Instagram next. Built to the documented webhook shape and tested with a f
 - **To verify with the first real voice message:** that the type is `audio`; the media type of the response; whether the download needs no token (if it does, the note fails safe to "please type" and this amendment must change); how long the URL stays valid (we fetch immediately; a retried job after expiry also fails safe).
 - **Tests:** unit (normalizer, downloader including SSRF cases, checked by loosening the policy, media types) and integration on the real database with a fake Meta transport, fake download and fake STT (stored as PENDING, transcribed and answered through Instagram, download failure, unknown media type, STT not configured).
 - **Side fix:** `dev-superadmin.integration.spec.ts` counted operators by display name, which a later test in the same file changes in the shared database, so it failed on every second run; it now counts the account by its e-mail. Integration suite: 566/566.
+
+## Amendment 2026-11-10 (later): Instagram voice verified with the first real message
+
+The owner sent a real Instagram voice message to the staging account; it failed (twice, then a `VOICE_UNREADABLE` handover) and the staging logs, database row and a probe from the server gave the facts the 2026-11-10 amendment listed as unverified:
+
+- **Type:** the webhook delivered it as an `audio` attachment (stored as `VOICE`/`PENDING`); host `lookaside.fbsbx.com`, URL about 300 characters, https.
+- **Token:** none needed; a plain GET from the server answered `200` with the bytes (about 20 KB for a few seconds).
+- **Container:** the response said `Content-Type: video/mp4`, `Content-Disposition: inline;filename=audioclip-<ms>-<n>.ogg`, and the bytes were **Ogg/Opus**, mono, 48 kHz. So the declared type is wrong for voice messages.
+- **Redirect without a User-Agent:** a request with no `User-Agent` header (what our HTTP client sent) gets a `302`; any `User-Agent` gets the `200`. The downloader refuses redirects by design, so it failed as `HTTP_ERROR`, which the service then logged as `PROVIDER_ERROR`.
+- **URL lifetime:** still unknown (the probe ran about 20 minutes after delivery and worked; no later check).
+
+Changes: the downloader sends `User-Agent: tezda-media-fetch/1.0` (an honest product name, not a browser string; redirects are still refused); the container is decided from the first bytes (`sniffAudioContainer`: Ogg, WAVE, MP4/M4A, MP3 and ADTS AAC only) and the declared type is used only when the bytes are not recognised **and** it is itself a known audio type, otherwise the clip is refused; the failure log now carries the specific download code (`DOWNLOAD_HTTP_ERROR` etc.), never the URL. Tests: unit for the sniffer and the header, integration for "Ogg labelled `video/mp4` is transcribed as `audio/ogg`" and "`video/mp4` with non-audio bytes is refused"; both checked by removing the fix.
+

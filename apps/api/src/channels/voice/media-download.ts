@@ -90,7 +90,13 @@ export async function downloadPublicMedia(
       origin: url.origin,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { accept: 'audio/*,video/*;q=0.5,*/*;q=0.1' },
+      // Meta's CDN answers a request without a User-Agent with a redirect
+      // (found on staging, 2026-11-10) and serves it when one is present.
+      // An honest product name, not a browser string.
+      headers: {
+        accept: 'audio/*,video/*;q=0.5,*/*;q=0.1',
+        'user-agent': 'tezda-media-fetch/1.0',
+      },
       signal: deadline,
     });
 

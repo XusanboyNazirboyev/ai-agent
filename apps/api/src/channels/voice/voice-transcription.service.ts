@@ -16,6 +16,7 @@ import {
 import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { ElevenLabsSpeechToText } from '../../speech/elevenlabs-speech-to-text.js';
+import { sniffAudioContainer } from './audio-container.js';
 import { downloadPublicMedia, type MediaDownload } from './media-download.js';
 import { FallbackSpeechToText } from '../../speech/fallback-speech-to-text.js';
 import {
@@ -243,9 +244,17 @@ export class VoiceTranscriptionService {
       maxBytes: INSTAGRAM_MAX_BYTES,
       timeoutMs: INSTAGRAM_DOWNLOAD_TIMEOUT_MS,
     });
-    if (!downloaded.ok) return { ok: false, code: 'PROVIDER_ERROR' };
+    // The specific download failure is the reason (never the URL).
+    if (!downloaded.ok)
+      return { ok: false, code: `DOWNLOAD_${downloaded.code}` };
+    // The bytes decide the container: Instagram labels an Ogg/Opus voice
+    // message `video/mp4`. A declared type is used only when the bytes are
+    // not recognised AND it is itself a known audio type; otherwise refused.
     const declared = downloaded.contentType ?? '';
-    const mimeType = MEDIA_TYPE_ALIASES[declared] ?? declared;
+    const mimeType =
+      sniffAudioContainer(downloaded.data) ??
+      MEDIA_TYPE_ALIASES[declared] ??
+      declared;
     // The duration is unknown: the policy maximum is both the check and the
     // metering worst case; the 2 MiB bound limits what can actually arrive.
     const clip: AudioClip = {

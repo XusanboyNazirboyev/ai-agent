@@ -80,6 +80,23 @@ describe('downloadPublicMedia (untrusted webhook URLs)', () => {
     expect(d.released.closed).toBe(1);
   });
 
+  it('identifies itself with a User-Agent (Meta redirects a request without one)', async () => {
+    const d = fakeDispatcher({
+      statusCode: 200,
+      headers: { 'content-type': 'audio/ogg' },
+      chunks: [new Uint8Array([1, 2, 3])],
+    });
+    await downloadPublicMedia(URL_OK, {
+      maxBytes: 1024,
+      timeoutMs: 1000,
+      resolve: PUBLIC,
+      createDispatcher: d.factory,
+    });
+    expect(d.requests[0]?.headers).toMatchObject({
+      'user-agent': 'tezda-media-fetch/1.0',
+    });
+  });
+
   it('refuses everything that is not a plain public https URL, before any request', async () => {
     for (const url of [
       'http://cdn.example.test/a',
