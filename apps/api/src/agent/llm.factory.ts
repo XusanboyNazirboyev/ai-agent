@@ -103,10 +103,11 @@ export function llmEnvironment(
 }
 
 /**
- * FAST-only effort per routed provider: Gemini takes every level; Groq
- * rejects `minimal` (HTTP 400), so it keeps LLM_REASONING_EFFORT then.
+ * Effort per routed provider: Gemini takes every level; Groq rejects
+ * `minimal` with HTTP 400 (an invalid request never fails over), so Groq is
+ * sent nothing then (FAST: it keeps LLM_REASONING_EFFORT).
  */
-export function fastEffortByProvider(
+export function routedEffortByProvider(
   effort: 'minimal' | 'low' | 'medium' | 'high',
 ): Record<string, 'minimal' | 'low' | 'medium' | 'high'> {
   return effort === 'minimal'
@@ -139,15 +140,14 @@ function baseProvider(
       // that take the parameter, and sends nothing to the others.
       ...(environment.LLM_REASONING_EFFORT
         ? {
-            reasoningEffortByProvider: {
-              gemini: environment.LLM_REASONING_EFFORT,
-              groq: environment.LLM_REASONING_EFFORT,
-            },
+            reasoningEffortByProvider: routedEffortByProvider(
+              environment.LLM_REASONING_EFFORT,
+            ),
           }
         : {}),
       ...(environment.LLM_FAST_REASONING_EFFORT
         ? {
-            fastReasoningEffortByProvider: fastEffortByProvider(
+            fastReasoningEffortByProvider: routedEffortByProvider(
               environment.LLM_FAST_REASONING_EFFORT,
             ),
           }

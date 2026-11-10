@@ -16,7 +16,7 @@ import {
   RateLimitedLlmProvider,
 } from '../src/llm/rate-limited-provider.js';
 import { PRICING_CATALOG } from '../src/llm/pricing-catalog.js';
-import { fastEffortByProvider } from '../src/agent/llm.factory.js';
+import { routedEffortByProvider } from '../src/agent/llm.factory.js';
 import { loadCases } from '../src/agent/testing/eval-runner.js';
 import {
   buildReport,
@@ -203,14 +203,11 @@ async function main(): Promise<void> {
       // Same thinking level as the application's routed provider.
       ...(reasoningEffort
         ? {
-            reasoningEffortByProvider: {
-              gemini: reasoningEffort,
-              groq: reasoningEffort,
-            },
+            reasoningEffortByProvider: routedEffortByProvider(reasoningEffort),
           }
         : {}),
       ...(fastEffort
-        ? { fastReasoningEffortByProvider: fastEffortByProvider(fastEffort) }
+        ? { fastReasoningEffortByProvider: routedEffortByProvider(fastEffort) }
         : {}),
     });
     label = `routed (${routed.policy.version})`;

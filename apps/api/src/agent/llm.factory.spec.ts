@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
 import {
   createLlmProvider,
-  fastEffortByProvider,
+  routedEffortByProvider,
   llmEnvironment,
   type LlmEnvironment,
 } from './llm.factory.js';
@@ -117,8 +117,54 @@ describe('llmEnvironment reads the reasoning settings', () => {
     ]);
   });
 
+  it('a minimal effort fails over to Groq without sending it minimal', async () => {
+    const seen: Array<{ host: string; effort: unknown }> = [];
+    const transport = ((url: string | URL | Request, init?: RequestInit) => {
+      const host = new URL(String(url)).host;
+      const parsed = JSON.parse(String(init?.body)) as {
+        reasoning_effort?: unknown;
+      };
+      seen.push({ host, effort: parsed.reasoning_effort });
+      return Promise.resolve(
+        host === 'api.groq.com'
+          ? new Response(
+              JSON.stringify({
+                id: 'x',
+                model: 'openai/gpt-oss-20b',
+                choices: [
+                  { finish_reason: 'stop', message: { content: 'ok' } },
+                ],
+                usage: { prompt_tokens: 3, completion_tokens: 1 },
+              }),
+              { status: 200, headers: { 'content-type': 'application/json' } },
+            )
+          : new Response('{}', { status: 503 }),
+      );
+    }) as typeof fetch;
+    const provider = createLlmProvider(
+      llmEnvironment(config({ ...ROUTED, LLM_REASONING_EFFORT: 'minimal' })),
+      transport,
+      { GEMINI_API_KEY: 'k', GROQ_API_KEY: 'k' },
+    );
+    await provider.generateWithTools({
+      tier: 'FAST',
+      purpose: 'respond',
+      system: 's',
+      messages: [{ role: 'user', text: 'salom' }],
+      tools: [],
+      maxOutputTokens: 50,
+    });
+    expect(seen).toEqual([
+      { host: 'generativelanguage.googleapis.com', effort: 'minimal' },
+      { host: 'api.groq.com', effort: undefined },
+    ]);
+  });
+
   it('never sends minimal to Groq, which rejects it', () => {
-    expect(fastEffortByProvider('minimal')).toEqual({ gemini: 'minimal' });
-    expect(fastEffortByProvider('low')).toEqual({ gemini: 'low', groq: 'low' });
+    expect(routedEffortByProvider('minimal')).toEqual({ gemini: 'minimal' });
+    expect(routedEffortByProvider('low')).toEqual({
+      gemini: 'low',
+      groq: 'low',
+    });
   });
 });
