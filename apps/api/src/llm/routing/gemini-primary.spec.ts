@@ -77,3 +77,72 @@ describe('gemini-primary routing policy', () => {
     expect(reasons).toContain('MISTRAL_API_KEY not set');
   });
 });
+
+describe('reasoning effort in routed mode (staging runs Gemini with LLM_REASONING_EFFORT)', () => {
+  const body = {
+    id: 'x',
+    model: 'm',
+    choices: [{ finish_reason: 'stop', message: { content: 'ok' } }],
+    usage: { prompt_tokens: 3, completion_tokens: 1 },
+  };
+
+  async function sent(
+    broken: string[],
+  ): Promise<Array<{ host: string; effort: unknown }>> {
+    const seen: Array<{ host: string; effort: unknown }> = [];
+    const fetchFake = ((url: string | URL | Request, init?: RequestInit) => {
+      const host = new URL(String(url)).host;
+      const parsed = JSON.parse(String(init?.body)) as {
+        reasoning_effort?: unknown;
+      };
+      seen.push({ host, effort: parsed.reasoning_effort });
+      return Promise.resolve(
+        broken.includes(host)
+          ? new Response('{}', { status: 503 })
+          : new Response(JSON.stringify(body), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+      );
+    }) as typeof fetch;
+    const built = buildRoutedProvider({
+      policy: GEMINI_PRIMARY_ROUTING_POLICY,
+      snapshot,
+      env: ALL_KEYS,
+      trustedProviders: TRUSTED,
+      requestTimeoutMs: 500,
+      maxRetries: 0,
+      reasoningEffortByProvider: { gemini: 'low', groq: 'low' },
+      fetch: fetchFake,
+    });
+    await built.provider.generateWithTools({
+      tier: 'FAST',
+      purpose: 'respond',
+      system: 's',
+      messages: [{ role: 'user', text: 'salom' }],
+      tools: [],
+      maxOutputTokens: 50,
+    });
+    return seen;
+  }
+
+  it('sends the configured effort to Gemini and Groq, and none to the others', async () => {
+    const seen = await sent([
+      'generativelanguage.googleapis.com',
+      'api.groq.com',
+      'api.mistral.ai',
+    ]);
+    expect(seen.map((s) => s.host)).toEqual([
+      'generativelanguage.googleapis.com',
+      'api.groq.com',
+      'api.mistral.ai',
+      'openrouter.ai',
+    ]);
+    expect(seen.map((s) => s.effort)).toEqual([
+      'low',
+      'low',
+      undefined,
+      undefined,
+    ]);
+  });
+});

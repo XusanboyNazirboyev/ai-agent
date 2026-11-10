@@ -119,6 +119,17 @@ function baseProvider(
       requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
       maxRetries: environment.LLM_MAX_RETRIES,
       maxInputBytes: environment.LLM_MAX_INPUT_BYTES,
+      // Staging runs Gemini with a reasoning effort (default effort truncated a
+      // third of the extraction calls); routed mode keeps it for the providers
+      // that take the parameter, and sends nothing to the others.
+      ...(environment.LLM_REASONING_EFFORT
+        ? {
+            reasoningEffortByProvider: {
+              gemini: environment.LLM_REASONING_EFFORT,
+              groq: environment.LLM_REASONING_EFFORT,
+            },
+          }
+        : {}),
       ...(transport ? { fetch: transport } : {}),
     });
     return build.provider;

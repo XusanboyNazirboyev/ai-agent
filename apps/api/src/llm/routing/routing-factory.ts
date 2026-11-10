@@ -62,6 +62,14 @@ export function buildRoutedProvider(options: {
   readonly maxRetries: number;
   /** LLM_MAX_INPUT_BYTES: must stay under every candidate's long-prompt tier. */
   readonly maxInputBytes?: number;
+  /**
+   * `reasoning_effort` per provider id, sent only to the providers listed
+   * (LLM_REASONING_EFFORT applies to Gemini and Groq, which accept it; an
+   * unlisted provider is never sent a parameter it may reject).
+   */
+  readonly reasoningEffortByProvider?: Readonly<
+    Record<string, 'minimal' | 'low' | 'medium' | 'high'>
+  >;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
   readonly onFailover?: ConstructorParameters<typeof RoutingLlmProvider>[4];
@@ -114,6 +122,12 @@ export function buildRoutedProvider(options: {
           structuredOutput: 'json_object',
           capabilityOf: (model): CapabilityView => capabilityFor(preset, model),
           maxTokensParam: preset.maxTokensParam,
+          ...(options.reasoningEffortByProvider?.[ref.provider]
+            ? {
+                reasoningEffort:
+                  options.reasoningEffortByProvider[ref.provider]!,
+              }
+            : {}),
           requestTimeoutMs: options.requestTimeoutMs,
           // Failover is the retry strategy across candidates: keep per
           // candidate retries to one so a failing provider is left quickly.
