@@ -7,6 +7,7 @@ import type {
   NormalizedInstagramComment,
   NormalizedInstagramPostback,
   NormalizedInstagramText,
+  NormalizedInstagramVoice,
 } from './instagram-normalizer.js';
 
 /** How many recent carousels a tap is matched against. */
@@ -24,7 +25,7 @@ export class InstagramWebhookService {
   constructor(private readonly prisma: PrismaService) {}
 
   async accept(
-    event: NormalizedInstagramText,
+    event: NormalizedInstagramText | NormalizedInstagramVoice,
     channelType: MetaChannelType = 'instagram',
   ): Promise<InstagramAcceptance> {
     if (
@@ -148,8 +149,16 @@ export class InstagramWebhookService {
             channelAccountId: channel.id,
             authorType: 'CUSTOMER',
             direction: 'INBOUND',
-            type: 'TEXT',
-            text: event.text,
+            ...(event.kind === 'voice'
+              ? {
+                  // ADR 042: the audio is fetched from this URL by the worker
+                  // (never at intake, never from a stored, long-lived link).
+                  type: 'VOICE' as const,
+                  text: '',
+                  voiceStatus: 'PENDING' as const,
+                  mediaRef: event.url,
+                }
+              : { type: 'TEXT' as const, text: event.text }),
             sequence: (latest?.sequence ?? 0) + 1,
             providerChatId: event.customerId,
             providerMessageId: storedId,

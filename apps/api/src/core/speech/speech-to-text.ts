@@ -103,7 +103,13 @@ export interface VoicePolicy {
 export const DEFAULT_VOICE_POLICY: VoicePolicy = {
   maxBytes: 5 * 1024 * 1024,
   maxSeconds: 60,
-  allowedMimeTypes: ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav'],
+  allowedMimeTypes: [
+    'audio/ogg',
+    'audio/mpeg',
+    'audio/mp4',
+    'audio/aac',
+    'audio/wav',
+  ],
   minTranscriptChars: 2,
   confirmBelowConfidence: 0.6,
   timeoutMs: 20_000,

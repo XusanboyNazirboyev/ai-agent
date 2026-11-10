@@ -187,6 +187,10 @@ export class TelegramProcessor {
     }
     if (event.type === 'instagram.inbound')
       await this.fillInstagramName(event.tenantId, conversationId);
+    // ADR 042: a voice message becomes text (or FAILED) before the agent
+    // reads the batch. Only Instagram stores one today; for any other
+    // channel nothing is pending and this does nothing.
+    await this.voice?.resolvePending(event.tenantId, conversationId);
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);
       if (mode !== 'OFF') {

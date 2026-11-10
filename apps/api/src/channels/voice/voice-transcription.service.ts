@@ -16,6 +16,7 @@ import {
 import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { ElevenLabsSpeechToText } from '../../speech/elevenlabs-speech-to-text.js';
+import { downloadPublicMedia, type MediaDownload } from './media-download.js';
 import { FallbackSpeechToText } from '../../speech/fallback-speech-to-text.js';
 import {
   GeminiSpeechToText,
@@ -70,6 +71,33 @@ export function buildSpeechToText(env: {
 /** Optional override of the speech-to-text adapter (tests). */
 export const SPEECH_TO_TEXT = Symbol('SPEECH_TO_TEXT');
 
+/** Optional override of the public-media download (tests). */
+export const MEDIA_DOWNLOADER = Symbol('MEDIA_DOWNLOADER');
+export type MediaDownloader = (
+  url: string,
+  options: { maxBytes: number; timeoutMs: number },
+) => Promise<MediaDownload>;
+
+/**
+ * Instagram voice messages (ADR 042). The webhook carries only a URL, no
+ * duration and no format, and the Meta docs do not say how long it lives or
+ * what the container is (read 2026-11-10), so: the file is fetched at once by
+ * the worker through the SSRF-guarded downloader, bounded to 2 MiB (about two
+ * minutes of 128 kbit/s audio); its length is unknown, so the metering
+ * reserves the policy maximum; and only a response with a known audio media
+ * type is sent to a provider (no guessing: anything else is "please type").
+ */
+const INSTAGRAM_MAX_BYTES = 2 * 1024 * 1024;
+const INSTAGRAM_DOWNLOAD_TIMEOUT_MS = 10_000;
+/** Same container, the name Gemini and the policy know. */
+const MEDIA_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  'audio/x-m4a': 'audio/mp4',
+  'audio/m4a': 'audio/mp4',
+  'audio/mpeg3': 'audio/mpeg',
+  'audio/x-wav': 'audio/wav',
+  'audio/wave': 'audio/wav',
+};
+
 /**
  * ADR 042: turns the PENDING voice notes of a conversation into text before
  * the agent answers. Each note is downloaded from the channel, checked
@@ -83,6 +111,7 @@ export const SPEECH_TO_TEXT = Symbol('SPEECH_TO_TEXT');
 export class VoiceTranscriptionService {
   private readonly logger = new Logger(VoiceTranscriptionService.name);
   private readonly stt: SpeechToText;
+  private readonly downloadMedia: MediaDownloader;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -90,7 +119,9 @@ export class VoiceTranscriptionService {
     @Optional() private readonly telegram?: TelegramSender,
     @Optional() @Inject(SPEECH_TO_TEXT) stt?: SpeechToText,
     @Optional() private readonly ledger?: LlmBudgetLedger,
+    @Optional() @Inject(MEDIA_DOWNLOADER) downloader?: MediaDownloader,
   ) {
+    this.downloadMedia = downloader ?? downloadPublicMedia;
     this.stt =
       stt ??
       buildSpeechToText({
@@ -168,6 +199,8 @@ export class VoiceTranscriptionService {
   ): Promise<TranscriptionResult | { ok: false; code: string }> {
     if (this.stt.providerId === 'none')
       return { ok: false, code: 'NOT_CONFIGURED' };
+    if (message.channelAccount.channelType === 'instagram')
+      return this.transcribeInstagram(tenantId, conversationId, message);
     const mimeType = message.mediaMimeType ?? 'audio/ogg';
     const durationSeconds = message.mediaDurationSeconds ?? 0;
     // Length and type are checked before anything is downloaded.
@@ -196,6 +229,37 @@ export class VoiceTranscriptionService {
       mimeType,
       durationSeconds,
     });
+  }
+
+  private async transcribeInstagram(
+    tenantId: string,
+    conversationId: string,
+    message: { readonly id: string; readonly mediaRef: string | null },
+  ): Promise<TranscriptionResult | { ok: false; code: string }> {
+    if (this.stt.providerId === 'none')
+      return { ok: false, code: 'NOT_CONFIGURED' };
+    if (!message.mediaRef) return { ok: false, code: 'UNSUPPORTED_TYPE' };
+    const downloaded = await this.downloadMedia(message.mediaRef, {
+      maxBytes: INSTAGRAM_MAX_BYTES,
+      timeoutMs: INSTAGRAM_DOWNLOAD_TIMEOUT_MS,
+    });
+    if (!downloaded.ok) return { ok: false, code: 'PROVIDER_ERROR' };
+    const declared = downloaded.contentType ?? '';
+    const mimeType = MEDIA_TYPE_ALIASES[declared] ?? declared;
+    // The duration is unknown: the policy maximum is both the check and the
+    // metering worst case; the 2 MiB bound limits what can actually arrive.
+    const clip: AudioClip = {
+      data: downloaded.data,
+      mimeType,
+      durationSeconds: DEFAULT_VOICE_POLICY.maxSeconds,
+    };
+    const checked = checkClip({
+      mimeType,
+      durationSeconds: clip.durationSeconds,
+      size: clip.data.byteLength,
+    });
+    if (!checked.ok) return checked;
+    return this.meteredTranscribe(tenantId, conversationId, message.id, clip);
   }
 
   /**

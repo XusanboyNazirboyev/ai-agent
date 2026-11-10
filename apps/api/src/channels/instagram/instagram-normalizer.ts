@@ -35,6 +35,26 @@ const messagingItem = z
         is_self: z.boolean().optional(),
         is_deleted: z.boolean().optional(),
         is_unsupported: z.boolean().optional(),
+        /**
+         * Media sent with the message ("Webhook Notification Examples",
+         * read 2026-11-10): `attachments[] { type, payload { url } }`, `audio`
+         * among the supported types. Untrusted: the URL is only a candidate
+         * to download (media-download.ts), never trusted.
+         */
+        attachments: z
+          .array(
+            z
+              .object({
+                type: z.string().max(50).optional(),
+                payload: z
+                  .object({ url: z.unknown().optional() })
+                  .passthrough()
+                  .optional(),
+              })
+              .passthrough(),
+          )
+          .max(20)
+          .optional(),
       })
       .passthrough()
       .optional(),
@@ -104,6 +124,23 @@ export type NormalizedInstagramText = {
 };
 
 /**
+ * ADR 042: a voice message. The audio is not in the webhook, only the URL of
+ * an `audio` attachment; the worker downloads and transcribes it before the
+ * agent answers.
+ */
+export type NormalizedInstagramVoice = {
+  readonly kind: 'voice';
+  readonly messageId: string;
+  readonly accountId: string;
+  readonly customerId: string;
+  readonly url: string;
+  readonly receivedAt: Date;
+};
+
+/** Stored in `messages.media_ref` (VarChar 2048): longer URLs are ignored. */
+export const MAX_MEDIA_URL_CHARS = 2_000;
+
+/**
  * ADR 044: a carousel button tap. The payload is untrusted; Meta's button
  * `title` is not kept (the service rebuilds the text from what we sent).
  */
@@ -143,6 +180,7 @@ export type InstagramIgnoreReason =
 
 export type NormalizedInstagramEvent =
   | NormalizedInstagramText
+  | NormalizedInstagramVoice
   | NormalizedInstagramComment
   | NormalizedInstagramPostback
   | { readonly kind: 'ignored'; readonly reason: InstagramIgnoreReason };
@@ -150,6 +188,28 @@ export type NormalizedInstagramEvent =
 export type InstagramNormalization =
   | { readonly ok: true; readonly events: readonly NormalizedInstagramEvent[] }
   | { readonly ok: false; readonly reason: 'invalid' | 'wrong_object' };
+
+/** The URL of the first `audio` attachment, when it is a plausible string. */
+function audioUrlOf(
+  attachments:
+    | ReadonlyArray<{
+        type?: string | undefined;
+        payload?: { url?: unknown } | undefined;
+      }>
+    | undefined,
+): string | undefined {
+  for (const attachment of attachments ?? []) {
+    if (attachment.type !== 'audio') continue;
+    const url = attachment.payload?.url;
+    if (
+      typeof url === 'string' &&
+      url.length > 0 &&
+      url.length <= MAX_MEDIA_URL_CHARS
+    )
+      return url;
+  }
+  return undefined;
+}
 
 export function normalizeInstagramWebhook(
   raw: unknown,
@@ -184,7 +244,17 @@ export function normalizeInstagramWebhook(
         } else if (message.is_deleted) {
           events.push({ kind: 'ignored', reason: 'deleted' });
         } else if (!message.text || message.text.trim() === '') {
-          events.push({ kind: 'ignored', reason: 'no_text' });
+          const url = audioUrlOf(message.attachments);
+          if (url)
+            events.push({
+              kind: 'voice',
+              messageId: message.mid,
+              accountId: e.id,
+              customerId: m.sender.id,
+              url,
+              receivedAt,
+            });
+          else events.push({ kind: 'ignored', reason: 'no_text' });
         } else {
           events.push({
             kind: 'text',

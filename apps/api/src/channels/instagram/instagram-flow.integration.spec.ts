@@ -31,6 +31,13 @@ import { InstagramApiError, InstagramGraphClient } from './instagram-graph.js';
 import { normalizeInstagramWebhook } from './instagram-normalizer.js';
 import { InstagramSender } from './instagram-sender.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
+import {
+  NotConfiguredSpeechToText,
+  type SpeechToText,
+} from '../../core/speech/speech-to-text.js';
+import { UZ_LATN } from '../../locales/locale-packs.js';
+import type { MediaDownload } from '../voice/media-download.js';
+import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 
 /**
  * Instagram DM end to end on the real database: durable webhook intake ->
@@ -117,6 +124,14 @@ async function fixture(options: {
   profile?: { status: number; body: unknown };
   /** The model's extraction slots and reply draft (default: IELTS, F1). */
   script?: { slots: Record<string, string>; text: string };
+  /** ADR 042: voice notes; the download and the STT are fakes. */
+  voice?: {
+    readonly stt: SpeechToText;
+    readonly download: (
+      url: string,
+      options: { maxBytes: number; timeoutMs: number },
+    ) => Promise<MediaDownload>;
+  };
 }): Promise<Fixture> {
   const suffix = randomUUID();
   const tenant = await db.tenant.create({
@@ -209,6 +224,16 @@ async function fixture(options: {
     new InstagramGraphClient(request as unknown as typeof fetch),
     secrets,
   );
+  const voice = options.voice
+    ? new VoiceTranscriptionService(
+        prisma,
+        cfg,
+        telegram as unknown as TelegramSender,
+        options.voice.stt,
+        undefined,
+        options.voice.download,
+      )
+    : undefined;
   const processor = new TelegramProcessor(
     prisma,
     telegram as unknown as TelegramSender,
@@ -219,6 +244,8 @@ async function fixture(options: {
     undefined,
     undefined,
     instagram,
+    undefined,
+    voice,
   );
   return {
     tenantId: tenant.id,
@@ -264,6 +291,56 @@ async function receive(
   );
   if (!normalized.ok || normalized.events[0]?.kind !== 'text')
     throw new Error('expected one text event');
+  expect(await f.intake.accept(normalized.events[0])).toBe('accepted');
+  const outbox = await db.outboxEvent.findFirstOrThrow({
+    where: {
+      tenantId: f.tenantId,
+      type: 'instagram.inbound',
+      idempotencyKey: metaInboundKey('instagram', f.channelAccountId, mid),
+    },
+  });
+  return {
+    mid,
+    event: {
+      outboxId: outbox.id,
+      tenantId: f.tenantId,
+      type: outbox.type,
+      payload: outbox.payload,
+    },
+  };
+}
+
+/** A delivery whose message has one `audio` attachment (ADR 042). */
+async function receiveVoice(
+  f: Fixture,
+  url: string,
+): Promise<{ event: TelegramQueueEvent; mid: string }> {
+  const mid = `mid.in.${++nextMid}.${randomUUID()}`;
+  const normalized = normalizeInstagramWebhook(
+    {
+      object: 'instagram',
+      entry: [
+        {
+          id: f.igUserId,
+          time: Date.now(),
+          messaging: [
+            {
+              sender: { id: CUSTOMER_ID },
+              recipient: { id: f.igUserId },
+              timestamp: Date.now(),
+              message: {
+                mid,
+                attachments: [{ type: 'audio', payload: { url } }],
+              },
+            },
+          ],
+        },
+      ],
+    },
+    new Date(),
+  );
+  if (!normalized.ok || normalized.events[0]?.kind !== 'voice')
+    throw new Error('expected one voice event');
   expect(await f.intake.accept(normalized.events[0])).toBe('accepted');
   const outbox = await db.outboxEvent.findFirstOrThrow({
     where: {
@@ -928,5 +1005,155 @@ describe('Instagram carousel (ADR 044)', () => {
     await f.processor.process(event);
     const [reply] = await outbound(f);
     expect(reply?.richContent).toBeNull();
+  });
+});
+
+describe('Instagram voice messages (ADR 042)', () => {
+  const VOICE_URL = 'https://cdn.example.test/voice/abc.m4a?sig=1';
+  const stt = (
+    result: Awaited<ReturnType<SpeechToText['transcribe']>>,
+  ): SpeechToText & {
+    clips: Array<{ size: number; mimeType: string; durationSeconds: number }>;
+  } => {
+    const fake = {
+      providerId: 'fake',
+      model: 'fake',
+      clips: [] as Array<{
+        size: number;
+        mimeType: string;
+        durationSeconds: number;
+      }>,
+      transcribe: async (
+        clip: Parameters<SpeechToText['transcribe']>[0],
+      ): ReturnType<SpeechToText['transcribe']> => {
+        fake.clips.push({
+          size: clip.data.byteLength,
+          mimeType: clip.mimeType,
+          durationSeconds: clip.durationSeconds,
+        });
+        return result;
+      },
+    };
+    return fake;
+  };
+  const downloads = (
+    result: MediaDownload,
+  ): {
+    fn: (
+      url: string,
+      options: { maxBytes: number; timeoutMs: number },
+    ) => Promise<MediaDownload>;
+    calls: Array<{ url: string; maxBytes: number }>;
+  } => {
+    const calls: Array<{ url: string; maxBytes: number }> = [];
+    return {
+      calls,
+      fn: async (url, options): Promise<MediaDownload> => {
+        calls.push({ url, maxBytes: options.maxBytes });
+        return result;
+      },
+    };
+  };
+  const audio: MediaDownload = {
+    ok: true,
+    data: new Uint8Array(4_096),
+    contentType: 'audio/x-m4a',
+  };
+
+  it('stores the voice message as PENDING with its URL, then answers its transcript', async () => {
+    const speech = stt({ ok: true, text: 'IELTS kursi kerak' });
+    const dl = downloads(audio);
+    const f = await fixture({
+      mode: 'LIVE',
+      voice: { stt: speech, download: dl.fn },
+    });
+    const { event, mid } = await receiveVoice(f, VOICE_URL);
+    const stored = await db.message.findFirstOrThrow({
+      where: {
+        tenantId: f.tenantId,
+        providerMessageId: { contains: mid.slice(0, 20) },
+      },
+    });
+    expect(stored).toMatchObject({
+      type: 'VOICE',
+      voiceStatus: 'PENDING',
+      text: '',
+      mediaRef: VOICE_URL,
+    });
+
+    await f.processor.process(event);
+    expect(
+      await db.message.findUniqueOrThrow({ where: { id: stored.id } }),
+    ).toMatchObject({ voiceStatus: 'TRANSCRIBED', text: 'IELTS kursi kerak' });
+    expect(JSON.stringify(f.provider.calls)).toContain('IELTS kursi kerak');
+    // Bounded download, an unlabeled duration counted at the worst case, and
+    // the m4a media type sent as the container it is.
+    expect(dl.calls).toEqual([{ url: VOICE_URL, maxBytes: 2 * 1024 * 1024 }]);
+    expect(speech.clips).toEqual([
+      { size: 4_096, mimeType: 'audio/mp4', durationSeconds: 60 },
+    ]);
+    const [reply] = await outbound(f);
+    expect(reply).toMatchObject({
+      authorType: 'BOT',
+      providerChatId: CUSTOMER_ID,
+    });
+  });
+
+  it('asks the customer to type when the download fails, and never calls STT', async () => {
+    const speech = stt({ ok: true, text: 'x' });
+    const f = await fixture({
+      mode: 'LIVE',
+      voice: {
+        stt: speech,
+        download: downloads({ ok: false, code: 'BLOCKED' }).fn,
+      },
+    });
+    const { event } = await receiveVoice(f, VOICE_URL);
+    await f.processor.process(event);
+    expect(speech.clips).toHaveLength(0);
+    const message = await db.message.findFirstOrThrow({
+      where: { tenantId: f.tenantId, type: 'VOICE' },
+    });
+    expect(message).toMatchObject({ voiceStatus: 'FAILED', text: '' });
+    const [reply] = await outbound(f);
+    expect(reply!.text).toBe(UZ_LATN.templates.voiceNotUnderstood);
+  });
+
+  it('does not guess the format: a missing or unknown media type is not sent to STT', async () => {
+    for (const contentType of [null, 'application/octet-stream', 'text/html']) {
+      const speech = stt({ ok: true, text: 'x' });
+      const f = await fixture({
+        mode: 'LIVE',
+        voice: {
+          stt: speech,
+          download: downloads({
+            ok: true,
+            data: new Uint8Array(100),
+            contentType,
+          }).fn,
+        },
+      });
+      await f.processor.process((await receiveVoice(f, VOICE_URL)).event);
+      expect(speech.clips, String(contentType)).toHaveLength(0);
+      expect(
+        await db.message.findFirstOrThrow({
+          where: { tenantId: f.tenantId, type: 'VOICE' },
+        }),
+      ).toMatchObject({ voiceStatus: 'FAILED' });
+    }
+  });
+
+  it('with no STT configured, the voice message is answered with "please type"', async () => {
+    const f = await fixture({
+      mode: 'LIVE',
+      voice: {
+        stt: new NotConfiguredSpeechToText(),
+        download: downloads(audio).fn,
+      },
+    });
+    const { event } = await receiveVoice(f, VOICE_URL);
+    await f.processor.process(event);
+    const [reply] = await outbound(f);
+    expect(reply!.text).toBe(UZ_LATN.templates.voiceNotUnderstood);
   });
 });
