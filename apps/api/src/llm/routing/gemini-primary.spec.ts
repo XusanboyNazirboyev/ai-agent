@@ -6,7 +6,10 @@ import {
   loadRoutingPolicy,
   RoutingConfigError,
 } from './routing-factory.js';
-import { GEMINI_PRIMARY_ROUTING_POLICY } from './routing-policy.js';
+import {
+  GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
+  GEMINI_PRIMARY_ROUTING_POLICY,
+} from './routing-policy.js';
 
 /**
  * Owner decision 2026-11-09: the paid Gemini answers first; the free Groq,
@@ -144,5 +147,56 @@ describe('reasoning effort in routed mode (staging runs Gemini with LLM_REASONIN
       undefined,
       undefined,
     ]);
+  });
+});
+
+describe('gemini-primary-fast-groq routing policy (latency experiment)', () => {
+  it('is loadable by name and leaves gemini-primary unchanged', () => {
+    expect(loadRoutingPolicy('builtin:gemini-primary-fast-groq')).toBe(
+      GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
+    );
+    expect(GEMINI_PRIMARY_ROUTING_POLICY.tiers.FAST[0]!.provider).toBe(
+      'gemini',
+    );
+  });
+
+  it('extracts with Groq first, then Gemini; replies exactly as gemini-primary', () => {
+    const fast = GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY.tiers.FAST;
+    expect(fast.slice(0, 2)).toEqual([
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      { provider: 'gemini', model: 'gemini-3.8-flash' },
+    ]);
+    expect(GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY.tiers.STRONG).toEqual(
+      GEMINI_PRIMARY_ROUTING_POLICY.tiers.STRONG,
+    );
+    const label = (c: { provider: string; model: string }): string =>
+      `${c.provider}/${c.model}`;
+    expect(new Set(fast.map(label))).toEqual(
+      new Set(GEMINI_PRIMARY_ROUTING_POLICY.tiers.FAST.map(label)),
+    );
+  });
+
+  it('builds with the same pricing snapshot, every candidate priced', () => {
+    const built = buildRoutedProvider({
+      policy: GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
+      snapshot,
+      env: ALL_KEYS,
+      trustedProviders: TRUSTED,
+      requestTimeoutMs: 500,
+      maxRetries: 0,
+    });
+    expect(built.skipped).toEqual([]);
+    // The reservation model (worst case) is the same as gemini-primary's.
+    const base = buildRoutedProvider({
+      policy: GEMINI_PRIMARY_ROUTING_POLICY,
+      snapshot,
+      env: ALL_KEYS,
+      trustedProviders: TRUSTED,
+      requestTimeoutMs: 500,
+      maxRetries: 0,
+    });
+    expect(built.provider.modelFor('FAST')).toBe(
+      base.provider.modelFor('FAST'),
+    );
   });
 });

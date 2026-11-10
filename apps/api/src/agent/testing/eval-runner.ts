@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import type { TurnTimings } from '../../core/agent/turn-timings.js';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { CrmConnector } from '../../connectors/interfaces/crm-connector.js';
@@ -416,6 +417,22 @@ export interface EvalOutcome {
   /** Fact-related guardrail violations caught in drafts (never shipped). */
   readonly blockedFactViolations: number;
   readonly budgetStopped: boolean;
+  /** Stage timings of the turn (latency audit 2026-11-10). */
+  readonly timings: TurnTimings | undefined;
+  /** Each recorded model call: which candidate served it and how fast. */
+  readonly calls: readonly EvalCallRecord[];
+}
+
+export interface EvalCallRecord {
+  readonly purpose: string;
+  readonly providerId: string;
+  readonly model: string;
+  readonly durationMs: number;
+  readonly inputTokens: number;
+  readonly cachedTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningTokens: number | undefined;
+  readonly outcome: string;
 }
 
 const FACT_VIOLATIONS: ReadonlySet<string> = new Set([
@@ -620,6 +637,18 @@ export function scoreCase(
     budgetStopped:
       result.budgetStop === 'TENANT_MONTHLY_LIMIT' ||
       result.budgetStop === 'CONVERSATION_TOKEN_LIMIT',
+    timings: result.timings,
+    calls: run.usage.map((entry) => ({
+      purpose: entry.purpose,
+      providerId: entry.providerId,
+      model: entry.model,
+      durationMs: entry.durationMs,
+      inputTokens: entry.usage.inputTokens,
+      cachedTokens: entry.usage.cacheReadTokens,
+      outputTokens: entry.usage.outputTokens,
+      reasoningTokens: entry.usage.reasoningTokens,
+      outcome: entry.outcome,
+    })),
   };
 }
 

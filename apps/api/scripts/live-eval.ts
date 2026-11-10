@@ -50,7 +50,13 @@ import {
  *   (default 30), LIVE_EVAL_MAX_CALLS (default 90 recorded model calls, at
  *   most LIVE_EVAL_CALLS_PER_TURN=4 per case), LIVE_EVAL_MAX_RUNTIME_MS
  *   (default 900000), LIVE_EVAL_MAX_OUTPUT_TOKENS (default 200, at most
- *   200: the per-call output ceiling of every request).
+ *   1024, the application's default LLM_MAX_OUTPUT_TOKENS: the per-call
+ *   output ceiling of every request).
+ * - routed mode sends LLM_REASONING_EFFORT to Gemini and Groq, as the
+ *   application does (llm.factory.ts).
+ * - Per-case outcomes, with stage timings and every model call's model,
+ *   duration and tokens, are written next to the report
+ *   (`live-<stamp>.outcomes.json`).
  * - Reports go to LIVE_EVAL_REPORT_DIR (default eval/reports, gitignored).
  * Only fictional eval cases and MockConnector data are used. Never in CI.
  */
@@ -116,7 +122,19 @@ async function main(): Promise<void> {
     900_000,
     3_600_000,
   );
-  const maxOutputTokens = positiveInt('LIVE_EVAL_MAX_OUTPUT_TOKENS', 200, 200);
+  const maxOutputTokens = positiveInt(
+    'LIVE_EVAL_MAX_OUTPUT_TOKENS',
+    200,
+    1_024,
+  );
+  const effort = process.env.LLM_REASONING_EFFORT;
+  const reasoningEffort =
+    effort === 'minimal' ||
+    effort === 'low' ||
+    effort === 'medium' ||
+    effort === 'high'
+      ? effort
+      : undefined;
   const listed = process.env.LIVE_EVAL_MODELS?.split(',')
     .map((model) => model.trim())
     .filter(Boolean);
@@ -172,6 +190,15 @@ async function main(): Promise<void> {
       requestTimeoutMs: 30_000,
       maxRetries: 1,
       maxInputBytes: 48_000,
+      // Same thinking level as the application's routed provider.
+      ...(reasoningEffort
+        ? {
+            reasoningEffortByProvider: {
+              gemini: reasoningEffort,
+              groq: reasoningEffort,
+            },
+          }
+        : {}),
     });
     label = `routed (${routed.policy.version})`;
     process.stdout.write(
@@ -204,14 +231,6 @@ async function main(): Promise<void> {
     const host = new URL(baseUrl).host;
     label = `openai-compatible (${host})`;
     const apiKey = process.env.LLM_API_KEY || undefined;
-    const effort = process.env.LLM_REASONING_EFFORT;
-    const reasoningEffort =
-      effort === 'minimal' ||
-      effort === 'low' ||
-      effort === 'medium' ||
-      effort === 'high'
-        ? effort
-        : undefined;
     build = (configuration): LlmProvider =>
       new OpenAiCompatibleLlmProvider({
         baseUrl,
@@ -303,6 +322,10 @@ async function main(): Promise<void> {
     JSON.stringify(report, null, 2),
   );
   writeFileSync(resolve(dir, `live-${stamp}.md`), markdown);
+  writeFileSync(
+    resolve(dir, `live-${stamp}.outcomes.json`),
+    JSON.stringify(runs, null, 2),
+  );
   process.stdout.write(markdown);
 }
 
