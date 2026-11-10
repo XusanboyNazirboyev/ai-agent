@@ -10,12 +10,20 @@ import {
   UnauthorizedException,
   HttpException,
   HttpStatus,
+  ForbiddenException,
+  Optional,
+  Param,
+  BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
 import { loginClientAddress, type AddressedRequest } from './client-address.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { TenantAccessService } from '../access/tenant-access.service.js';
+import { OperatorInviteService } from '../team/operator-invite.service.js';
+import { inviteHttpError } from './team.controller.js';
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
@@ -23,6 +31,14 @@ import {
   type InboxRequest,
 } from './session.guard.js';
 import { SessionService } from './session.service.js';
+
+const AcceptBody = z.object({
+  displayName: z
+    .string()
+    .transform((value) => value.replace(/\s+/gu, ' ').trim())
+    .pipe(z.string().min(1).max(160)),
+  password: z.string().min(10).max(200),
+});
 
 const LoginBody = z.object({
   email: z.string().min(3).max(254),
@@ -61,6 +77,8 @@ export class AuthController {
     private readonly sessions: SessionService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
+    @Optional() private readonly access?: TenantAccessService,
+    @Optional() private readonly invites?: OperatorInviteService,
   ) {
     const limit = Number(
       this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
@@ -68,11 +86,18 @@ export class AuthController {
     this.limiter = new LoginRateLimiter(limit > 1 ? limit : 20);
   }
 
-  private cookies(
-    session: string,
-    csrf: string,
-    maxAgeSeconds: number,
-  ): string[] {
+  /** Rate limit by client address (ADR 021); shared with invite acceptance. */
+  allowAttempt(request: AddressedRequest): boolean {
+    return this.limiter.allow(
+      loginClientAddress(
+        request,
+        this.config.get('WEB_PROXY_SECRET', { infer: true }),
+      ),
+    );
+  }
+
+  /** Session + CSRF cookies of a fresh login. */
+  cookies(session: string, csrf: string, maxAgeSeconds: number): string[] {
     const secure = this.config.get('SESSION_COOKIE_SECURE', { infer: true })
       ? '; Secure'
       : '';
@@ -92,19 +117,7 @@ export class AuthController {
     @Req() request: AddressedRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<unknown> {
-    const client = loginClientAddress(
-      request,
-      this.config.get('WEB_PROXY_SECRET', { infer: true }),
-    );
-    if (!this.limiter.allow(client))
-      throw new HttpException(
-        {
-          code: 'RATE_LIMITED',
-          message: 'Too many attempts',
-          i18nKey: 'errors.rateLimited',
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+    if (!this.allowAttempt(request)) throw this.rateLimited();
     const parsed = LoginBody.safeParse(body);
     if (!parsed.success)
       throw new UnauthorizedException({
@@ -116,6 +129,12 @@ export class AuthController {
       parsed.data.email,
       parsed.data.password,
     );
+    if (!result.ok && result.code === 'TENANT_SUSPENDED')
+      throw new ForbiddenException({
+        code: 'TENANT_SUSPENDED',
+        message: 'This account is suspended',
+        i18nKey: 'errors.tenantSuspended',
+      });
     if (!result.ok)
       throw new UnauthorizedException({
         code: result.code === 'LOCKED' ? 'LOCKED' : 'INVALID_CREDENTIALS',
@@ -124,6 +143,95 @@ export class AuthController {
           result.code === 'LOCKED'
             ? 'errors.accountLocked'
             : 'errors.invalidCredentials',
+      });
+    const maxAge = Math.floor((result.expiresAt.getTime() - Date.now()) / 1000);
+    reply.setHeader(
+      'Set-Cookie',
+      this.cookies(result.sessionToken, result.csrfToken, maxAge),
+    );
+    reply.setHeader('Cache-Control', 'no-store');
+    return {
+      csrfToken: result.csrfToken,
+      operator: {
+        id: result.principal.operatorId,
+        displayName: result.principal.displayName,
+        role: result.principal.role,
+      },
+    };
+  }
+
+  private rateLimited(): HttpException {
+    return new HttpException(
+      {
+        code: 'RATE_LIMITED',
+        message: 'Too many attempts',
+        i18nKey: 'errors.rateLimited',
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+  }
+
+  private inviteService(): OperatorInviteService {
+    if (!this.invites)
+      throw new ServiceUnavailableException({
+        code: 'NOT_CONFIGURED',
+        message: 'Invites are not available',
+        i18nKey: 'errors.unavailable',
+      });
+    return this.invites;
+  }
+
+  /** What the invite page shows; the token itself is the credential. */
+  @Get('invites/:token')
+  async invitePreview(
+    @Param('token') token: string,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    if (!this.allowAttempt(request)) throw this.rateLimited();
+    reply.setHeader('Cache-Control', 'no-store');
+    try {
+      return await this.inviteService().preview(token);
+    } catch (error) {
+      throw inviteHttpError(error);
+    }
+  }
+
+  /**
+   * Accepts an invite (ADR 047 §5): creates the operator and its login in
+   * one transaction, then signs the browser in exactly like `login`.
+   */
+  @Post('invites/:token/accept')
+  @HttpCode(200)
+  async acceptInvite(
+    @Param('token') token: string,
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    if (!this.allowAttempt(request)) throw this.rateLimited();
+    const parsed = AcceptBody.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'INVALID_BODY',
+        message: 'Invalid body',
+        i18nKey: 'errors.invalidBody',
+      });
+    let accepted: { email: string };
+    try {
+      accepted = await this.inviteService().accept(token, parsed.data);
+    } catch (error) {
+      throw inviteHttpError(error);
+    }
+    const result = await this.sessions.login(
+      accepted.email,
+      parsed.data.password,
+    );
+    if (!result.ok)
+      throw new UnauthorizedException({
+        code: result.code,
+        message: 'Sign in failed',
+        i18nKey: 'errors.invalidCredentials',
       });
     const maxAge = Math.floor((result.expiresAt.getTime() - Date.now()) / 1000);
     reply.setHeader(
@@ -153,7 +261,18 @@ export class AuthController {
       where: { id: principal.tenantId },
       select: { timezone: true, defaultLocale: true },
     });
-    return { operator, tenant };
+    const access = this.access
+      ? await this.access.check(principal.tenantId)
+      : undefined;
+    return {
+      operator,
+      tenant,
+      access: {
+        state: access?.state ?? 'ok',
+        periodEnd: access?.periodEnd ?? null,
+        graceUntil: access?.graceUntil ?? null,
+      },
+    };
   }
 
   @Post('logout')

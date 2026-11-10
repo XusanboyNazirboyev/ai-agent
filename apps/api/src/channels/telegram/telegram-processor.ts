@@ -37,6 +37,8 @@ import {
   COMMENT_PUBLIC_REPLY_EVENT,
   InstagramCommentReplyService,
 } from '../instagram/instagram-comment-reply.service.js';
+import { InboundAccessGate } from '../../access/inbound-access-gate.js';
+import type { AccessState } from '../../access/access-decision.js';
 
 export type TelegramQueueEvent = {
   outboxId: string;
@@ -65,7 +67,29 @@ export class TelegramProcessor {
     @Optional() private readonly facebook?: FacebookSender,
     @Optional() private readonly voice?: VoiceTranscriptionService,
     @Optional() private readonly comments?: InstagramCommentReplyService,
+    @Optional() private readonly access?: InboundAccessGate,
   ) {}
+
+  /**
+   * ADR 047 §3: a suspended/archived tenant gets no turn and no reply; an
+   * expired subscription silences the bot (operators still reply by hand).
+   * Returns true when the event was settled here.
+   */
+  private async held(
+    event: TelegramQueueEvent,
+    inboundEventId: string,
+    conversationId: string,
+    state: AccessState,
+  ): Promise<boolean> {
+    if (state === 'ok' || !this.access) return false;
+    await this.access.hold(
+      event.tenantId,
+      inboundEventId,
+      conversationId,
+      state,
+    );
+    return true;
+  }
 
   async process(event: TelegramQueueEvent): Promise<ProcessResult> {
     if (event.type === 'telegram.inbound') {
@@ -157,8 +181,17 @@ export class TelegramProcessor {
     if (!inboundEventId || !conversationId) {
       throw new Error('Invalid durable inbound event reference');
     }
+    const access = (await this.access?.state(event.tenantId)) ?? 'ok';
+    if (access === 'SUSPENDED' || access === 'ARCHIVED')
+      return void (await this.held(
+        event,
+        inboundEventId,
+        conversationId,
+        access,
+      ));
     // ADR 042: voice notes become text (or FAILED) before anyone reads them.
     await this.voice?.resolvePending(event.tenantId, conversationId);
+    if (await this.held(event, inboundEventId, conversationId, access)) return;
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);
       if (mode !== 'OFF') {
@@ -185,12 +218,21 @@ export class TelegramProcessor {
     if (!inboundEventId || !conversationId) {
       throw new Error('Invalid durable inbound event reference');
     }
+    const access = (await this.access?.state(event.tenantId)) ?? 'ok';
+    if (access === 'SUSPENDED' || access === 'ARCHIVED')
+      return void (await this.held(
+        event,
+        inboundEventId,
+        conversationId,
+        access,
+      ));
     if (event.type === 'instagram.inbound')
       await this.fillInstagramName(event.tenantId, conversationId);
     // ADR 042: a voice message becomes text (or FAILED) before the agent
     // reads the batch. Only Instagram stores one today; for any other
     // channel nothing is pending and this does nothing.
     await this.voice?.resolvePending(event.tenantId, conversationId);
+    if (await this.held(event, inboundEventId, conversationId, access)) return;
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);
       if (mode !== 'OFF') {

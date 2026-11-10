@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../access/access.module.js';
+import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { FollowUpService } from '../followup/follow-up.service.js';
 import {
   HandoverRuntime,
@@ -19,7 +21,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
 
 /**
  * The periodic scans of the API process: SLA alerts, CRM lead retries,
- * follow-ups and idle operator returns. One interval, one overlap guard (HandoverRuntime); each scan is
+ * follow-ups, idle operator returns and subscription expiry (ADR 047). One interval, one overlap guard (HandoverRuntime); each scan is
  * idempotent, so several API processes may run it.
  */
 @Module({
@@ -29,6 +31,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
     LeadsModule,
     WebInboxModule,
     ActionsModule,
+    AccessModule,
   ],
   providers: [
     FollowUpService,
@@ -45,6 +48,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         ActionService,
         AlertsService,
         OperatorIdleReturnService,
+        SubscriptionScanService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -54,6 +58,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         actions: ActionService,
         alerts: AlertsService,
         idle: OperatorIdleReturnService,
+        subscriptions: SubscriptionScanService,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -62,6 +67,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         actions,
         alerts,
         idle,
+        subscriptions,
       ],
     },
     HandoverRuntime,

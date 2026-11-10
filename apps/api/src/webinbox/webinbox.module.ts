@@ -17,6 +17,9 @@ import {
 } from '../channels/instagram/instagram-oauth-state-ledger.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
+import { AccessModule } from '../access/access.module.js';
+import { TeamModule } from '../team/team.module.js';
+import { TeamController } from './team.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AnalyticsController } from './analytics.controller.js';
 import { AnalyticsService } from './analytics.service.js';
@@ -40,7 +43,13 @@ import { SessionService } from './session.service.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
 @Module({
-  imports: [PersistenceModule, KnowledgeModule, SecretsModule],
+  imports: [
+    PersistenceModule,
+    KnowledgeModule,
+    SecretsModule,
+    AccessModule,
+    TeamModule,
+  ],
   controllers: [
     AuthController,
     InboxController,
@@ -56,6 +65,7 @@ import { SessionService } from './session.service.js';
     AnalyticsController,
     LeadPipelineController,
     FacebookConnectController,
+    TeamController,
   ],
   providers: [
     AnalyticsService,
