@@ -19,7 +19,8 @@ import {
   type LiveEvent,
 } from '@/lib/live-updates';
 import { usePreferences } from '@/lib/preferences';
-import type { ConversationPage, Me, Role } from '@/lib/types';
+import { canManageTeam } from '@/lib/roles';
+import type { ConversationPage, Me, Role, TenantAccess } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
 import { LocaleSwitcher } from './locale-switcher';
 import { Avatar } from './ui/avatar';
@@ -28,6 +29,7 @@ import { BrandMark } from './ui/brand';
 import { Button } from './ui/button';
 import { Icon, type IconName } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
+import { useToast } from './ui/toast';
 
 interface ShellValue {
   operator: { id: string; displayName: string; role: Role };
@@ -141,7 +143,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
 
   const tRef = useRef(t);
   tRef.current = t;
-  const onEvent = useCallback((event: LiveEvent) => {
+  const toast = useToast();
+  const pausedNoticeShown = useRef(false);
+  const onHandover = (event: LiveEvent): void => {
     if (event.type !== 'handover.created') return;
     if (soundRef.current) beep();
     if (
@@ -149,7 +153,24 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       Notification.permission === 'granted'
     )
       new Notification(tRef.current('notify.newHandover'), { tag: 'handover' });
-  }, []);
+  };
+  const onEvent = useCallback(
+    (event: LiveEvent) => {
+      if (event.type.startsWith('subscription.')) {
+        // The access answer changed: refetch it (banner) and say so once.
+        void queryClient.invalidateQueries({ queryKey: ['me'] });
+        void queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        if (event.type === 'subscription.bot_paused') {
+          if (pausedNoticeShown.current) return;
+          pausedNoticeShown.current = true;
+        }
+        toast(tRef.current(`notify.${event.type}`));
+        return;
+      }
+      onHandover(event);
+    },
+    [queryClient, toast],
+  );
   const connection = useLiveUpdates(me.isSuccess, onEvent);
 
   const waiting = useQuery({
@@ -292,6 +313,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
               </Button>
             </div>
           </header>
+          <AccessBanner
+            access={me.data.access}
+            manager={canManageTeam(operator.role)}
+          />
           {overdue > 0 ? (
             <div
               role="alert"
@@ -335,5 +360,54 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
         </div>
       </div>
     </ShellContext.Provider>
+  );
+}
+
+/**
+ * Subscription state from `GET /me` (ADR 047 §3): expired means the assistant
+ * is paused while people can still answer by hand; past due (a grace date
+ * while still `ok`) warns before that happens.
+ */
+export function AccessBanner(props: {
+  access: TenantAccess | undefined;
+  manager: boolean;
+}): ReactNode {
+  const { t, locale } = useI18n();
+  const access = props.access;
+  if (!access) return null;
+  const expired = access.state === 'SUBSCRIPTION_EXPIRED';
+  const pastDue = access.state === 'ok' && access.graceUntil !== null;
+  if (!expired && !pastDue) return null;
+  const date = access.graceUntil
+    ? new Intl.DateTimeFormat(locale === 'uz-Latn' ? 'uz-Latn' : locale, {
+        dateStyle: 'medium',
+      }).format(new Date(access.graceUntil))
+    : '';
+  return (
+    <div
+      role="alert"
+      data-testid="access-banner"
+      data-state={expired ? 'expired' : 'past-due'}
+      className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm font-medium ${
+        expired
+          ? 'bg-danger-soft text-danger-fg'
+          : 'bg-warning-soft text-warning-fg'
+      }`}
+    >
+      <span className="flex min-w-0 items-start gap-2">
+        <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>
+          {expired ? t('banner.expired') : t('banner.pastDue', { date })}
+        </span>
+      </span>
+      {props.manager ? (
+        <Link
+          href="/settings/subscription"
+          className="underline underline-offset-2"
+        >
+          {t('banner.subscriptionLink')}
+        </Link>
+      ) : null}
+    </div>
   );
 }

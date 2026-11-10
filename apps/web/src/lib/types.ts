@@ -42,9 +42,91 @@ export type ActionStatus =
   | 'FAILED'
   | 'UNCERTAIN';
 
+export type AccessState =
+  'ok' | 'SUSPENDED' | 'ARCHIVED' | 'SUBSCRIPTION_EXPIRED';
+
+/** What the tenant may do right now (ADR 047 §3), from `GET /me`. */
+export interface TenantAccess {
+  state: AccessState;
+  periodEnd: string | null;
+  graceUntil: string | null;
+}
+
 export interface Me {
   operator: { id: string; displayName: string; role: Role } | null;
   tenant: { timezone: string; defaultLocale: string } | null;
+  /** Absent on an API older than ADR 047. */
+  access?: TenantAccess;
+}
+
+export interface TeamMember {
+  id: string;
+  displayName: string;
+  role: Role;
+  isActive: boolean;
+  email: string | null;
+  createdAt: string;
+}
+
+export interface PendingInvite {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface TeamView {
+  operators: TeamMember[];
+  invites: PendingInvite[];
+  limits: { maxOperators: number | null; seatsUsed: number };
+}
+
+/** An invite as created: the token and link exist only in this response. */
+export interface CreatedInvite {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  token: string;
+  path: string;
+}
+
+export interface InvitePreview {
+  email: string;
+  role: Role;
+  tenantName: string;
+  expiresAt: string;
+}
+
+export type SubscriptionStatus =
+  'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED' | 'CANCELED';
+export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+
+export interface PaymentRow {
+  id: string;
+  provider: 'MANUAL' | 'CLICK';
+  amountMinor: number;
+  currency: string;
+  status: PaymentStatus;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface OwnSubscription {
+  access: TenantAccess;
+  subscription: {
+    status: SubscriptionStatus;
+    planName: string;
+    priceMinor: number;
+    currency: string;
+    periodDays: number;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    graceUntil: string | null;
+    canceledAt: string | null;
+  } | null;
+  payments: PaymentRow[];
 }
 
 export interface ConversationListItem {
