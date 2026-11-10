@@ -15,6 +15,14 @@ export interface Fixtures {
   password: string;
   a: TenantFixture;
   b: TenantFixture;
+  /** Platform console admins (ADR 047). */
+  platform: Record<'owner' | 'support', { id: string; email: string }>;
+  /** A billed tenant whose subscription expired. */
+  expired: {
+    tenantId: string;
+    owner: { id: string; email: string };
+    planName: string;
+  };
 }
 
 let clients = 0;
@@ -108,6 +116,38 @@ export async function newSession(
   });
   const page = await context.newPage();
   await login(page, email, fixtures().password);
+  return { context, page };
+}
+
+/** Signs in to the platform console (its own page and cookies). */
+export async function consoleLogin(
+  page: Page,
+  email: string,
+  password: string,
+): Promise<void> {
+  await page.goto('/console/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.waitForURL(/\/console$/u);
+}
+
+/** A fresh browser context signed in to the console. */
+export async function consoleSession(
+  browser: Browser,
+  email: string,
+  options: {
+    viewport?: { width: number; height: number };
+    colorScheme?: 'light' | 'dark';
+  } = {},
+): Promise<{ context: BrowserContext; page: Page }> {
+  const context = await browser.newContext({
+    baseURL: 'http://127.0.0.1:3010',
+    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
+    ...options,
+  });
+  const page = await context.newPage();
+  await consoleLogin(page, email, fixtures().password);
   return { context, page };
 }
 

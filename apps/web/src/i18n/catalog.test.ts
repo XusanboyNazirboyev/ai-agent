@@ -187,7 +187,41 @@ describe('source uses the catalog', () => {
       'channels.desc': ['telegram', 'instagram', 'whatsapp', 'webchat'],
       theme: ['system', 'light', 'dark'],
       permission: ['granted', 'denied', 'default', 'unsupported'],
-      'settings.section': ['bot', 'channels', 'pipeline', 'general'],
+      'settings.section': [
+        'bot',
+        'channels',
+        'pipeline',
+        'team',
+        'subscription',
+        'general',
+      ],
+      // ADR 047: platform console and tenant subscription.
+      platformRole: ['PLATFORM_OWNER', 'PLATFORM_SUPPORT'],
+      tenantStatus: ['ACTIVE', 'SUSPENDED', 'ARCHIVED'],
+      subscriptionStatus: [
+        'TRIAL',
+        'ACTIVE',
+        'PAST_DUE',
+        'EXPIRED',
+        'CANCELED',
+      ],
+      accessState: ['ok', 'SUSPENDED', 'ARCHIVED', 'SUBSCRIPTION_EXPIRED'],
+      paymentStatus: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
+      paymentProvider: ['MANUAL', 'CLICK'],
+      'console.nav': ['tenants', 'plans', 'admins', 'audit'],
+      'console.tenant': [
+        'suspend',
+        'suspendTitle',
+        'suspendBody',
+        'reactivate',
+        'reactivateTitle',
+        'reactivateBody',
+        'archive',
+        'archiveTitle',
+        'archiveBody',
+      ],
+      'notify.subscription': ['bot_paused', 'past_due', 'expired'],
+      'invite.accept': ['nameRequired', 'tooShort', 'mismatch'],
     };
     for (const [family, ids] of Object.entries(families))
       for (const id of ids)
@@ -236,6 +270,38 @@ describe('source uses the catalog', () => {
       'UNKNOWN',
     ])
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);
+  });
+
+  it('every rule error key the ADR 047 API sends has a message', () => {
+    // i18nKey values of team.controller, platform-http `conflict()` and the
+    // platform admin/auth controllers, plus the tenant login refusal.
+    const keys = [
+      'errors.tenantSuspended',
+      'errors.TENANT_SUSPENDED',
+      ...[
+        'SELF_EDIT',
+        'OWNER_ONLY',
+        'LAST_OWNER',
+        'INVITE_INVALID',
+        'EMAIL_TAKEN',
+        'SEATS_EXHAUSTED',
+        'TENANT_SUSPENDED',
+        'NOT_FOUND',
+      ].map((code) => `team.errors.${code}`),
+      ...[
+        'SLUG_TAKEN',
+        'SUBSCRIPTION_OPEN',
+        'NO_OPEN_SUBSCRIPTION',
+        'DUPLICATE_PAYMENT',
+        'PLAN_CODE_TAKEN',
+        'INVALID_EMAIL',
+        'EMAIL_TAKEN',
+        'SELF_EDIT',
+        'LAST_OWNER',
+        'INVITE_INVALID',
+      ].map((code) => `platform.errors.${code}`),
+    ];
+    for (const key of keys) expect(CATALOGS.en, key).toHaveProperty(key);
   });
 
   it('has no hardcoded user-facing text in JSX', () => {

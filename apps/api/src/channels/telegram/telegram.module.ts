@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../../access/access.module.js';
 import { AgentModule } from '../../agent/agent.module.js';
 import { HandoverModule } from '../../handover/handover.module.js';
 import { LeadsModule } from '../../leads/leads.module.js';
@@ -17,6 +18,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
 @Module({
   imports: [
     PersistenceModule,
+    AccessModule,
     AgentModule,
     HandoverModule,
     LeadsModule,

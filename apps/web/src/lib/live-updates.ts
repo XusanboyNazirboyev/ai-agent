@@ -11,6 +11,10 @@ const EVENT_TYPES = [
   'message.created',
   'handover.created',
   'handover.sla_breached',
+  // ADR 047: the bot did not answer (expired), or the subscription changed.
+  'subscription.bot_paused',
+  'subscription.past_due',
+  'subscription.expired',
 ] as const;
 
 const POLL_MS = 10_000;

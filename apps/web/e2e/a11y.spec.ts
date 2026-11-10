@@ -1,6 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { fixtures, newHandover, newSession } from './helpers';
+import {
+  consoleSession,
+  findOverflow,
+  fixtures,
+  newHandover,
+  newSession,
+} from './helpers';
 
 /**
  * Automated accessibility audit of the rendered pages (axe-core: WCAG 2.2 A/AA
@@ -299,4 +305,148 @@ test('the channels page with controls and the connect dialog have no violations'
   await page.locator('details summary').first().click();
   await audit(page, 'instagram guide open');
   await context.close();
+});
+
+test.describe('platform console and the ADR 047 tenant pages', () => {
+  for (const [scheme, language, viewport] of [
+    ['light', 'en', { width: 1280, height: 800 }],
+    ['dark', 'en', { width: 1280, height: 800 }],
+    ['light', 'ru', { width: 1280, height: 800 }],
+    ['light', 'uz-Latn', { width: 1280, height: 800 }],
+    ['light', 'uz-Latn', { width: 320, height: 640 }],
+    ['dark', 'ru', { width: 320, height: 640 }],
+  ] as const) {
+    const label = `${scheme}, ${language}, ${viewport.width}px`;
+
+    async function check(page: Page, name: string): Promise<void> {
+      await audit(page, `${name} ${label}`);
+      if (viewport.width <= 375)
+        expect(await findOverflow(page), `${name} ${label}`).toEqual([]);
+    }
+
+    test(`console screens have no violations (${label})`, async ({
+      browser,
+    }) => {
+      test.setTimeout(120_000);
+      const f = fixtures();
+      const signedOut = await browser.newContext({
+        baseURL: 'http://127.0.0.1:3010',
+        colorScheme: scheme,
+        viewport,
+      });
+      const anonymous = await signedOut.newPage();
+      await anonymous.goto('/console/login');
+      await anonymous
+        .getByLabel(/^(Language|Язык|Til)$/u)
+        .selectOption(language);
+      await check(anonymous, 'console login');
+      await anonymous.goto('/console/invite/not-a-real-token-000000');
+      await expect(anonymous.getByTestId('invite-accept')).toBeVisible();
+      await check(anonymous, 'console invite');
+      await signedOut.close();
+
+      const { page, context } = await consoleSession(
+        browser,
+        f.platform.owner.email,
+        { viewport, colorScheme: scheme },
+      );
+      await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
+      await expect(page.getByTestId('tenant-row').first()).toBeVisible();
+      await check(page, 'console customers');
+      await page.getByTestId('new-customer').click();
+      await expect(page.getByTestId('new-customer-dialog')).toBeVisible();
+      await check(page, 'new customer dialog');
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('new-customer-dialog')).toBeHidden();
+      await expect(page.getByTestId('new-customer')).toBeFocused();
+
+      await page.goto(`/console/tenants/${f.a.tenantId}`);
+      await expect(page.getByTestId('subscription-card')).toBeVisible();
+      await expect(page.getByTestId('payments-card')).toBeVisible();
+      await check(page, 'console customer');
+      await page.getByTestId('tenant-suspend').click();
+      const reason = page.getByTestId('status-dialog');
+      await expect(reason).toBeVisible();
+      await check(page, 'reason dialog');
+      await reason.getByTestId('reason-cancel').click();
+      await expect(page.getByTestId('tenant-suspend')).toBeFocused();
+      await page.getByTestId('payment-record').click();
+      await expect(page.getByTestId('payment-dialog')).toBeVisible();
+      await page.getByTestId('payment-amount').fill('150 000');
+      await check(page, 'payment dialog');
+      await page.keyboard.press('Escape');
+      await page.getByTestId('tenant-invite').click();
+      await expect(page.getByTestId('tenant-invite-dialog')).toBeVisible();
+      await check(page, 'invite dialog');
+      await page.keyboard.press('Escape');
+
+      for (const [path, row] of [
+        ['/console/plans', 'plan-row'],
+        ['/console/admins', 'admin-row'],
+      ] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(row).first()).toBeVisible();
+        await check(page, path);
+      }
+      await page.goto('/console/plans');
+      await page.getByTestId('plan-new').click();
+      await expect(page.getByTestId('plan-dialog')).toBeVisible();
+      await check(page, 'plan dialog');
+      await page.keyboard.press('Escape');
+      await page.goto('/console/audit');
+      await expect(page.getByTestId('audit-row').first()).toBeVisible();
+      await check(page, 'console audit');
+      await context.close();
+    });
+
+    test(`team, subscription, invite and banner have no violations (${label})`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const signedOut = await browser.newContext({
+        baseURL: 'http://127.0.0.1:3010',
+        colorScheme: scheme,
+        viewport,
+      });
+      const anonymous = await signedOut.newPage();
+      await anonymous.goto('/invite/not-a-real-token-000000');
+      await anonymous
+        .getByLabel(/^(Language|Язык|Til)$/u)
+        .selectOption(language);
+      await expect(anonymous.getByTestId('invite-invalid')).toBeVisible();
+      await check(anonymous, 'invite invalid');
+      await signedOut.close();
+
+      const admin = await newSession(browser, f.a.operators.admin.email, {
+        viewport,
+        colorScheme: scheme,
+      });
+      await admin.page
+        .getByLabel(/^(Language|Язык|Til)$/u)
+        .selectOption(language);
+      await admin.page.goto('/settings/team');
+      await expect(admin.page.getByTestId('team-member').first()).toBeVisible();
+      await check(admin.page, 'team');
+      await admin.page.getByTestId('team-invite').click();
+      await expect(admin.page.getByTestId('team-invite-dialog')).toBeVisible();
+      await check(admin.page, 'team invite dialog');
+      await admin.page.keyboard.press('Escape');
+      await expect(admin.page.getByTestId('team-invite')).toBeFocused();
+      await admin.page.goto('/settings/subscription');
+      await expect(admin.page.getByTestId('own-none')).toBeVisible();
+      await check(admin.page, 'subscription');
+      await admin.context.close();
+
+      const expired = await newSession(browser, f.expired.owner.email, {
+        viewport,
+        colorScheme: scheme,
+      });
+      await expired.page
+        .getByLabel(/^(Language|Язык|Til)$/u)
+        .selectOption(language);
+      await expect(expired.page.getByTestId('access-banner')).toBeVisible();
+      await check(expired.page, 'expired banner');
+      await expired.context.close();
+    });
+  }
 });

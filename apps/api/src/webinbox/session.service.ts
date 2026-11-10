@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { TenantAccessService } from '../access/tenant-access.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
   DEFAULT_SCRYPT,
@@ -45,7 +46,10 @@ export type LoginResult =
         displayName: string;
       };
     }
-  | { readonly ok: false; readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' };
+  | {
+      readonly ok: false;
+      readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' | 'TENANT_SUSPENDED';
+    };
 
 const sha256 = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
@@ -72,6 +76,7 @@ export class SessionService {
     @Optional()
     @Inject(SESSION_POLICY)
     private readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+    @Optional() private readonly access?: TenantAccessService,
   ) {}
 
   private dummy(): Promise<string> {
@@ -107,6 +112,13 @@ export class SessionService {
           ok: false,
           code: failure === 'locked' ? 'LOCKED' : 'INVALID_CREDENTIALS',
         };
+      }
+      // ADR 047: a suspended or archived tenant cannot sign in. Checked only
+      // after the password, so the answer reveals nothing to a stranger.
+      if (this.access) {
+        const { state } = await this.access.check(credential.tenantId, now);
+        if (state === 'SUSPENDED' || state === 'ARCHIVED')
+          return { ok: false, code: 'TENANT_SUSPENDED' };
       }
 
       const sessionToken = randomBytes(32).toString('base64url');

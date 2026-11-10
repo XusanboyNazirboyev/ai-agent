@@ -6,6 +6,9 @@
  *   tsx scripts/e2e-fixtures.ts seed <out.json>
  *   tsx scripts/e2e-fixtures.ts customer-message <tenantId> <conversationId> <text>
  *   tsx scripts/e2e-fixtures.ts new-handover <tenantId> <contactName>
+ *
+ * `seed` also creates two platform console admins (PLATFORM_OWNER and
+ * PLATFORM_SUPPORT, ADR 047) and a tenant whose subscription has expired.
  */
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -170,13 +173,118 @@ async function tenant(label: string): Promise<{
   };
 }
 
+/** Console admins of this run (ADR 047); same throwaway password. */
+async function platformAdmins(): Promise<
+  Record<'owner' | 'support', { id: string; email: string }>
+> {
+  const run = randomUUID().slice(0, 8);
+  const result = {} as Record<
+    'owner' | 'support',
+    { id: string; email: string }
+  >;
+  for (const [key, role] of [
+    ['owner', 'PLATFORM_OWNER'],
+    ['support', 'PLATFORM_SUPPORT'],
+  ] as const) {
+    const email = `platform-${key}-${run}@example.test`;
+    const admin = await db.platformAdmin.create({
+      data: {
+        email,
+        displayName: `Platform ${key}`,
+        role,
+        passwordHash: await hashPassword(PASSWORD, FAST),
+      },
+    });
+    result[key] = { id: admin.id, email };
+  }
+  return result;
+}
+
+/**
+ * A billed tenant whose subscription expired (fictional plan and payment):
+ * the assistant is paused, the team signs in and sees the banner.
+ */
+async function expiredTenant(): Promise<{
+  tenantId: string;
+  owner: { id: string; email: string };
+  planName: string;
+}> {
+  const run = randomUUID().slice(0, 8);
+  const tenant = await db.tenant.create({
+    data: {
+      slug: `e2e-expired-${run}`,
+      name: 'E2E expired',
+      defaultLocale: 'en',
+      supportedLocales: ['en'],
+      timezone: 'Asia/Tashkent',
+      packKey: 'education',
+      packVersion: '1',
+      config: { billing: { required: true } },
+    },
+  });
+  await ensureLeadStages(db, tenant.id);
+  const planName = `E2E plan ${run}`;
+  const plan = await db.subscriptionPlan.create({
+    data: {
+      code: `e2e-${run}`,
+      name: planName,
+      priceMinor: 15_000_000n,
+      currency: 'UZS',
+      periodDays: 30,
+      limits: { maxOperators: 5 },
+    },
+  });
+  const day = 86_400_000;
+  const subscription = await db.tenantSubscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'EXPIRED',
+      currentPeriodStart: new Date(Date.now() - 40 * day),
+      currentPeriodEnd: new Date(Date.now() - 10 * day),
+      graceUntil: new Date(Date.now() - 7 * day),
+    },
+  });
+  await db.subscriptionPayment.create({
+    data: {
+      tenantId: tenant.id,
+      subscriptionId: subscription.id,
+      provider: 'MANUAL',
+      providerRef: `manual:e2e-${run}`,
+      amountMinor: 15_000_000n,
+      currency: 'UZS',
+      status: 'PAID',
+      paidAt: new Date(Date.now() - 40 * day),
+      safeSummary: {},
+    },
+  });
+  const operator = await db.operator.create({
+    data: { tenantId: tenant.id, displayName: 'expired-owner', role: 'OWNER' },
+  });
+  const email = `expired-owner-${run}@example.test`;
+  await db.operatorCredential.create({
+    data: {
+      tenantId: tenant.id,
+      operatorId: operator.id,
+      email,
+      passwordHash: await hashPassword(PASSWORD, FAST),
+    },
+  });
+  return { tenantId: tenant.id, owner: { id: operator.id, email }, planName };
+}
+
 const [command, ...args] = process.argv.slice(2);
 try {
   if (command === 'seed') {
     const out = args[0];
     const a = await tenant('a');
     const b = await tenant('b');
-    writeFileSync(out, JSON.stringify({ password: PASSWORD, a, b }, null, 2));
+    const platform = await platformAdmins();
+    const expired = await expiredTenant();
+    writeFileSync(
+      out,
+      JSON.stringify({ password: PASSWORD, a, b, platform, expired }, null, 2),
+    );
     console.log('seeded');
   } else if (command === 'customer-message') {
     const [tenantId, conversationId, text] = args;

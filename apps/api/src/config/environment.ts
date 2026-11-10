@@ -353,6 +353,8 @@ const environmentSchema = postgresEnvironmentSchema
       .min(5)
       .max(3_600)
       .default(30),
+    /** Days an overdue subscription keeps working before it expires (ADR 047). */
+    SUBSCRIPTION_GRACE_DAYS: z.coerce.number().int().min(0).max(60).default(3),
     /**
      * Embeddings for knowledge retrieval. Off until configured. The embedder
      * receives customer questions, so an untrusted provider is limited like
