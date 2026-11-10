@@ -20,6 +20,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AccessModule } from '../access/access.module.js';
 import { TeamModule } from '../team/team.module.js';
 import { TeamController } from './team.controller.js';
+import { SubscriptionController } from './subscription.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AnalyticsController } from './analytics.controller.js';
 import { AnalyticsService } from './analytics.service.js';
@@ -66,6 +67,7 @@ import { SessionService } from './session.service.js';
     LeadPipelineController,
     FacebookConnectController,
     TeamController,
+    SubscriptionController,
   ],
   providers: [
     AnalyticsService,

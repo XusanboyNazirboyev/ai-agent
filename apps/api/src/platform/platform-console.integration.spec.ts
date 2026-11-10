@@ -287,6 +287,14 @@ describe('tenant lifecycle from the console', () => {
     });
     expect(plan.status).toBe(201);
     planId = String(plan.body.id);
+    const options = await call('GET', '/api/v1/platform/tenants/options', {
+      session: platform,
+    });
+    expect(options.status).toBe(200);
+    expect(options.body.packs).toContain(PACK);
+    expect(options.body.locales).toEqual(
+      expect.arrayContaining(['uz-Latn', 'ru', 'en']),
+    );
 
     const created = await call('POST', '/api/v1/platform/tenants', {
       session: platform,
@@ -594,6 +602,21 @@ describe('tenant lifecycle from the console', () => {
         amountMinor: 50_000_000,
       }),
     ]);
+    // The tenant's own read-only view (Settings -> Subscription).
+    const own = await call('GET', '/api/v1/subscription', { session: owner });
+    expect(own.status).toBe(200);
+    expect(own.body.subscription).toMatchObject({
+      status: 'ACTIVE',
+      planName: 'Basic',
+      priceMinor: 50_000_000,
+    });
+    expect(own.body.access).toMatchObject({ state: 'ok' });
+    expect(own.body.payments).toEqual([
+      expect.objectContaining({ amountMinor: 50_000_000, status: 'PAID' }),
+    ]);
+    expect(
+      (await call('GET', '/api/v1/subscription', { session: platform })).status,
+    ).toBe(401);
   });
 });
 

@@ -162,6 +162,15 @@ export class PlatformTenantsController {
     };
   }
 
+  /** What the "new customer" form may choose: Domain Packs and locales. */
+  @Get('options')
+  options(): { packs: string[]; locales: string[] } {
+    return {
+      packs: [...DOMAIN_PACKS.keys()],
+      locales: INITIAL_LOCALE_PACKS.map((locale) => locale.id as string),
+    };
+  }
+
   @Get(':id')
   async detail(@Param('id', new ParseUUIDPipe()) id: string): Promise<unknown> {
     const tenant = await this.prisma.tenant.findUnique({
