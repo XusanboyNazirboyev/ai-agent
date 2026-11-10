@@ -16,6 +16,7 @@ export const MIN_REASON = 3;
  */
 export function ReasonDialog(props: {
   open: boolean;
+  testId: string;
   title: string;
   body: string;
   confirmLabel: string;
@@ -37,7 +38,7 @@ export function ReasonDialog(props: {
       open={props.open}
       title={props.title}
       description={props.body}
-      testId="reason-dialog"
+      testId={props.testId}
       onClose={props.onCancel}
       onSubmit={() => {
         if (valid && !props.busy) props.onConfirm(reason.trim());

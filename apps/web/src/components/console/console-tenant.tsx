@@ -176,6 +176,7 @@ export function ConsoleTenant(): ReactNode {
       {canWrite ? (
         <ReasonDialog
           open={action !== null}
+          testId="status-dialog"
           title={action ? t(`console.tenant.${action}Title`) : ''}
           body={action ? t(`console.tenant.${action}Body`) : ''}
           confirmLabel={action ? t(`console.tenant.${action}`) : ''}

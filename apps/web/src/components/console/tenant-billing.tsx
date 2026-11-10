@@ -310,6 +310,7 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
           <ErrorNote error={extend.error} testId="extend-error" />
           <ReasonDialog
             open={dialog === 'cancel'}
+            testId="cancel-dialog"
             title={t('console.subscription.cancelTitle')}
             body={t('console.subscription.cancelBody')}
             confirmLabel={t('console.subscription.cancel')}
