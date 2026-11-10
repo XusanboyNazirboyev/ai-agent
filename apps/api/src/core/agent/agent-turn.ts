@@ -24,6 +24,7 @@ import {
   type StuckPolicy,
 } from './stuck.js';
 import type { KnowledgeSearch } from '../knowledge/passage.js';
+import { TurnStopwatch, type TurnTimings } from './turn-timings.js';
 import {
   ACTION_SLOT_PREFIX,
   confirmationOf,
@@ -158,6 +159,8 @@ export interface AgentDependencies {
     readonly respond: number;
   };
   readonly now?: () => Date;
+  /** Monotonic milliseconds for stage timings (default performance.now). */
+  readonly clock?: () => number;
   /** Tenant and conversation this turn runs for; stamped on every fact. */
   readonly scope: {
     readonly tenantId: string;
@@ -218,6 +221,8 @@ export interface AgentTurnResult {
   readonly llmFailure?: string;
   /** What the commit step must do with business-action proposals. */
   readonly action?: ActionDecision;
+  /** Stage timings; absent for a turn cut off by the caller's deadline. */
+  readonly timings?: TurnTimings;
 }
 
 /** Intents that show the customer is engaging (ADR 041, STUCK). */
@@ -315,6 +320,9 @@ export async function runAgentTurn(
   deps: AgentDependencies,
 ): Promise<AgentTurnResult> {
   const now = deps.now ?? ((): Date => new Date());
+  const stopwatch = new TurnStopwatch(
+    deps.clock ?? ((): number => performance.now()),
+  );
   const { pack, locales, llm } = deps;
   const facts = new FactStore();
   const language = detectLanguage(input.customerText);
@@ -387,6 +395,7 @@ export async function runAgentTurn(
     shownFactIds: [],
     ...(supersede ? { action: supersede } : {}),
     ...extra,
+    timings: stopwatch.snapshot(),
   });
   const finish = (
     reply: string,
@@ -548,23 +557,26 @@ export async function runAgentTurn(
   // 1-2. Candidate slots: deterministic enum matches plus model extraction.
   const deterministic = detectEnumSlots(pack, input.customerText);
   let proposed: Record<string, string | null> = { ...deterministic };
+  stopwatch.gatesDone();
   try {
     const { schema, jsonSchema } = extractionSchema(pack);
-    const result = await llm.structured({
-      tier: 'FAST',
-      purpose: 'extract',
-      system: extractionSystemPrompt(pack, locales.all()),
-      messages: [
-        {
-          role: 'user',
-          text: extractionUserMessage(input.history, input.customerText),
-        },
-      ],
-      schemaName: 'turn_extraction',
-      schema,
-      jsonSchema,
-      maxOutputTokens: deps.maxOutputTokens.extract,
-    });
+    const result = await stopwatch.time('extract', () =>
+      llm.structured({
+        tier: 'FAST',
+        purpose: 'extract',
+        system: extractionSystemPrompt(pack, locales.all()),
+        messages: [
+          {
+            role: 'user',
+            text: extractionUserMessage(input.history, input.customerText),
+          },
+        ],
+        schemaName: 'turn_extraction',
+        schema,
+        jsonSchema,
+        maxOutputTokens: deps.maxOutputTokens.extract,
+      }),
+    );
     if (result.value) {
       intent = result.value.intent;
       const fromModel = Object.fromEntries(
@@ -772,7 +784,9 @@ export async function runAgentTurn(
     if (!tools || !tools.available().includes('knowledge_search'))
       return handover('LEGAL_UNVERIFIED');
     try {
-      knowledgeOutcome = await tools.searchKnowledge(input.customerText);
+      knowledgeOutcome = await stopwatch.time('search', () =>
+        tools.searchKnowledge(input.customerText),
+      );
     } catch (error: unknown) {
       if (error instanceof BudgetExhaustedError)
         return handover(budgetHandoverReason(error.reason), {
@@ -811,6 +825,7 @@ export async function runAgentTurn(
     summary: '',
     items: [],
   };
+  const searchDone = stopwatch.begin('search');
   try {
     if (schedulingTurn) {
       search = { ...search, summary: await tools!.schedulingContext() };
@@ -836,6 +851,8 @@ export async function runAgentTurn(
       });
     }
     throw error;
+  } finally {
+    searchDone();
   }
   if (!search.ok) {
     // CRM failure is distinct from missing data (addendum §3.4).
@@ -854,31 +871,33 @@ export async function runAgentTurn(
   // 6. Guardrail (also for the code-rendered fallback below), one
   // regeneration, then a safe code-rendered fallback.
   const guard = (text: string): ReturnType<typeof checkDraft> =>
-    checkDraft(text, {
-      facts,
-      locale: locale(),
-      customerTexts: [
-        input.customerText,
-        ...input.history
-          .filter((h) => h.role === 'customer')
-          .map((h) => h.text),
-      ],
-      timeZone: input.timeZone,
-      now: now(),
-      evidence: {
-        tenantId: deps.scope.tenantId,
-        conversationId: deps.scope.conversationId,
-        policy: displayPolicyFor(
-          // Strictest policy when no connector is wired (cannot happen here:
-          // a draft exists only after a connector search).
-          deps.connector?.capabilities ?? {
-            liveQuote: true,
-            availability: true,
-          },
-          deps.displayPolicy,
-        ),
-      },
-    });
+    stopwatch.timeSync('guardrail', () =>
+      checkDraft(text, {
+        facts,
+        locale: locale(),
+        customerTexts: [
+          input.customerText,
+          ...input.history
+            .filter((h) => h.role === 'customer')
+            .map((h) => h.text),
+        ],
+        timeZone: input.timeZone,
+        now: now(),
+        evidence: {
+          tenantId: deps.scope.tenantId,
+          conversationId: deps.scope.conversationId,
+          policy: displayPolicyFor(
+            // Strictest policy when no connector is wired (cannot happen here:
+            // a draft exists only after a connector search).
+            deps.connector?.capabilities ?? {
+              liveQuote: true,
+              availability: true,
+            },
+            deps.displayPolicy,
+          ),
+        },
+      }),
+    );
   const quoteMissing = firstMissing(pack, slots, 'quote');
   const nextQuestion = quoteMissing?.questions[localeId];
   const fallback = (extra: Partial<AgentTurnResult> = {}): AgentTurnResult => {
@@ -926,7 +945,7 @@ export async function runAgentTurn(
         }).format(nowDate),
       })
     : responseSystemPrompt(pack, locale());
-  const draft = await respond(deps, tools!, {
+  const draft = await respond(deps, tools!, stopwatch, {
     system: systemPrompt,
     user: schedulingTurn
       ? schedulingUserMessage({
@@ -1002,7 +1021,7 @@ export async function runAgentTurn(
       if (first.includes('FACT_NOT_LIVE') && tools) {
         // A price that is not live needs a tool call (get_quote), so this retry
         // keeps the tools; the same rounds, budget and guardrail apply.
-        const again = await respond(deps, tools, {
+        const again = await respond(deps, tools, stopwatch, {
           system: systemPrompt,
           messages: correction,
         });
@@ -1022,14 +1041,17 @@ export async function runAgentTurn(
           });
         if (again.kind === 'draft') retryText = again.text;
       } else {
-        const retry = await llm.withTools({
-          tier: 'STRONG',
-          purpose: 'respond',
-          system: systemPrompt,
-          messages: correction,
-          tools: [],
-          maxOutputTokens: deps.maxOutputTokens.respond,
-        });
+        stopwatch.countRound();
+        const retry = await stopwatch.time('respond', () =>
+          llm.withTools({
+            tier: 'STRONG',
+            purpose: 'respond',
+            system: systemPrompt,
+            messages: correction,
+            tools: [],
+            maxOutputTokens: deps.maxOutputTokens.respond,
+          }),
+        );
         if (retry.stopReason === 'end') retryText = retry.text;
       }
       checked =
@@ -1146,6 +1168,21 @@ function localDateIn(instant: Date, timeZone: string): string {
 async function respond(
   deps: AgentDependencies,
   tools: AgentTools,
+  stopwatch: TurnStopwatch,
+  prompt: { system: string } & (
+    | { user: string; messages?: undefined }
+    | { messages: readonly LlmMessage[]; user?: undefined }
+  ),
+): Promise<Draft> {
+  return stopwatch.time('respond', () =>
+    respondLoop(deps, tools, stopwatch, prompt),
+  );
+}
+
+async function respondLoop(
+  deps: AgentDependencies,
+  tools: AgentTools,
+  stopwatch: TurnStopwatch,
   prompt: { system: string } & (
     | { user: string; messages?: undefined }
     | { messages: readonly LlmMessage[]; user?: undefined }
@@ -1156,6 +1193,7 @@ async function respond(
     : [{ role: 'user', text: prompt.user }];
   try {
     for (;;) {
+      stopwatch.countRound();
       const result = await deps.llm.withTools({
         tier: 'STRONG',
         purpose: 'respond',
@@ -1183,7 +1221,10 @@ async function respond(
       messages.push(assistant);
       const results = [];
       for (const call of result.toolCalls) {
-        const outcome = await tools.run(call.name, call.input);
+        stopwatch.countToolExecution();
+        const outcome = await stopwatch.time('respondTool', () =>
+          tools.run(call.name, call.input),
+        );
         results.push({
           toolCallId: call.id,
           content: outcome.summary,

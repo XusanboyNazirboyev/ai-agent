@@ -88,6 +88,8 @@ export async function runTurn(options: {
   knowledge?: KnowledgeSearch;
   /** Locale packs (default: all); mutation tests replace them. */
   locales?: LocaleRegistry;
+  /** Monotonic clock for stage timings (default performance.now). */
+  clock?: () => number;
 }): Promise<TurnRun> {
   const usage: LlmUsageEntry[] = [];
   const budget = new TurnBudget(
@@ -134,6 +136,7 @@ export async function runTurn(options: {
       toolTimeoutMs: 200,
       maxOutputTokens: { extract: 600, respond: 900 },
       now: () => now,
+      ...(options.clock ? { clock: options.clock } : {}),
     },
   );
   return { result, usage, budget };

@@ -272,6 +272,10 @@ export class TelegramAgentPipeline {
           outcome: computed.result.outcome,
           handover: computed.result.handover,
           round,
+          // Latency audit 2026-11-10: whole compute (context reads included)
+          // and the agent turn's stage timings; durations and counts only.
+          latencyMs: computed.latencyMs,
+          timings: computed.result.timings,
         }),
       );
       if (result !== 'SUPERSEDED') return;
