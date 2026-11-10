@@ -34,9 +34,20 @@ describe('local superadmin bootstrap', () => {
     const tenant = await db.tenant.findUniqueOrThrow({
       where: { slug: SUPERADMIN_TENANT_SLUG },
     });
+    // Counted by the account's own e-mail, not by display name: the
+    // "configured LOGIN and PASS" test below adds a second operator with the
+    // same display name to this tenant, and the database is shared between
+    // runs (counting by name made this test fail on every second run).
+    const accountIds = (
+      await db.operatorCredential.findMany({
+        where: { tenantId: tenant.id, email: SUPERADMIN_EMAIL },
+        select: { operatorId: true },
+      })
+    ).map((row) => row.operatorId);
+    expect(accountIds).toEqual([first.operatorId]);
     expect(
       await db.operator.count({
-        where: { tenantId: tenant.id, displayName: 'Local Superadmin' },
+        where: { tenantId: tenant.id, id: { in: accountIds } },
       }),
     ).toBe(1);
     const credential = await db.operatorCredential.findUniqueOrThrow({
