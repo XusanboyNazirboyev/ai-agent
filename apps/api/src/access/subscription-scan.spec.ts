@@ -38,7 +38,11 @@ function fakeDb(rows: Row[]): {
   };
   const client = {
     tenantSubscription: {
-      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+      findMany: async ({
+        where,
+      }: {
+        where: Record<string, unknown>;
+      }): Promise<Row[]> =>
         rows.filter((row) => matches(row, where)).map((row) => ({ ...row })),
       updateMany: async ({
         where,
@@ -46,7 +50,7 @@ function fakeDb(rows: Row[]): {
       }: {
         where: Record<string, unknown>;
         data: Partial<Row>;
-      }) => {
+      }): Promise<{ count: number }> => {
         const hit = rows.filter((row) => matches(row, where));
         for (const row of hit) Object.assign(row, data);
         return { count: hit.length };
@@ -57,11 +61,14 @@ function fakeDb(rows: Row[]): {
         data,
       }: {
         data: { action: string; entityId: string };
-      }) => void audits.push(data),
+      }): Promise<void> => void audits.push(data),
     },
     inboxEvent: {
-      create: async ({ data }: { data: { tenantId: string; type: string } }) =>
-        void inbox.push(data),
+      create: async ({
+        data,
+      }: {
+        data: { tenantId: string; type: string };
+      }): Promise<void> => void inbox.push(data),
     },
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
       fn(client),
