@@ -251,6 +251,10 @@ model Tenant {
   inboundEvents   InboundEvent[]
   outboxEvents    OutboxEvent[]
   auditEvents     AuditEvent[]
+  subscriptions        TenantSubscription[]
+  subscriptionPayments SubscriptionPayment[]
+  operatorInvites      OperatorInvite[]
+  platformAuditEvents  PlatformAuditEvent[]
 
   @@map("tenants")
 }
@@ -1407,4 +1411,182 @@ model Appointment {
   @@index([tenantId, staffMemberId, blockedFrom])
   @@index([tenantId, status, holdExpiresAt])
   @@map("appointments")
+}
+
+// ADR 047: platform console, subscriptions and two-layer RBAC.
+
+enum PlatformRole {
+  PLATFORM_OWNER
+  PLATFORM_SUPPORT
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+  CANCELED
+}
+
+enum PaymentProvider {
+  MANUAL
+  CLICK
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+/// Principal above the tenants (ADR 047). Not related to any tenant. A row
+/// created by an invite has no password until the invite is accepted.
+model PlatformAdmin {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  email           String       @unique @db.VarChar(254)
+  displayName     String       @map("display_name") @db.VarChar(160)
+  role            PlatformRole @default(PLATFORM_SUPPORT)
+  passwordHash    String?      @map("password_hash") @db.VarChar(255)
+  failedAttempts  Int          @default(0) @map("failed_attempts")
+  lockedUntil     DateTime?    @map("locked_until") @db.Timestamptz(6)
+  isActive        Boolean      @default(true) @map("is_active")
+  inviteTokenHash String?      @unique @map("invite_token_hash") @db.VarChar(64)
+  inviteExpiresAt DateTime?    @map("invite_expires_at") @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  sessions    PlatformSession[]
+  auditEvents PlatformAuditEvent[]
+  payments    SubscriptionPayment[]
+
+  @@map("platform_admins")
+}
+
+/// Browser session of a platform admin; only hashes are stored.
+model PlatformSession {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  adminId    String        @map("admin_id") @db.Uuid
+  tokenHash  String        @unique @map("token_hash") @db.VarChar(64)
+  csrfHash   String        @map("csrf_hash") @db.VarChar(64)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt DateTime      @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  expiresAt  DateTime      @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime?     @map("revoked_at") @db.Timestamptz(6)
+  admin      PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@map("platform_sessions")
+}
+
+/// Prices are integers in minor units, rendered by code; not seeded.
+model SubscriptionPlan {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  code       String   @unique @db.VarChar(60)
+  name       String   @db.VarChar(200)
+  priceMinor BigInt   @map("price_minor")
+  currency   String   @default("UZS") @db.VarChar(3)
+  periodDays Int      @map("period_days")
+  /// { maxOperators?, maxChannelAccounts?, monthlyLlmBudgetUsd? }
+  limits     Json     @default("{}") @db.JsonB
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subscriptions TenantSubscription[]
+
+  @@map("subscription_plans")
+}
+
+/// Subscription history of a tenant. At most one open row (TRIAL, ACTIVE,
+/// PAST_DUE) per tenant: partial unique index in the migration SQL.
+model TenantSubscription {
+  id                 String             @id @default(uuid(7)) @db.Uuid
+  tenantId           String             @map("tenant_id") @db.Uuid
+  planId             String             @map("plan_id") @db.Uuid
+  status             SubscriptionStatus
+  currentPeriodStart DateTime           @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Timestamptz(6)
+  graceUntil         DateTime?          @map("grace_until") @db.Timestamptz(6)
+  canceledAt         DateTime?          @map("canceled_at") @db.Timestamptz(6)
+  notes              String?            @db.VarChar(500)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  payments SubscriptionPayment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([status, currentPeriodEnd])
+  @@map("tenant_subscriptions")
+}
+
+/// MANUAL rows are recorded in the console; CLICK rows come from the Click
+/// adapter. safeSummary never holds raw provider payloads.
+model SubscriptionPayment {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  tenantId       String              @map("tenant_id") @db.Uuid
+  subscriptionId String?             @map("subscription_id") @db.Uuid
+  provider       PaymentProvider
+  providerRef    String              @map("provider_ref") @db.VarChar(200)
+  amountMinor    BigInt              @map("amount_minor")
+  currency       String              @default("UZS") @db.VarChar(3)
+  status         PaymentStatus
+  paidAt         DateTime?           @map("paid_at") @db.Timestamptz(6)
+  recordedById   String?             @map("recorded_by_id") @db.Uuid
+  safeSummary    Json                @default("{}") @map("safe_summary") @db.JsonB
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription   TenantSubscription? @relation(fields: [tenantId, subscriptionId], references: [tenantId, id], onDelete: Restrict)
+  recordedBy     PlatformAdmin?      @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, id])
+  @@unique([provider, providerRef])
+  @@index([tenantId, createdAt])
+  @@map("subscription_payments")
+}
+
+/// Invite to join a tenant as an operator. Only the token hash is stored;
+/// the plain token is shown once. Created by a platform admin or an operator.
+model OperatorInvite {
+  id                       String       @id @default(uuid(7)) @db.Uuid
+  tenantId                 String       @map("tenant_id") @db.Uuid
+  email                    String       @db.VarChar(254)
+  role                     OperatorRole
+  tokenHash                String       @unique @map("token_hash") @db.VarChar(64)
+  expiresAt                DateTime     @map("expires_at") @db.Timestamptz(6)
+  acceptedAt               DateTime?    @map("accepted_at") @db.Timestamptz(6)
+  acceptedOperatorId       String?      @map("accepted_operator_id") @db.Uuid
+  revokedAt                DateTime?    @map("revoked_at") @db.Timestamptz(6)
+  createdByPlatformAdminId String?      @map("created_by_platform_admin_id") @db.Uuid
+  createdByOperatorId      String?      @map("created_by_operator_id") @db.Uuid
+  createdAt                DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant                   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, email])
+  @@map("operator_invites")
+}
+
+/// Audit trail of the platform console and of subscription transitions.
+/// actorAdminId is null for system transitions (the subscription scan).
+model PlatformAuditEvent {
+  id           String         @id @default(uuid(7)) @db.Uuid
+  actorAdminId String?        @map("actor_admin_id") @db.Uuid
+  action       String         @db.VarChar(120)
+  tenantId     String?        @map("tenant_id") @db.Uuid
+  entityType   String         @map("entity_type") @db.VarChar(100)
+  entityId     String         @map("entity_id") @db.VarChar(200)
+  safeSummary  Json           @default("{}") @map("safe_summary") @db.JsonB
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  actor        PlatformAdmin? @relation(fields: [actorAdminId], references: [id], onDelete: SetNull)
+  tenant       Tenant?        @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([tenantId, createdAt])
+  @@map("platform_audit_events")
 }
