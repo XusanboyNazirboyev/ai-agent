@@ -70,6 +70,13 @@ export interface OpenAiCompatibleOptions {
   readonly maxTokensParam: MaxTokensParam;
   /** Sent as `reasoning_effort` when set (e.g. Gemini's thinking level). */
   readonly reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  /**
+   * Overrides `reasoningEffort` for one tier (LLM_FAST_REASONING_EFFORT:
+   * extraction only). Unset tiers keep `reasoningEffort`.
+   */
+  readonly reasoningEffortByTier?: Partial<
+    Record<LlmTier, 'minimal' | 'low' | 'medium' | 'high'>
+  >;
   readonly requestTimeoutMs: number;
   readonly maxRetries: number;
   readonly providerId?: string;
@@ -604,12 +611,14 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
   /** The output ceiling, plus the reasoning effort when one is configured. */
   private outputCeiling(
     maxOutputTokens: number,
+    tier: LlmTier,
   ): Record<string, number | string> {
+    const effort =
+      this.options.reasoningEffortByTier?.[tier] ??
+      this.options.reasoningEffort;
     return {
       [this.options.maxTokensParam]: maxOutputTokens,
-      ...(this.options.reasoningEffort
-        ? { reasoning_effort: this.options.reasoningEffort }
-        : {}),
+      ...(effort ? { reasoning_effort: effort } : {}),
     };
   }
 
@@ -638,7 +647,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       {
         model,
         messages: this.wireMessages(system, request.messages),
-        ...this.outputCeiling(request.maxOutputTokens),
+        ...this.outputCeiling(request.maxOutputTokens, request.tier),
         response_format: jsonObject
           ? { type: 'json_object' }
           : {
@@ -702,7 +711,7 @@ export class OpenAiCompatibleLlmProvider implements LlmProvider {
       body: {
         model,
         messages: this.wireMessages(request.system, request.messages),
-        ...this.outputCeiling(request.maxOutputTokens),
+        ...this.outputCeiling(request.maxOutputTokens, request.tier),
         ...(request.tools.length > 0
           ? {
               tools: request.tools.map((tool) => ({

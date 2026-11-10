@@ -46,6 +46,7 @@ export type LlmEnvironment = Pick<
   | 'LLM_STRUCTURED_OUTPUT'
   | 'LLM_MAX_TOKENS_PARAM'
   | 'LLM_REASONING_EFFORT'
+  | 'LLM_FAST_REASONING_EFFORT'
   | 'LLM_RATE_LIMIT_RPM'
   | 'LLM_RATE_LIMIT_TPM'
   | 'LLM_RATE_LIMIT_RPD'
@@ -80,6 +81,8 @@ const LLM_KEYS = [
   'LLM_MODEL_STRONG',
   'LLM_STRUCTURED_OUTPUT',
   'LLM_MAX_TOKENS_PARAM',
+  'LLM_REASONING_EFFORT',
+  'LLM_FAST_REASONING_EFFORT',
   'LLM_RATE_LIMIT_RPM',
   'LLM_RATE_LIMIT_TPM',
   'LLM_RATE_LIMIT_RPD',
@@ -97,6 +100,19 @@ export function llmEnvironment(
   return Object.fromEntries(
     LLM_KEYS.map((key) => [key, config.get(key, { infer: true })]),
   ) as unknown as LlmEnvironment;
+}
+
+/**
+ * Effort per routed provider: Gemini takes every level; Groq rejects
+ * `minimal` with HTTP 400 (an invalid request never fails over), so Groq is
+ * sent nothing then (FAST: it keeps LLM_REASONING_EFFORT).
+ */
+export function routedEffortByProvider(
+  effort: 'minimal' | 'low' | 'medium' | 'high',
+): Record<string, 'minimal' | 'low' | 'medium' | 'high'> {
+  return effort === 'minimal'
+    ? { gemini: effort }
+    : { gemini: effort, groq: effort };
 }
 
 /**
@@ -124,10 +140,16 @@ function baseProvider(
       // that take the parameter, and sends nothing to the others.
       ...(environment.LLM_REASONING_EFFORT
         ? {
-            reasoningEffortByProvider: {
-              gemini: environment.LLM_REASONING_EFFORT,
-              groq: environment.LLM_REASONING_EFFORT,
-            },
+            reasoningEffortByProvider: routedEffortByProvider(
+              environment.LLM_REASONING_EFFORT,
+            ),
+          }
+        : {}),
+      ...(environment.LLM_FAST_REASONING_EFFORT
+        ? {
+            fastReasoningEffortByProvider: routedEffortByProvider(
+              environment.LLM_FAST_REASONING_EFFORT,
+            ),
           }
         : {}),
       ...(transport ? { fetch: transport } : {}),
@@ -157,6 +179,13 @@ function baseProvider(
       maxTokensParam: environment.LLM_MAX_TOKENS_PARAM,
       ...(environment.LLM_REASONING_EFFORT
         ? { reasoningEffort: environment.LLM_REASONING_EFFORT }
+        : {}),
+      ...(environment.LLM_FAST_REASONING_EFFORT
+        ? {
+            reasoningEffortByTier: {
+              FAST: environment.LLM_FAST_REASONING_EFFORT,
+            },
+          }
         : {}),
       requestTimeoutMs: environment.LLM_REQUEST_TIMEOUT_MS,
       maxRetries: environment.LLM_MAX_RETRIES,

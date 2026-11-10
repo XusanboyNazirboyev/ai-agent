@@ -88,10 +88,38 @@ export const GEMINI_PRIMARY_ROUTING_POLICY: RoutingPolicy =
     },
   });
 
+/**
+ * Latency experiment 2026-11-10 (docs/audit/2026-11-10-latency-experiments.md):
+ * extraction (FAST) goes to Groq `openai/gpt-oss-20b` first and to the paid
+ * Gemini when Groq fails (rate limit, outage); replies (STRONG) are exactly
+ * `gemini-primary`. Same candidates as `gemini-primary`, so the same pricing
+ * snapshot (`routing-gemini-paid-2026-11-09`) and reservation model apply.
+ * Selected with `LLM_ROUTING_POLICY_FILE=builtin:gemini-primary-fast-groq`.
+ */
+export const GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY: RoutingPolicy =
+  RoutingPolicySchema.parse({
+    version: 'gemini-primary-fast-groq-2026-11-10',
+    tiers: {
+      FAST: [
+        { provider: 'groq', model: 'openai/gpt-oss-20b' },
+        { provider: 'gemini', model: 'gemini-3.8-flash' },
+        { provider: 'mistral', model: 'mistral-large-4' },
+        {
+          provider: 'openrouter',
+          model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+        },
+        { provider: 'openrouter', model: 'google/gemma-4-31b-it:free' },
+      ],
+      STRONG: GEMINI_PRIMARY_ROUTING_POLICY.tiers.STRONG,
+    },
+    breaker: GEMINI_PRIMARY_ROUTING_POLICY.breaker,
+  });
+
 /** Policies selectable by name (`builtin:<name>`) instead of a file. */
 export const BUILTIN_ROUTING_POLICIES: Readonly<Record<string, RoutingPolicy>> =
   {
     'gemini-primary': GEMINI_PRIMARY_ROUTING_POLICY,
+    'gemini-primary-fast-groq': GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
   };
 
 export const DEFAULT_ROUTING_POLICY: RoutingPolicy = RoutingPolicySchema.parse({
