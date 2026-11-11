@@ -89,7 +89,7 @@ export function LeadsBoard(): ReactNode {
       {stages.isSuccess && rows.length > 0 ? (
         <div
           aria-label={t('leads.columns')}
-          className="flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
+          className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
         >
           {rows.map((stage) => (
             <LeadColumn key={stage.id} stage={stage} stages={rows} />
