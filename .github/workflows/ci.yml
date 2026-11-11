@@ -101,7 +101,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
       - name: Production dependencies have no high or critical advisory
         run: pnpm audit --prod --audit-level=high
       - name: No secrets in the tree (gitleaks)
@@ -130,7 +129,9 @@ jobs:
           for target in api web migrate; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               aquasec/trivy:0.57.1 image --severity CRITICAL --ignore-unfixed \
-              --exit-code 1 --no-progress "tezda-$target:ci"
+              --exit-code 1 --no-progress --quiet --format template \
+              --template '{{ range . }}{{ $t := .Target }}{{ range .Vulnerabilities }}{{ "'"$target"'" }} {{ $t }}: {{ .PkgName }}@{{ .InstalledVersion }} {{ .VulnerabilityID }} fixed in {{ .FixedVersion }}{{ "\n" }}{{ end }}{{ end }}' \
+              "tezda-$target:ci"
           done
 
   # Staging deploy (ADR 035 step 6): only a push to the staging branch, only
