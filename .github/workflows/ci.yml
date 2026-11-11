@@ -130,7 +130,7 @@ jobs:
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
               aquasec/trivy:0.57.1 image --severity CRITICAL --ignore-unfixed \
               --exit-code 1 --no-progress --quiet --format template \
-              --template '{{ range . }}{{ $t := .Target }}{{ range .Vulnerabilities }}{{ "'"$target"'" }} {{ $t }}: {{ .PkgName }}@{{ .InstalledVersion }} {{ .VulnerabilityID }} fixed in {{ .FixedVersion }}{{ "\n" }}{{ end }}{{ end }}' \
+              --template '{{ range . }}{{ $t := .Target }}{{ range .Vulnerabilities }}{{ "'"$target"'" }} {{ $t }} {{ .PkgPath }}: {{ .PkgName }}@{{ .InstalledVersion }} {{ .VulnerabilityID }} fixed in {{ .FixedVersion }}{{ "\n" }}{{ end }}{{ end }}' \
               "tezda-$target:ci"
           done
 
