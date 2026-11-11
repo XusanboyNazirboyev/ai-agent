@@ -263,6 +263,14 @@ export interface ContactItem {
   createdAt: string;
 }
 
+/** Result of owner-initiated contact erasure (ADR 049). */
+export interface ContactErasureResult {
+  contactId: string;
+  alreadyErased: boolean;
+  conversations: number;
+  messagesRedacted: number;
+}
+
 export interface ChannelList {
   items: ChannelAccount[];
   capabilities: { secretsConfigured: boolean; publicUrlConfigured: boolean };

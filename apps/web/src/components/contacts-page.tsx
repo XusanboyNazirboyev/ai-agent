@@ -1,18 +1,24 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
-import type { ContactItem } from '@/lib/types';
+import type { ContactErasureResult, ContactItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button, buttonClass } from './ui/button';
+import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
+import { useToast } from './ui/toast';
 
 interface ContactPage {
   items: ContactItem[];
@@ -31,8 +37,12 @@ function useDebounced<T>(value: T, ms: number): T {
 /** Everyone who has written in, newest first, with a link to their latest chat. */
 export function ContactsPage(): ReactNode {
   const { t, formatDateTime } = useI18n();
-  const { timeZone } = useShell();
+  const { operator, timeZone } = useShell();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const canErase = operator?.role === 'OWNER';
   const [search, setSearch] = useState('');
+  const [pendingErase, setPendingErase] = useState<ContactItem | null>(null);
   const q = useDebounced(search.trim(), 300);
 
   const query = useInfiniteQuery({
@@ -47,6 +57,26 @@ export function ContactsPage(): ReactNode {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+
+  const erase = useMutation({
+    mutationFn: (contactId: string) =>
+      api<ContactErasureResult>(`/api/v1/contacts/${contactId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (result) => {
+      toast(
+        result.alreadyErased
+          ? t('toast.contactAlreadyErased')
+          : t('toast.contactErased', {
+              conversations: result.conversations,
+              messages: result.messagesRedacted,
+            }),
+      );
+      setPendingErase(null);
+      void queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
 
   return (
     <div
@@ -145,15 +175,30 @@ export function ContactsPage(): ReactNode {
                     : t('contacts.never')}
                 </span>
               </span>
-              {item.lastConversationId ? (
-                <Link
-                  href={`/inbox?scope=all&c=${item.lastConversationId}`}
-                  className={buttonClass('secondary', 'sm')}
-                >
-                  <Icon name="message" />
-                  {t('contacts.open')}
-                </Link>
-              ) : null}
+              <span className="flex shrink-0 flex-wrap items-center gap-2">
+                {item.lastConversationId ? (
+                  <Link
+                    href={`/inbox?scope=all&c=${item.lastConversationId}`}
+                    className={buttonClass('secondary', 'sm')}
+                  >
+                    <Icon name="message" />
+                    {t('contacts.open')}
+                  </Link>
+                ) : null}
+                {canErase ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => {
+                      erase.reset();
+                      setPendingErase(item);
+                    }}
+                    data-testid="contact-erase"
+                  >
+                    {t('contacts.erase')}
+                  </Button>
+                ) : null}
+              </span>
             </li>
           ))}
           {query.hasNextPage ? (
@@ -171,6 +216,38 @@ export function ContactsPage(): ReactNode {
           ) : null}
         </ul>
       </div>
+      <ConfirmDialog
+        open={pendingErase !== null}
+        title={t('contacts.eraseTitle')}
+        body={t('contacts.eraseBody', {
+          name: pendingErase?.name ?? t('list.unnamed'),
+        })}
+        confirmLabel={t('contacts.eraseConfirm')}
+        cancelLabel={t('confirm.cancel')}
+        tone="danger"
+        busy={erase.isPending}
+        onConfirm={() => {
+          if (pendingErase) erase.mutate(pendingErase.id);
+        }}
+        onCancel={() => {
+          if (!erase.isPending) {
+            erase.reset();
+            setPendingErase(null);
+          }
+        }}
+      />
+      {erase.isError && pendingErase ? (
+        <div
+          role="alert"
+          data-testid="contact-erase-error"
+          className="fixed right-4 bottom-4 z-40 max-w-md rounded-xl border border-line bg-surface p-3 text-sm text-danger-fg shadow-pop"
+        >
+          <p className="flex items-center gap-2">
+            <Icon name="alert" />
+            {t(errorKey(erase.error))}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
