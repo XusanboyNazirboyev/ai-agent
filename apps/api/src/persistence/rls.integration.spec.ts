@@ -152,10 +152,11 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
     });
     expect(own).toHaveLength(1);
 
-    // The table owner bypasses RLS unless FORCE is set (ADR 050), so the
-    // foreign-tenant read runs with FORCE inside a transaction that is always
-    // rolled back (DDL is transactional). A superuser would bypass FORCE too;
-    // then the check is reported as not exercised by failing loudly.
+    // The table owner bypasses RLS unless FORCE is set (ADR 050), and a
+    // superuser (the CI database role) bypasses even FORCE. So the foreign-
+    // tenant read runs inside a transaction that is always rolled back (DDL
+    // and SET LOCAL are transactional): as a non-superuser owner with FORCE,
+    // or, for a superuser, as a throwaway non-owner role that RLS applies to.
     const rolledBack = new Error('rollback');
     let foreign: number | null = null;
     let own2: number | null = null;
@@ -163,10 +164,16 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
       .$transaction(async (tx) => {
         const [role] = await tx.$queryRaw<Array<{ rolsuper: boolean }>>`
           SELECT rolsuper FROM pg_roles WHERE rolname = current_user`;
-        expect(role?.rolsuper).toBe(false);
-        await tx.$executeRawUnsafe(
-          'ALTER TABLE "persons" FORCE ROW LEVEL SECURITY',
-        );
+        if (role?.rolsuper) {
+          const probe = `rls_probe_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+          await tx.$executeRawUnsafe(`CREATE ROLE ${probe} NOLOGIN`);
+          await tx.$executeRawUnsafe(`GRANT SELECT ON "persons" TO ${probe}`);
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE ${probe}`);
+        } else {
+          await tx.$executeRawUnsafe(
+            'ALTER TABLE "persons" FORCE ROW LEVEL SECURITY',
+          );
+        }
         await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantB.id}, true)`;
         foreign = (await tx.person.findMany({ where: { id: person.id } }))
           .length;
