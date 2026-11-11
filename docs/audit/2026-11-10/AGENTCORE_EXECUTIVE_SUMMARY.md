@@ -22,7 +22,7 @@ A **pilot-grade AI sales and support agent with an operator inbox and a platform
 |---|---|---|
 | 1 | **No cross-channel customer identity** (`Contact` is unique per channel account) | The "one AI agent across all channels" promise and any CRM view of a person are impossible without it. |
 | 2 | **CRM core is thin**: no Company, Deal/multiple pipelines, Task/reminder, Tag, custom fields, activity timeline, import/export | A business cannot run sales in AgentCore; it can only receive qualified leads. |
-| 3 | **Backups are on the same host, never restore-tested; one EC2 instance** | One disk or instance loss loses all tenant data. |
+| 3 | **Backups are on the same host, never restore-tested; one EC2 instance** | One disk or instance loss loses all tenant data. Low impact today (staging holds demo data only, owner 2026-11-11); mandatory before the first real customer. |
 | 4 | **No MFA** for platform or tenant owners; **tenant isolation is by convention** (no Postgres RLS) | Highest-impact security risks for a multi-tenant SaaS. |
 | 5 | **Answer quality**: 31% of staging turns end in handover, 13% FALLBACK (last 7 days, 61 turns) | Below what a paying business will accept; latency fix deployed but not yet measured on staging. |
 | 6 | **No automation engine** (no flows, triggers, campaigns) and **no WhatsApp / website chat** | The two largest product gaps against ManyChat and Jivo/Chatra. |

@@ -17,7 +17,7 @@ Out of the MVP: visual flow builder (a small set of built-in automations instead
 ## P0 — critical security and operational blockers
 | # | Task | Value | Complexity | Deps | Risks | Acceptance | Effort |
 |---|---|---|---|---|---|---|---|
-| P0.1 | Off-host encrypted backups (S3, separate account/role, lifecycle) + documented restore drill | prevents total data loss | low | AWS | restore never tested today | nightly copy in S3; drill restores into a scratch DB and row counts match; RPO ≤ 24 h, RTO ≤ 4 h written down | S |
+| P0.1 | Off-host encrypted backups (S3, separate account/role, lifecycle) + documented restore drill. **Deferred by the owner (2026-11-11) until real customer data is loaded; must be done before the first pilot business connects** | prevents total data loss | low | AWS | restore never tested today | nightly copy in S3; drill restores into a scratch DB and row counts match; RPO ≤ 24 h, RTO ≤ 4 h written down | S |
 | P0.2 | MFA (TOTP + recovery codes) for platform admins and tenant OWNER/ADMIN | account takeover is the top multi-tenant risk | medium | — | lockout support | login requires TOTP when enabled; enforced for platform roles; integration + e2e tests | M |
 | P0.3 | Secrets hygiene: instance role + Parameter Store/Secrets Manager read at boot; stop passing values through SSM command text; rotate keys that were exposed (incl. the jev key pasted in chat) | reduces blast radius | low | AWS IAM | — | no secret in `.env.production` or SSM history; rotation runbook | S |
 | P0.4 | CI security gates: secret scan (gitleaks), `pnpm audit --prod` threshold, container scan (Trivy) | catches regressions | low | — | noise | CI fails on high findings; baseline file for accepted ones | S |
