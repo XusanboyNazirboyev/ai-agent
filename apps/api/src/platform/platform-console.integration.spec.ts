@@ -1,5 +1,5 @@
 import { config as loadEnv } from 'dotenv';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import { base32Decode, totpCode } from '../auth/totp.js';
 import { hashPassword } from '../webinbox/password.js';
 
 /**
@@ -29,6 +30,7 @@ for (const key of [
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
 process.env.NODE_ENV = 'test';
+process.env.SECRETS_MASTER_KEY = randomBytes(32).toString('base64');
 process.env.LOGIN_RATE_LIMIT_PER_MINUTE = '1000';
 process.env.WEB_ORIGINS = 'http://localhost:3000';
 delete process.env.WEB_PROXY_SECRET;
@@ -66,6 +68,8 @@ beforeAll(async () => {
   });
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
+  await enrol(OWNER_EMAIL);
+  await enrol(SUPPORT_EMAIL);
 });
 afterAll(async () => {
   await app?.close();
@@ -122,9 +126,44 @@ function sessionFrom(result: Result, name: string): Session {
   return { cookie, csrf: String(result.body.csrfToken) };
 }
 
-async function platformLogin(email: string): Promise<Session> {
-  const result = await call('POST', '/api/v1/platform/auth/login', {
-    body: { email, password: ADMIN_PASSWORD },
+const secrets = new Map<string, string>();
+
+/** First sign-in of a fixture admin: forced enrolment (ADR 048 §5). */
+async function enrol(email: string, password = ADMIN_PASSWORD): Promise<void> {
+  const login = await call('POST', '/api/v1/platform/auth/login', {
+    body: { email, password },
+  });
+  expect(login.body.mfaEnrollmentRequired).toBe(true);
+  const challenge = String(login.body.challenge);
+  const setup = await call('POST', '/api/v1/platform/auth/login/mfa/setup', {
+    body: { challenge },
+  });
+  const secret = String(setup.body.secret);
+  const done = await call('POST', '/api/v1/platform/auth/login/mfa/enable', {
+    body: { challenge, code: totpCode(base32Decode(secret), Date.now()) },
+  });
+  expect(done.status).toBe(200);
+  secrets.set(email, secret);
+}
+
+/** Password then code; the replay marker is cleared so tests can sign in repeatedly. */
+async function platformLogin(
+  email: string,
+  password = ADMIN_PASSWORD,
+): Promise<Session> {
+  await db.platformAdmin.update({
+    where: { email },
+    data: { totpLastStep: null },
+  });
+  const login = await call('POST', '/api/v1/platform/auth/login', {
+    body: { email, password },
+  });
+  expect(login.body.mfaRequired).toBe(true);
+  const result = await call('POST', '/api/v1/platform/auth/login/mfa', {
+    body: {
+      challenge: String(login.body.challenge),
+      code: totpCode(base32Decode(secrets.get(email)!), Date.now()),
+    },
   });
   expect(result.status).toBe(200);
   return sessionFrom(result, 'ac_platform');
@@ -152,8 +191,19 @@ describe('platform sign-in and guard', () => {
       body: { email: OWNER_EMAIL, password: 'nope' },
     });
     expect(wrong.status).toBe(401);
-    const login = await call('POST', '/api/v1/platform/auth/login', {
+    await db.platformAdmin.update({
+      where: { email: OWNER_EMAIL },
+      data: { totpLastStep: null },
+    });
+    const first = await call('POST', '/api/v1/platform/auth/login', {
       body: { email: OWNER_EMAIL.toUpperCase(), password: ADMIN_PASSWORD },
+    });
+    expect(first.body.mfaRequired).toBe(true);
+    const login = await call('POST', '/api/v1/platform/auth/login/mfa', {
+      body: {
+        challenge: String(first.body.challenge),
+        code: totpCode(base32Decode(secrets.get(OWNER_EMAIL)!), Date.now()),
+      },
     });
     expect(login.status).toBe(200);
     expect(
@@ -638,7 +688,11 @@ describe('platform admins', () => {
       { body: { password: 'a long platform password' } },
     );
     expect(accepted.status).toBe(200);
-    const support = sessionFrom(accepted, 'ac_platform');
+    expect(accepted.body.mfaEnrollmentRequired).toBe(true);
+    expect(accepted.cookies).toEqual([]);
+    const newEmail = `p-new-${suffix}@example.test`;
+    await enrol(newEmail, 'a long platform password');
+    const support = await platformLogin(newEmail, 'a long platform password');
     expect(
       (await call('GET', '/api/v1/platform/auth/me', { session: support }))
         .status,
