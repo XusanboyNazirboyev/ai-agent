@@ -7,7 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { channelName } from '@/lib/channel-names';
@@ -59,7 +59,7 @@ export function LeadsBoard(): ReactNode {
   const rows = stages.data ?? [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
       <p className="text-sm text-muted">{t('leads.funnelIntro')}</p>
       {stages.isPending ? (
         <div role="status">
@@ -89,7 +89,7 @@ export function LeadsBoard(): ReactNode {
       {stages.isSuccess && rows.length > 0 ? (
         <div
           aria-label={t('leads.columns')}
-          className="flex min-h-0 flex-1 items-stretch gap-3 overflow-x-auto pb-2"
+          className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
         >
           {rows.map((stage) => (
             <LeadColumn key={stage.id} stage={stage} stages={rows} />
@@ -198,6 +198,29 @@ function LeadCard(props: {
   const { timeZone, operator } = useShell();
   const queryClient = useQueryClient();
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
+  // Optimistic selections: keep the user's choice visible while a mutation is
+  // in flight or before the invalidated query refetch reflects it, so a
+  // background refetch cannot snap the controlled select back to stale data.
+  const [stageChoice, setStageChoice] = useState<string | null>(null);
+  const [scoreChoice, setScoreChoice] = useState<LeadScore | null>(null);
+  const [statusChoice, setStatusChoice] = useState<LeadStatus | null>(null);
+
+  useEffect(() => {
+    if (stageChoice && props.currentStageId === stageChoice) {
+      setStageChoice(null);
+    }
+  }, [props.currentStageId, stageChoice]);
+  useEffect(() => {
+    if (scoreChoice && props.item.score === scoreChoice) {
+      setScoreChoice(null);
+    }
+  }, [props.item.score, scoreChoice]);
+  useEffect(() => {
+    if (statusChoice && props.item.status === statusChoice) {
+      setStatusChoice(null);
+    }
+  }, [props.item.status, statusChoice]);
+
   // Operator-set score and status (ADR 037) stay next to the funnel stage.
   const setField = useMutation({
     mutationFn: (input: { field: 'score' | 'status'; value: string }) =>
@@ -211,9 +234,20 @@ function LeadCard(props: {
               : { status: input.value },
         },
       ),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['leads'] });
-      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    onSettled: (_data, _error, input) => {
+      // The optimistic choice ends once the refetch has the server's answer,
+      // so a change made by another operator in the meantime is not hidden.
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['leads'] }),
+        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+      ]).finally(() => {
+        if (input.field === 'score') setScoreChoice(null);
+        else setStatusChoice(null);
+      });
+    },
+    onError: (_error, input) => {
+      if (input.field === 'score') setScoreChoice(null);
+      if (input.field === 'status') setStatusChoice(null);
     },
   });
   const move = useMutation({
@@ -222,11 +256,17 @@ function LeadCard(props: {
         method: 'PATCH',
         body: { stageId },
       }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+    onSettled: () => {
+      void queryClient
+        .invalidateQueries({ queryKey: ['leads'] })
+        .finally(() => setStageChoice(null));
     },
+    onError: () => setStageChoice(null),
   });
   const name = props.item.contact.name ?? t('list.unnamed');
+  const stageValue = stageChoice ?? props.currentStageId;
+  const scoreValue = scoreChoice ?? props.item.score;
+  const statusValue = statusChoice ?? props.item.status;
 
   return (
     <li>
@@ -247,8 +287,8 @@ function LeadCard(props: {
               </span>
             ) : null}
             <span className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={SCORE_TONE[props.item.score]} dot>
-                {t(`score.${props.item.score}`)}
+              <Badge tone={SCORE_TONE[scoreValue]} dot>
+                {t(`score.${scoreValue}`)}
               </Badge>
               <Badge tone={STATE_TONE[props.item.conversation.state]} dot>
                 {OWNER_ICON[props.item.conversation.state] ? (
@@ -277,9 +317,13 @@ function LeadCard(props: {
             <select
               aria-label={t('leads.moveToStage')}
               data-testid="lead-card-stage"
-              value={props.currentStageId}
+              value={stageValue}
               disabled={move.isPending}
-              onChange={(event) => move.mutate(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setStageChoice(value);
+                move.mutate(value);
+              }}
               className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
             >
               {props.stages.map((stage) => (
@@ -297,11 +341,13 @@ function LeadCard(props: {
               <select
                 aria-label={t('leads.view.score')}
                 data-testid="lead-card-score"
-                value={props.item.score}
+                value={scoreValue}
                 disabled={setField.isPending}
-                onChange={(event) =>
-                  setField.mutate({ field: 'score', value: event.target.value })
-                }
+                onChange={(event) => {
+                  const value = event.target.value as LeadScore;
+                  setScoreChoice(value);
+                  setField.mutate({ field: 'score', value });
+                }}
                 className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
               >
                 {(
@@ -322,14 +368,16 @@ function LeadCard(props: {
               <select
                 aria-label={t('leads.view.status')}
                 data-testid="lead-card-status"
-                value={props.item.status}
+                value={statusValue}
                 disabled={setField.isPending}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const value = event.target.value as LeadStatus;
+                  setStatusChoice(value);
                   setField.mutate({
                     field: 'status',
-                    value: event.target.value,
-                  })
-                }
+                    value,
+                  });
+                }}
                 className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
               >
                 {(
