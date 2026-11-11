@@ -8,7 +8,14 @@ import { useShell } from './app-shell';
 import { Icon, type IconName } from './ui/icons';
 
 export type SettingsSection =
-  'bot' | 'channels' | 'crm' | 'pipeline' | 'team' | 'subscription' | 'general';
+  | 'bot'
+  | 'channels'
+  | 'crm'
+  | 'pipeline'
+  | 'team'
+  | 'subscription'
+  | 'security'
+  | 'general';
 
 const SECTIONS: {
   key: SettingsSection;
@@ -28,6 +35,7 @@ const SECTIONS: {
     icon: 'clock',
     managers: true,
   },
+  { key: 'security', href: '/settings/security', icon: 'lock' },
   { key: 'general', href: '/settings', icon: 'sliders' },
 ];
 

@@ -30,19 +30,21 @@ export function useConsole(): ConsoleValue {
   return value;
 }
 
-type Section = 'tenants' | 'plans' | 'admins' | 'audit';
+type Section = 'tenants' | 'plans' | 'admins' | 'audit' | 'security';
 
 const NAV: { key: Section; href: string; icon: IconName; owner?: boolean }[] = [
   { key: 'tenants', href: '/console', icon: 'users' },
   { key: 'plans', href: '/console/plans', icon: 'database' },
   { key: 'admins', href: '/console/admins', icon: 'user', owner: true },
   { key: 'audit', href: '/console/audit', icon: 'note' },
+  { key: 'security', href: '/console/security', icon: 'lock' },
 ];
 
 function sectionOf(pathname: string): Section {
   if (pathname.startsWith('/console/plans')) return 'plans';
   if (pathname.startsWith('/console/admins')) return 'admins';
   if (pathname.startsWith('/console/audit')) return 'audit';
+  if (pathname.startsWith('/console/security')) return 'security';
   return 'tenants';
 }
 

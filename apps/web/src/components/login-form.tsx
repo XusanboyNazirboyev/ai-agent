@@ -10,6 +10,7 @@ import { BrandLogo } from './ui/brand';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { MfaCodeForm } from './mfa';
 
 export function LoginForm(): ReactNode {
   const { t } = useI18n();
@@ -18,15 +19,38 @@ export function LoginForm(): ReactNode {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [challenge, setChallenge] = useState<string | undefined>();
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     setBusy(true);
     setError(undefined);
     try {
-      await api('/api/v1/auth/login', {
+      const result = await api<{ mfaRequired?: boolean; challenge?: string }>(
+        '/api/v1/auth/login',
+        { method: 'POST', body: { email, password } },
+      );
+      if (result?.mfaRequired && result.challenge) {
+        setChallenge(result.challenge);
+        setBusy(false);
+        return;
+      }
+      router.replace('/inbox');
+    } catch (failure) {
+      setError(errorKey(failure));
+      setBusy(false);
+    }
+  }
+
+  async function submitFactor(
+    factor: { code: string } | { recoveryCode: string },
+  ): Promise<void> {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api('/api/v1/auth/login/mfa', {
         method: 'POST',
-        body: { email, password },
+        body: { challenge, ...factor },
       });
       router.replace('/inbox');
     } catch (failure) {
@@ -76,52 +100,60 @@ export function LoginForm(): ReactNode {
             </h1>
             <p className="text-sm text-muted">{t('login.subtitle')}</p>
           </div>
-          <form
-            onSubmit={submit}
-            className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-card"
-            noValidate
-          >
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('login.email')}
-              <input
-                name="email"
-                type="email"
-                autoComplete="username"
-                inputMode="email"
-                required
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-invalid={error ? true : undefined}
-                className={fieldClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('login.password')}
-              <input
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                aria-invalid={error ? true : undefined}
-                className={fieldClass}
-              />
-            </label>
-            {error ? (
-              <p
-                role="alert"
-                className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-              >
-                <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-                {t(error)}
-              </p>
-            ) : null}
-            <Button type="submit" variant="primary" loading={busy}>
-              {busy ? t('login.submitting') : t('login.submit')}
-            </Button>
-          </form>
+          {challenge ? (
+            <MfaCodeForm
+              onSubmit={(factor) => void submitFactor(factor)}
+              busy={busy}
+              error={error}
+            />
+          ) : (
+            <form
+              onSubmit={submit}
+              className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-card"
+              noValidate
+            >
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                {t('login.email')}
+                <input
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  required
+                  autoFocus
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  aria-invalid={error ? true : undefined}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                {t('login.password')}
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={error ? true : undefined}
+                  className={fieldClass}
+                />
+              </label>
+              {error ? (
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
+                >
+                  <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+                  {t(error)}
+                </p>
+              ) : null}
+              <Button type="submit" variant="primary" loading={busy}>
+                {busy ? t('login.submitting') : t('login.submit')}
+              </Button>
+            </form>
+          )}
           <LegalLinks />
         </div>
       </div>
