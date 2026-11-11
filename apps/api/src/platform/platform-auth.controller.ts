@@ -33,7 +33,20 @@ import {
   PlatformSessionGuard,
   type PlatformRequest,
 } from './platform-session.guard.js';
-import { PlatformSessionService } from './platform-session.service.js';
+import {
+  PlatformSessionService,
+  type PlatformLoginResult,
+} from './platform-session.service.js';
+import { MfaError, MfaService } from '../auth/mfa.service.js';
+import {
+  ChallengeBody,
+  CodeBody,
+  DisableBody,
+  EnrollEnableBody,
+  LoginMfaBody,
+  mfaHttpError,
+  parseMfaBody,
+} from '../auth/mfa-http.js';
 
 const LoginBody = z.object({
   email: z.string().min(3).max(254),
@@ -62,6 +75,7 @@ export class PlatformAuthController {
     private readonly sessions: PlatformSessionService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly mfa: MfaService,
   ) {
     const limit = Number(
       this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
@@ -96,12 +110,19 @@ export class PlatformAuthController {
     ];
   }
 
-  private async signIn(
-    email: string,
-    password: string,
+  /** Cookies and body of a signed-in browser, or the next step / refusal. */
+  private reply(
+    result: PlatformLoginResult,
     reply: Reply,
-  ): Promise<unknown> {
-    const result = await this.sessions.login(email, password);
+    extra: Record<string, unknown> = {},
+  ): unknown {
+    reply.setHeader('Cache-Control', 'no-store');
+    if (!result.ok && result.code === 'MFA_REQUIRED')
+      return { mfaRequired: true, challenge: result.challenge };
+    if (!result.ok && result.code === 'MFA_ENROLLMENT_REQUIRED')
+      return { mfaEnrollmentRequired: true, challenge: result.challenge };
+    if (!result.ok && result.code === 'MFA_NOT_AVAILABLE')
+      throw mfaHttpError(new MfaError('MFA_NOT_AVAILABLE'), true);
     if (!result.ok)
       throw new UnauthorizedException({
         code: result.code,
@@ -116,7 +137,6 @@ export class PlatformAuthController {
       'Set-Cookie',
       this.cookies(result.sessionToken, result.csrfToken, maxAge),
     );
-    reply.setHeader('Cache-Control', 'no-store');
     return {
       csrfToken: result.csrfToken,
       admin: {
@@ -124,7 +144,159 @@ export class PlatformAuthController {
         displayName: result.admin.displayName,
         role: result.admin.role,
       },
+      ...extra,
     };
+  }
+
+  private async signIn(
+    email: string,
+    password: string,
+    reply: Reply,
+  ): Promise<unknown> {
+    return this.reply(await this.sessions.login(email, password), reply);
+  }
+
+  /** Second step of a sign-in (ADR 048 §4). */
+  @Post('login/mfa')
+  @HttpCode(200)
+  async loginMfa(
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    this.allow(request);
+    const input = parseMfaBody(LoginMfaBody, body);
+    try {
+      return this.reply(
+        await this.sessions.loginWithMfa(input.challenge, input),
+        reply,
+      );
+    } catch (error) {
+      throw mfaHttpError(error, true);
+    }
+  }
+
+  /** Forced enrolment (ADR 048 §5), step 1: a secret for the challenge's admin. */
+  @Post('login/mfa/setup')
+  @HttpCode(200)
+  async enrollSetup(
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    this.allow(request);
+    const input = parseMfaBody(ChallengeBody, body);
+    reply.setHeader('Cache-Control', 'no-store');
+    try {
+      return await this.mfa.setup(
+        await this.mfa.enrollSubject(input.challenge),
+      );
+    } catch (error) {
+      throw mfaHttpError(error, true);
+    }
+  }
+
+  /** Forced enrolment, step 2: confirms the code, opens the session, returns the recovery codes once. */
+  @Post('login/mfa/enable')
+  @HttpCode(200)
+  async enrollEnable(
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    this.allow(request);
+    const input = parseMfaBody(EnrollEnableBody, body);
+    try {
+      const result = await this.sessions.enrollAndLogin(
+        input.challenge,
+        input.code,
+      );
+      return this.reply(result, reply, {
+        recoveryCodes: result.recoveryCodes,
+      });
+    } catch (error) {
+      throw mfaHttpError(error, true);
+    }
+  }
+
+  private subject(request: PlatformRequest): {
+    kind: 'PLATFORM';
+    adminId: string;
+  } {
+    return { kind: 'PLATFORM', adminId: request.platform!.adminId };
+  }
+
+  private async mfaCall<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      throw mfaHttpError(error, false);
+    }
+  }
+
+  @Get('mfa')
+  @UseGuards(PlatformSessionGuard)
+  async mfaStatus(@Req() request: PlatformRequest): Promise<unknown> {
+    return this.mfaCall(() => this.mfa.status(this.subject(request)));
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  @PlatformAccessLevel('self')
+  @UseGuards(PlatformSessionGuard)
+  async mfaSetup(
+    @Req() request: PlatformRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    return this.mfaCall(() => this.mfa.setup(this.subject(request)));
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @PlatformAccessLevel('self')
+  @UseGuards(PlatformSessionGuard)
+  async mfaEnable(
+    @Body() body: unknown,
+    @Req() request: PlatformRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    const input = parseMfaBody(CodeBody, body);
+    return this.mfaCall(() =>
+      this.mfa.enable(this.subject(request), input.code),
+    );
+  }
+
+  /** Always refused for platform admins: MFA is enforced (ADR 048 §6). */
+  @Post('mfa/disable')
+  @HttpCode(204)
+  @PlatformAccessLevel('self')
+  @UseGuards(PlatformSessionGuard)
+  async mfaDisable(
+    @Body() body: unknown,
+    @Req() request: PlatformRequest,
+  ): Promise<void> {
+    const input = parseMfaBody(DisableBody, body);
+    await this.mfaCall(() =>
+      this.mfa.disable(this.subject(request), input.password, input),
+    );
+  }
+
+  @Post('mfa/recovery-codes')
+  @HttpCode(200)
+  @PlatformAccessLevel('self')
+  @UseGuards(PlatformSessionGuard)
+  async mfaRecoveryCodes(
+    @Body() body: unknown,
+    @Req() request: PlatformRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    const input = parseMfaBody(CodeBody, body);
+    return this.mfaCall(() =>
+      this.mfa.regenerateRecoveryCodes(this.subject(request), input.code),
+    );
   }
 
   @Post('login')

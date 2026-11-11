@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MfaModule } from '../auth/mfa.module.js';
 import { AccessModule } from '../access/access.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { TeamModule } from '../team/team.module.js';
@@ -17,7 +18,7 @@ import { PlatformTenantsController } from './platform-tenants.controller.js';
  * `app.module.ts` imports this directory (asserted by a unit test).
  */
 @Module({
-  imports: [PersistenceModule, AccessModule, TeamModule],
+  imports: [PersistenceModule, AccessModule, TeamModule, MfaModule],
   controllers: [
     PlatformAuthController,
     PlatformTenantsController,

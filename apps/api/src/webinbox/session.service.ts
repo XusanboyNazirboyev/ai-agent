@@ -3,11 +3,18 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
-  DEFAULT_SCRYPT,
-  hashPassword,
-  verifyPassword,
-  type ScryptParams,
-} from './password.js';
+  DEFAULT_SESSION_POLICY,
+  SESSION_POLICY,
+  type SessionPolicy,
+} from '../auth/session-policy.js';
+import { MfaError, MfaService } from '../auth/mfa.service.js';
+import { hashPassword, verifyPassword } from './password.js';
+
+export {
+  DEFAULT_SESSION_POLICY,
+  SESSION_POLICY,
+  type SessionPolicy,
+} from '../auth/session-policy.js';
 
 export type InboxRole = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 
@@ -17,24 +24,6 @@ export interface InboxPrincipal {
   readonly role: InboxRole;
   readonly sessionId: string;
 }
-
-export interface SessionPolicy {
-  readonly absoluteTtlMs: number;
-  readonly idleTtlMs: number;
-  readonly maxFailedAttempts: number;
-  readonly lockMs: number;
-  readonly scrypt: ScryptParams;
-}
-
-export const SESSION_POLICY = Symbol('SESSION_POLICY');
-
-export const DEFAULT_SESSION_POLICY: SessionPolicy = {
-  absoluteTtlMs: 12 * 60 * 60 * 1000,
-  idleTtlMs: 2 * 60 * 60 * 1000,
-  maxFailedAttempts: 5,
-  lockMs: 15 * 60 * 1000,
-  scrypt: DEFAULT_SCRYPT,
-};
 
 export type LoginResult =
   | {
@@ -49,7 +38,14 @@ export type LoginResult =
   | {
       readonly ok: false;
       readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' | 'TENANT_SUSPENDED';
-    };
+    }
+  /** ADR 048: correct password, second factor still owed; no session yet. */
+  | {
+      readonly ok: false;
+      readonly code: 'MFA_REQUIRED';
+      readonly challenge: string;
+    }
+  | { readonly ok: false; readonly code: 'MFA_NOT_AVAILABLE' };
 
 const sha256 = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
@@ -77,6 +73,7 @@ export class SessionService {
     @Inject(SESSION_POLICY)
     private readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
     @Optional() private readonly access?: TenantAccessService,
+    @Optional() private readonly mfa?: MfaService,
   ) {}
 
   private dummy(): Promise<string> {
@@ -119,6 +116,27 @@ export class SessionService {
         const { state } = await this.access.check(credential.tenantId, now);
         if (state === 'SUSPENDED' || state === 'ARCHIVED')
           return { ok: false, code: 'TENANT_SUSPENDED' };
+      }
+
+      // ADR 048: with a second factor on, the password alone opens nothing and
+      // the failure counter is not reset (wrong codes must keep counting).
+      if (credential.totpEnabledAt) {
+        if (!this.mfa) return { ok: false, code: 'INVALID_CREDENTIALS' };
+        if (!this.mfa.available)
+          return { ok: false, code: 'MFA_NOT_AVAILABLE' };
+        return {
+          ok: false,
+          code: 'MFA_REQUIRED',
+          challenge: await this.mfa.createChallenge(
+            {
+              kind: 'OPERATOR',
+              tenantId: credential.tenantId,
+              operatorId: credential.operatorId,
+            },
+            'LOGIN',
+            now,
+          ),
+        };
       }
 
       const sessionToken = randomBytes(32).toString('base64url');
@@ -164,6 +182,65 @@ export class SessionService {
       };
     }
     return { ok: false, code: 'INVALID_CREDENTIALS' };
+  }
+
+  /**
+   * Second step of a sign-in (ADR 048): verifies the code or recovery code of
+   * a challenge, then opens the session exactly like `login`. Throws MfaError.
+   */
+  async loginWithMfa(
+    challenge: string,
+    factor: { code?: string | undefined; recoveryCode?: string | undefined },
+    now = new Date(),
+  ): Promise<
+    Extract<LoginResult, { ok: true }> | { ok: false; code: 'TENANT_SUSPENDED' }
+  > {
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
+    const { subject } = await this.mfa.verifyLogin(challenge, factor, now);
+    if (subject.kind !== 'OPERATOR')
+      throw new MfaError('MFA_CHALLENGE_INVALID');
+    const credential = await this.prisma.operatorCredential.findFirst({
+      where: { tenantId: subject.tenantId, operatorId: subject.operatorId },
+      include: { operator: true },
+    });
+    if (!credential || !credential.operator.isActive)
+      throw new MfaError('MFA_CHALLENGE_INVALID');
+    if (this.access) {
+      const { state } = await this.access.check(credential.tenantId, now);
+      if (state === 'SUSPENDED' || state === 'ARCHIVED')
+        return { ok: false, code: 'TENANT_SUSPENDED' };
+    }
+    const sessionToken = randomBytes(32).toString('base64url');
+    const csrfToken = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.operatorCredential.updateMany({
+        where: { id: credential.id, tenantId: credential.tenantId },
+        data: { failedAttempts: 0, lockedUntil: null },
+      });
+      await tx.operatorSession.create({
+        data: {
+          tenantId: credential.tenantId,
+          operatorId: credential.operatorId,
+          tokenHash: sha256(sessionToken),
+          csrfHash: sha256(csrfToken),
+          lastSeenAt: now,
+          expiresAt,
+        },
+      });
+    });
+    return {
+      ok: true,
+      sessionToken,
+      csrfToken,
+      expiresAt,
+      principal: {
+        tenantId: credential.tenantId,
+        operatorId: credential.operatorId,
+        role: credential.operator.role,
+        displayName: credential.operator.displayName,
+      },
+    };
   }
 
   private async recordFailure(

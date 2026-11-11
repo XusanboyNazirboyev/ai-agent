@@ -30,7 +30,15 @@ import {
   SessionGuard,
   type InboxRequest,
 } from './session.guard.js';
-import { SessionService } from './session.service.js';
+import { SessionService, type LoginResult } from './session.service.js';
+import { MfaError, MfaService } from '../auth/mfa.service.js';
+import {
+  CodeBody,
+  DisableBody,
+  LoginMfaBody,
+  mfaHttpError,
+  parseMfaBody,
+} from '../auth/mfa-http.js';
 
 const AcceptBody = z.object({
   displayName: z
@@ -79,6 +87,7 @@ export class AuthController {
     private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() private readonly access?: TenantAccessService,
     @Optional() private readonly invites?: OperatorInviteService,
+    @Optional() private readonly mfa?: MfaService,
   ) {
     const limit = Number(
       this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
@@ -129,6 +138,16 @@ export class AuthController {
       parsed.data.email,
       parsed.data.password,
     );
+    return this.sessionReply(result, reply);
+  }
+
+  /** Cookies and body of a signed-in browser, or the refusal that explains why not. */
+  private sessionReply(result: LoginResult, reply: Reply): unknown {
+    reply.setHeader('Cache-Control', 'no-store');
+    if (!result.ok && result.code === 'MFA_REQUIRED')
+      return { mfaRequired: true, challenge: result.challenge };
+    if (!result.ok && result.code === 'MFA_NOT_AVAILABLE')
+      throw mfaHttpError(new MfaError('MFA_NOT_AVAILABLE'), true);
     if (!result.ok && result.code === 'TENANT_SUSPENDED')
       throw new ForbiddenException({
         code: 'TENANT_SUSPENDED',
@@ -149,7 +168,6 @@ export class AuthController {
       'Set-Cookie',
       this.cookies(result.sessionToken, result.csrfToken, maxAge),
     );
-    reply.setHeader('Cache-Control', 'no-store');
     return {
       csrfToken: result.csrfToken,
       operator: {
@@ -158,6 +176,113 @@ export class AuthController {
         role: result.principal.role,
       },
     };
+  }
+
+  /** Second step of a sign-in (ADR 048 §4): the challenge plus a code or recovery code. */
+  @Post('login/mfa')
+  @HttpCode(200)
+  async loginMfa(
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    if (!this.allowAttempt(request)) throw this.rateLimited();
+    const input = parseMfaBody(LoginMfaBody, body);
+    try {
+      const result = await this.sessions.loginWithMfa(input.challenge, input);
+      return this.sessionReply(result, reply);
+    } catch (error) {
+      throw mfaHttpError(error, true);
+    }
+  }
+
+  private mfaService(): MfaService {
+    if (!this.mfa) throw mfaHttpError(new MfaError('MFA_NOT_AVAILABLE'), false);
+    return this.mfa;
+  }
+
+  private subject(request: InboxRequest): {
+    kind: 'OPERATOR';
+    tenantId: string;
+    operatorId: string;
+  } {
+    const principal = request.principal!;
+    return {
+      kind: 'OPERATOR',
+      tenantId: principal.tenantId,
+      operatorId: principal.operatorId,
+    };
+  }
+
+  @Get('mfa')
+  @UseGuards(SessionGuard)
+  async mfaStatus(@Req() request: InboxRequest): Promise<unknown> {
+    return this.mfaCall(() => this.mfaService().status(this.subject(request)));
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async mfaSetup(
+    @Req() request: InboxRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    return this.mfaCall(() => this.mfaService().setup(this.subject(request)));
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async mfaEnable(
+    @Body() body: unknown,
+    @Req() request: InboxRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    const input = parseMfaBody(CodeBody, body);
+    return this.mfaCall(() =>
+      this.mfaService().enable(this.subject(request), input.code),
+    );
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async mfaDisable(
+    @Body() body: unknown,
+    @Req() request: InboxRequest,
+  ): Promise<void> {
+    const input = parseMfaBody(DisableBody, body);
+    await this.mfaCall(() =>
+      this.mfaService().disable(this.subject(request), input.password, input),
+    );
+  }
+
+  @Post('mfa/recovery-codes')
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async mfaRecoveryCodes(
+    @Body() body: unknown,
+    @Req() request: InboxRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    reply.setHeader('Cache-Control', 'no-store');
+    const input = parseMfaBody(CodeBody, body);
+    return this.mfaCall(() =>
+      this.mfaService().regenerateRecoveryCodes(
+        this.subject(request),
+        input.code,
+      ),
+    );
+  }
+
+  private async mfaCall<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error) {
+      throw mfaHttpError(error, false);
+    }
   }
 
   private rateLimited(): HttpException {
@@ -227,26 +352,7 @@ export class AuthController {
       accepted.email,
       parsed.data.password,
     );
-    if (!result.ok)
-      throw new UnauthorizedException({
-        code: result.code,
-        message: 'Sign in failed',
-        i18nKey: 'errors.invalidCredentials',
-      });
-    const maxAge = Math.floor((result.expiresAt.getTime() - Date.now()) / 1000);
-    reply.setHeader(
-      'Set-Cookie',
-      this.cookies(result.sessionToken, result.csrfToken, maxAge),
-    );
-    reply.setHeader('Cache-Control', 'no-store');
-    return {
-      csrfToken: result.csrfToken,
-      operator: {
-        id: result.principal.operatorId,
-        displayName: result.principal.displayName,
-        role: result.principal.role,
-      },
-    };
+    return this.sessionReply(result, reply);
   }
 
   @Get('me')

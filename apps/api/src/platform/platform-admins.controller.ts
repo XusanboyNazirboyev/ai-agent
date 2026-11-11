@@ -3,6 +3,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Post,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import type { Prisma } from '../generated/prisma/client.js';
+import { MfaService } from '../auth/mfa.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
   generateInviteToken,
@@ -60,6 +62,7 @@ export class PlatformAdminsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: PlatformSessionService,
+    private readonly mfa: MfaService,
   ) {}
 
   @Get()
@@ -74,16 +77,43 @@ export class PlatformAdminsController {
         role: true,
         isActive: true,
         passwordHash: true,
+        totpEnabledAt: true,
         inviteExpiresAt: true,
         createdAt: true,
       },
     });
     return {
-      admins: rows.map(({ passwordHash, ...row }) => ({
+      admins: rows.map(({ passwordHash, totpEnabledAt, ...row }) => ({
         ...row,
+        mfaEnabled: totpEnabledAt !== null,
         invitePending: passwordHash === null,
       })),
     };
+  }
+
+  /**
+   * Lost authenticator and recovery codes (ADR 048): an owner clears another
+   * admin's second factor; that admin enrols again at the next sign-in. Audited.
+   * Your own is reset by the server CLI, not here.
+   */
+  @Post(':id/mfa/reset')
+  @HttpCode(204)
+  async resetMfa(
+    @Req() request: PlatformRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    if (id === request.platform!.adminId)
+      throw conflict('CANNOT_RESET_OWN_MFA');
+    const target = await this.prisma.platformAdmin.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!target) throw notFound();
+    await this.mfa.reset(
+      { kind: 'PLATFORM', adminId: id },
+      request.platform!.adminId,
+    );
+    await this.sessions.revokeAll(id);
   }
 
   @Post()

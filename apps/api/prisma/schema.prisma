@@ -255,6 +255,7 @@ model Tenant {
   subscriptionPayments SubscriptionPayment[]
   operatorInvites      OperatorInvite[]
   platformAuditEvents  PlatformAuditEvent[]
+  mfaChallenges        MfaChallenge[]
 
   @@map("tenants")
 }
@@ -1115,6 +1116,13 @@ model OperatorCredential {
   passwordHash   String    @map("password_hash") @db.VarChar(255)
   failedAttempts Int       @default(0) @map("failed_attempts")
   lockedUntil    DateTime? @map("locked_until") @db.Timestamptz(6)
+  /// ADR 048: TOTP secret sealed with the keyring; pending while totpEnabledAt is null.
+  totpKeyId        String?   @map("totp_key_id") @db.VarChar(40)
+  totpNonce        Bytes?    @map("totp_nonce")
+  totpCiphertext   Bytes?    @map("totp_ciphertext")
+  totpEnabledAt    DateTime? @map("totp_enabled_at") @db.Timestamptz(6)
+  totpLastStep     Int?      @map("totp_last_step")
+  mfaRecoveryHashes String[] @default([]) @map("mfa_recovery_hashes")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1453,6 +1461,13 @@ model PlatformAdmin {
   isActive        Boolean      @default(true) @map("is_active")
   inviteTokenHash String?      @unique @map("invite_token_hash") @db.VarChar(64)
   inviteExpiresAt DateTime?    @map("invite_expires_at") @db.Timestamptz(6)
+  /// ADR 048: TOTP secret sealed with the keyring; pending while totpEnabledAt is null.
+  totpKeyId        String?   @map("totp_key_id") @db.VarChar(40)
+  totpNonce        Bytes?    @map("totp_nonce")
+  totpCiphertext   Bytes?    @map("totp_ciphertext")
+  totpEnabledAt    DateTime? @map("totp_enabled_at") @db.Timestamptz(6)
+  totpLastStep     Int?      @map("totp_last_step")
+  mfaRecoveryHashes String[] @default([]) @map("mfa_recovery_hashes")
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1589,4 +1604,24 @@ model PlatformAuditEvent {
   @@index([createdAt])
   @@index([tenantId, createdAt])
   @@map("platform_audit_events")
+}
+
+/// ADR 048: short-lived step between a correct password and a session. Only the
+/// SHA-256 of the token is stored. principalType is OPERATOR or PLATFORM_ADMIN;
+/// purpose is LOGIN (second factor) or ENROLL (platform admin must enrol first).
+model MfaChallenge {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  principalType String    @map("principal_type") @db.VarChar(16)
+  principalId   String    @map("principal_id") @db.Uuid
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  purpose       String    @db.VarChar(16)
+  tokenHash     String    @unique @map("token_hash") @db.VarChar(64)
+  attempts      Int       @default(0)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("mfa_challenges")
 }

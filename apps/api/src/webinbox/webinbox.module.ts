@@ -15,6 +15,7 @@ import {
   OAuthStateLedger,
   RedisOAuthStateLedger,
 } from '../channels/instagram/instagram-oauth-state-ledger.js';
+import { MfaModule } from '../auth/mfa.module.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { AccessModule } from '../access/access.module.js';
@@ -50,6 +51,7 @@ import { SessionService } from './session.service.js';
     SecretsModule,
     AccessModule,
     TeamModule,
+    MfaModule,
   ],
   controllers: [
     AuthController,

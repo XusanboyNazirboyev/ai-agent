@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { MfaError, MfaService, type MfaSubject } from '../auth/mfa.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { hashPassword, verifyPassword } from '../webinbox/password.js';
 import {
@@ -30,7 +31,16 @@ export type PlatformLoginResult =
         readonly role: PlatformRoleName;
       };
     }
-  | { readonly ok: false; readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' };
+  | { readonly ok: false; readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' }
+  /** ADR 048: correct password, no session yet; a code (or first enrolment) is owed. */
+  | {
+      readonly ok: false;
+      readonly code: 'MFA_REQUIRED' | 'MFA_ENROLLMENT_REQUIRED';
+      readonly challenge: string;
+    }
+  | { readonly ok: false; readonly code: 'MFA_NOT_AVAILABLE' };
+
+type PlatformSignedIn = Extract<PlatformLoginResult, { ok: true }>;
 
 const sha256 = (value: string): string =>
   createHash('sha256').update(value).digest('hex');
@@ -53,6 +63,7 @@ export class PlatformSessionService {
     @Optional()
     @Inject(SESSION_POLICY)
     readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+    @Optional() private readonly mfa?: MfaService,
   ) {}
 
   private dummy(): Promise<string> {
@@ -88,69 +99,92 @@ export class PlatformSessionService {
           code: failure === 'locked' ? 'LOCKED' : 'INVALID_CREDENTIALS',
         };
       }
-      const opened = await this.open(
-        {
-          id: admin.id,
-          passwordHash: admin.passwordHash,
-          failedAttempts: admin.failedAttempts,
-          lockedUntil: admin.lockedUntil,
-        },
-        now,
-      );
-      if (!opened) continue;
+      // ADR 048 §4-5: platform admins always need a second factor. Without a
+      // keyring neither step is possible, so sign-in is refused (fail closed).
+      // The failure counter is not reset here: wrong codes must keep counting.
+      if (!this.mfa) return { ok: false, code: 'INVALID_CREDENTIALS' };
+      if (!this.mfa.available) return { ok: false, code: 'MFA_NOT_AVAILABLE' };
+      const subject: MfaSubject = { kind: 'PLATFORM', adminId: admin.id };
+      const enrolled = admin.totpEnabledAt !== null;
       return {
-        ok: true,
-        ...opened,
-        admin: {
-          id: admin.id,
-          email: admin.email,
-          displayName: admin.displayName,
-          role: admin.role,
-        },
+        ok: false,
+        code: enrolled ? 'MFA_REQUIRED' : 'MFA_ENROLLMENT_REQUIRED',
+        challenge: await this.mfa.createChallenge(
+          subject,
+          enrolled ? 'LOGIN' : 'ENROLL',
+          now,
+        ),
       };
     }
     return { ok: false, code: 'INVALID_CREDENTIALS' };
   }
 
-  /** Opens a session if the credential snapshot is unchanged; resets failures. */
-  private async open(
-    snapshot: {
-      id: string;
-      passwordHash: string;
-      failedAttempts: number;
-      lockedUntil: Date | null;
-    },
+  /** Second step of a sign-in: verifies the factor of a LOGIN challenge, then opens the session. */
+  async loginWithMfa(
+    challenge: string,
+    factor: { code?: string | undefined; recoveryCode?: string | undefined },
+    now = new Date(),
+  ): Promise<PlatformSignedIn> {
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
+    const { subject } = await this.mfa.verifyLogin(challenge, factor, now);
+    return this.openForSubject(subject, now);
+  }
+
+  /** Forced first enrolment: confirms the pending secret, then opens the session. */
+  async enrollAndLogin(
+    challenge: string,
+    code: string,
+    now = new Date(),
+  ): Promise<PlatformSignedIn & { recoveryCodes: string[] }> {
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
+    const { subject, recoveryCodes } = await this.mfa.enableWithChallenge(
+      challenge,
+      code,
+      now,
+    );
+    return { ...(await this.openForSubject(subject, now)), recoveryCodes };
+  }
+
+  private async openForSubject(
+    subject: MfaSubject,
     now: Date,
-  ): Promise<
-    { sessionToken: string; csrfToken: string; expiresAt: Date } | undefined
-  > {
+  ): Promise<PlatformSignedIn> {
+    if (subject.kind !== 'PLATFORM')
+      throw new MfaError('MFA_CHALLENGE_INVALID');
+    const admin = await this.prisma.platformAdmin.findFirst({
+      where: { id: subject.adminId, isActive: true },
+    });
+    if (!admin) throw new MfaError('MFA_CHALLENGE_INVALID');
     const sessionToken = randomBytes(32).toString('base64url');
     const csrfToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
-    const committed = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.platformAdmin.updateMany({
-        where: {
-          id: snapshot.id,
-          isActive: true,
-          passwordHash: snapshot.passwordHash,
-          failedAttempts: snapshot.failedAttempts,
-          lockedUntil: snapshot.lockedUntil,
-        },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.platformAdmin.updateMany({
+        where: { id: admin.id },
         data: { failedAttempts: 0, lockedUntil: null },
       });
-      if (updated.count !== 1) return false;
       await tx.platformSession.create({
         data: {
-          adminId: snapshot.id,
+          adminId: admin.id,
           tokenHash: sha256(sessionToken),
           csrfHash: sha256(csrfToken),
           lastSeenAt: now,
           expiresAt,
         },
       });
-      return true;
     });
-    return committed ? { sessionToken, csrfToken, expiresAt } : undefined;
+    return {
+      ok: true,
+      sessionToken,
+      csrfToken,
+      expiresAt,
+      admin: {
+        id: admin.id,
+        email: admin.email,
+        displayName: admin.displayName,
+        role: admin.role,
+      },
+    };
   }
 
   private async recordFailure(
