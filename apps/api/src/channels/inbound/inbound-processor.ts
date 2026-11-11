@@ -47,6 +47,9 @@ export type TelegramQueueEvent = {
   payload: Prisma.JsonValue;
 };
 
+/** Neutral alias for channel-agnostic inbound queue events. */
+export type InboundQueueEvent = TelegramQueueEvent;
+
 /** The conversation is busy with another worker's turn: retry later. */
 export type ProcessResult = void | { readonly retryAt: Date };
 
