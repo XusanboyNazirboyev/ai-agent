@@ -104,7 +104,11 @@ export function assemblePersonItem(
   }
   return {
     id: person.id,
-    displayName: person.displayName,
+    // The person's own name wins; the channel name often arrives later (the
+    // Instagram name is filled after intake), so fall back to the oldest
+    // contact that has one instead of showing a named customer as unnamed.
+    displayName:
+      person.displayName ?? contacts.find((c) => c.name !== null)?.name ?? null,
     phone: contacts.find((c) => c.phone !== null)?.phone ?? null,
     channels: contacts.map((c) => ({
       contactId: c.id,

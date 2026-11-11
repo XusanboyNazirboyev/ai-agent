@@ -66,6 +66,25 @@ describe('assemblePersonItem', () => {
     expect(item.createdAt).toBe('2026-01-01T00:00:00.000Z');
   });
 
+  it('falls back to the oldest contact name when the person has none, and keeps the person name when set', () => {
+    const contacts = [
+      row('b', '2026-02-01T00:00:00Z', { name: 'Newer' }),
+      row('a', '2026-01-01T00:00:00Z', { name: 'Older' }),
+      row('c', '2026-03-01T00:00:00Z', { name: null }),
+    ];
+    expect(assemblePersonItem(person, contacts, new Map()).displayName).toBe(
+      'Older',
+    );
+    expect(
+      assemblePersonItem({ ...person, displayName: 'Own' }, contacts, new Map())
+        .displayName,
+    ).toBe('Own');
+    expect(
+      assemblePersonItem(person, [row('d', '2026-01-01T00:00:00Z')], new Map())
+        .displayName,
+    ).toBeNull();
+  });
+
   it('returns nulls and zeros without activity', () => {
     const item = assemblePersonItem(
       person,
