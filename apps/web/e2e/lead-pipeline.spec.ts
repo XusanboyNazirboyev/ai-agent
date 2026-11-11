@@ -11,7 +11,7 @@ test('leads offer a contact list and configurable funnel stages', async ({
   );
 
   await page.goto('/leads?view=list');
-  await expect(page.getByTestId('contact-item').first()).toBeVisible();
+  await expect(page.getByTestId('person-item').first()).toBeVisible();
   await page.getByRole('tab', { name: 'Funnel' }).click();
   await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
   await expect(

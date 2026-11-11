@@ -169,7 +169,7 @@ function PersonRow(props: {
             : t('people.never')}
         </span>
       </span>
-      <span className="flex shrink-0 flex-wrap items-center gap-2">
+      <span className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
         {item.lastConversationId ? (
           <Link
             href={`/inbox?scope=all&c=${item.lastConversationId}`}
