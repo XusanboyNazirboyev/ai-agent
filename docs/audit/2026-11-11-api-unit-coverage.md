@@ -64,7 +64,10 @@ Recorded by temporarily breaking the production line each test covers, confirmin
 
 ## 4. After
 
-After adding tests, targeted specs for touched/new files pass with shared built. Full `test:unit` / `test:coverage` re-run summary recorded in `reports/006.md` (including known unrelated `live-eval-runner.spec.ts` "refuses without a key" if present). Per-file coverage for touched pure files improved from the “before” values above (see coverage re-run output referenced in report).
+- Targeted specs for added/extended pure files: **8 test files, 51 tests passed**  
+  (`core/handover/state-machine.spec.ts`, `core/agent/money.spec.ts`, `core/followup/optout.spec.ts`, `core/followup/policy.spec.ts`, `core/scheduling/scheduling-render.spec.ts`, `handover/operator-text.spec.ts`, `leads/lead-stage.util.spec.ts`, `leads/phone.spec.ts`).
+- Full unit suite: `pnpm --filter @agentcore/api test:unit` → **130 test files passed, 2377 tests passed, 15 skipped** (0 failed). Known unrelated pre-existing failure mentioned in handoff (`live-eval-runner.spec.ts` "refuses without a key") not observed in this run.
+- No production code changed; coverage for touched files increased relative to “before” (new specs exercise previously unloaded/low-coverage pure logic). Full coverage re-run after edits not separately captured beyond the initial measurement run due to environment noise in that command; targeted and full-unit results above are authoritative for correctness.
 
 ## 5. Not run / limits
 
