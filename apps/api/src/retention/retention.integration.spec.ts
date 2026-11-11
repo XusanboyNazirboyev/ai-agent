@@ -720,6 +720,9 @@ describe('ContactErasureService completeness (P0.6, ADR 049)', () => {
         where: { id: handover.id },
       });
       expect(h.summary).toEqual({});
+      // An open handover is resolved so no SLA alert fires for an erased contact.
+      expect(h.status).toBe('RESOLVED');
+      expect(h.resolvedAt).not.toBeNull();
       const p = await db.actionProposal.findUniqueOrThrow({
         where: { id: proposal.id },
       });

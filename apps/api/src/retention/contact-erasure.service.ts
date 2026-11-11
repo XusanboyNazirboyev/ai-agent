@@ -85,6 +85,22 @@ export class ContactErasureService {
           where: { tenantId, conversationId: { in: conversationIds } },
           data: { summary: {} },
         });
+        // The conversation is closed below, as in a normal close: an open
+        // handover would still raise SLA alerts for a conversation nobody can
+        // act on (handover-sla.service scans status OPEN regardless of the
+        // conversation state).
+        await tx.handover.updateMany({
+          where: {
+            tenantId,
+            conversationId: { in: conversationIds },
+            status: { in: ['OPEN', 'TAKEN'] },
+          },
+          data: {
+            status: 'RESOLVED',
+            resolvedAt: new Date(),
+            version: { increment: 1 },
+          },
+        });
         await tx.actionProposal.updateMany({
           where: { tenantId, conversationId: { in: conversationIds } },
           data: { payload: {}, payloadClearedAt: new Date() },
