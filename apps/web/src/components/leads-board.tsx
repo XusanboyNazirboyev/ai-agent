@@ -234,9 +234,16 @@ function LeadCard(props: {
               : { status: input.value },
         },
       ),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['leads'] });
-      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    onSettled: (_data, _error, input) => {
+      // The optimistic choice ends once the refetch has the server's answer,
+      // so a change made by another operator in the meantime is not hidden.
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['leads'] }),
+        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+      ]).finally(() => {
+        if (input.field === 'score') setScoreChoice(null);
+        else setStatusChoice(null);
+      });
     },
     onError: (_error, input) => {
       if (input.field === 'score') setScoreChoice(null);
@@ -249,8 +256,10 @@ function LeadCard(props: {
         method: 'PATCH',
         body: { stageId },
       }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+    onSettled: () => {
+      void queryClient
+        .invalidateQueries({ queryKey: ['leads'] })
+        .finally(() => setStageChoice(null));
     },
     onError: () => setStageChoice(null),
   });
