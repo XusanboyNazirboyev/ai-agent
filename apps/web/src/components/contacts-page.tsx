@@ -219,7 +219,9 @@ export function ContactsPage(): ReactNode {
       <ConfirmDialog
         open={pendingErase !== null}
         title={t('contacts.eraseTitle')}
-        body={t('contacts.eraseBody')}
+        body={t('contacts.eraseBody', {
+          name: pendingErase?.name ?? t('list.unnamed'),
+        })}
         confirmLabel={t('contacts.eraseConfirm')}
         cancelLabel={t('confirm.cancel')}
         tone="danger"

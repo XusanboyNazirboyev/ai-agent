@@ -314,7 +314,7 @@
   "contacts.optedOut": "Opted out of messages",
   "contacts.erase": "Erase",
   "contacts.eraseTitle": "Erase this contact?",
-  "contacts.eraseBody": "This cannot be undone. The contact's personal details are cleared, their messages are replaced by a placeholder, and their conversations are closed. Statistics and the audit record are kept.",
+  "contacts.eraseBody": "Contact: {name}. This cannot be undone. The contact's personal details are cleared, their messages are replaced by a placeholder, and their conversations are closed. Statistics and the audit record are kept.",
   "contacts.eraseConfirm": "Erase contact",
   "more.intro": "Knowledge and settings sections.",
   "more.desc.bot": "Switch the assistant on or off.",

@@ -314,7 +314,7 @@
   "contacts.optedOut": "Xabarlardan voz kechgan",
   "contacts.erase": "O‘chirish",
   "contacts.eraseTitle": "Bu kontaktni o‘chirasizmi?",
-  "contacts.eraseBody": "Bu amalni bekor qilib bo‘lmaydi. Kontaktning shaxsiy ma’lumotlari tozalanadi, xabarlari o‘rinbosar bilan almashtiriladi va suhbatlari yopiladi. Statistika va audit yozuvi saqlanadi.",
+  "contacts.eraseBody": "Kontakt: {name}. Bu amalni bekor qilib bo‘lmaydi. Kontaktning shaxsiy ma’lumotlari tozalanadi, xabarlari o‘rinbosar bilan almashtiriladi va suhbatlari yopiladi. Statistika va audit yozuvi saqlanadi.",
   "contacts.eraseConfirm": "Kontaktni o‘chirish",
   "more.intro": "Bilimlar va sozlamalar bo‘limlari.",
   "more.desc.bot": "Yordamchini yoqish yoki o‘chirish.",
