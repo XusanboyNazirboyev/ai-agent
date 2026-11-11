@@ -271,6 +271,53 @@ export interface ContactErasureResult {
   messagesRedacted: number;
 }
 
+export interface PersonItem {
+  id: string;
+  displayName: string | null;
+  phone: string | null;
+  channels: Array<{ contactId: string; channelType: string }>;
+  conversationCount: number;
+  leadCount: number;
+  lastConversationId: string | null;
+  lastActivityAt: string | null;
+  marketingOptOut: boolean;
+  createdAt: string;
+}
+
+export interface PersonList {
+  items: PersonItem[];
+  nextCursor: string | null;
+}
+
+export interface PersonDetail extends PersonItem {
+  contacts: Array<{
+    id: string;
+    channelType: string;
+    channelName: string | null;
+    name: string | null;
+    phone: string | null;
+    language: string | null;
+    consentStatus: 'UNKNOWN' | 'GRANTED' | 'REVOKED';
+    marketingOptOut: boolean;
+    createdAt: string;
+  }>;
+  conversations: Array<{
+    id: string;
+    contactId: string;
+    channelType: string;
+    state: ConversationState;
+    updatedAt: string;
+  }>;
+  leads: Array<{
+    id: string;
+    contactId: string;
+    status: LeadStatus;
+    score: LeadScore;
+    stageName: string | null;
+    updatedAt: string;
+  }>;
+}
+
 export interface ChannelList {
   items: ChannelAccount[];
   capabilities: { secretsConfigured: boolean; publicUrlConfigured: boolean };
