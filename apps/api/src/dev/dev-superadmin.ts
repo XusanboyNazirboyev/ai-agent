@@ -3,6 +3,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import type { PrismaClient } from '../generated/prisma/client.js';
+import { backfillPersons } from '../ops/backfill-persons.js';
 import { hashPassword } from '../webinbox/password.js';
 
 /**
@@ -261,5 +262,7 @@ export async function ensureDemoConversations(
       },
     });
   }
+  // ADR 052: the demo contacts are created directly; give them persons.
+  await backfillPersons(db, { tenantId });
   return DEMO_CONVERSATIONS.length;
 }

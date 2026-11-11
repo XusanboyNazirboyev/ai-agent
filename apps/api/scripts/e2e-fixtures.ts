@@ -17,6 +17,7 @@ import { config as loadEnv } from 'dotenv';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { createPostgresAdapter } from '../src/persistence/postgres-adapter.js';
 import { hashPassword } from '../src/webinbox/password.js';
+import { backfillPersons } from '../src/ops/backfill-persons.js';
 import { ensureLeadStages } from '../src/leads/lead-stage.util.js';
 import {
   base32Encode,
@@ -321,6 +322,9 @@ try {
     const b = await tenant('b');
     const platform = await platformAdmins();
     const expired = await expiredTenant();
+    // ADR 052: fixture contacts are created directly; give them persons.
+    for (const seeded of [a, b, expired])
+      await backfillPersons(db, { tenantId: seeded.tenantId });
     writeFileSync(
       out,
       JSON.stringify({ password: PASSWORD, a, b, platform, expired }, null, 2),
@@ -391,6 +395,7 @@ try {
     const created = await conversation(tenantId, account.id, name, {
       text: 'New customer',
     });
+    await backfillPersons(db, { tenantId });
     console.log(JSON.stringify(created));
   } else {
     console.error('unknown command');

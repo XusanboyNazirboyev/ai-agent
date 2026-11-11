@@ -28,6 +28,8 @@ import { AnalyticsController } from './analytics.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
+import { PeopleController } from './people.controller.js';
+import { PeopleService } from '../persons/people.service.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
 import { FacebookConnectController } from './facebook-connect.controller.js';
@@ -65,6 +67,7 @@ import { SessionService } from './session.service.js';
     KnowledgeFaqController,
     KnowledgeDocumentsController,
     ContactsController,
+    PeopleController,
     ConnectorsController,
     LeadsController,
     AnalyticsController,
@@ -74,6 +77,7 @@ import { SessionService } from './session.service.js';
     SubscriptionController,
   ],
   providers: [
+    PeopleService,
     AnalyticsService,
     TelegramManagement,
     InstagramGraphClient,
