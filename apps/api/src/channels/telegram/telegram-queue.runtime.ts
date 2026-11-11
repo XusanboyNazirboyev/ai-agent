@@ -10,7 +10,7 @@ import type { RedisOptions } from 'bullmq';
 import type { AppEnvironment } from '../../config/environment.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
-import { TelegramProcessor } from './telegram-processor.js';
+import { InboundProcessor } from '../inbound/inbound-processor.js';
 import { telegramRetryDelayMs } from './retry-policy.js';
 import { runWithLogContext } from '../../observability/log-context.js';
 import { redisOptions } from '../../queue/redis-options.js';
@@ -26,9 +26,9 @@ const queueName = 'agentcore-telegram';
 
 /** Runs one queued event in its own log context: one trace per outbox event, the same across retries. */
 export function processQueuedEvent(
-  processor: Pick<TelegramProcessor, 'process'>,
+  processor: Pick<InboundProcessor, 'process'>,
   data: QueuePayload,
-): ReturnType<TelegramProcessor['process']> {
+): ReturnType<InboundProcessor['process']> {
   return runWithLogContext(
     { traceId: data.outboxId, tenantId: data.tenantId },
     () => processor.process(data),
@@ -49,7 +49,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
   constructor(
     config: ConfigService<AppEnvironment, true>,
     private readonly prisma: PrismaService,
-    private readonly processor: TelegramProcessor,
+    private readonly processor: InboundProcessor,
   ) {
     this.connection = redisOptions(config.get('REDIS_URL', { infer: true }));
   }
