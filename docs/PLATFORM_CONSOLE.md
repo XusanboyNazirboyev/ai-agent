@@ -28,6 +28,14 @@ sign-in needs a code (or one recovery code, single use). Requires
 `SECRETS_MASTER_KEY` on the server; without it console sign-in is refused. If an
 admin loses both, another owner resets it (audited; API `POST /api/v1/platform/admins/:id/mfa/reset`, no button yet) and the admin
 enrols again.
+If the **last owner** lost both, reset it on the server (clears the factor, revokes its sessions, audited as `admin.mfa_reset` via `server_cli`):
+
+```sh
+pnpm ops:platform-admin-reset-mfa --email you@example.com
+# production image:
+docker compose run --rm --no-deps api node dist/platform/reset-platform-admin-mfa.cli.js --email you@example.com
+```
+
 Further admins are invited from **Console → Admins** (owner only): the
 invite link is shown once; the person sets their own password at
 `/console/invite/…`. The last active owner cannot be deactivated.

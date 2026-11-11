@@ -16,7 +16,7 @@ Both principal types (tenant `Operator` with `OperatorCredential`, and `Platform
 
 ## Consequences
 - Migration is additive (nullable columns, one table). Existing users are unaffected until they enrol; the platform owner is asked to enrol at the next console login.
-- Lost authenticator + lost recovery codes: a platform owner resets another admin's MFA (audited); for the last platform owner the reset is the CLI on the server.
+- Lost authenticator + lost recovery codes: a platform owner resets another admin's MFA (audited); for the last platform owner the reset is the CLI on the server (`ops:platform-admin-reset-mfa --email …`, now implemented; it also revokes that admin's sessions and is audited with `via: server_cli`).
 - Two extra round trips only for users with MFA.
 
 ## Verification
