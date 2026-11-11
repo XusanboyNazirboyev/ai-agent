@@ -1,12 +1,20 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
+  ForbiddenException,
   Get,
+  Param,
+  ParseUUIDPipe,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import {
+  ContactErasureService,
+  type ErasureResult,
+} from '../retention/contact-erasure.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 
@@ -39,7 +47,10 @@ export interface ContactListItem {
 @Controller('api/v1/contacts')
 @UseGuards(SessionGuard)
 export class ContactsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly erasure: ContactErasureService,
+  ) {}
 
   @Get()
   async list(
@@ -97,5 +108,25 @@ export class ContactsController {
       })),
       nextCursor: rows.length > limit ? page[page.length - 1].id : null,
     };
+  }
+
+  /**
+   * Owner-initiated contact erasure (P0.6, ADR 049). OWNER only; tenant-
+   * scoped, audited, idempotent in effect (an already erased contact returns
+   * alreadyErased). Personal data is redacted and the contact is hidden.
+   */
+  @Delete(':id')
+  async erase(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<ErasureResult> {
+    const principal = request.principal!;
+    if (principal.role !== 'OWNER')
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Not allowed',
+        i18nKey: 'errors.forbidden',
+      });
+    return this.erasure.erase(principal.tenantId, id, principal.operatorId);
   }
 }

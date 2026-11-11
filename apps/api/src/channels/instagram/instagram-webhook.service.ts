@@ -1,6 +1,10 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  inboundEventExpiresAt,
+  parseRetentionSettings,
+} from '../../retention/retention-settings.js';
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
 import { parseCarouselPayload, readCarousel } from './instagram-carousel.js';
 import type {
@@ -49,7 +53,11 @@ export class InstagramWebhookService {
             status: 'ACTIVE',
             tenant: { status: 'ACTIVE' },
           },
-          select: { id: true, tenantId: true },
+          select: {
+            id: true,
+            tenantId: true,
+            tenant: { select: { retentionSettings: true } },
+          },
         });
         if (!channel) return 'unavailable';
 
@@ -73,6 +81,10 @@ export class InstagramWebhookService {
             channelAccountId: channel.id,
             providerEventId: storedId,
             receivedAt: event.receivedAt,
+            expiresAt: inboundEventExpiresAt(
+              parseRetentionSettings(channel.tenant.retentionSettings),
+              event.receivedAt,
+            ),
             redactedPayload: {
               providerAccountId: event.accountId,
               providerUserId: event.customerId,
@@ -312,7 +324,11 @@ export class InstagramWebhookService {
             status: 'ACTIVE',
             tenant: { status: 'ACTIVE' },
           },
-          select: { id: true, tenantId: true },
+          select: {
+            id: true,
+            tenantId: true,
+            tenant: { select: { retentionSettings: true } },
+          },
         });
         if (!channel) return 'unavailable';
 
@@ -336,6 +352,10 @@ export class InstagramWebhookService {
             channelAccountId: channel.id,
             providerEventId: providerKey,
             receivedAt: event.receivedAt,
+            expiresAt: inboundEventExpiresAt(
+              parseRetentionSettings(channel.tenant.retentionSettings),
+              event.receivedAt,
+            ),
             redactedPayload: {
               providerAccountId: event.accountId,
               providerUserId: event.fromId,

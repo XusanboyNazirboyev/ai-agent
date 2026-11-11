@@ -1702,7 +1702,11 @@ describe('contacts list', () => {
       },
     });
     const s = await signIn(a);
-    const controller = new ContactsController(prisma);
+    const controller = new ContactsController(prisma, {
+      erase: async () => {
+        throw new Error('not used');
+      },
+    } as never);
     const request = { principal: s.principal } as never;
     const first = await controller.list(request, { limit: '2' });
     expect(first.items).toHaveLength(2);

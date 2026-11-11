@@ -28,7 +28,11 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
         .fn()
         .mockResolvedValue(
           options?.channel === undefined
-            ? { id: 'channel-1', tenantId: 'tenant-1' }
+            ? {
+                id: 'channel-1',
+                tenantId: 'tenant-1',
+                tenant: { retentionSettings: {} },
+              }
             : options.channel,
         ),
     },

@@ -13,6 +13,10 @@ import type { AppEnvironment } from '../../config/environment.js';
 import { isOptOutMessage } from '../../core/followup/optout.js';
 import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  inboundEventExpiresAt,
+  parseRetentionSettings,
+} from '../../retention/retention-settings.js';
 import type { NormalizedTelegramText } from './telegram-normalizer.js';
 import { TelegramCredentials } from './telegram-credentials.js';
 import {
@@ -163,7 +167,11 @@ export class TelegramWebhookService {
             status: 'ACTIVE',
             tenant: { status: 'ACTIVE' },
           },
-          select: { id: true, tenantId: true },
+          select: {
+            id: true,
+            tenantId: true,
+            tenant: { select: { retentionSettings: true } },
+          },
         });
         if (!channel) {
           throw new ServiceUnavailableException(
@@ -205,6 +213,10 @@ export class TelegramWebhookService {
             tenantId: channel.tenantId,
             channelAccountId: channel.id,
             providerEventId: update.updateId,
+            expiresAt: inboundEventExpiresAt(
+              parseRetentionSettings(channel.tenant.retentionSettings),
+              update.receivedAt,
+            ),
             redactedPayload: {
               providerChatId: update.chatId,
               providerMessageId: update.messageId,

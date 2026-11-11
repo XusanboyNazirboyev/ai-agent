@@ -18,11 +18,15 @@ import { WebInboxModule } from '../webinbox/webinbox.module.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
 import { AlertsService } from '../observability/alerts.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
+import { RetentionModule } from '../retention/retention.module.js';
+import { RetentionService } from '../retention/retention.service.js';
 
 /**
  * The periodic scans of the API process: SLA alerts, CRM lead retries,
- * follow-ups, idle operator returns and subscription expiry (ADR 047). One interval, one overlap guard (HandoverRuntime); each scan is
- * idempotent, so several API processes may run it.
+ * follow-ups, idle operator returns, subscription expiry (ADR 047), and
+ * retention/envelope purge (P0.6, ADR 049). One interval, one overlap guard
+ * (HandoverRuntime); each scan is idempotent, so several API processes may
+ * run it.
  */
 @Module({
   imports: [
@@ -32,6 +36,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
     WebInboxModule,
     ActionsModule,
     AccessModule,
+    RetentionModule,
   ],
   providers: [
     FollowUpService,
@@ -49,6 +54,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         AlertsService,
         OperatorIdleReturnService,
         SubscriptionScanService,
+        RetentionService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -59,6 +65,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         alerts: AlertsService,
         idle: OperatorIdleReturnService,
         subscriptions: SubscriptionScanService,
+        retention: RetentionService,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -68,6 +75,7 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
         alerts,
         idle,
         subscriptions,
+        retention,
       ],
     },
     HandoverRuntime,
