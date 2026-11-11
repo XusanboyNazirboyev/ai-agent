@@ -218,6 +218,7 @@ model Tenant {
   followUps             FollowUp[]
   knowledgeDocuments    KnowledgeDocument[]
   knowledgeChunks       KnowledgeChunk[]
+  persons               Person[]
   operatorApiTokens     OperatorApiToken[]
   operatorCredentials   OperatorCredential[]
   operatorSessions      OperatorSession[]
@@ -541,6 +542,8 @@ model Contact {
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   channelAccount    ChannelAccount @relation(fields: [tenantId, channelAccountId], references: [tenantId, id], onDelete: Restrict)
+  personId          String?       @map("person_id") @db.Uuid
+  person            Person?       @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
 
   conversations Conversation[]
   leads         Lead[]
@@ -550,7 +553,30 @@ model Contact {
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerUserId])
   @@index([tenantId, phone])
+  @@index([tenantId, personId])
   @@map("contacts")
+}
+
+/// ADR 052: customer identity above the per-channel Contact. Slice A keeps it 1:1.
+model Person {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  displayName   String?   @map("display_name") @db.VarChar(200)
+  primaryPhone  String?   @map("primary_phone") @db.VarChar(40)
+  mergedIntoId  String?   @map("merged_into_id") @db.Uuid
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mergedInto    Person?   @relation("PersonMerge", fields: [tenantId, mergedIntoId], references: [tenantId, id], onDelete: Restrict)
+  mergedFrom    Person[]  @relation("PersonMerge")
+
+  contacts Contact[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, primaryPhone])
+  @@index([tenantId, mergedIntoId])
+  @@map("persons")
 }
 
 model Conversation {

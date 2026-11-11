@@ -7,6 +7,7 @@ import {
 } from '../../retention/retention-settings.js';
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
 import { parseCarouselPayload, readCarousel } from './instagram-carousel.js';
+import { upsertContactWithPerson } from '../../persons/ensure-contact.js';
 import type {
   NormalizedInstagramComment,
   NormalizedInstagramPostback,
@@ -92,21 +93,10 @@ export class InstagramWebhookService {
           },
         });
 
-        const contact = await tx.contact.upsert({
-          where: {
-            tenantId_channelAccountId_providerUserId: {
-              tenantId: channel.tenantId,
-              channelAccountId: channel.id,
-              providerUserId: event.customerId,
-            },
-          },
-          create: {
-            tenantId: channel.tenantId,
-            channelAccountId: channel.id,
-            providerUserId: event.customerId,
-          },
-          update: {},
-          select: { id: true },
+        const contact = await upsertContactWithPerson(tx, {
+          tenantId: channel.tenantId,
+          channelAccountId: channel.id,
+          providerUserId: event.customerId,
         });
 
         const conversation = await tx.conversation.upsert({
@@ -363,21 +353,10 @@ export class InstagramWebhookService {
           },
         });
 
-        const contact = await tx.contact.upsert({
-          where: {
-            tenantId_channelAccountId_providerUserId: {
-              tenantId: channel.tenantId,
-              channelAccountId: channel.id,
-              providerUserId: event.fromId,
-            },
-          },
-          create: {
-            tenantId: channel.tenantId,
-            channelAccountId: channel.id,
-            providerUserId: event.fromId,
-          },
-          update: {},
-          select: { id: true },
+        const contact = await upsertContactWithPerson(tx, {
+          tenantId: channel.tenantId,
+          channelAccountId: channel.id,
+          providerUserId: event.fromId,
         });
 
         const conversation = await tx.conversation.upsert({

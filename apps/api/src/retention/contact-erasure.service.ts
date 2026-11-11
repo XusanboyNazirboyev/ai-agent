@@ -31,7 +31,7 @@ export class ContactErasureService {
     return this.prisma.$transaction(async (tx) => {
       const contact = await tx.contact.findFirst({
         where: { tenantId, id: contactId },
-        select: { id: true, deletedAt: true },
+        select: { id: true, deletedAt: true, personId: true },
       });
       if (!contact) throw new NotFoundException('Contact not found');
 
@@ -147,6 +147,24 @@ export class ContactErasureService {
           providerUserId: erasedProviderId,
         },
       });
+
+      // ADR 052: the person copies the contact name (personal data). Clear it,
+      // and mark the person deleted once none of its contacts is left.
+      if (contact.personId) {
+        await tx.person.updateMany({
+          where: { tenantId, id: contact.personId },
+          data: { displayName: null, primaryPhone: null },
+        });
+        const remaining = await tx.contact.count({
+          where: { tenantId, personId: contact.personId, deletedAt: null },
+        });
+        if (remaining === 0) {
+          await tx.person.updateMany({
+            where: { tenantId, id: contact.personId, deletedAt: null },
+            data: { deletedAt: new Date() },
+          });
+        }
+      }
 
       await tx.auditEvent.create({
         data: {

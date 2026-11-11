@@ -508,6 +508,19 @@ describe('Instagram DM: inbound to agent reply to Graph send', () => {
     ).toBe(1);
   });
 
+  it('creates exactly one person for a new user and none for a repeat (ADR 052)', async () => {
+    const f = await fixture({ mode: 'OFF' });
+    await receive(f, 'salom');
+    await receive(f, 'yana salom');
+    expect(await db.contact.count({ where: { tenantId: f.tenantId } })).toBe(1);
+    expect(await db.person.count({ where: { tenantId: f.tenantId } })).toBe(1);
+    expect(
+      await db.contact.count({
+        where: { tenantId: f.tenantId, personId: { not: null } },
+      }),
+    ).toBe(1);
+  });
+
   it('OFF: no echo, no model call, nothing sent; the event is closed', async () => {
     const f = await fixture({ mode: 'OFF' });
     const { event } = await receive(f, 'salom');

@@ -36,6 +36,20 @@ async function ensureRlsMigration(): Promise<void> {
   await db.$executeRawUnsafe(sql);
 }
 
+async function ensurePersonRlsMigration(): Promise<void> {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'prisma/migrations/20261118090000_person_identity/migration.sql',
+    ),
+    'utf8',
+  );
+  // Only the RLS part is re-applied (idempotent: DROP POLICY IF EXISTS).
+  await db.$executeRawUnsafe(
+    sql.slice(sql.indexOf('ALTER TABLE "persons" ENABLE ROW LEVEL SECURITY')),
+  );
+}
+
 async function createTenant(slug = unique('rls')): Promise<{ id: string }> {
   return db.tenant.create({
     data: {
@@ -107,5 +121,63 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
         AND c.relname IN ('contacts','conversations','messages','leads','handovers','knowledge_chunks')
       ORDER BY c.relname`;
     expect(rels.every((r) => r.relrowsecurity)).toBe(true);
+  });
+
+  it('isolates persons (ADR 052) per tenant under RLS', async () => {
+    await ensurePersonRlsMigration();
+    const tenantA = await createTenant();
+    const tenantB = await createTenant();
+    const person = await db.person.create({
+      data: { tenantId: tenantA.id, displayName: 'RLS Person' },
+    });
+
+    const policies = await db.$queryRaw<Array<{ cmd: string }>>`
+      SELECT cmd::text AS cmd FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = 'persons'
+      ORDER BY cmd`;
+    expect(policies.map((p) => p.cmd)).toEqual([
+      'DELETE',
+      'INSERT',
+      'SELECT',
+      'UPDATE',
+    ]);
+    const [rel] = await db.$queryRaw<Array<{ relrowsecurity: boolean }>>`
+      SELECT relrowsecurity FROM pg_class
+      WHERE oid = 'public.persons'::regclass`;
+    expect(rel?.relrowsecurity).toBe(true);
+
+    const own = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantA.id}, true)`;
+      return tx.person.findMany({ where: { id: person.id } });
+    });
+    expect(own).toHaveLength(1);
+
+    // The table owner bypasses RLS unless FORCE is set (ADR 050), so the
+    // foreign-tenant read runs with FORCE inside a transaction that is always
+    // rolled back (DDL is transactional). A superuser would bypass FORCE too;
+    // then the check is reported as not exercised by failing loudly.
+    const rolledBack = new Error('rollback');
+    let foreign: number | null = null;
+    let own2: number | null = null;
+    await db
+      .$transaction(async (tx) => {
+        const [role] = await tx.$queryRaw<Array<{ rolsuper: boolean }>>`
+          SELECT rolsuper FROM pg_roles WHERE rolname = current_user`;
+        expect(role?.rolsuper).toBe(false);
+        await tx.$executeRawUnsafe(
+          'ALTER TABLE "persons" FORCE ROW LEVEL SECURITY',
+        );
+        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantB.id}, true)`;
+        foreign = (await tx.person.findMany({ where: { id: person.id } }))
+          .length;
+        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantA.id}, true)`;
+        own2 = (await tx.person.findMany({ where: { id: person.id } })).length;
+        throw rolledBack;
+      })
+      .catch((error: unknown) => {
+        if (error !== rolledBack) throw error;
+      });
+    expect(foreign).toBe(0);
+    expect(own2).toBe(1);
   });
 });

@@ -221,6 +221,50 @@ describe('ContactErasureService (P0.6)', () => {
     expect(again.alreadyErased).toBe(true);
   });
 
+  it('clears the person and marks it deleted with its last contact (ADR 052)', async () => {
+    const tenant = await createTenant({});
+    const { account, contact } = await createBase(tenant.id);
+    const person = await db.person.create({
+      data: {
+        tenantId: tenant.id,
+        displayName: 'Ada Lovelace',
+        primaryPhone: '+998901234567',
+      },
+    });
+    await db.contact.update({
+      where: { tenantId_id: { tenantId: tenant.id, id: contact.id } },
+      data: { personId: person.id },
+    });
+    const second = await db.contact.create({
+      data: {
+        tenantId: tenant.id,
+        channelAccountId: account.id,
+        providerUserId: unique('user'),
+        personId: person.id,
+      },
+    });
+    const actor = await db.operator.create({
+      data: { tenantId: tenant.id, displayName: 'Owner', role: 'OWNER' },
+    });
+    const service = new ContactErasureService(prisma);
+
+    await service.erase(tenant.id, contact.id, actor.id);
+    const afterFirst = await db.person.findUniqueOrThrow({
+      where: { tenantId_id: { tenantId: tenant.id, id: person.id } },
+    });
+    expect(afterFirst).toMatchObject({
+      displayName: null,
+      primaryPhone: null,
+      deletedAt: null,
+    });
+
+    await service.erase(tenant.id, second.id, actor.id);
+    const afterLast = await db.person.findUniqueOrThrow({
+      where: { tenantId_id: { tenantId: tenant.id, id: person.id } },
+    });
+    expect(afterLast.deletedAt).not.toBeNull();
+  });
+
   it('does not erase contacts of another tenant', async () => {
     const a = await createTenant({});
     const b = await createTenant({});

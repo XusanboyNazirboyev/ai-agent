@@ -19,6 +19,7 @@ import {
 } from '../../retention/retention-settings.js';
 import type { NormalizedTelegramText } from './telegram-normalizer.js';
 import { TelegramCredentials } from './telegram-credentials.js';
+import { upsertContactWithPerson } from '../../persons/ensure-contact.js';
 import {
   groupLinkKey,
   startPayload,
@@ -224,22 +225,11 @@ export class TelegramWebhookService {
           },
         });
 
-        const contact = await tx.contact.upsert({
-          where: {
-            tenantId_channelAccountId_providerUserId: {
-              tenantId: channel.tenantId,
-              channelAccountId: channel.id,
-              providerUserId: update.userId,
-            },
-          },
-          create: {
-            tenantId: channel.tenantId,
-            channelAccountId: channel.id,
-            providerUserId: update.userId,
-            name: update.displayName,
-          },
-          update: update.displayName ? { name: update.displayName } : {},
-          select: { id: true },
+        const contact = await upsertContactWithPerson(tx, {
+          tenantId: channel.tenantId,
+          channelAccountId: channel.id,
+          providerUserId: update.userId,
+          name: update.displayName,
         });
 
         const conversation = await tx.conversation.upsert({
