@@ -30,4 +30,19 @@ export class PrismaService
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
   }
+
+  /**
+   * Runs work in a transaction with the tenant context set for RLS (ADR 050).
+   * Use for tenant-scoped operations that must be enforced by Postgres policies
+   * when the DB role does not bypass RLS. Requires an interactive transaction.
+   */
+  async withTenant<T>(
+    tenantId: string,
+    fn: (tx: PrismaService) => Promise<T>,
+  ): Promise<T> {
+    return this.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      return fn(tx as unknown as PrismaService);
+    });
+  }
 }
