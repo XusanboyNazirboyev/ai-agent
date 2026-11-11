@@ -24,17 +24,15 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
 } {
   const tx = {
     channelAccount: {
-      findFirst: vi
-        .fn()
-        .mockResolvedValue(
-          options?.channel === undefined
-            ? {
-                id: 'channel-1',
-                tenantId: 'tenant-1',
-                tenant: { retentionSettings: {} },
-              }
-            : options.channel,
-        ),
+      findFirst: vi.fn().mockResolvedValue(
+        options?.channel === undefined
+          ? {
+              id: 'channel-1',
+              tenantId: 'tenant-1',
+              tenant: { retentionSettings: {} },
+            }
+          : options.channel,
+      ),
     },
     inboundEvent: {
       findUnique: vi.fn().mockResolvedValue(options?.duplicate ?? null),

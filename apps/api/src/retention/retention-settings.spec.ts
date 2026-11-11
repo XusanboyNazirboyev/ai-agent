@@ -47,7 +47,11 @@ describe('inboundEventExpiresAt (P0.6)', () => {
   it('returns null when inbound event retention is not configured', () => {
     expect(
       inboundEventExpiresAt(
-        { inboundEventMinutes: null, messageDays: null, conversationDays: null },
+        {
+          inboundEventMinutes: null,
+          messageDays: null,
+          conversationDays: null,
+        },
         new Date('2026-11-11T00:00:00Z'),
       ),
     ).toBeNull();
