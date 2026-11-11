@@ -66,9 +66,9 @@ Listed are `.ts/.tsx` files under `apps/web/src/components`, `apps/web/src/app`,
 | `components/invite-accept.test.tsx`     | **invite acceptance form validation** (name required for tenant, min password per kind, mismatch), invalid/404 preview state, tenant submit + redirect, platform submit via `platformApi` with stricter min length, API error mapping (`errorKey`) | no production changes                                                                                |
 | `components/mfa.test.tsx`               | **MFA setup/enable flow** (start → secret/URI enroll form → enable → recovery codes shown once), code vs recovery toggle submit, regenerate recovery codes, disable (with password when not required)                                              | `MfaSecurityPanel` driven by mocked `MfaCall`; clipboard stubbed                                     |
 
-## 3. Mutation sanity (>=5)
+## 3. Mutation sanity (>=5, part 1; >=6, part 2)
 
-Temporarily broke production lines, confirmed the noted test failed, then restored (re-verified independently by the reviewer for items 1, 3 and 5; the other two were not re-run):
+**Part 1 (task 007, re-verified independently by the reviewer for items 1, 3 and 5; the other two were not re-run):**
 
 1. `components/team-page.tsx` — removed manager gate branch → “hidden for non-managers” test failed.
 2. `components/subscription-page.tsx` — forced `banner.expired` off / wrong state text path → expired/no-subscription state test failed.
@@ -76,9 +76,31 @@ Temporarily broke production lines, confirmed the noted test failed, then restor
 4. `components/invite-accept.tsx` — bypassed mismatch check → mismatch validation test failed.
 5. `components/mfa.tsx` — stopped showing recovery codes after enable (skipped `setCodes`) → “shows recovery codes once”/enable flow test failed.
 
-## 3b. Still not covered (left for a follow-up)
+**Part 2 (task 008, verified 2026-11-11 in `test-web-gaps-008`, each mutation shown with `git diff --stat`, test failed as expected, then restored with `git checkout -- <file>`):**
 
-Console pages (`console-tenant`, `console-tenants`, `console-admins`, `new-customer-dialog`), the `app-shell` expired-subscription banner, `security-page` wiring, `login-form`, and `ui/confirm-dialog`/`reason-dialog`. The task asked for these; the first run stopped before reaching them.
+1. `components/ui/reason-dialog.tsx` — forced `valid = true` → “blocks submit for short/empty reason…” failed.
+2. `components/ui/confirm-dialog.tsx` — cancel button called `onConfirm` → “calls confirm and cancel handlers appropriately” failed.
+3. `components/console/console-admins.tsx` — deactivate button called API immediately (skipped confirm target) → “deactivates another admin only after confirmation” failed.
+4. `components/console/console-tenant.tsx` — suspend/reactivate called `status.mutate` immediately → “suspend requires reason dialog and calls API only after confirm” failed.
+5. `components/console/new-customer-dialog.tsx` — removed required-field validation guard → “validates required fields before submit” failed.
+6. `components/app-shell.tsx` (`AccessBanner`) — forced `expired/pastDue = false` → “renders expired banner and subscription link for manager” failed.
+7. `components/login-form.tsx` — skipped MFA challenge branch → “shows MFA step only when API asks for it…” failed.
+
+## 3b. Coverage added in task 008 and remaining gaps
+
+**Added (task 008, tests only):**
+
+- `components/ui/confirm-dialog.test.tsx` — confirm/cancel handlers, cancel event does not confirm.
+- `components/ui/reason-dialog.test.tsx` — empty/short reason blocked, trimmed valid reason submitted.
+- `components/app-shell.test.tsx` — `AccessBanner` healthy/absent, expired (manager link), past-due warning states.
+- `components/login-form.test.tsx` — credential submit/redirect, MFA step appears only when API requests it, error mapping.
+- `components/console/console-login.test.tsx` — login success/error mapping, MFA code step, enrollment-required + recovery codes flow.
+- `components/console/new-customer-dialog.test.tsx` — `slugify`, required-field validation blocks submit, create + invite link, API error mapped.
+- `components/console/console-admins.test.tsx` — read-only/support denied (no fetch), deactivate behind confirmation (API only after confirm), invite/link.
+- `components/console/console-tenants.test.tsx` — list render, create button hidden for read-only, new-customer dialog open, status filter query.
+- `components/console/console-tenant.test.tsx` — status actions hidden for read-only, suspend behind reason dialog (API only after confirmed reason), reactivate action shown for suspended tenant.
+
+**Still not covered / only partial:** `console-tenant` TeamCard invite create/revoke flows (component exists but not exercised in new tests), broader `console-tenants`/`console-admins` edge cases, `security-page` wiring, full `AppShell` integration (only `AccessBanner` covered), `console-plans`/`console-audit`/`console-security`/`tenant-billing`, and other console/app pages listed in section 1.
 
 ## 4. Bugs found (not fixed)
 
