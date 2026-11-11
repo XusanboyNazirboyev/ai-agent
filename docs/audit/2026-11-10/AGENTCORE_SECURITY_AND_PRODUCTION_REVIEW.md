@@ -71,3 +71,8 @@ Counts at `8dd5de0` (local run 2026-11-10): API unit 2,284 passed + 1 environmen
 | Appointment scheduling | yes | yes | tools only | n/a | no (0 appointments) | no |
 | Voice calls | partial | yes | no | keys only | no | no |
 | Click | no | — | — | — | — | — |
+
+## Remediation log
+- **2026-11-11, SEC-06 (P0.4), branch `feat/p0-hardening`:** CI job `security` runs `pnpm audit --prod --audit-level=high` and gitleaks `v8.21.2` (`.gitleaks.toml`: default rules; test doubles, fixtures, lockfile and `.git/` allow-listed); the `images` job scans the three images with Trivy `0.57.1` for fixable CRITICAL CVEs; `publish` (staging deploy) now also needs `security`. Verified locally: `pnpm audit` exits 0 with the exception below; workflow YAML and TOML parse. **Not verified locally:** gitleaks and Trivy (no Docker on the workstation; downloading their binaries was refused by the session's safety policy) — first proof is the CI run.
+  - **Accepted advisory `GHSA-ggr8-5vv4-36mx`** (`deepmerge-ts < 8.0.0`, uncontrolled recursion, CVSS 8.2, availability only), reached through `prisma → @prisma/config`. Exploitation needs two self-referencing object graphs at the same path; plain JSON cannot create them and Prisma merges only its own configuration objects, never request data. Fixing means a major bump inside Prisma's dependency tree (not done: no dependency changes in this phase). **Review by 2026-12-31** or when Prisma ships `deepmerge-ts >= 8`.
+

@@ -1,0 +1,20 @@
+# Secret scanning for the working tree (audit 2026-11-10, P0.4). The default
+# gitleaks rules apply everywhere except test doubles and fixtures, which by
+# project rule 4 contain only fake values (`fake-…`, `test-…`).
+title = "AgentCore gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test doubles, fixtures and the lockfile (no real secrets by rule 4)"
+paths = [
+  '''(^|/)[^/]+\.spec\.ts$''',
+  '''(^|/)[^/]+\.test\.tsx?$''',
+  '''(^|/)apps/web/e2e/''',
+  '''(^|/)apps/api/scripts/e2e-fixtures\.ts$''',
+  '''(^|/)testing/''',
+  '''(^|/)fakes\.ts$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)\.git/''',
+]
