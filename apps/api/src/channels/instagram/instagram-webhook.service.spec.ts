@@ -40,7 +40,9 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
       update: vi.fn().mockResolvedValue({ id: 'inbound-1' }),
     },
     contact: {
-      upsert: vi.fn().mockResolvedValue({ id: 'contact-1' }),
+      upsert: vi
+        .fn()
+        .mockResolvedValue({ id: 'contact-1', personId: 'person-1' }),
     },
     conversation: {
       upsert: vi.fn().mockResolvedValue({ id: 'conversation-1' }),
