@@ -1,6 +1,6 @@
 # ADR 052 — Person above Contact: cross-channel customer identity and merge (P1.1)
 
-Status: proposed (design only; no schema or code change in this ADR). Roadmap item P1.1; `docs/audit/2026-11-10/AGENTCORE_DATA_MODEL_REVIEW.md` §3.1; blocker 1 in `AGENTCORE_EXECUTIVE_SUMMARY.md`. Depends on P1.2 (ADR 051, channel-neutral inbound processor) only for file layout, not for behaviour.
+Status: slice A implemented (2026-11-11, branch `feat/p1-1-person-slice-a`, not merged); slices B-D proposed. Roadmap item P1.1; `docs/audit/2026-11-10/AGENTCORE_DATA_MODEL_REVIEW.md` §3.1; blocker 1 in `AGENTCORE_EXECUTIVE_SUMMARY.md`. Depends on P1.2 (ADR 051, channel-neutral inbound processor) only for file layout, not for behaviour.
 
 ## Context
 `Contact` is unique per `[tenantId, channelAccountId, providerUserId]` (`schema.prisma`), so the same human on Telegram and Instagram is two contacts, two conversations and possibly two leads. The "one AI agent, one customer card across all channels" promise needs a person-level identity.
@@ -40,3 +40,9 @@ Companies (P1.4), tags and custom fields (P1.5), the activity timeline (P1.7), a
 
 ## Verification (per slice)
 Unit tests (phone normalisation, candidate selection, merge planning); integration tests on the real database (1:1 creation at intake for Telegram and Instagram, backfill idempotency, merge/undo moves exactly the snapshot contacts and nothing else, cross-tenant refusal, RLS isolation of `persons`); e2e for the contacts list, duplicate banner and merge dialog; axe on the new screens; i18n in uz-Latn, ru, en.
+
+## Slice A status and amendments (2026-11-11)
+- Migration `20261118090000_person_identity`: `persons`, nullable `contacts.person_id` with the composite FK, RLS for `persons`. **The initial backfill is a set-based, idempotent SQL statement inside the migration** (every contact without a person gets its own person; `display_name` = contact name, `primary_phone` NULL until phone normalisation), not a separate script. The idempotent TypeScript function `backfillPersons` (`apps/api/src/ops/backfill-persons.ts`, CLI `pnpm ops:backfill-persons [tenantId]`) handles stragglers created afterwards (dev scripts, tests).
+- **`person_merges` moved to slice C**; slice A does not create it. `contacts.person_id` stays nullable; the NOT NULL step comes after the stragglers are gone (a later slice).
+- Intake (`upsertContactWithPerson`, `apps/api/src/persons/ensure-contact.ts`) keeps the native contact upsert, then creates the person and attaches it with a guarded update (`person_id IS NULL`); if a racing writer won, the new person is deleted in the same transaction, so no orphan person is committed. It also heals person-less contacts on their next message.
+- Erasure (ADR 049) clears the person's `display_name` and `primary_phone` in the same transaction and sets `persons.deleted_at` when the last contact of the person is erased (the person copies the contact name, which is personal data).
