@@ -5,6 +5,13 @@ import { PrismaService } from '../persistence/prisma.service.js';
 
 const ERASED_TEXT = '[erased]';
 
+function erasedPlaceholder(tenantId: string, id: string): string {
+  return `erased:${createHash('sha256')
+    .update(`${tenantId}:${id}:${randomUUID()}`)
+    .digest('hex')
+    .slice(0, 48)}`;
+}
+
 export interface ErasureResult {
   contactId: string;
   alreadyErased: boolean;
@@ -62,12 +69,53 @@ export class ContactErasureService {
           where: { tenantId, conversationId: { in: conversationIds } },
           data: { text: ERASED_TEXT },
         });
+
+        await tx.conversationSlots.updateMany({
+          where: { tenantId, conversationId: { in: conversationIds } },
+          data: { slots: {} },
+        });
+        await tx.lead.updateMany({
+          where: {
+            tenantId,
+            OR: [{ contactId }, { conversationId: { in: conversationIds } }],
+          },
+          data: { summary: '', requirements: {} },
+        });
+        await tx.handover.updateMany({
+          where: { tenantId, conversationId: { in: conversationIds } },
+          data: { summary: {} },
+        });
+        await tx.actionProposal.updateMany({
+          where: { tenantId, conversationId: { in: conversationIds } },
+          data: { payload: {}, payloadClearedAt: new Date() },
+        });
+
+        // Non-reversible, per-conversation placeholder: keeps the unique
+        // (tenant, channel account, chat id) constraint satisfied and makes a
+        // later message from the same person start a new contact and
+        // conversation. The conversation is closed so the bot never answers
+        // an erased contact.
+        for (const conversationId of conversationIds) {
+          const placeholder = erasedPlaceholder(tenantId, conversationId);
+          await tx.message.updateMany({
+            where: { tenantId, conversationId },
+            data: { providerChatId: placeholder },
+          });
+          await tx.conversation.updateMany({
+            where: { tenantId, id: conversationId },
+            data: {
+              providerChatId: placeholder,
+              state: 'CLOSED',
+              assignedOperatorId: null,
+              language: null,
+              script: null,
+              version: { increment: 1 },
+            },
+          });
+        }
       }
 
-      const erasedProviderId = `erased:${createHash('sha256')
-        .update(`${tenantId}:${contactId}:${randomUUID()}`)
-        .digest('hex')
-        .slice(0, 48)}`;
+      const erasedProviderId = erasedPlaceholder(tenantId, contactId);
 
       await tx.contact.update({
         where: { tenantId_id: { tenantId, id: contactId } },

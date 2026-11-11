@@ -9,6 +9,9 @@ export interface EffectiveRetention {
   conversationDays: number | null;
 }
 
+/** Deleting inbound_events removes webhook idempotency; keep at least 24 h. */
+export const MIN_INBOUND_EVENT_MINUTES = 1440;
+
 const EMPTY: EffectiveRetention = {
   inboundEventMinutes: null,
   messageDays: null,
@@ -25,7 +28,10 @@ export function parseRetentionSettings(value: unknown): EffectiveRetention {
   const d = parsed.data;
   return {
     inboundEventMinutes:
-      typeof d.inboundEventMinutes === 'number' ? d.inboundEventMinutes : null,
+      typeof d.inboundEventMinutes === 'number' &&
+      d.inboundEventMinutes >= MIN_INBOUND_EVENT_MINUTES
+        ? d.inboundEventMinutes
+        : null,
     messageDays: typeof d.messageDays === 'number' ? d.messageDays : null,
     conversationDays:
       typeof d.conversationDays === 'number' ? d.conversationDays : null,

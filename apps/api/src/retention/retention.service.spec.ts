@@ -9,7 +9,7 @@ function fakePrisma() {
   const tenants = [
     {
       id: 't1',
-      retentionSettings: { inboundEventMinutes: 10 },
+      retentionSettings: { inboundEventMinutes: 1440 },
     },
   ];
   const inboundBatches = [

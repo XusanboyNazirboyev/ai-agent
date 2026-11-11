@@ -18,7 +18,15 @@ function fakePrisma(state: {
     },
     conversation: {
       findMany: async () => [{ id: 'c1' }],
+      updateMany: async (args: unknown) => {
+        calls.push({ model: 'conversation', op: 'updateMany', args });
+        return { count: 1 };
+      },
     },
+    conversationSlots: { updateMany: async () => ({ count: 1 }) },
+    lead: { updateMany: async () => ({ count: 1 }) },
+    handover: { updateMany: async () => ({ count: 1 }) },
+    actionProposal: { updateMany: async () => ({ count: 1 }) },
     message: {
       updateMany: async (args: unknown) => {
         calls.push({ model: 'message', op: 'updateMany', args });
@@ -63,6 +71,14 @@ describe('ContactErasureService (unit, P0.6)', () => {
     expect(
       calls.some((c) => c.model === 'auditEvent' && c.op === 'create'),
     ).toBe(true);
+    const conv = calls.find((c) => c.model === 'conversation')!.args as {
+      data: { state: string; assignedOperatorId: null; providerChatId: string };
+    };
+    expect(conv.data).toMatchObject({
+      state: 'CLOSED',
+      assignedOperatorId: null,
+    });
+    expect(conv.data.providerChatId).toMatch(/^erased:/);
     const audit = calls.find((c) => c.model === 'auditEvent')!.args as {
       data: { action: string };
     };

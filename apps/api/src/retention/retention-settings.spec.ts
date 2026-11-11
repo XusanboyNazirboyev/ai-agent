@@ -31,15 +31,28 @@ describe('parseRetentionSettings (P0.6)', () => {
   it('reads configured positive integer values', () => {
     expect(
       parseRetentionSettings({
-        inboundEventMinutes: 60,
+        inboundEventMinutes: 1440,
         messageDays: 30,
         conversationDays: 90,
       }),
     ).toEqual({
-      inboundEventMinutes: 60,
+      inboundEventMinutes: 1440,
       messageDays: 30,
       conversationDays: 90,
     });
+  });
+});
+
+describe('inbound event retention floor (P0.6)', () => {
+  it('treats windows under 24 hours as invalid (keep)', () => {
+    expect(parseRetentionSettings({ inboundEventMinutes: 1439 })).toEqual({
+      inboundEventMinutes: null,
+      messageDays: null,
+      conversationDays: null,
+    });
+    expect(
+      parseRetentionSettings({ inboundEventMinutes: 1440 }).inboundEventMinutes,
+    ).toBe(1440);
   });
 });
 

@@ -15,11 +15,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 @Injectable()
 export class RetentionService implements ScheduledScan {
   private readonly logger = new Logger(RetentionService.name);
+  /** Conversations whose purge failed during the current run (counted, never silent). */
+  protected failedConversations = 0;
 
   constructor(private readonly prisma: PrismaService) {}
 
   async scanDue(now: Date): Promise<number> {
     let total = 0;
+    this.failedConversations = 0;
     let cursor: string | undefined;
     for (;;) {
       const tenants = await this.prisma.tenant.findMany({
@@ -36,9 +39,13 @@ export class RetentionService implements ScheduledScan {
       cursor = tenants[tenants.length - 1]?.id;
       if (tenants.length < TENANT_BATCH) break;
     }
-    if (total > 0) {
+    if (total > 0 || this.failedConversations > 0) {
       this.logger.log(
-        JSON.stringify({ event: 'retention.purge', deleted: total }),
+        JSON.stringify({
+          event: 'retention.purge',
+          deleted: total,
+          failedConversations: this.failedConversations,
+        }),
       );
     }
     return total;
@@ -109,6 +116,12 @@ export class RetentionService implements ScheduledScan {
     return total;
   }
 
+  /**
+   * Purges old messages but never the newest message (highest sequence) of a
+   * conversation, so `sequence` (and the agent reply idempotency key built
+   * from it) never restarts. Candidate selection excludes the newest message
+   * by itself, so each batch makes progress and the loop terminates.
+   */
   private async purgeMessages(
     tenantId: string,
     settings: ReturnType<typeof parseRetentionSettings>,
@@ -118,40 +131,59 @@ export class RetentionService implements ScheduledScan {
     const cutoff = new Date(now.getTime() - settings.messageDays * DAY_MS);
     let total = 0;
     for (;;) {
-      const rows = await this.prisma.message.findMany({
-        where: { tenantId, createdAt: { lt: cutoff } },
-        select: { id: true },
-        take: DELETE_BATCH,
-      });
+      const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT m.id FROM messages m
+        WHERE m.tenant_id = ${tenantId}::uuid
+          AND m.created_at < ${cutoff}
+          AND EXISTS (
+            SELECT 1 FROM messages n
+            WHERE n.tenant_id = m.tenant_id
+              AND n.conversation_id = m.conversation_id
+              AND n.sequence > m.sequence)
+        ORDER BY m.id
+        LIMIT ${DELETE_BATCH}`;
       if (rows.length === 0) break;
       const ids = rows.map((r) => r.id);
-      await this.prisma.quote.updateMany({
-        where: { tenantId, shownInMessageId: { in: ids } },
-        data: { shownInMessageId: null },
+      const deleted = await this.prisma.$transaction(async (tx) => {
+        // Only quotes.shown_in_message_id has a database foreign key (Restrict);
+        // the other message_id columns are plain references, cleaned here so
+        // nothing points at a purged message.
+        await tx.quote.updateMany({
+          where: { tenantId, shownInMessageId: { in: ids } },
+          data: { shownInMessageId: null },
+        });
+        await tx.agentTurn.updateMany({
+          where: { tenantId, replyMessageId: { in: ids } },
+          data: { replyMessageId: null },
+        });
+        await tx.followUp.updateMany({
+          where: { tenantId, messageId: { in: ids } },
+          data: { messageId: null },
+        });
+        await tx.shownOffer.deleteMany({
+          where: { tenantId, messageId: { in: ids } },
+        });
+        await tx.instagramComment.deleteMany({
+          where: { tenantId, messageId: { in: ids } },
+        });
+        const result = await tx.message.deleteMany({
+          where: { tenantId, id: { in: ids } },
+        });
+        return result.count;
       });
-      await this.prisma.agentTurn.updateMany({
-        where: { tenantId, replyMessageId: { in: ids } },
-        data: { replyMessageId: null },
-      });
-      await this.prisma.followUp.updateMany({
-        where: { tenantId, messageId: { in: ids } },
-        data: { messageId: null },
-      });
-      await this.prisma.shownOffer.deleteMany({
-        where: { tenantId, messageId: { in: ids } },
-      });
-      await this.prisma.instagramComment.deleteMany({
-        where: { tenantId, messageId: { in: ids } },
-      });
-      const result = await this.prisma.message.deleteMany({
-        where: { tenantId, id: { in: ids } },
-      });
-      total += result.count;
-      if (rows.length < DELETE_BATCH) break;
+      total += deleted;
+      if (deleted === 0 || rows.length < DELETE_BATCH) break;
     }
     return total;
   }
 
+  /**
+   * Purges old CLOSED conversations that have no messages and no leads.
+   * Leads are CRM records and are never deleted here. Handovers, quotes and
+   * other child rows go with the conversation through the schema's cascade;
+   * appointments (Restrict) are detached. A cursor guarantees progress, and a
+   * failing conversation is logged (ids only) and skipped.
+   */
   private async purgeConversations(
     tenantId: string,
     settings: ReturnType<typeof parseRetentionSettings>,
@@ -160,52 +192,55 @@ export class RetentionService implements ScheduledScan {
     if (settings.conversationDays === null) return 0;
     const cutoff = new Date(now.getTime() - settings.conversationDays * DAY_MS);
     let total = 0;
+    let cursor: string | undefined;
     for (;;) {
       const rows = await this.prisma.conversation.findMany({
         where: {
           tenantId,
           updatedAt: { lt: cutoff },
           state: 'CLOSED',
+          messages: { none: {} },
+          leads: { none: {} },
+          ...(cursor ? { id: { gt: cursor } } : {}),
         },
         select: { id: true },
+        orderBy: { id: 'asc' },
         take: DELETE_BATCH,
       });
       if (rows.length === 0) break;
       for (const row of rows) {
-        const msgCount = await this.prisma.message.count({
-          where: { tenantId, conversationId: row.id },
-        });
-        if (msgCount > 0) continue;
-        await this.prisma.lead
-          .deleteMany({
-            where: { tenantId, conversationId: row.id },
-          })
-          .catch(() => undefined);
-        await this.prisma.handover
-          .deleteMany({
-            where: { tenantId, conversationId: row.id },
-          })
-          .catch(() => undefined);
-        await this.prisma.quote
-          .deleteMany({
-            where: { tenantId, conversationId: row.id },
-          })
-          .catch(() => undefined);
-        await this.prisma.appointment
-          .updateMany({
-            where: { tenantId, conversationId: row.id },
-            data: { conversationId: null },
-          })
-          .catch(() => undefined);
-        const result = await this.prisma.conversation
-          .deleteMany({
-            where: { tenantId, id: row.id },
-          })
-          .catch(() => ({ count: 0 }));
-        total += result.count;
+        try {
+          total += await this.purgeOneConversation(tenantId, row.id);
+        } catch {
+          this.failedConversations += 1;
+          this.logger.warn(
+            JSON.stringify({
+              event: 'retention.conversation_purge_failed',
+              tenantId,
+              conversationId: row.id,
+            }),
+          );
+        }
       }
+      cursor = rows[rows.length - 1]?.id;
       if (rows.length < DELETE_BATCH) break;
     }
     return total;
+  }
+
+  protected async purgeOneConversation(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<number> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.appointment.updateMany({
+        where: { tenantId, conversationId },
+        data: { conversationId: null },
+      });
+      const result = await tx.conversation.deleteMany({
+        where: { tenantId, id: conversationId },
+      });
+      return result.count;
+    });
   }
 }
