@@ -31,8 +31,7 @@ export class RetentionService implements ScheduledScan {
       });
       if (tenants.length === 0) break;
       for (const tenant of tenants) {
-        const settings = parseRetentionSettings(tenant.retentionSettings);
-        total += await this.purgeTenant(tenant.id, settings, now);
+        total += await this.scanTenantRow(tenant, now);
       }
       cursor = tenants[tenants.length - 1]?.id;
       if (tenants.length < TENANT_BATCH) break;
@@ -43,6 +42,24 @@ export class RetentionService implements ScheduledScan {
       );
     }
     return total;
+  }
+
+  /** Purges one tenant; used by scheduled scans and deterministic tests. */
+  async scanTenant(tenantId: string, now: Date): Promise<number> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, retentionSettings: true },
+    });
+    if (!tenant) return 0;
+    return this.scanTenantRow(tenant, now);
+  }
+
+  private async scanTenantRow(
+    tenant: { id: string; retentionSettings: unknown },
+    now: Date,
+  ): Promise<number> {
+    const settings = parseRetentionSettings(tenant.retentionSettings);
+    return this.purgeTenant(tenant.id, settings, now);
   }
 
   private async purgeTenant(

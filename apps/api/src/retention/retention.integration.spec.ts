@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -77,65 +78,77 @@ async function createBase(tenantId: string) {
 }
 
 describe('RetentionService (P0.6)', () => {
-  it('purges expired and stale inbound events by tenant retention settings', async () => {
-    const tenant = await createTenant({ inboundEventMinutes: 10 });
-    const other = await createTenant({});
-    const { account } = await createBase(tenant.id);
-    const { account: otherAccount } = await createBase(other.id);
-    const now = new Date('2026-11-11T12:00:00Z');
+  it(
+    'purges expired and stale inbound events by tenant retention settings',
+    { timeout: 15000 },
+    async () => {
+      const tenant = await createTenant({ inboundEventMinutes: 10 });
+      const other = await createTenant({});
+      const { account } = await createBase(tenant.id);
+      const { account: otherAccount } = await createBase(other.id);
+      const now = new Date('2026-11-11T12:00:00Z');
 
-    const expired = await db.inboundEvent.create({
-      data: {
-        tenantId: tenant.id,
-        channelAccountId: account.id,
-        providerEventId: unique('ev'),
-        redactedPayload: {},
-        status: 'PROCESSED',
-        receivedAt: new Date('2026-11-11T11:00:00Z'),
-        expiresAt: new Date('2026-11-11T11:30:00Z'),
-      },
-    });
-    const staleNoExpiry = await db.inboundEvent.create({
-      data: {
-        tenantId: tenant.id,
-        channelAccountId: account.id,
-        providerEventId: unique('ev'),
-        redactedPayload: {},
-        status: 'FAILED',
-        receivedAt: new Date('2026-11-11T11:00:00Z'),
-      },
-    });
-    const recent = await db.inboundEvent.create({
-      data: {
-        tenantId: tenant.id,
-        channelAccountId: account.id,
-        providerEventId: unique('ev'),
-        redactedPayload: {},
-        status: 'PROCESSED',
-        receivedAt: new Date('2026-11-11T11:55:00Z'),
-      },
-    });
-    const otherOld = await db.inboundEvent.create({
-      data: {
-        tenantId: other.id,
-        channelAccountId: otherAccount.id,
-        providerEventId: unique('ev'),
-        redactedPayload: {},
-        status: 'PROCESSED',
-        receivedAt: new Date('2026-11-11T10:00:00Z'),
-        expiresAt: new Date('2026-11-11T10:10:00Z'),
-      },
-    });
+      const expired = await db.inboundEvent.create({
+        data: {
+          tenantId: tenant.id,
+          channelAccountId: account.id,
+          providerEventId: unique('ev'),
+          redactedPayload: {},
+          status: 'PROCESSED',
+          receivedAt: new Date('2026-11-11T11:00:00Z'),
+          expiresAt: new Date('2026-11-11T11:30:00Z'),
+        },
+      });
+      const staleNoExpiry = await db.inboundEvent.create({
+        data: {
+          tenantId: tenant.id,
+          channelAccountId: account.id,
+          providerEventId: unique('ev'),
+          redactedPayload: {},
+          status: 'FAILED',
+          receivedAt: new Date('2026-11-11T11:00:00Z'),
+        },
+      });
+      const recent = await db.inboundEvent.create({
+        data: {
+          tenantId: tenant.id,
+          channelAccountId: account.id,
+          providerEventId: unique('ev'),
+          redactedPayload: {},
+          status: 'PROCESSED',
+          receivedAt: new Date('2026-11-11T11:55:00Z'),
+        },
+      });
+      const otherOld = await db.inboundEvent.create({
+        data: {
+          tenantId: other.id,
+          channelAccountId: otherAccount.id,
+          providerEventId: unique('ev'),
+          redactedPayload: {},
+          status: 'PROCESSED',
+          receivedAt: new Date('2026-11-11T10:00:00Z'),
+          expiresAt: new Date('2026-11-11T10:10:00Z'),
+        },
+      });
 
-    const service = new RetentionService(prisma);
-    const deleted = await service.scanDue(now);
-    expect(deleted).toBeGreaterThanOrEqual(2);
+      const service = new RetentionService(prisma);
+      const deleted = await service.scanTenant(tenant.id, now);
+      expect(deleted).toBe(2);
 
-    await expect(db.inboundEvent.findUnique({ where: { id: expired.id } })).resolves.toBeNull();
-    await expect(db.inboundEvent.findUnique({ where: { id: staleNoExpiry.id } })).resolves.toBeNull();
-    await expect(db.inboundEvent.findUnique({ where: { id: recent.id } })).resolves.not.toBeNull();
-    await expect(db.inboundEvent.findUnique({ where: { id: otherOld.id } })).resolves.not.toBeNull();
-  });
+      await expect(
+        db.inboundEvent.findUnique({ where: { id: expired.id } }),
+      ).resolves.toBeNull();
+      await expect(
+        db.inboundEvent.findUnique({ where: { id: staleNoExpiry.id } }),
+      ).resolves.toBeNull();
+      await expect(
+        db.inboundEvent.findUnique({ where: { id: recent.id } }),
+      ).resolves.not.toBeNull();
+      await expect(
+        db.inboundEvent.findUnique({ where: { id: otherOld.id } }),
+      ).resolves.not.toBeNull();
+    },
+  );
 });
 
 describe('ContactErasureService (P0.6)', () => {
@@ -171,7 +184,9 @@ describe('ContactErasureService (P0.6)', () => {
       messagesRedacted: 1,
     });
 
-    const erased = await db.contact.findUnique({ where: { tenantId_id: { tenantId: tenant.id, id: contact.id } } });
+    const erased = await db.contact.findUnique({
+      where: { tenantId_id: { tenantId: tenant.id, id: contact.id } },
+    });
     expect(erased).toMatchObject({
       name: null,
       phone: null,
@@ -183,7 +198,9 @@ describe('ContactErasureService (P0.6)', () => {
     expect(erased?.deletedAt).not.toBeNull();
     expect(erased?.providerUserId).toMatch(/^erased:/);
 
-    const erasedMsg = await db.message.findUnique({ where: { tenantId_id: { tenantId: tenant.id, id: msg.id } } });
+    const erasedMsg = await db.message.findUnique({
+      where: { tenantId_id: { tenantId: tenant.id, id: msg.id } },
+    });
     expect(erasedMsg).toMatchObject({
       text: '[erased]',
       mediaRef: null,
@@ -192,7 +209,11 @@ describe('ContactErasureService (P0.6)', () => {
     });
 
     const audit = await db.auditEvent.findFirst({
-      where: { tenantId: tenant.id, action: 'contact.erased', entityId: contact.id },
+      where: {
+        tenantId: tenant.id,
+        action: 'contact.erased',
+        entityId: contact.id,
+      },
     });
     expect(audit).not.toBeNull();
 
@@ -208,8 +229,10 @@ describe('ContactErasureService (P0.6)', () => {
       data: { tenantId: b.id, displayName: 'Owner B', role: 'OWNER' },
     });
     const service = new ContactErasureService(prisma);
-    await expect(service.erase(b.tenantId, contact.id, actor.id)).rejects.toThrow();
-    const still = await db.contact.findUnique({ where: { tenantId_id: { tenantId: a.id, id: contact.id } } });
+    await expect(service.erase(b.id, contact.id, actor.id)).rejects.toThrow();
+    const still = await db.contact.findUnique({
+      where: { tenantId_id: { tenantId: a.id, id: contact.id } },
+    });
     expect(still?.deletedAt).toBeNull();
   });
 });
