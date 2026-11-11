@@ -18,6 +18,13 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
 import { createPostgresAdapter } from '../src/persistence/postgres-adapter.js';
 import { hashPassword } from '../src/webinbox/password.js';
 import { ensureLeadStages } from '../src/leads/lead-stage.util.js';
+import {
+  base32Encode,
+  generateRecoveryCodes,
+  generateTotpSecret,
+  hashRecoveryCode,
+} from '../src/auth/totp.js';
+import { createKeyring, SecretCipher } from '../src/secrets/secret-cipher.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
@@ -118,6 +125,8 @@ async function tenant(label: string): Promise<{
           ['admin', 'ADMIN'],
           // Its own rate-limit budget for the Business Login e2e.
           ['owner', 'OWNER'],
+          // Enrols a second factor in the MFA e2e; no other test signs in as it.
+          ['mfa', 'ADMIN'],
         ]
       : [['op1', 'OPERATOR']];
   for (const [key, role] of roles) {
@@ -175,27 +184,58 @@ async function tenant(label: string): Promise<{
 
 /** Console admins of this run (ADR 047); same throwaway password. */
 async function platformAdmins(): Promise<
-  Record<'owner' | 'support', { id: string; email: string }>
+  Record<
+    'owner' | 'support' | 'fresh',
+    { id: string; email: string; recoveryCodes: string[] }
+  >
 > {
   const run = randomUUID().slice(0, 8);
   const result = {} as Record<
-    'owner' | 'support',
-    { id: string; email: string }
+    'owner' | 'support' | 'fresh',
+    { id: string; email: string; recoveryCodes: string[] }
   >;
-  for (const [key, role] of [
+  // ADR 048: console admins need a second factor. owner and support are
+  // enrolled here, with many single-use recovery codes the browser tests
+  // sign in with; `fresh` has none, to exercise forced enrolment. The sealing
+  // key is the one the e2e API runs with.
+  const key = process.env.E2E_SECRETS_KEY;
+  if (!key) throw new Error('E2E_SECRETS_KEY is not set');
+  const cipher = new SecretCipher(createKeyring({ SECRETS_MASTER_KEY: key }));
+  for (const [name, role] of [
     ['owner', 'PLATFORM_OWNER'],
     ['support', 'PLATFORM_SUPPORT'],
+    ['fresh', 'PLATFORM_OWNER'],
   ] as const) {
-    const email = `platform-${key}-${run}@example.test`;
+    const email = `platform-${name}-${run}@example.test`;
     const admin = await db.platformAdmin.create({
       data: {
         email,
-        displayName: `Platform ${key}`,
+        displayName: `Platform ${name}`,
         role,
         passwordHash: await hashPassword(PASSWORD, FAST),
       },
     });
-    result[key] = { id: admin.id, email };
+    const recoveryCodes = name === 'fresh' ? [] : generateRecoveryCodes(80);
+    if (name !== 'fresh') {
+      const secret = generateTotpSecret();
+      const sealed = cipher.seal(
+        base32Encode(secret),
+        `mfa:platform:${admin.id}`,
+      );
+      await db.platformAdmin.update({
+        where: { id: admin.id },
+        data: {
+          totpKeyId: sealed.keyId,
+          totpNonce: Uint8Array.from(sealed.nonce),
+          totpCiphertext: Uint8Array.from(sealed.ciphertext),
+          totpEnabledAt: new Date(),
+          mfaRecoveryHashes: recoveryCodes.map((code) =>
+            hashRecoveryCode(secret, code.replace('-', '')),
+          ),
+        },
+      });
+    }
+    result[name] = { id: admin.id, email, recoveryCodes };
   }
   return result;
 }

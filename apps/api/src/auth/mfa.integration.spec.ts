@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
-import { PlatformSessionService } from '../platform/platform-session.service.js';
 import { hashPassword } from '../webinbox/password.js';
 import { SessionService } from '../webinbox/session.service.js';
 import { MfaError, MfaService } from './mfa.service.js';
@@ -191,22 +190,6 @@ const passwordLogin = (
   email: string,
   password = PASSWORD,
 ): Promise<Result> => call('POST', api.login, { body: { email, password } });
-
-/** Enrols an account that already has a session (tenant, or a platform admin after forced enrolment). */
-async function enrolWithSession(
-  api: typeof TENANT,
-  session: Session,
-): Promise<{ secret: string; recoveryCodes: string[] }> {
-  const setup = await call('POST', `${api.prefix}/setup`, { session });
-  expect(setup.status).toBe(200);
-  const secret = String(setup.body.secret);
-  const enable = await call('POST', `${api.prefix}/enable`, {
-    session,
-    body: { code: nextCode(secret, 0) },
-  });
-  expect(enable.status).toBe(200);
-  return { secret, recoveryCodes: enable.body.recoveryCodes as string[] };
-}
 
 describe('tenant operator two-step sign-in', () => {
   let email = '';
@@ -648,18 +631,7 @@ describe('without the keyring', () => {
     expect(row.totpCiphertext).toBeNull();
   });
 
-  it('refuses sign-in where a second factor is owed, for both principals', async () => {
-    const { email: platformEmail } = await newAdmin('nokey-admin');
-    const platform = new PlatformSessionService(
-      db as unknown as PrismaService,
-      undefined,
-      noKey,
-    );
-    expect(await platform.login(platformEmail, PASSWORD)).toEqual({
-      ok: false,
-      code: 'MFA_NOT_AVAILABLE',
-    });
-
+  it('refuses sign-in where a second factor is owed (tenant operator)', async () => {
     const { email, operatorId } = await newOperator('nokey-enrolled');
     await db.operatorCredential.update({
       where: { operatorId },

@@ -20,6 +20,14 @@ pnpm ops:platform-admin --email you@example.com --name "Your Name" \
 
 The random password is written to that file (mode 0600, must not exist yet)
 and is never printed. Sign in at `/console/login`, then delete the file.
+
+**First sign-in asks for two-step verification (ADR 048).** After the password the
+console shows a setup key (and otpauth link): add it to an authenticator app,
+enter the 6-digit code, and save the 10 recovery codes shown once. Every later
+sign-in needs a code (or one recovery code, single use). Requires
+`SECRETS_MASTER_KEY` on the server; without it console sign-in is refused. If an
+admin loses both, another owner resets it (audited; API `POST /api/v1/platform/admins/:id/mfa/reset`, no button yet) and the admin
+enrols again.
 Further admins are invited from **Console → Admins** (owner only): the
 invite link is shown once; the person sets their own password at
 `/console/invite/…`. The last active owner cannot be deactivated.

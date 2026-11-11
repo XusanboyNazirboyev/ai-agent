@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { resolve } from 'node:path';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
@@ -16,7 +16,10 @@ export interface Fixtures {
   a: TenantFixture;
   b: TenantFixture;
   /** Platform console admins (ADR 047). */
-  platform: Record<'owner' | 'support', { id: string; email: string }>;
+  platform: Record<
+    'owner' | 'support' | 'fresh',
+    { id: string; email: string; recoveryCodes: string[] }
+  >;
   /** A billed tenant whose subscription expired. */
   expired: {
     tenantId: string;
@@ -119,7 +122,30 @@ export async function newSession(
   return { context, page };
 }
 
-/** Signs in to the platform console (its own page and cookies). */
+/** The next unused recovery code of a seeded console admin (each works once). */
+function nextRecoveryCode(email: string): string {
+  const admin = Object.values(fixtures().platform).find(
+    (candidate) => candidate.email === email,
+  );
+  if (!admin || admin.recoveryCodes.length === 0)
+    throw new Error('this console admin has no seeded recovery codes');
+  const counter = resolve(FIXTURE_FILE, `../recovery-${admin.id}.count`);
+  let used: number;
+  try {
+    used = Number(readFileSync(counter, 'utf8'));
+  } catch {
+    used = 0;
+  }
+  const code = admin.recoveryCodes[used];
+  if (!code) throw new Error('seeded recovery codes are used up');
+  writeFileSync(counter, String(used + 1));
+  return code;
+}
+
+/**
+ * Signs in to the platform console (its own page and cookies). Seeded admins
+ * pass the second step with a single-use recovery code (ADR 048).
+ */
 export async function consoleLogin(
   page: Page,
   email: string,
@@ -129,6 +155,9 @@ export async function consoleLogin(
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByTestId('mfa-toggle-recovery').click();
+  await page.getByTestId('mfa-code').fill(nextRecoveryCode(email));
+  await page.getByRole('button', { name: 'Verify' }).click();
   await page.waitForURL(/\/console$/u);
 }
 
