@@ -1,0 +1,13 @@
+# Accepted, path-scoped exception for the Trivy gate in .github/workflows/ci.yml
+# (audit 2026-11-11, P0.4). Anything else, or the same CVE at another path, still fails.
+vulnerabilities:
+  - id: CVE-2026-59873
+    paths:
+      - "root/.cache/node/corepack/v1/pnpm/10.33.3/dist/node_modules/tar/package.json"
+    statement: >-
+      node-tar 7.5.13 (denial of service when extracting crafted archives) is bundled
+      inside the pnpm 10.33.3 distribution that corepack downloads in the build stage,
+      so it exists only in the tezda-migrate image (api and web do not contain it).
+      The migrate container only runs `prisma migrate deploy`: it installs nothing and
+      extracts no archive. Fix: move to a pnpm release that bundles tar >= 7.5.19.
+    expired_at: 2026-12-31
