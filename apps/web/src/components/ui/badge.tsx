@@ -22,11 +22,13 @@ export function Badge(props: {
   tone?: Tone;
   dot?: boolean;
   className?: string;
+  'data-testid'?: string;
   children: ReactNode;
 }): ReactNode {
   const tone = props.tone ?? 'neutral';
   return (
     <span
+      data-testid={props['data-testid']}
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${TONE[tone]} ${props.className ?? ''}`}
     >
       {props.dot ? (
