@@ -24,6 +24,7 @@ import { ErrorNote } from './ui/error-note';
 import { textareaClass } from './ui/fields';
 import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
+import { ErasePersonButton } from './person-erase';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 
@@ -175,6 +176,7 @@ function PersonDetailView(props: {
               : t('people.never')}
           </span>
         </div>
+        <ErasePersonButton person={person} role={operator.role} />
       </section>
 
       <Section title={t('people.contactsSection')} testId="person-contacts">
