@@ -2,20 +2,33 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, ApiError, errorKey } from '@/lib/api';
 import { channelName } from '@/lib/channel-names';
-import type { ContactErasureResult, PersonDetail, Role } from '@/lib/types';
+import type {
+  ContactErasureResult,
+  PersonDetail,
+  PersonDuplicateGroup,
+  PersonItem,
+  PersonMergePreview,
+  Role,
+} from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button, buttonClass } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
+import { ErrorNote } from './ui/error-note';
+import { textareaClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
+
+const MIN_REASON = 3;
+const MAX_REASON = 500;
 
 interface ContactRow {
   id: string;
@@ -85,7 +98,9 @@ export function PersonPage(): ReactNode {
         ) : null}
 
         {query.isError ? <PersonError error={query.error} /> : null}
-        {query.isSuccess ? <PersonDetailView person={query.data} /> : null}
+        {query.isSuccess ? (
+          <PersonDetailView person={query.data} personId={id} />
+        ) : null}
       </div>
     </div>
   );
@@ -112,12 +127,21 @@ function PersonError(props: { error: unknown }): ReactNode {
   );
 }
 
-function PersonDetailView(props: { person: PersonDetail }): ReactNode {
-  const { person } = props;
+function PersonDetailView(props: {
+  person: PersonDetail;
+  personId: string;
+}): ReactNode {
+  const { person, personId } = props;
   const { t, formatDateTime } = useI18n();
   const { timeZone, operator } = useShell();
   return (
     <div className="flex flex-col gap-4">
+      <DuplicatesBanner
+        person={person}
+        personId={personId}
+        role={operator.role}
+      />
+      <LastMergeNote person={person} personId={personId} role={operator.role} />
       <section
         data-testid="person-header"
         className="flex min-w-0 flex-wrap items-center gap-4 rounded-2xl border border-line bg-surface p-4 shadow-card"
@@ -374,5 +398,323 @@ function ContactCard(props: {
         </div>
       ) : null}
     </li>
+  );
+}
+
+function personLabel(person: PersonItem): string {
+  return person.displayName ?? person.phone ?? person.id;
+}
+
+function DuplicatesBanner(props: {
+  person: PersonDetail;
+  personId: string;
+  role: Role;
+}): ReactNode {
+  const { person, personId, role } = props;
+  const { t } = useI18n();
+  const [mergeState, setMergeState] = useState<{
+    source: PersonItem;
+    survivor: PersonItem;
+  } | null>(null);
+  const canMerge = role === 'ADMIN' || role === 'OWNER';
+  const query = useQuery({
+    queryKey: ['person-duplicates', personId],
+    queryFn: () =>
+      api<PersonDuplicateGroup[] | { items: PersonDuplicateGroup[] }>(
+        `/api/v1/people/${personId}/duplicates`,
+      ),
+  });
+  if (query.isPending || query.isError) return null;
+  const items = Array.isArray(query.data)
+    ? query.data
+    : (query.data?.items ?? []);
+  const candidates = items
+    .flatMap((group) => group.persons ?? [])
+    .filter((p) => p.id !== personId);
+  if (candidates.length === 0) return null;
+  return (
+    <>
+      <section
+        role="status"
+        data-testid="person-duplicates"
+        className="flex flex-col gap-3 rounded-2xl border border-warning/40 bg-warning-soft p-4 text-sm shadow-card"
+      >
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="font-medium">
+            {t('people.duplicatesBanner', { count: candidates.length })}
+          </p>
+          <p className="text-muted">{t('people.duplicatesBannerHint')}</p>
+        </div>
+        <ul className="flex flex-col gap-2">
+          {candidates.map((candidate) => (
+            <li
+              key={candidate.id}
+              data-testid="person-duplicate-candidate"
+              className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface p-3"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate font-medium">
+                  {personLabel(candidate)}
+                </span>
+                {candidate.phone ? (
+                  <span className="truncate text-xs text-muted">
+                    {candidate.phone}
+                  </span>
+                ) : null}
+                <span className="flex flex-wrap gap-1.5">
+                  {candidate.channels?.map((ch) => (
+                    <Badge key={`${ch.contactId}-${ch.channelType}`}>
+                      {channelName(ch.channelType)}
+                    </Badge>
+                  ))}
+                </span>
+              </span>
+              <span className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+                <Link
+                  href={`/contacts/${candidate.id}`}
+                  className={buttonClass('secondary', 'sm')}
+                  data-testid="person-duplicate-open-card"
+                >
+                  {t('people.openCard')}
+                </Link>
+                {canMerge ? (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setMergeState({ source: candidate, survivor: person })
+                      }
+                      data-testid="merge-candidate-into-person"
+                    >
+                      {t('people.mergeIntoThis')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() =>
+                        setMergeState({ source: person, survivor: candidate })
+                      }
+                      data-testid="merge-person-into-candidate"
+                    >
+                      {t('people.mergeThisInto')}
+                    </Button>
+                  </>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {mergeState ? (
+        <MergeDialog
+          open
+          source={mergeState.source}
+          survivor={mergeState.survivor}
+          onClose={() => setMergeState(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function MergeDialog(props: {
+  open: boolean;
+  source: PersonItem;
+  survivor: PersonItem;
+  onClose: () => void;
+}): ReactNode {
+  const { open, source, survivor, onClose } = props;
+  const { t } = useI18n();
+  const toast = useToast();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState('');
+  const fieldId = useId();
+  useEffect(() => {
+    if (!open) setReason('');
+  }, [open]);
+  const valid =
+    reason.trim().length >= MIN_REASON && reason.trim().length <= MAX_REASON;
+  const preview = useQuery({
+    queryKey: ['person-merge-preview', source.id, survivor.id],
+    queryFn: () =>
+      api<PersonMergePreview>(
+        `/api/v1/people/${source.id}/merge-preview?intoId=${encodeURIComponent(survivor.id)}`,
+      ),
+    enabled: open,
+  });
+  const merge = useMutation({
+    mutationFn: () =>
+      api<unknown>(`/api/v1/people/${source.id}/merge`, {
+        method: 'POST',
+        body: { intoId: survivor.id, reason: reason.trim() },
+      }),
+    onSuccess: () => {
+      toast(t('people.mergeSuccess'));
+      void queryClient.invalidateQueries({ queryKey: ['people'] });
+      void queryClient.invalidateQueries({ queryKey: ['person'] });
+      void queryClient.invalidateQueries({ queryKey: ['person-duplicates'] });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      router.push(`/contacts/${survivor.id}`);
+      onClose();
+    },
+  });
+  const busy = merge.isPending;
+  return (
+    <FormDialog
+      open={open}
+      title={t('people.mergeTitle')}
+      testId="merge-dialog"
+      onClose={busy ? () => undefined : onClose}
+      onSubmit={() => {
+        if (valid && !busy) merge.mutate();
+      }}
+      footer={
+        <>
+          <Button onClick={onClose} data-testid="merge-cancel" disabled={busy}>
+            {t('confirm.cancel')}
+          </Button>
+          <Button
+            type="submit"
+            variant="danger"
+            loading={busy}
+            disabled={!valid}
+            data-testid="merge-confirm"
+          >
+            {t('people.mergeConfirm')}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm" data-testid="merge-direction">
+        {t('people.mergeDirection', {
+          source: personLabel(source),
+          survivor: personLabel(survivor),
+        })}
+      </p>
+      <p className="text-sm text-warning-fg">{t('people.mergeWarning')}</p>
+      {preview.isSuccess ? (
+        <div
+          data-testid="merge-preview-counts"
+          className="flex flex-col gap-1 rounded-xl border border-line bg-surface-2 p-3 text-sm"
+        >
+          <p className="font-medium">{t('people.mergePreview')}</p>
+          <ul className="list-disc pl-5">
+            <li>
+              {t('people.mergeMoves.contacts', {
+                count: preview.data.moves.contacts,
+              })}
+            </li>
+            <li>
+              {t('people.mergeMoves.conversations', {
+                count: preview.data.moves.conversations,
+              })}
+            </li>
+            <li>
+              {t('people.mergeMoves.leads', {
+                count: preview.data.moves.leads,
+              })}
+            </li>
+          </ul>
+        </div>
+      ) : null}
+      {preview.isError ? <ErrorNote error={preview.error} /> : null}
+      <label
+        htmlFor={fieldId}
+        className="flex flex-col gap-1.5 text-sm font-medium"
+      >
+        {t('people.mergeReason')}
+        <textarea
+          id={fieldId}
+          data-testid="merge-reason-input"
+          required
+          minLength={MIN_REASON}
+          maxLength={MAX_REASON}
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          className={textareaClass}
+        />
+        <span className="text-xs font-normal text-muted">
+          {t('people.mergeReasonHint')} ({reason.trim().length}/{MAX_REASON})
+        </span>
+      </label>
+      <ErrorNote error={merge.error} testId="merge-error" />
+    </FormDialog>
+  );
+}
+
+function LastMergeNote(props: {
+  person: PersonDetail;
+  personId: string;
+  role: Role;
+}): ReactNode {
+  const { person, personId, role } = props;
+  const { t, formatDateTime } = useI18n();
+  const { timeZone } = useShell();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [confirm, setConfirm] = useState(false);
+  const canUnmerge = role === 'ADMIN' || role === 'OWNER';
+  const unmerge = useMutation({
+    mutationFn: () =>
+      api<unknown>(`/api/v1/people/${personId}/unmerge`, { method: 'POST' }),
+    onSuccess: () => {
+      toast(t('people.unmergeSuccess'));
+      setConfirm(false);
+      void queryClient.invalidateQueries({ queryKey: ['people'] });
+      void queryClient.invalidateQueries({ queryKey: ['person', personId] });
+      void queryClient.invalidateQueries({ queryKey: ['person-duplicates'] });
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  });
+  if (!person.lastMerge || !canUnmerge) return null;
+  return (
+    <section
+      data-testid="person-last-merge"
+      className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card"
+    >
+      <div className="flex min-w-0 flex-col gap-1 text-sm">
+        <p className="font-medium">{t('people.lastMergeTitle')}</p>
+        <p className="text-muted">
+          {t('people.lastMergeNote', {
+            date: formatDateTime(person.lastMerge.mergedAt, timeZone),
+            count: person.lastMerge.contacts,
+          })}
+        </p>
+      </div>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => {
+          unmerge.reset();
+          setConfirm(true);
+        }}
+        data-testid="person-unmerge"
+      >
+        {t('people.unmerge')}
+      </Button>
+      <ConfirmDialog
+        open={confirm}
+        title={t('people.unmergeTitle')}
+        body={t('people.unmergeBody')}
+        confirmLabel={t('people.unmergeConfirm')}
+        cancelLabel={t('confirm.cancel')}
+        tone="danger"
+        busy={unmerge.isPending}
+        onConfirm={() => unmerge.mutate()}
+        onCancel={() => {
+          if (!unmerge.isPending) {
+            unmerge.reset();
+            setConfirm(false);
+          }
+        }}
+      />
+      {unmerge.isError && confirm ? (
+        <div className="w-full">
+          <ErrorNote error={unmerge.error} testId="person-unmerge-error" />
+        </div>
+      ) : null}
+    </section>
   );
 }
