@@ -27,6 +27,7 @@ import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { textareaClass } from './ui/fields';
+import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { Select } from './ui/select';
 import { Icon, type IconName } from './ui/icons';
 import { Section } from './ui/section';
@@ -709,6 +710,16 @@ export function ConversationViewPane(props: {
                     ))}
                   </Select>
                 </label>
+                <LeadTagsEditor
+                  leadId={view.lead.id}
+                  tags={view.lead.tags ?? []}
+                  role={props.me.role}
+                />
+                <LeadCustomFieldsEditor
+                  leadId={view.lead.id}
+                  fields={view.lead.customFields ?? []}
+                  role={props.me.role}
+                />
               </>
             ) : (
               <p className="text-muted">{t('view.noLead')}</p>

@@ -25,6 +25,10 @@ export interface LeadPipelineItem {
     state: ConversationState;
     channelType: string;
   };
+  /** P1.5: tags on the lead (additive). */
+  tags?: TagRef[];
+  /** P1.5: active custom field values (additive). */
+  customFields?: CustomFieldEntry[];
 }
 
 export interface LeadPipelinePage {
@@ -176,6 +180,9 @@ export interface ConversationView {
     summary: string;
     crmSyncStatus:
       'PENDING' | 'SYNCED' | 'NOT_REQUIRED' | 'FAILED' | 'UNCERTAIN' | string;
+    /** P1.5: tags/custom fields on lead (additive). */
+    tags?: TagRef[];
+    customFields?: CustomFieldEntry[];
   } | null;
   messages: {
     id: string;
@@ -279,6 +286,41 @@ export interface PersonErasureResult {
   messagesRedacted: number;
 }
 
+/** P1.5: tag attached to a person or lead (ADR 053). */
+export interface TagRef {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+export type CustomFieldEntity = 'PERSON' | 'LEAD';
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'BOOLEAN' | 'SELECT';
+export type CustomFieldValue = string | number | boolean | null;
+
+/** P1.5: tenant-defined custom field definition (ADR 053). */
+export interface CustomFieldDef {
+  id: string;
+  entity: CustomFieldEntity;
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options: string[] | null;
+  position: number;
+}
+
+/** Tag as managed in settings, including usage counts. */
+export interface Tag extends TagRef {
+  usage: { people: number; leads: number };
+}
+
+/** Custom field value resolved against active definitions. */
+export interface CustomFieldEntry {
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  value: CustomFieldValue;
+}
+
 export interface PersonItem {
   id: string;
   displayName: string | null;
@@ -290,6 +332,8 @@ export interface PersonItem {
   lastActivityAt: string | null;
   marketingOptOut: boolean;
   createdAt: string;
+  /** P1.5: tags on the person (additive; empty when API is older). */
+  tags?: TagRef[];
 }
 
 export interface PersonList {
@@ -331,6 +375,8 @@ export interface PersonDetail extends PersonItem {
     stageName: string | null;
     updatedAt: string;
   }>;
+  /** P1.5: active custom field values in definition order (ADR 053). */
+  customFields?: CustomFieldEntry[];
 }
 
 export interface PersonMergePreview {

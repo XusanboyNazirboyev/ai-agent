@@ -24,6 +24,10 @@ import { textareaClass } from './ui/fields';
 import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { ErasePersonButton } from './person-erase';
+import {
+  PersonCustomFieldsSection,
+  PersonTagsSection,
+} from './person-tags-fields';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 
@@ -160,6 +164,11 @@ function PersonDetailView(props: {
                 {channelName(ch.channelType)}
               </Badge>
             ))}
+            {(person.tags ?? []).map((tag) => (
+              <Badge key={tag.id} data-testid="person-header-tag">
+                {tag.name}
+              </Badge>
+            ))}
           </div>
         </div>
         <div className="flex flex-col gap-1 text-sm text-muted">
@@ -177,6 +186,9 @@ function PersonDetailView(props: {
         </div>
         <ErasePersonButton person={person} role={operator.role} />
       </section>
+
+      <PersonTagsSection person={person} role={operator.role} />
+      <PersonCustomFieldsSection person={person} role={operator.role} />
 
       <Section title={t('people.contactsSection')} testId="person-contacts">
         {person.contacts.length === 0 ? (
