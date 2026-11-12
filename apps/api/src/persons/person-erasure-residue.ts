@@ -3,6 +3,54 @@ import type { Prisma } from '../generated/prisma/client.js';
 const ERASED_TEXT = '[erased]';
 
 /**
+ * Tags and custom field values of a person are personal data (ADR 053): on
+ * erasure the values become `{}` and the tag links are deleted. Runs in the
+ * caller's transaction, tenant-scoped.
+ */
+export async function clearPersonTagsAndFields(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  personIds: string[],
+): Promise<void> {
+  if (personIds.length === 0) return;
+  await tx.personTag.deleteMany({
+    where: { tenantId, personId: { in: personIds } },
+  });
+  await tx.person.updateMany({
+    where: { tenantId, id: { in: personIds } },
+    data: { customFields: {} },
+  });
+}
+
+/**
+ * Leads of an erased contact: custom field values may hold free text about
+ * the customer, so they are cleared too and the tag links removed (ADR 053).
+ */
+export async function clearLeadTagsAndFields(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  contactId: string,
+): Promise<void> {
+  await tx.$queryRaw`
+    WITH l AS (
+      SELECT id FROM leads
+      WHERE tenant_id = ${tenantId}::uuid AND contact_id = ${contactId}::uuid
+    ),
+    gone AS (
+      DELETE FROM lead_tags
+      WHERE tenant_id = ${tenantId}::uuid AND lead_id IN (SELECT id FROM l)
+      RETURNING lead_id
+    ),
+    cleared AS (
+      UPDATE leads SET custom_fields = '{}'::jsonb
+      WHERE tenant_id = ${tenantId}::uuid AND id IN (SELECT id FROM l)
+      RETURNING id
+    )
+    SELECT (SELECT count(*) FROM gone)::int AS gone,
+           (SELECT count(*) FROM cleared)::int AS cleared`;
+}
+
+/**
  * Erasure residue of person merges (ADR 052 slice D). A person row that was
  * merged into the erased person (directly or through a chain) is a copy of
  * personal data: its name and phone are cleared and it is marked deleted, and
@@ -35,6 +83,7 @@ export async function clearMergedLineage(
       data: { displayName: null, primaryPhone: null },
     });
     personsCleared = cleared.count;
+    await clearPersonTagsAndFields(tx, tenantId, ids);
     await tx.person.updateMany({
       where: { tenantId, id: { in: ids }, deletedAt: null },
       data: { deletedAt: new Date() },
@@ -78,10 +127,17 @@ export async function clearErasedMergeCopies(
     cleared AS (
       UPDATE persons p
       SET display_name = NULL, primary_phone = NULL,
+          custom_fields = '{}'::jsonb,
           deleted_at = COALESCE(p.deleted_at, now())
       WHERE p.tenant_id = ${tenantId}::uuid
         AND p.id IN (SELECT merged_id FROM done)
       RETURNING p.id
+    ),
+    tags_gone AS (
+      DELETE FROM person_tags
+      WHERE tenant_id = ${tenantId}::uuid
+        AND person_id IN (SELECT merged_id FROM done)
+      RETURNING person_id
     ),
     redacted AS (
       UPDATE person_merges

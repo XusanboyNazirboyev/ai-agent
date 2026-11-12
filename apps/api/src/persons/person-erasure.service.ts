@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { ContactErasureService } from '../retention/contact-erasure.service.js';
-import { clearMergedLineage } from './person-erasure-residue.js';
+import {
+  clearMergedLineage,
+  clearPersonTagsAndFields,
+} from './person-erasure-residue.js';
 import { PersonNotFoundError } from './person-merge.service.js';
 
 export interface PersonErasureResult {
@@ -69,6 +72,7 @@ export class PersonErasureService {
         where: { tenantId, id: personId, deletedAt: null },
         data: { deletedAt: new Date() },
       });
+      await clearPersonTagsAndFields(tx, tenantId, [personId]);
       await clearMergedLineage(tx, tenantId, personId);
       await tx.auditEvent.create({
         data: {

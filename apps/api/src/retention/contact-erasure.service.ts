@@ -4,7 +4,9 @@ import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import {
   clearErasedMergeCopies,
+  clearLeadTagsAndFields,
   clearMergedLineage,
+  clearPersonTagsAndFields,
 } from '../persons/person-erasure-residue.js';
 
 const ERASED_TEXT = '[erased]';
@@ -182,9 +184,11 @@ export class ContactErasureService {
           where: { tenantId, id: contact.personId, deletedAt: null },
           data: { deletedAt: new Date() },
         });
+        await clearPersonTagsAndFields(tx, tenantId, [contact.personId]);
         await clearMergedLineage(tx, tenantId, contact.personId);
       }
     }
+    await clearLeadTagsAndFields(tx, tenantId, contactId);
     // A merged-away person row copies this contact's name: clear the copy
     // once nothing of its merge snapshot is alive (even if the survivor lives).
     await clearErasedMergeCopies(tx, tenantId, contactId);

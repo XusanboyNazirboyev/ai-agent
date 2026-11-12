@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import {
+  applyFieldValues,
+  asValues,
+  parseCarried,
+  planMergeCarry,
+  planUnmergeCarry,
+} from '../tags/custom-field-values.js';
 import { PeopleService } from './people.service.js';
 import { canUnmerge, planMerge, type PersonState } from './person-merge.js';
 import type { PersonDetail, PersonItem } from './person-view.js';
@@ -34,6 +41,28 @@ async function loadStates(
     },
   });
   return new Map(rows.map((r) => [r.id, r]));
+}
+
+/** Active tag ids and custom field values of one person (ADR 053). */
+async function loadTagState(
+  tx: Tx,
+  tenantId: string,
+  personId: string,
+): Promise<{ tagIds: string[]; fields: Record<string, unknown> }> {
+  const [tags, person] = await Promise.all([
+    tx.personTag.findMany({
+      where: { tenantId, personId, tag: { archivedAt: null } },
+      select: { tagId: true },
+    }),
+    tx.person.findFirst({
+      where: { tenantId, id: personId },
+      select: { customFields: true },
+    }),
+  ]);
+  return {
+    tagIds: tags.map((t) => t.tagId),
+    fields: asValues(person?.customFields),
+  };
 }
 
 /**
@@ -108,6 +137,37 @@ export class PersonMergeService {
         if (plan.code === 'SAME_PERSON') throw new SamePersonError();
         throw new MergeRefusedError();
       }
+      // ADR 053: the survivor takes the union of tags (capped) and fills
+      // only its empty custom fields; exactly that is recorded to undo it.
+      const [fromSource, fromSurvivor] = await Promise.all([
+        loadTagState(tx, tenantId, sourceId),
+        loadTagState(tx, tenantId, survivorId),
+      ]);
+      const carried = planMergeCarry({
+        survivorTagIds: fromSurvivor.tagIds,
+        sourceTagIds: fromSource.tagIds,
+        survivorFields: fromSurvivor.fields,
+        sourceFields: fromSource.fields,
+      });
+      if (carried.tagIds.length > 0)
+        await tx.personTag.createMany({
+          data: carried.tagIds.map((tagId) => ({
+            tenantId,
+            personId: survivorId,
+            tagId,
+          })),
+          skipDuplicates: true,
+        });
+      if (Object.keys(carried.fields).length > 0)
+        await tx.person.update({
+          where: { tenantId_id: { tenantId, id: survivorId } },
+          data: {
+            customFields: applyFieldValues(fromSurvivor.fields, {
+              set: carried.fields as Record<string, string>,
+              clear: [],
+            }) as Prisma.InputJsonObject,
+          },
+        });
       await tx.contact.updateMany({
         where: { tenantId, personId: sourceId, id: { in: plan.contactIds } },
         data: { personId: survivorId },
@@ -124,6 +184,7 @@ export class PersonMergeService {
           contactIds: plan.contactIds,
           byOperatorId: operatorId,
           reason,
+          carried: carried as unknown as Prisma.InputJsonObject,
         },
       });
       await tx.auditEvent.create({
@@ -138,6 +199,8 @@ export class PersonMergeService {
             survivorId,
             mergeId: merge.id,
             contacts: plan.contactIds.length,
+            tagsCarried: carried.tagIds.length,
+            fieldsCarried: Object.keys(carried.fields).length,
           },
         },
       });
@@ -197,6 +260,31 @@ export class PersonMergeService {
         })
       )
         throw new UnmergeBlockedError();
+      // ADR 053: remove exactly what the merge carried, where unchanged.
+      const survivorState = await loadTagState(tx, tenantId, survivorId);
+      const undo = planUnmergeCarry({
+        carried: parseCarried(merge.carried),
+        survivorTagIds: survivorState.tagIds,
+        survivorFields: survivorState.fields,
+      });
+      if (undo.removeTagIds.length > 0)
+        await tx.personTag.deleteMany({
+          where: {
+            tenantId,
+            personId: survivorId,
+            tagId: { in: undo.removeTagIds },
+          },
+        });
+      if (undo.clearKeys.length > 0)
+        await tx.person.update({
+          where: { tenantId_id: { tenantId, id: survivorId } },
+          data: {
+            customFields: applyFieldValues(survivorState.fields, {
+              set: {},
+              clear: undo.clearKeys,
+            }) as Prisma.InputJsonObject,
+          },
+        });
       await tx.contact.updateMany({
         where: {
           tenantId,
