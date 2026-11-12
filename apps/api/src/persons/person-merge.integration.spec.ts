@@ -870,4 +870,41 @@ describe('Person erase (ADR 052 slice D)', () => {
       ).reason,
     ).toBe('[erased]');
   });
+  it('erasing the last contact of a merged-away person clears its copy even while the survivor lives on', async () => {
+    const f = await fixture();
+    const s = await person(f, [{ name: 'S1' }], { displayName: 'Survivor' });
+    const m = await person(f, [{ name: 'M1' }, { name: 'M2', ig: true }], {
+      displayName: 'M copy',
+    });
+    await merge(f, 'OWNER', m.person.id, s.person.id, 'secret reason');
+
+    // One of the two snapshot contacts is erased: the copy and the reason stay.
+    await contactErasure.erase(f.tenantId, m.contacts[0].id, f.operatorId);
+    const mid = await db.person.findUniqueOrThrow({
+      where: { id: m.person.id },
+    });
+    expect(mid.displayName).toBe('M copy');
+    expect(mid.deletedAt).toBeNull();
+
+    // The last snapshot contact is erased; the survivor still has S1.
+    await contactErasure.erase(f.tenantId, m.contacts[1].id, f.operatorId);
+    const last = await db.person.findUniqueOrThrow({
+      where: { id: m.person.id },
+    });
+    expect(last.displayName).toBeNull();
+    expect(last.primaryPhone).toBeNull();
+    expect(last.deletedAt).not.toBeNull();
+    expect(
+      (
+        await db.personMerge.findFirstOrThrow({
+          where: { tenantId: f.tenantId },
+        })
+      ).reason,
+    ).toBe('[erased]');
+    const survivor = await db.person.findUniqueOrThrow({
+      where: { id: s.person.id },
+    });
+    // The survivor keeps its live contact S1 and stays a live person.
+    expect(survivor.deletedAt).toBeNull();
+  });
 });

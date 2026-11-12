@@ -49,3 +49,46 @@ export async function clearMergedLineage(
   });
   return { personsCleared, mergesRedacted: redacted.count };
 }
+
+/**
+ * A merged person row copies the name and phone of the person that was merged
+ * away. When every contact of that merge snapshot is erased, the copy has no
+ * live owner any more, even if the survivor still has other contacts. Clears
+ * the copy and the merge `reason` for the un-undone merges whose snapshot
+ * contains `contactId` and has no live contact left. Call after the contact
+ * itself is marked erased, in the same transaction.
+ */
+export async function clearErasedMergeCopies(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  contactId: string,
+): Promise<number> {
+  const done = await tx.$queryRaw<Array<{ id: string }>>`
+    WITH done AS (
+      SELECT m.id, m.merged_id FROM person_merges m
+      WHERE m.tenant_id = ${tenantId}::uuid
+        AND m.undone_at IS NULL
+        AND ${contactId}::uuid = ANY (m.contact_ids)
+        AND NOT EXISTS (
+          SELECT 1 FROM contacts c
+          WHERE c.tenant_id = ${tenantId}::uuid
+            AND c.id = ANY (m.contact_ids)
+            AND c.deleted_at IS NULL)
+    ),
+    cleared AS (
+      UPDATE persons p
+      SET display_name = NULL, primary_phone = NULL,
+          deleted_at = COALESCE(p.deleted_at, now())
+      WHERE p.tenant_id = ${tenantId}::uuid
+        AND p.id IN (SELECT merged_id FROM done)
+      RETURNING p.id
+    ),
+    redacted AS (
+      UPDATE person_merges
+      SET reason = ${ERASED_TEXT}
+      WHERE tenant_id = ${tenantId}::uuid AND id IN (SELECT id FROM done)
+      RETURNING id
+    )
+    SELECT id::text AS id FROM redacted`;
+  return done.length;
+}

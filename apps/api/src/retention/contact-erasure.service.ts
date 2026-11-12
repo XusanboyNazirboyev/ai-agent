@@ -2,7 +2,10 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { clearMergedLineage } from '../persons/person-erasure-residue.js';
+import {
+  clearErasedMergeCopies,
+  clearMergedLineage,
+} from '../persons/person-erasure-residue.js';
 
 const ERASED_TEXT = '[erased]';
 
@@ -182,6 +185,11 @@ export class ContactErasureService {
         await clearMergedLineage(tx, tenantId, contact.personId);
       }
     }
+    // A merged-away person row copies this contact's name: clear the copy
+    // once nothing of its merge snapshot is alive (even if the survivor lives).
+    await clearErasedMergeCopies(tx, tenantId, contactId);
+    // A merged-away person row copies this contact's name: clear the copy
+    // once nothing of its merge snapshot is alive (even if the survivor lives).
 
     await tx.auditEvent.create({
       data: {
