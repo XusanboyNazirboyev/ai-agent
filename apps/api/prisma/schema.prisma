@@ -219,6 +219,7 @@ model Tenant {
   knowledgeDocuments    KnowledgeDocument[]
   knowledgeChunks       KnowledgeChunk[]
   persons               Person[]
+  personMerges          PersonMerge[]
   operatorApiTokens     OperatorApiToken[]
   operatorCredentials   OperatorCredential[]
   operatorSessions      OperatorSession[]
@@ -518,6 +519,8 @@ model Operator {
   sessions              OperatorSession[]
   assignedConversations Conversation[] @relation("AssignedOperator")
   assignedHandovers     Handover[]     @relation("AssignedHandoverOperator")
+  personMerges          PersonMerge[]  @relation("PersonMergeBy")
+  personUnmerges        PersonMerge[]  @relation("PersonMergeUndoneBy")
 
   @@unique([tenantId, id])
   @@unique([tenantId, telegramUserId])
@@ -572,11 +575,35 @@ model Person {
   mergedFrom    Person[]  @relation("PersonMerge")
 
   contacts Contact[]
+  mergesAsSurvivor PersonMerge[] @relation("PersonMergeSurvivor")
+  mergesAsMerged   PersonMerge[] @relation("PersonMergeMerged")
 
   @@unique([tenantId, id])
   @@index([tenantId, primaryPhone])
   @@index([tenantId, mergedIntoId])
   @@map("persons")
+}
+
+/// Audit and undo record of a person merge (ADR 052 slice C).
+model PersonMerge {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  survivorId         String    @map("survivor_id") @db.Uuid
+  mergedId           String    @map("merged_id") @db.Uuid
+  contactIds         String[]  @map("contact_ids") @db.Uuid
+  byOperatorId       String    @map("by_operator_id") @db.Uuid
+  reason             String    @db.VarChar(500)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  undoneAt           DateTime? @map("undone_at") @db.Timestamptz(6)
+  undoneByOperatorId String?   @map("undone_by_operator_id") @db.Uuid
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  survivor           Person    @relation("PersonMergeSurvivor", fields: [tenantId, survivorId], references: [tenantId, id], onDelete: Restrict)
+  merged             Person    @relation("PersonMergeMerged", fields: [tenantId, mergedId], references: [tenantId, id], onDelete: Restrict)
+  byOperator         Operator  @relation("PersonMergeBy", fields: [tenantId, byOperatorId], references: [tenantId, id], onDelete: Restrict)
+  undoneByOperator   Operator? @relation("PersonMergeUndoneBy", fields: [tenantId, undoneByOperatorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@index([tenantId, survivorId, createdAt])
+  @@map("person_merges")
 }
 
 model Conversation {
