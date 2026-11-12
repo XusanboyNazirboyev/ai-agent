@@ -309,7 +309,8 @@ export class InboxReadService {
       await Promise.all([
         this.prisma.message.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { sequence: 'asc' },
+          // Fetch the newest window, then return it chronologically to the UI.
+          orderBy: [{ sequence: 'desc' }, { id: 'desc' }],
           take: 500,
           select: {
             id: true,
@@ -396,7 +397,7 @@ export class InboxReadService {
             customFields: describeFields(leadDefs, lead.customFields),
           }
         : null,
-      messages,
+      messages: messages.reverse(),
       notes,
       shownOffers,
       quotes: quotes.map((quote) => ({
