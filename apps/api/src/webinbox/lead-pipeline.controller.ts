@@ -15,6 +15,7 @@ import {
 import { z } from 'zod';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { ensureDefaultPipeline } from '../leads/lead-stage.util.js';
+import { moveLeadToStage } from '../leads/lead-stage-move.js';
 import {
   conflict,
   forbidden,
@@ -28,6 +29,7 @@ import {
   checkLostReason,
   fromDateOnly,
   isCalendarDate,
+  MAX_LOST_REASON,
   MAX_STAGES_PER_PIPELINE,
   parseOpportunityPatch,
   toDateOnly,
@@ -75,7 +77,11 @@ const CreateStageBody = z.object({
   pipelineId: z.string().uuid().optional(),
 });
 const StagesQuery = z.object({ pipelineId: z.string().uuid().optional() });
-const MoveBody = z.object({ stageId: z.string().uuid() });
+const MoveBody = z.object({
+  stageId: z.string().uuid(),
+  /** Required when the stage is a LOST stage (ADR 058). */
+  lostReason: z.string().trim().max(MAX_LOST_REASON).nullable().optional(),
+});
 const STAGE_SELECT = {
   id: true,
   code: true,
@@ -602,59 +608,30 @@ export class LeadPipelineController {
     @Req() request: InboxRequest,
     @Param('id', ParseUUIDPipe) leadId: string,
     @Body() body: unknown,
-  ): Promise<{ id: string; pipelineStageId: string; pipelineId: string }> {
+  ): Promise<{
+    id: string;
+    pipelineStageId: string;
+    pipelineId: string;
+    status: string;
+  }> {
     const who = request.principal!;
     if (who.role === 'VIEWER') throw forbidden();
     const parsed = MoveBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
     return this.prisma.$transaction(async (tx) => {
-      const [lead, stage] = await Promise.all([
-        tx.lead.findFirst({
-          where: { tenantId: who.tenantId, id: leadId },
-          select: { id: true, pipelineId: true, pipelineStageId: true },
-        }),
-        tx.leadStage.findFirst({
-          where: {
-            tenantId: who.tenantId,
-            id: parsed.data.stageId,
-            archivedAt: null,
-            pipeline: { archivedAt: null },
-          },
-          select: { id: true, pipelineId: true },
-        }),
-      ]);
-      if (!lead || !stage) throw notFound();
-      if (lead.pipelineStageId !== stage.id) {
-        // Pipeline and stage change in one update (the composite FK keeps
-        // them consistent at the database level).
-        await tx.lead.update({
-          where: { tenantId_id: { tenantId: who.tenantId, id: leadId } },
-          data: { pipelineId: stage.pipelineId, pipelineStageId: stage.id },
-        });
-        await tx.auditEvent.create({
-          data: {
-            tenantId: who.tenantId,
-            actorType: 'OPERATOR',
-            actorId: who.operatorId,
-            action:
-              lead.pipelineId === stage.pipelineId
-                ? 'lead.stage.changed'
-                : 'lead.pipeline.changed',
-            entityType: 'lead',
-            entityId: lead.id,
-            safeInputSummary: {
-              fromStageId: lead.pipelineStageId ?? '',
-              toStageId: stage.id,
-              fromPipelineId: lead.pipelineId,
-              toPipelineId: stage.pipelineId,
-            },
-          },
-        });
-      }
+      const moved = await moveLeadToStage(tx, {
+        tenantId: who.tenantId,
+        leadId,
+        stageId: parsed.data.stageId,
+        actor: 'OPERATOR',
+        actorId: who.operatorId,
+        lostReason: parsed.data.lostReason,
+      });
       return {
-        id: lead.id,
-        pipelineStageId: stage.id,
-        pipelineId: stage.pipelineId,
+        id: moved.id,
+        pipelineStageId: moved.pipelineStageId,
+        pipelineId: moved.pipelineId,
+        status: moved.status,
       };
     });
   }

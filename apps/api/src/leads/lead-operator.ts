@@ -1,6 +1,11 @@
 import type { Prisma } from '../generated/prisma/client.js';
+import { moveLeadToStage } from './lead-stage-move.js';
 
 type Tx = Pick<Prisma.TransactionClient, 'lead' | 'outboxEvent'>;
+type StatusTx = Pick<
+  Prisma.TransactionClient,
+  'lead' | 'leadStage' | 'auditEvent'
+>;
 
 export type OperatorLeadScore = 'HOT' | 'WARM' | 'COLD' | null;
 export type OperatorLeadStatus = 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
@@ -54,13 +59,50 @@ export async function setOperatorLeadScore(
     });
 }
 
+/**
+ * Deprecated route (ADR 058 decision 9): the stage is the only thing an
+ * operator sets. WON/LOST move the lead to the first stage of that kind in its
+ * pipeline when one exists; otherwise only the status is set, as before.
+ */
 export async function setOperatorLeadStatus(
-  tx: Tx,
+  tx: StatusTx,
   tenantId: string,
   lead: { id: string },
   status: OperatorLeadStatus,
   lostReason: string | null = null,
+  actorId?: string,
 ): Promise<void> {
+  const current = await tx.lead.findFirst({
+    where: { tenantId, id: lead.id },
+    select: {
+      pipelineId: true,
+      pipelineStageId: true,
+      pipelineStage: { select: { kind: true } },
+    },
+  });
+  const wantedKind =
+    status === 'WON' ? 'WON' : status === 'LOST' ? 'LOST' : 'OPEN';
+  if (current && current.pipelineStage?.kind !== wantedKind) {
+    const target = await tx.leadStage.findFirst({
+      where: {
+        tenantId,
+        pipelineId: current.pipelineId,
+        kind: wantedKind,
+        archivedAt: null,
+      },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (target)
+      await moveLeadToStage(tx, {
+        tenantId,
+        leadId: lead.id,
+        stageId: target.id,
+        actor: 'OPERATOR',
+        actorId,
+        lostReason,
+      });
+  }
   // ADR 057: LOST carries its reason; leaving LOST clears it.
   await tx.lead.updateMany({
     where: { tenantId, id: lead.id },
