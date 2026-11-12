@@ -333,8 +333,7 @@ function CustomFieldEntityPanel(props: {
       key: string;
       label: string;
       type: CustomFieldType;
-      options?: string[] | null;
-      position: number;
+      options?: string[];
     }) =>
       api<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body }),
     onSuccess: () => {
@@ -410,13 +409,15 @@ function CustomFieldEntityPanel(props: {
             const l = label.trim();
             const k = key.trim();
             if (!l || !k) return;
+            // The API takes exactly these fields (strict body) and appends the
+            // definition itself; options only exist for SELECT.
+            const options = type === 'SELECT' ? parseOptions() : null;
             create.mutate({
               entity,
               key: k,
               label: l,
               type,
-              options: parseOptions(),
-              position: defs.length,
+              ...(options ? { options } : {}),
             });
           }}
         >

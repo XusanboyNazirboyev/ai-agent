@@ -52,7 +52,7 @@ export function SettingsSectionNav(props: {
       aria-label={t('settings.sections')}
       className="shrink-0 overflow-x-auto border-b border-line bg-surface px-2 py-2 sm:px-4"
     >
-      <ul className="mx-auto flex w-max min-w-full max-w-5xl gap-1">
+      <ul className="flex w-max min-w-full gap-1">
         {SECTIONS.filter((section) => manager || !section.managers).map(
           (section) => (
             <li key={section.key}>

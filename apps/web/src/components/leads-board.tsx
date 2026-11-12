@@ -68,7 +68,7 @@ export function LeadsBoard(): ReactNode {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
       <div className="flex flex-wrap items-end gap-2">
-        <p className="min-w-0 flex-1 text-sm text-muted">
+        <p className="min-w-0 flex-1 basis-56 text-sm text-muted">
           {t('leads.funnelIntro')}
         </p>
         <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm sm:max-w-xs">

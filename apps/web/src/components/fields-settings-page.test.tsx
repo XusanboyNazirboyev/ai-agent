@@ -174,12 +174,14 @@ describe('FieldsSettingsPage', () => {
         '/api/v1/custom-fields',
         expect.objectContaining({
           method: 'POST',
-          body: expect.objectContaining({
+          // Exactly what the API's strict body accepts: no `position` (the
+          // API appends) and no `options` for a non-SELECT type.
+          body: {
             entity: 'PERSON',
             key: 'company',
             label: 'Company',
             type: 'TEXT',
-          }),
+          },
         }),
       ),
     );
