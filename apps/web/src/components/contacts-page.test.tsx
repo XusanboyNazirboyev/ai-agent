@@ -137,7 +137,7 @@ describe('ContactsPage people list', () => {
         return Promise.resolve({ items: [person], nextCursor: null });
       }
       if (path === '/api/v1/people/duplicates') {
-        return Promise.resolve([duplicateGroup]);
+        return Promise.resolve({ groups: [duplicateGroup] });
       }
       return Promise.reject(new Error(`unexpected call: ${path}`));
     });
@@ -161,7 +161,7 @@ describe('ContactsPage people list', () => {
         return Promise.resolve({ items: [person], nextCursor: null });
       }
       if (path === '/api/v1/people/duplicates') {
-        return Promise.resolve([]);
+        return Promise.resolve({ groups: [] });
       }
       return Promise.reject(new Error(`unexpected call: ${path}`));
     });

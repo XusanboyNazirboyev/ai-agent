@@ -50,13 +50,9 @@ export function ContactsPage(): ReactNode {
     queryKey: ['people', 'duplicates'],
     enabled: tab === 'duplicates',
     queryFn: () =>
-      api<PersonDuplicateGroup[] | { items: PersonDuplicateGroup[] }>(
-        '/api/v1/people/duplicates',
-      ),
+      api<{ groups: PersonDuplicateGroup[] }>('/api/v1/people/duplicates'),
   });
-  const groups = Array.isArray(duplicates.data)
-    ? duplicates.data
-    : (duplicates.data?.items ?? []);
+  const groups = duplicates.data?.groups ?? [];
 
   return (
     <div

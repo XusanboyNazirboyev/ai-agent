@@ -12,7 +12,6 @@ import { api, ApiError } from '@/lib/api';
 import type {
   ContactErasureResult,
   PersonDetail,
-  PersonDuplicateGroup,
   PersonErasureResult,
   PersonItem,
   PersonMergePreview,
@@ -206,7 +205,7 @@ afterEach(() => {
 
 function mockApi(
   opts: {
-    duplicates?: PersonDuplicateGroup[] | 'error';
+    duplicates?: PersonItem[] | 'error';
     previewResult?: PersonMergePreview | 'error';
     mergeResult?: unknown | Error;
     unmergeResult?: unknown | Error;
@@ -222,7 +221,7 @@ function mockApi(
       if (path === '/api/v1/people/person-1/duplicates') {
         if (opts.duplicates === 'error')
           return Promise.reject(new Error('dup-fail'));
-        return Promise.resolve(opts.duplicates ?? []);
+        return Promise.resolve({ items: opts.duplicates ?? [] });
       }
       if (path.startsWith('/api/v1/people/person-2/merge-preview')) {
         if (opts.previewResult === 'error')
@@ -292,7 +291,7 @@ describe('PersonPage', () => {
   it('shows duplicate banner and merge buttons for ADMIN/OWNER but not for OPERATOR/VIEWER', async () => {
     currentRole = 'OPERATOR';
     mockApi({
-      duplicates: [{ reason: 'PHONE', persons: [personItem, duplicatePerson] }],
+      duplicates: [duplicatePerson],
     });
     renderPage();
     expect(await screen.findByTestId('person-duplicates')).toBeInTheDocument();
@@ -306,7 +305,7 @@ describe('PersonPage', () => {
     cleanup();
     currentRole = 'ADMIN';
     mockApi({
-      duplicates: [{ reason: 'PHONE', persons: [personItem, duplicatePerson] }],
+      duplicates: [duplicatePerson],
     });
     renderPage();
     await screen.findByTestId('person-duplicates');
@@ -320,7 +319,7 @@ describe('PersonPage', () => {
 
   it('shows merge dialog with direction and preview counts, submit disabled until reason valid', async () => {
     mockApi({
-      duplicates: [{ reason: 'PHONE', persons: [personItem, duplicatePerson] }],
+      duplicates: [duplicatePerson],
     });
     renderPage();
     await screen.findByTestId('person-duplicates');
@@ -353,7 +352,7 @@ describe('PersonPage', () => {
 
   it('merge success calls correct URL/body, invalidates and navigates', async () => {
     mockApi({
-      duplicates: [{ reason: 'PHONE', persons: [personItem, duplicatePerson] }],
+      duplicates: [duplicatePerson],
     });
     const { client } = renderPage();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
@@ -402,9 +401,7 @@ describe('PersonPage', () => {
     'maps merge error %s to message and keeps dialog open',
     async (code, text) => {
       mockApi({
-        duplicates: [
-          { reason: 'PHONE', persons: [personItem, duplicatePerson] },
-        ],
+        duplicates: [duplicatePerson],
         mergeResult: new ApiError(409, code),
       });
       renderPage();
@@ -527,7 +524,7 @@ describe('PersonPage', () => {
       if (path === '/api/v1/people/person-1')
         return Promise.reject(new ApiError(404, 'NOT_FOUND'));
       if (path === '/api/v1/people/person-1/duplicates')
-        return Promise.resolve([]);
+        return Promise.resolve({ items: [] });
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     renderPage();
@@ -590,7 +587,7 @@ describe('PersonPage', () => {
         if (path === '/api/v1/people/person-1' && !options?.method)
           return Promise.resolve(person);
         if (path === '/api/v1/people/person-1/duplicates')
-          return Promise.resolve([]);
+          return Promise.resolve({ items: [] });
         if (path === '/api/v1/people/person-1' && options?.method === 'DELETE')
           return Promise.resolve(result);
         return Promise.reject(new Error(`unexpected ${path}`));
@@ -632,7 +629,7 @@ describe('PersonPage', () => {
         if (path === '/api/v1/people/person-1' && !options?.method)
           return Promise.resolve(person);
         if (path === '/api/v1/people/person-1/duplicates')
-          return Promise.resolve([]);
+          return Promise.resolve({ items: [] });
         if (path === '/api/v1/people/person-1' && options?.method === 'DELETE')
           return Promise.reject(new ApiError(403, 'FORBIDDEN'));
         return Promise.reject(new Error(`unexpected ${path}`));

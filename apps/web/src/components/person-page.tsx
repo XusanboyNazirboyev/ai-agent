@@ -10,7 +10,6 @@ import { channelName } from '@/lib/channel-names';
 import type {
   ContactErasureResult,
   PersonDetail,
-  PersonDuplicateGroup,
   PersonItem,
   PersonMergePreview,
   Role,
@@ -422,17 +421,10 @@ function DuplicatesBanner(props: {
   const query = useQuery({
     queryKey: ['person-duplicates', personId],
     queryFn: () =>
-      api<PersonDuplicateGroup[] | { items: PersonDuplicateGroup[] }>(
-        `/api/v1/people/${personId}/duplicates`,
-      ),
+      api<{ items: PersonItem[] }>(`/api/v1/people/${personId}/duplicates`),
   });
   if (query.isPending || query.isError) return null;
-  const items = Array.isArray(query.data)
-    ? query.data
-    : (query.data?.items ?? []);
-  const candidates = items
-    .flatMap((group) => group.persons ?? [])
-    .filter((p) => p.id !== personId);
+  const candidates = (query.data?.items ?? []).filter((p) => p.id !== personId);
   if (candidates.length === 0) return null;
   return (
     <>
