@@ -13,6 +13,7 @@ import type {
   ContactErasureResult,
   PersonDetail,
   PersonDuplicateGroup,
+  PersonErasureResult,
   PersonItem,
   PersonMergePreview,
   Role,
@@ -50,6 +51,10 @@ vi.mock('@/i18n', () => ({
         return `erased:${String(values?.conversations)}:${String(values?.messages)}`;
       }
       if (key === 'toast.contactAlreadyErased') return 'already';
+      if (key === 'toast.personErased')
+        return `person-erased:${String(values?.contacts)}`;
+      if (key === 'people.erasePersonBody')
+        return `erase-person-body:${String(values?.name)}:${String(values?.contacts)}:${String(values?.conversations)}`;
       if (key === 'people.mergeSuccess') return 'merged';
       if (key === 'people.unmergeSuccess') return 'unmerged';
       if (key === 'errors.MERGE_REFUSED') return 'merge-refused';
@@ -528,5 +533,118 @@ describe('PersonPage', () => {
     renderPage();
     expect(await screen.findByTestId('person-not-found')).toBeInTheDocument();
     expect(screen.getByText('people.notFound')).toBeInTheDocument();
+  });
+
+  it('shows erase person button only for OWNER with dialog text and counts', async () => {
+    mockApi();
+    renderPage();
+    const btn = await screen.findByTestId('person-erase');
+    fireEvent.click(btn);
+    const header = screen.getByTestId('person-header');
+    const dialog = within(header).getByTestId('confirm-dialog');
+    expect(dialog).toBeVisible();
+    expect(dialog).toHaveTextContent('erase-person-body:Ada Lovelace:1:1');
+  });
+
+  it('hides erase person button for non-OWNER roles', async () => {
+    currentRole = 'ADMIN';
+    mockApi();
+    renderPage();
+    await screen.findByTestId('person-header');
+    expect(screen.queryByTestId('person-erase')).toBeNull();
+
+    cleanup();
+    currentRole = 'VIEWER';
+    mockApi();
+    renderPage();
+    await screen.findByTestId('person-header');
+    expect(screen.queryByTestId('person-erase')).toBeNull();
+  });
+
+  it('cancel erase person dialog does not call API', async () => {
+    mockApi();
+    renderPage();
+    const btn = await screen.findByTestId('person-erase');
+    fireEvent.click(btn);
+    const header = screen.getByTestId('person-header');
+    fireEvent.click(within(header).getByTestId('confirm-cancel'));
+    expect(
+      vi
+        .mocked(api)
+        .mock.calls.some(
+          (c) =>
+            c[0] === '/api/v1/people/person-1' && c[1]?.method === 'DELETE',
+        ),
+    ).toBe(false);
+  });
+
+  it('erase person success calls DELETE, invalidates and navigates', async () => {
+    const result: PersonErasureResult = {
+      personId: 'person-1',
+      contacts: 1,
+      conversations: 1,
+      messagesRedacted: 3,
+    };
+    vi.mocked(api).mockImplementation(
+      (path: string, options?: { method?: string }) => {
+        if (path === '/api/v1/people/person-1' && !options?.method)
+          return Promise.resolve(person);
+        if (path === '/api/v1/people/person-1/duplicates')
+          return Promise.resolve([]);
+        if (path === '/api/v1/people/person-1' && options?.method === 'DELETE')
+          return Promise.resolve(result);
+        return Promise.reject(new Error(`unexpected ${path}`));
+      },
+    );
+    const { client } = renderPage();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const header = await screen.findByTestId('person-header');
+    fireEvent.click(within(header).getByTestId('person-erase'));
+    fireEvent.click(within(header).getByTestId('confirm-accept'));
+    await waitFor(() => {
+      expect(api).toHaveBeenCalledWith('/api/v1/people/person-1', {
+        method: 'DELETE',
+      });
+    });
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('person-erased:1'),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['people'] }),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['person'] }),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ['person-duplicates'],
+      }),
+    );
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['conversations'] }),
+    );
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/contacts'));
+  });
+
+  it('shows inline error on person erase 403 and keeps dialog', async () => {
+    vi.mocked(api).mockImplementation(
+      (path: string, options?: { method?: string }) => {
+        if (path === '/api/v1/people/person-1' && !options?.method)
+          return Promise.resolve(person);
+        if (path === '/api/v1/people/person-1/duplicates')
+          return Promise.resolve([]);
+        if (path === '/api/v1/people/person-1' && options?.method === 'DELETE')
+          return Promise.reject(new ApiError(403, 'FORBIDDEN'));
+        return Promise.reject(new Error(`unexpected ${path}`));
+      },
+    );
+    renderPage();
+    const header = await screen.findByTestId('person-header');
+    fireEvent.click(within(header).getByTestId('person-erase'));
+    fireEvent.click(within(header).getByTestId('confirm-accept'));
+    expect(await screen.findByTestId('person-erase-error')).toHaveTextContent(
+      'errors.FORBIDDEN',
+    );
+    expect(within(header).getByTestId('confirm-dialog')).toBeVisible();
   });
 });
