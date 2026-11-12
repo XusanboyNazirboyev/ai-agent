@@ -227,6 +227,7 @@ describe('People API (ADR 052 slice B)', () => {
         'leadCount',
         'marketingOptOut',
         'phone',
+        'tags',
       ].sort(),
     );
     expect(first.items[0]).toMatchObject({
