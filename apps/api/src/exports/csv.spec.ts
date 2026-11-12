@@ -144,9 +144,9 @@ describe('typed columns and edge cases', () => {
   });
 
   it('neutralises header labels too (custom field labels are user text)', () => {
-    expect(csvHeader([{ header: '=evil', kind: 'text', get: (): string => '' }])).toBe(
-      "'=evil",
-    );
+    expect(
+      csvHeader([{ header: '=evil', kind: 'text', get: (): string => '' }]),
+    ).toBe("'=evil");
   });
 
   it('does not strip an existing apostrophe or add one twice', () => {
