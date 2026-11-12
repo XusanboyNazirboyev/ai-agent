@@ -1042,6 +1042,7 @@ describe('event stream resource accounting', () => {
     status = 0;
     frames: string[] = [];
     ended = false;
+    blockNextWrite = false;
     constructor(private readonly closeOnHead = false) {
       super();
     }
@@ -1052,6 +1053,10 @@ describe('event stream resource accounting', () => {
     }
     write(chunk: string): boolean {
       this.frames.push(chunk);
+      if (this.blockNextWrite) {
+        this.blockNextWrite = false;
+        return false;
+      }
       return true;
     }
     end(): void {
@@ -1098,6 +1103,41 @@ describe('event stream resource accounting', () => {
     expect(bus.listenerCount(w.tenantId)).toBe(1);
     live.emit('close');
     live.emit('close');
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
+    expect(bus.listenerCount(w.tenantId)).toBe(0);
+    bus.onModuleDestroy();
+  });
+
+  it('pauses writes on backpressure and flushes queued events after drain', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const bus = new InboxEventBus(prisma);
+    const response = new FakeResponse();
+    response.blockNextWrite = true;
+
+    await controllerWith(bus).stream(
+      { principal: s.principal } as never,
+      response as never,
+      undefined,
+      undefined,
+    );
+
+    // The retry frame fills the writable buffer; later events must stay in
+    // the bounded application queue until Node emits drain.
+    expect(response.frames).toEqual(['retry: 3000\\n\\n']);
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    await bus.tick();
+    await vi.waitFor(() => expect(response.frames).toHaveLength(1));
+
+    response.emit('drain');
+    await vi.waitFor(() =>
+      expect(response.frames.join('')).toContain(w.conversationId),
+    );
+
+    response.emit('close');
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     expect(bus.listenerCount(w.tenantId)).toBe(0);
     bus.onModuleDestroy();
