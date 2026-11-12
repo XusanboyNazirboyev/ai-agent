@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
@@ -18,8 +19,10 @@ import type {
   LeadScore,
   LeadStage,
   LeadStatus,
+  PipelineView,
   Tag,
 } from '@/lib/types';
+import { formatAmount } from '@/lib/currencies';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
@@ -27,6 +30,7 @@ import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
+import { LeadOpportunity } from './lead-opportunity';
 
 const STATE_TONE: Record<ConversationState, Tone> = {
   BOT_ACTIVE: 'neutral',
@@ -51,19 +55,74 @@ function stageName(stage: LeadStage, t: (key: string) => string): string {
   return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
 }
 
-/** Tenant-configured funnel stages; lead score remains a separate attribute. */
+/** Tenant-configured funnels; lead score remains a separate attribute.
+ * ADR 057: every pipeline has its own stages, and the board shows one
+ * pipeline at a time. */
 export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
-  const [tagId, setTagId] = useState('');
+  const router = useRouter();
+  const params = useSearchParams();
+  const qc = useQueryClient();
+  const { operator } = useShell();
+  const canManage = operator.role === 'OWNER' || operator.role === 'ADMIN';
+
+  const pipelines = useQuery({
+    queryKey: ['pipelines'],
+    queryFn: () => api<{ items: PipelineView[] }>('/api/v1/pipelines'),
+  });
+  const list = pipelines.data?.items ?? [];
+  const urlPipeline = params.get('pipeline');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (list.length === 0) return;
+    const valid = list.find((p) => p.id === urlPipeline);
+    if (valid) {
+      setActiveId(valid.id);
+      return;
+    }
+    const def = list.find((p) => p.isDefault);
+    setActiveId((def ?? list[0]).id);
+  }, [list, urlPipeline]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const active = list.find((p) => p.id === activeId) ?? list[0];
   const stages = useQuery({
-    queryKey: ['lead-stages'],
-    queryFn: () => api<LeadStage[]>('/api/v1/leads/stages'),
+    queryKey: ['lead-stages', active?.id],
+    enabled: !!active,
+    queryFn: () =>
+      api<LeadStage[]>(`/api/v1/leads/stages?pipelineId=${active!.id}`),
   });
-  const tags = useQuery({
-    queryKey: ['tags'],
-    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
-  });
+
+  function choose(next: PipelineView): void {
+    setActiveId(next.id);
+    router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
+  }
+
   const rows = stages.data ?? [];
+  const switcher = (
+    <div
+      role="group"
+      aria-label={t('pipelines.switcher')}
+      className="flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-line bg-surface p-1"
+    >
+      {list.map((pipeline) => (
+        <button
+          key={pipeline.id}
+          type="button"
+          aria-pressed={pipeline.id === active?.id}
+          disabled={pipeline.id === active?.id}
+          onClick={() => choose(pipeline)}
+          className={`min-h-9 max-w-[14rem] truncate rounded-lg px-3 text-sm font-medium transition-colors ${
+            pipeline.id === active?.id
+              ? 'bg-primary text-white'
+              : 'text-muted hover:bg-surface-2 hover:text-fg'
+          }`}
+        >
+          {pipeline.name ?? t('pipeline.defaultName')}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
@@ -71,24 +130,20 @@ export function LeadsBoard(): ReactNode {
         <p className="min-w-0 flex-1 basis-56 text-sm text-muted">
           {t('leads.funnelIntro')}
         </p>
-        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm sm:max-w-xs">
-          <span className="sr-only">{t('people.filterByTag')}</span>
-          <select
-            aria-label={t('people.filterByTag')}
-            data-testid="leads-tag-filter"
-            value={tagId}
-            onChange={(e) => setTagId(e.target.value)}
-            className={fieldClass}
-          >
-            <option value="">{t('people.allTags')}</option>
-            {(tags.data?.items ?? []).map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex min-w-0 flex-1 basis-72 sm:max-w-xs">
+          {list.length > 1 ? (
+            switcher
+          ) : (
+            <p
+              data-testid="pipelines-single"
+              className="truncate rounded-lg border border-line bg-surface px-3 py-2 text-sm text-muted"
+            >
+              {active?.name ?? t('pipeline.defaultName')}
+            </p>
+          )}
+        </div>
       </div>
+      <LeadsFilters activePipelineId={active?.id} />
       {stages.isPending ? (
         <div role="status">
           <span className="sr-only">{t('app.loading')}</span>
@@ -123,8 +178,9 @@ export function LeadsBoard(): ReactNode {
             <LeadColumn
               key={stage.id}
               stage={stage}
+              pipelineId={active!.id}
               stages={rows}
-              tagId={tagId}
+              filters={filters}
             />
           ))}
         </div>
@@ -135,20 +191,32 @@ export function LeadsBoard(): ReactNode {
 
 function LeadColumn(props: {
   stage: LeadStage;
+  pipelineId: string;
   stages: LeadStage[];
-  tagId: string;
+  filters: LeadFilters;
 }): ReactNode {
   const { t } = useI18n();
   const query = useInfiniteQuery({
-    queryKey: ['leads', props.stage.id, props.tagId],
+    queryKey: [
+      'leads',
+      props.stage.id,
+      props.pipelineId,
+      props.filters,
+    ],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
+        pipelineId: props.pipelineId,
         stageId: props.stage.id,
         limit: '25',
       });
       if (pageParam) params.set('cursor', pageParam);
-      if (props.tagId) params.set('tagId', props.tagId);
+      if (props.filters.ownerId) params.set('ownerOperatorId', props.filters.ownerId);
+      if (props.filters.source) params.set('source', props.filters.source);
+      if (props.filters.closeBefore) params.set('closeBefore', props.filters.closeBefore);
+      if (props.filters.closeAfter) params.set('closeAfter', props.filters.closeAfter);
+      if (props.filters.tagId) params.set('tagId', props.filters.tagId);
+      if (props.filters.score) params.set('score', props.filters.score);
       return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -206,6 +274,7 @@ function LeadColumn(props: {
             item={item}
             currentStageId={props.stage.id}
             stages={props.stages}
+            pipelineId={props.pipelineId}
           />
         ))}
         {query.hasNextPage ? (
@@ -228,6 +297,7 @@ function LeadCard(props: {
   item: LeadPipelineItem;
   currentStageId: string;
   stages: LeadStage[];
+  pipelineId: string;
 }): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { timeZone, operator } = useShell();
@@ -343,6 +413,31 @@ function LeadCard(props: {
                   {tag.name}
                 </Badge>
               ))}
+              {props.item.amount ? (
+                <Badge tone="accent" data-testid="lead-card-amount">
+                  {formatAmount(
+                    props.item.amount,
+                    props.item.currency,
+                    t('locale.uz-Latn') === 'uz-Latn' ? 'uz-Latn' : undefined,
+                  )}
+                </Badge>
+              ) : null}
+              {props.item.owner ? (
+                <span
+                  data-testid="lead-card-owner-name"
+                  className="truncate text-xs text-muted"
+                >
+                  {props.item.owner.displayName}
+                </span>
+              ) : null}
+              {props.item.expectedCloseDate ? (
+                <span
+                  data-testid="lead-card-close"
+                  className="truncate text-xs text-muted"
+                >
+                  {t('opportunity.closeDate', { date: props.item.expectedCloseDate })}
+                </span>
+              ) : null}
             </span>
             <span className="text-xs text-muted">
               {t('leads.updated', {
@@ -351,6 +446,14 @@ function LeadCard(props: {
             </span>
           </span>
         </Link>
+        {canEdit ? (
+          <LeadOpportunity
+            leadId={props.item.id}
+            item={props.item}
+            stages={props.stages}
+            pipelineId={props.pipelineId}
+          />
+        ) : null}
         {canEdit ? (
           <label className="flex flex-col gap-1 text-xs text-muted">
             {t('leads.moveToStage')}
@@ -448,5 +551,127 @@ function LeadCard(props: {
         ) : null}
       </article>
     </li>
+  );
+}
+
+interface LeadFilters {
+  ownerId: string;
+  source: string;
+  closeBefore: string;
+  closeAfter: string;
+  tagId: string;
+  score: string;
+}
+
+/** ADR 057: the API filters the leads list, so the web only sends filters. */
+function LeadsFilters(props: {
+  filters: LeadFilters;
+  onChange: (next: LeadFilters) => void;
+  onClear: () => void;
+}): ReactNode {
+  const { t } = useI18n();
+  const { operator } = useShell();
+
+  const team = useQuery({
+    queryKey: ['team'],
+    queryFn: () =>
+      api<{ operators: { id: string; displayName: string; isActive: boolean }[] }>(
+        '/api/v1/team',
+      ),
+    enabled: operator.role === 'OWNER' || operator.role === 'ADMIN',
+  });
+  const tags = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
+  });
+
+  const active = Object.values(props.filters).some((v) => v);
+  const update = (patch: Partial<LeadFilters>): void => {
+    props.onChange({ ...props.filters, ...patch });
+  };
+
+  return (
+    <div
+      data-testid="leads-filters"
+      className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3"
+    >
+      {operator.role === 'OWNER' || operator.role === 'ADMIN' ? (
+        <label className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-sm font-medium">
+          <span className="sr-only">{t('leads.filterOwner')}</span>
+          <select
+            aria-label={t('leads.filterOwner')}
+            value={props.filters.ownerId}
+            onChange={(e) => update({ ownerId: e.target.value })}
+            className={fieldClass}
+          >
+            <option value="">{t('leads.anyOwner')}</option>
+            {(team.data?.operators ?? [])
+              .filter((o) => o.isActive)
+              .map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.displayName}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
+      <label className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-sm font-medium">
+        <span className="sr-only">{t('leads.filterSource')}</span>
+        <input
+          aria-label={t('leads.filterSource')}
+          value={props.filters.source}
+          maxLength={60}
+          onChange={(e) => update({ source: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex min-w-0 flex-1 basis-36 flex-col gap-1 text-sm font-medium">
+        <span className="sr-only">{t('leads.filterCloseBefore')}</span>
+        <input
+          type="date"
+          aria-label={t('leads.filterCloseBefore')}
+          value={props.filters.closeBefore}
+          onChange={(e) => update({ closeBefore: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex min-w-0 flex-1 basis-36 flex-col gap-1 text-sm font-medium">
+        <span className="sr-only">{t('leads.filterCloseAfter')}</span>
+        <input
+          type="date"
+          aria-label={t('leads.filterCloseAfter')}
+          value={props.filters.closeAfter}
+          onChange={(e) => update({ closeAfter: e.target.value })}
+          className={fieldClass}
+        />
+      </label>
+      <label className="flex min-w-0 flex-1 basis-40 flex-col gap-1 text-sm font-medium">
+        <span className="sr-only">{t('people.filterByTag')}</span>
+        <select
+          aria-label={t('people.filterByTag')}
+          value={props.filters.tagId}
+          onChange={(e) => update({ tagId: e.target.value })}
+          className={fieldClass}
+        >
+          <option value="">{t('people.allTags')}</option>
+          {(tags.data?.items ?? []).map((tag) => (
+            <option key={tag.id} value={tag.id}>
+              {tag.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          icon="x"
+          disabled={!active}
+          onClick={props.onClear}
+        >
+          {t('leads.clearFilters')}
+        </Button>
+      </div>
+    </div>
   );
 }

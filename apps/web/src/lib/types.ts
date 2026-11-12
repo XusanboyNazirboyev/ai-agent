@@ -9,11 +9,48 @@ export interface LeadStage {
   code: string | null;
   name: string | null;
   position: number;
+  /** ADR 057: the pipeline this stage belongs to. */
+  pipelineId: string;
+}
+
+/** A pipeline (ADR 057): `name === null` is the unnamed default pipeline. */
+export interface PipelineView {
+  id: string;
+  name: string | null;
+  position: number;
+  isDefault: boolean;
+  stageCount: number;
+  leadCount: number;
+}
+
+/** Opportunity fields of a lead (ADR 057), as returned by the leads list. */
+export interface OpportunityView {
+  id: string;
+  status: LeadStatus;
+  pipelineId: string;
+  ownerOperatorId: string | null;
+  owner: { id: string; displayName: string } | null;
+  /** Decimal string (`1500.50`), never a JS number. */
+  amount: string | null;
+  currency: string | null;
+  source: string | null;
+  /** `YYYY-MM-DD`. */
+  expectedCloseDate: string | null;
+  lostReason: string | null;
 }
 
 export interface LeadPipelineItem {
   id: string;
+  /** ADR 057 (additive). */
+  pipelineId: string;
   pipelineStageId: string | null;
+  ownerOperatorId: string | null;
+  owner: { id: string; displayName: string } | null;
+  amount: string | null;
+  currency: string | null;
+  source: string | null;
+  expectedCloseDate: string | null;
+  lostReason: string | null;
   score: LeadScore;
   status: LeadStatus;
   summary: string;
