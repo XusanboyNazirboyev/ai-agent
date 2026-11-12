@@ -8,10 +8,12 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { Prisma } from '../generated/prisma/client.js';
 import {
   ensureCodedStages,
   ensureDefaultPipeline,
@@ -21,10 +23,13 @@ import {
   conflict,
   forbidden,
   invalidBody,
+  invalidQuery,
   notFound,
 } from '../pipelines/pipeline-errors.js';
 import {
+  isCalendarDate,
   MAX_PIPELINES,
+  toDateOnly,
   validateStageOrder,
 } from '../pipelines/pipeline-rules.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
@@ -48,6 +53,24 @@ const PatchBody = z
 const OrderBody = z
   .object({ stageIds: z.array(z.string().uuid()).max(100) })
   .strict();
+
+const BoardQuery = z
+  .object({
+    from: z.string().refine(isCalendarDate).optional(),
+    to: z.string().refine(isCalendarDate).optional(),
+  })
+  .strict();
+
+export interface BoardStageView {
+  id: string;
+  code: string | null;
+  name: string | null;
+  kind: 'OPEN' | 'WON' | 'LOST';
+  position: number;
+  count: number;
+  /** One total per currency; decimal strings (`0.30`), never JS numbers. */
+  totals: Array<{ currency: string; amount: string }>;
+}
 
 export interface PipelineView {
   id: string;
@@ -119,6 +142,77 @@ export class PipelinesController {
     const tenantId = request.principal!.tenantId;
     await this.prisma.$transaction((tx) => ensureDefaultPipeline(tx, tenantId));
     return { items: await view(this.prisma, tenantId) };
+  }
+
+  /**
+   * Kanban board data (ADR 058 decision 7): per stage the lead count and one
+   * decimal total per currency, computed in SQL (a constant number of queries).
+   * Leads without an amount are counted but add to no total. `from`/`to`
+   * (inclusive calendar days) filter on the lead's creation date.
+   */
+  @Get(':id/board')
+  async board(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: unknown = {},
+  ): Promise<{ stages: BoardStageView[] }> {
+    const parsed = BoardQuery.safeParse(query);
+    if (!parsed.success) throw invalidQuery();
+    const tenantId = request.principal!.tenantId;
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { tenantId, id, archivedAt: null },
+      select: { id: true },
+    });
+    if (!pipeline) throw notFound();
+    const { from, to } = parsed.data;
+    const range = Prisma.sql`${
+      from ? Prisma.sql`AND "created_at" >= ${toDateOnly(from)}` : Prisma.empty
+    } ${
+      to
+        ? Prisma.sql`AND "created_at" < ${new Date(toDateOnly(to).getTime() + 86_400_000)}`
+        : Prisma.empty
+    }`;
+    const [stages, rows] = await Promise.all([
+      this.prisma.leadStage.findMany({
+        where: { tenantId, pipelineId: id, archivedAt: null },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          kind: true,
+          position: true,
+        },
+      }),
+      this.prisma.$queryRaw<
+        Array<{
+          stage_id: string;
+          currency: string | null;
+          n: number;
+          total: string | null;
+        }>
+      >`SELECT "pipeline_stage_id" AS stage_id, "currency", COUNT(*)::int AS n,
+          SUM("amount")::text AS total
+        FROM "leads"
+        WHERE "tenant_id" = ${tenantId}::uuid AND "pipeline_id" = ${id}::uuid
+          AND "pipeline_stage_id" IS NOT NULL ${range}
+        GROUP BY "pipeline_stage_id", "currency"
+        ORDER BY "currency" ASC NULLS LAST`,
+    ]);
+    return {
+      stages: stages.map((stage) => {
+        const mine = rows.filter((row) => row.stage_id === stage.id);
+        return {
+          ...stage,
+          count: mine.reduce((sum, row) => sum + row.n, 0),
+          totals: mine.flatMap((row) =>
+            row.currency !== null && row.total !== null
+              ? [{ currency: row.currency.trim(), amount: row.total }]
+              : [],
+          ),
+        };
+      }),
+    };
   }
 
   @Post()
