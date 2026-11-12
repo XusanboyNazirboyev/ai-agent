@@ -86,17 +86,30 @@ describe('PersonTagsSection', () => {
       if (path === '/api/v1/tags')
         return Promise.resolve({
           items: [
-            { id: 't1', name: 'VIP', color: 'blue', usage: { people: 1, leads: 0 } },
-            { id: 't2', name: 'New', color: null, usage: { people: 0, leads: 0 } },
+            {
+              id: 't1',
+              name: 'VIP',
+              color: 'blue',
+              usage: { people: 1, leads: 0 },
+            },
+            {
+              id: 't2',
+              name: 'New',
+              color: null,
+              usage: { people: 0, leads: 0 },
+            },
           ],
         });
       if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
         return Promise.resolve({ tags: [] });
       return Promise.reject(new Error(path));
     });
-    renderWith(<PersonTagsSection person={basePerson()} role={'OPERATOR' as Role} />);
+    renderWith(
+      <PersonTagsSection person={basePerson()} role={'OPERATOR' as Role} />,
+    );
     fireEvent.click(screen.getByTestId('person-tag-add'));
-    const select = await screen.findByTestId('person-tag-select');
+    await screen.findByRole('option', { name: 'New' });
+    const select = screen.getByTestId('person-tag-select');
     fireEvent.change(select, { target: { value: 't2' } });
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith('/api/v1/people/p1/tags', {
