@@ -31,3 +31,30 @@ Per-operation cost (BEGIN, set_config, COMMIT: about 3 extra round trips outside
 
 ## Verification
 S0: spike numbers recorded in this ADR. Each later stage: integration suite as `agentcore_app` in `strict`; cross-tenant read and write attempts return 0 rows or fail; the pooled-connection leak test; the import-boundary test; staging smoke after each switch.
+
+## S0 spike results (2026-11-12)
+Code: `apps/api/src/persistence/tenant-context.ts`, `rls-extension.ts` (prototype, not wired into the app), tests `rls-extension.integration.spec.ts` (12) and `set-config-guard.spec.ts` (2), benchmark `apps/api/scripts/rls-spike-bench.ts`.
+
+**Plan confirmed:** `$extends` with `query.$allModels.$allOperations` works with Prisma 7.10.0 and `@prisma/adapter-pg`. A wrapped single operation sends 4 statements (BEGIN, `set_config(..., true)`, the query, COMMIT) against 1 unwrapped, i.e. 3 extra round trips, and holds one pool connection for the whole time. The tenant setting does not leak: 200 alternating-tenant operations (20 in parallel) always left an empty setting on fresh pooled queries. Cross-tenant reads return 0 rows/null, a cross-tenant INSERT fails the WITH CHECK, strict throws without context. `$queryRaw` and `$executeRaw` ARE intercepted by `query.$queryRaw`/`$executeRaw`/`$allOperations` hooks with this adapter version (observed once; still not relied on).
+
+**Latency** (PostgreSQL 18.3 Postgres.app, local machine, pool max 10, 2 tenants x 2000 contacts/conversations/messages, one run, 20 warm-ups + 200 iterations, sequential, ms):
+
+| Case | owner, no extension | app role + extension | app role, no extension (setting preset per role) |
+|---|---|---|---|
+| inbox list (take 51, include contact, lead, handover) | 1.56 / 1.84 | 3.24 / 7.00 | 3.13 / 6.02 |
+| single message insert | 0.40 / 0.79 | 1.40 / 2.10 | 1.51 / 2.37 |
+| interactive tx, 5 model calls | 1.84 / 2.19 | 6.54 / 12.59 | 6.72 / 12.14 |
+
+(p50 / p95.) The third variant uses `ALTER ROLE ... SET app.tenant_id`, so policies are evaluated but no BEGIN/set_config/COMMIT is added.
+
+What this shows: moving from the owner (RLS bypassed) to a role subject to RLS roughly doubles to triples these local latencies, and the extension itself adds little on top of that (variants 2 and 3 are within noise of each other). What it does not show: one run, one machine, tiny data, an idle database, sequential load only; no agent turn was measured (no LLM in the loop), no pgvector query, no contention on the pool of 10. The cause of the RLS-role cost (policy expression per row, planner choices, trigger writes as a non-owner) was not isolated. Treat the numbers as an order of magnitude, repeat on staging in S6.
+
+## Findings (change S1 to S7)
+1. **Prisma calls are lazy.** `runWithTenant(id, () => prisma.x.findMany())` returns an unexecuted PrismaPromise that runs on the caller's `await`, outside the ALS scope; the hook then sees no context. The prototype awaits thenable results inside the scope. S2 must keep that, and the import-boundary/lint rules should discourage returning bare Prisma promises across scope edges.
+2. **Interactive `$transaction` override:** passing the un-extended `tx` into the callback is enough (no hook re-entry, no ALS flag needed); a call on the OUTER client inside the callback runs on another connection and is wrapped on its own with the context. The ALS flag is only needed for the array (batch) form of `$transaction`. Prototype tested: batch form with tenant context prepends `set_config` and returns only the caller's results.
+3. **Owner has no CREATEROLE locally.** The `agentcore` owner on dev Postgres.app is neither superuser nor CREATEROLE (CI's user is superuser). Role creation in tests and in S1 needs an admin connection; the spike falls back to a local superuser (`RLS_SPIKE_ADMIN_USER`, default OS user). S1 and S3 CI design must account for this (and RDS `CREATEROLE`, still unverified).
+4. **Grants beyond the 8 tables:** triggers on `conversations`, `messages`, `handovers` insert into `inbox_events` (no RLS) as the invoking role, so `agentcore_app` needs INSERT there and sequence usage; S1 must grant per table actually touched, and a test should compare grants with what the suite needs.
+5. **Prisma query log omits BEGIN;** round trips were counted by wrapping `pg.Client.prototype.query`.
+6. **pg deprecation warning** ("client.query() when the client is already executing a query", removal in pg 9) is raised from `@prisma/adapter-pg` `PgTransaction.performIO` during the benchmark's transactions; not caused by the extension code as far as the stack shows, but it should be tracked before a pg 9 upgrade.
+7. **System paths:** `runAsSystem` only bypasses the guard; real cross-tenant reads still need the separate BYPASSRLS client (S2 `PrismaSystemService`).
+8. **A non-RLS model under the app role needs explicit grants**; the strict guard only covers the 8 models, so a missed RLS table fails only when added to `RLS_MODELS` (keep that list generated from the policy list or tested against `pg_policies`).
