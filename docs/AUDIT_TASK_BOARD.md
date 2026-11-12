@@ -53,7 +53,8 @@ AUD-02 and AUD-08 both modify `apps/api/src/webinbox/webinbox.integration.spec.t
 
 - **Current task:** AUD-01 — global waiting queue ordering and keyset pagination.
 - **Current branch:** `fix/inbox-waiting-order-2026-11-12-chatgpt`.
-- **Last commit:** `cb860c481112c1af57a821cc0ad2d13fad97fe82`.
+- **Latest branch HEAD:** `4bea0c5b43a54c729e3cd88f1c656402818cad9a` (task-board documentation).
+- **Last implementation commit:** `cb860c481112c1af57a821cc0ad2d13fad97fe82`.
 - **Implementation:** waiting candidates are filtered and sorted in PostgreSQL by `COALESCE(MIN(active handover.opened_at), conversation.updated_at)`, then by UUID text; the cursor uses the same ascending composite order. Full rows are fetched only for the selected page and restored to candidate order.
 - **Regression coverage authored:** three conversations with staggered handover times, two-page traversal, no duplicate/missing IDs.
 - **Validation:** NOT RUN by ChatGPT. Claude Code must review and run it.
