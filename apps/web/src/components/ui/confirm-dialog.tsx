@@ -41,6 +41,15 @@ export function ConfirmDialog(props: {
     }
   }, [props.open]);
 
+  // A parent may unmount the dialog instead of closing it: give focus back then too.
+  useEffect(
+    () => () => {
+      const element = opener.current;
+      if (element?.isConnected) element.focus();
+    },
+    [],
+  );
+
   return (
     <dialog
       ref={ref}

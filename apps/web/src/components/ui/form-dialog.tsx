@@ -46,6 +46,15 @@ export function FormDialog(props: {
     }
   }, [props.open]);
 
+  // A parent may unmount the dialog instead of closing it: give focus back then too.
+  useEffect(
+    () => () => {
+      const element = opener.current;
+      if (element?.isConnected) element.focus();
+    },
+    [],
+  );
+
   function submit(event: FormEvent): void {
     event.preventDefault();
     props.onSubmit?.();
