@@ -94,6 +94,14 @@ export function LeadsBoard(): ReactNode {
       api<LeadStage[]>(`/api/v1/leads/stages?pipelineId=${active!.id}`),
   });
 
+  const [ownerId, setOwnerId] = useState('');
+  const [source, setSource] = useState('');
+  const [closeBefore, setCloseBefore] = useState('');
+  const [closeAfter, setCloseAfter] = useState('');
+  const [tagId, setTagId] = useState('');
+  const [score, setScore] = useState('');
+  const filters: LeadFilters = { ownerId, source, closeBefore, closeAfter, tagId, score };
+
   function choose(next: PipelineView): void {
     setActiveId(next.id);
     router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
