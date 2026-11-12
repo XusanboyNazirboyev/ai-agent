@@ -17,7 +17,8 @@ test('only the owner sees and can open the erase contact flow', async ({
   const contact = owner.page.getByTestId('person-contact').first();
   await expect(contact).toBeVisible();
   await contact.getByTestId('person-contact-erase').click();
-  const dialog = owner.page.getByTestId('confirm-dialog');
+  // The card holds one (closed) confirm dialog per action; take the open one.
+  const dialog = owner.page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(
     dialog.getByRole('heading', { name: 'Erase this contact?' }),

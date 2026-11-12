@@ -58,7 +58,7 @@ test.describe('person merge (P1.1 slice C)', () => {
     await expect(page).toHaveURL(survivorUrl);
     await expect(page.getByTestId('person-last-merge')).toBeVisible();
     await page.getByTestId('person-unmerge').click();
-    await page.getByTestId('confirm-accept').click();
+    await page.getByRole('dialog').getByTestId('confirm-accept').click();
     await expect(page.getByTestId('person-last-merge')).toBeHidden();
     await context.close();
   });
