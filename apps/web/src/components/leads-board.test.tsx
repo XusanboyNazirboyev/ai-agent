@@ -26,6 +26,10 @@ vi.mock('./app-shell', () => ({
   }),
 }));
 
+vi.mock('./ui/toast', () => ({
+  useToast: () => vi.fn(),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   useSearchParams: () => new URLSearchParams('view=funnel'),
