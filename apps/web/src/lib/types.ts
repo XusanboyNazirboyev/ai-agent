@@ -289,7 +289,14 @@ export interface PersonList {
   nextCursor: string | null;
 }
 
+export interface PersonLastMerge {
+  id: string;
+  mergedAt: string;
+  contacts: number;
+}
+
 export interface PersonDetail extends PersonItem {
+  lastMerge: PersonLastMerge | null;
   contacts: Array<{
     id: string;
     channelType: string;
@@ -316,6 +323,21 @@ export interface PersonDetail extends PersonItem {
     stageName: string | null;
     updatedAt: string;
   }>;
+}
+
+export interface PersonMergePreview {
+  source: PersonItem;
+  survivor: PersonItem;
+  moves: {
+    contacts: number;
+    conversations: number;
+    leads: number;
+  };
+}
+
+export interface PersonDuplicateGroup {
+  reason: 'PHONE';
+  persons: PersonItem[];
 }
 
 export interface ChannelList {

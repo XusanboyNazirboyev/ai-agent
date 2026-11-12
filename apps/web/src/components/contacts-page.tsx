@@ -1,12 +1,12 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { channelName } from '@/lib/channel-names';
-import type { PersonItem, PersonList } from '@/lib/types';
+import type { PersonDuplicateGroup, PersonItem, PersonList } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -29,11 +29,13 @@ export function ContactsPage(): ReactNode {
   const { t } = useI18n();
   const { timeZone } = useShell();
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'people' | 'duplicates'>('people');
   const q = useDebounced(search.trim(), 300);
 
   const query = useInfiniteQuery({
     queryKey: ['people', q],
     initialPageParam: '',
+    enabled: tab === 'people',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ limit: '25' });
       if (pageParam) params.set('cursor', pageParam);
@@ -44,6 +46,18 @@ export function ContactsPage(): ReactNode {
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
 
+  const duplicates = useQuery({
+    queryKey: ['people', 'duplicates'],
+    enabled: tab === 'duplicates',
+    queryFn: () =>
+      api<PersonDuplicateGroup[] | { items: PersonDuplicateGroup[] }>(
+        '/api/v1/people/duplicates',
+      ),
+  });
+  const groups = Array.isArray(duplicates.data)
+    ? duplicates.data
+    : (duplicates.data?.items ?? []);
+
   return (
     <div
       role="region"
@@ -53,70 +67,101 @@ export function ContactsPage(): ReactNode {
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('people.intro')}</p>
-        <div className="relative">
-          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted">
-            <Icon name="search" />
-          </span>
-          <input
-            type="search"
-            aria-label={t('people.search')}
-            placeholder={t('people.search')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={`${fieldClass} pl-9`}
-          />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant={tab === 'people' ? 'primary' : 'secondary'}
+            onClick={() => setTab('people')}
+            data-testid="people-tab-list"
+          >
+            {t('people.peopleList')}
+          </Button>
+          <Button
+            size="sm"
+            variant={tab === 'duplicates' ? 'primary' : 'secondary'}
+            onClick={() => setTab('duplicates')}
+            data-testid="people-tab-duplicates"
+          >
+            {t('people.duplicatesReview')}
+          </Button>
         </div>
 
-        {query.isPending ? (
-          <div
-            role="status"
-            className="overflow-hidden rounded-2xl border border-line bg-surface"
-          >
-            <span className="sr-only">{t('app.loading')}</span>
-            <SkeletonRows rows={4} />
-          </div>
-        ) : null}
-        {query.isError ? (
-          <div className="flex flex-col items-start gap-3">
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-            >
-              <Icon name="alert" />
-              {t(errorKey(query.error))}
-            </p>
-            <Button size="sm" onClick={() => void query.refetch()}>
-              {t('app.retry')}
-            </Button>
-          </div>
-        ) : null}
-        {query.isSuccess && items.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-6 py-10 text-center text-muted">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-2">
-              <Icon name="users" className="h-6 w-6" />
-            </span>
-            <p>{q ? t('people.emptyFiltered') : t('people.empty')}</p>
-          </div>
-        ) : null}
+        {tab === 'people' ? (
+          <>
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted">
+                <Icon name="search" />
+              </span>
+              <input
+                type="search"
+                aria-label={t('people.search')}
+                placeholder={t('people.search')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className={`${fieldClass} pl-9`}
+              />
+            </div>
 
-        <ul className="flex flex-col gap-2">
-          {items.map((item) => (
-            <PersonRow key={item.id} item={item} timeZone={timeZone} />
-          ))}
-          {query.hasNextPage ? (
-            <li>
-              <Button
-                className="w-full"
-                loading={query.isFetchingNextPage}
-                onClick={() => void query.fetchNextPage()}
+            {query.isPending ? (
+              <div
+                role="status"
+                className="overflow-hidden rounded-2xl border border-line bg-surface"
               >
-                {query.isFetchingNextPage
-                  ? t('app.loading')
-                  : t('list.loadMore')}
-              </Button>
-            </li>
-          ) : null}
-        </ul>
+                <span className="sr-only">{t('app.loading')}</span>
+                <SkeletonRows rows={4} />
+              </div>
+            ) : null}
+            {query.isError ? (
+              <div className="flex flex-col items-start gap-3">
+                <p
+                  role="alert"
+                  className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
+                >
+                  <Icon name="alert" />
+                  {t(errorKey(query.error))}
+                </p>
+                <Button size="sm" onClick={() => void query.refetch()}>
+                  {t('app.retry')}
+                </Button>
+              </div>
+            ) : null}
+            {query.isSuccess && items.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-6 py-10 text-center text-muted">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-2">
+                  <Icon name="users" className="h-6 w-6" />
+                </span>
+                <p>{q ? t('people.emptyFiltered') : t('people.empty')}</p>
+              </div>
+            ) : null}
+
+            <ul className="flex flex-col gap-2">
+              {items.map((item) => (
+                <PersonRow key={item.id} item={item} timeZone={timeZone} />
+              ))}
+              {query.hasNextPage ? (
+                <li>
+                  <Button
+                    className="w-full"
+                    loading={query.isFetchingNextPage}
+                    onClick={() => void query.fetchNextPage()}
+                  >
+                    {query.isFetchingNextPage
+                      ? t('app.loading')
+                      : t('list.loadMore')}
+                  </Button>
+                </li>
+              ) : null}
+            </ul>
+          </>
+        ) : (
+          <DuplicatesReview
+            groups={groups}
+            pending={duplicates.isPending}
+            error={duplicates.error}
+            onRetry={() => void duplicates.refetch()}
+            timeZone={timeZone}
+          />
+        )}
       </div>
     </div>
   );
@@ -189,5 +234,103 @@ function PersonRow(props: {
         </Link>
       </span>
     </li>
+  );
+}
+
+function DuplicatesReview(props: {
+  groups: PersonDuplicateGroup[];
+  pending: boolean;
+  error: unknown;
+  onRetry: () => void;
+  timeZone: string | undefined;
+}): ReactNode {
+  const { t } = useI18n();
+  if (props.pending) {
+    return (
+      <div
+        role="status"
+        className="overflow-hidden rounded-2xl border border-line bg-surface"
+      >
+        <span className="sr-only">{t('app.loading')}</span>
+        <SkeletonRows rows={3} />
+      </div>
+    );
+  }
+  if (props.error) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p
+          role="alert"
+          className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
+        >
+          <Icon name="alert" />
+          {t(errorKey(props.error))}
+        </p>
+        <Button size="sm" onClick={props.onRetry}>
+          {t('app.retry')}
+        </Button>
+      </div>
+    );
+  }
+  if (props.groups.length === 0) {
+    return (
+      <div
+        data-testid="duplicate-group-empty"
+        className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-6 py-10 text-center text-muted"
+      >
+        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-2">
+          <Icon name="users" className="h-6 w-6" />
+        </span>
+        <p>{t('people.duplicatesEmpty')}</p>
+      </div>
+    );
+  }
+  return (
+    <ul className="flex flex-col gap-3">
+      {props.groups.map((group, idx) => (
+        <li
+          key={`${group.reason}-${idx}`}
+          data-testid="duplicate-group"
+          className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-card"
+        >
+          <p className="text-sm font-medium text-muted">
+            {t('people.duplicateGroup')}
+          </p>
+          <ul className="flex flex-col gap-2">
+            {group.persons.map((person) => (
+              <li
+                key={person.id}
+                className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3"
+              >
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="truncate font-medium">
+                    {person.displayName ?? t('list.unnamed')}
+                  </span>
+                  {person.phone ? (
+                    <span className="truncate text-sm text-muted">
+                      {person.phone}
+                    </span>
+                  ) : null}
+                  <span className="flex flex-wrap gap-1.5">
+                    {person.channels.map((ch) => (
+                      <Badge key={`${ch.contactId}-${ch.channelType}`}>
+                        {channelName(ch.channelType)}
+                      </Badge>
+                    ))}
+                  </span>
+                </span>
+                <Link
+                  href={`/contacts/${person.id}`}
+                  className={buttonClass('secondary', 'sm')}
+                >
+                  <Icon name="users" />
+                  {t('people.openCard')}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))}
+    </ul>
   );
 }

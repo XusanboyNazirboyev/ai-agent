@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
-import type { PersonItem } from '@/lib/types';
+import type { PersonDuplicateGroup, PersonItem } from '@/lib/types';
 import { ContactsPage } from './contacts-page';
 
 vi.mock('@/i18n', () => ({
@@ -44,6 +44,20 @@ const person: PersonItem = {
   lastActivityAt: '2026-11-11T10:00:00.000Z',
   marketingOptOut: false,
   createdAt: '2026-11-10T10:00:00.000Z',
+};
+
+const duplicateGroup: PersonDuplicateGroup = {
+  reason: 'PHONE',
+  persons: [
+    person,
+    {
+      ...person,
+      id: 'person-2',
+      displayName: 'Ada Byron',
+      lastConversationId: 'conv-2',
+      channels: [{ contactId: 'c3', channelType: 'sms' }],
+    },
+  ],
 };
 
 function renderPage(): void {
@@ -115,5 +129,49 @@ describe('ContactsPage people list', () => {
     vi.mocked(api).mockResolvedValue({ items: [], nextCursor: null });
     renderPage();
     expect(await screen.findByText('people.empty')).toBeInTheDocument();
+  });
+
+  it('shows duplicates review tab with groups and open card links', async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.startsWith('/api/v1/people?')) {
+        return Promise.resolve({ items: [person], nextCursor: null });
+      }
+      if (path === '/api/v1/people/duplicates') {
+        return Promise.resolve([duplicateGroup]);
+      }
+      return Promise.reject(new Error(`unexpected call: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByTestId('person-item');
+    fireEvent.click(screen.getByTestId('people-tab-duplicates'));
+
+    expect(await screen.findByTestId('duplicate-group')).toBeInTheDocument();
+    expect(screen.getByText('Ada Byron')).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: /people.openCard/ });
+    expect(
+      links.some((l) => l.getAttribute('href') === '/contacts/person-2'),
+    ).toBe(true);
+    expect(api).toHaveBeenCalledWith('/api/v1/people/duplicates');
+  });
+
+  it('shows empty state for duplicates review when there are none', async () => {
+    vi.mocked(api).mockImplementation((path: string) => {
+      if (path.startsWith('/api/v1/people?')) {
+        return Promise.resolve({ items: [person], nextCursor: null });
+      }
+      if (path === '/api/v1/people/duplicates') {
+        return Promise.resolve([]);
+      }
+      return Promise.reject(new Error(`unexpected call: ${path}`));
+    });
+
+    renderPage();
+    await screen.findByTestId('person-item');
+    fireEvent.click(screen.getByTestId('people-tab-duplicates'));
+    expect(
+      await screen.findByTestId('duplicate-group-empty'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('people.duplicatesEmpty')).toBeInTheDocument();
   });
 });
