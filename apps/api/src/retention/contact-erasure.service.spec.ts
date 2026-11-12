@@ -9,6 +9,11 @@ function fakePrisma(state: {
 }) {
   const calls: Array<{ model: string; op: string; args: unknown }> = [];
   const tx = {
+    // Raw SQL: the merged-person copy clearing (ADR 052 slice D).
+    $queryRaw: async () => {
+      calls.push({ model: 'raw', op: 'queryRaw', args: null });
+      return [];
+    },
     contact: {
       findFirst: async () => state.contact,
       update: async (args: unknown) => {
@@ -83,6 +88,9 @@ describe('ContactErasureService (unit, P0.6)', () => {
       data: { action: string };
     };
     expect(audit.data.action).toBe('contact.erased');
+    // The merged-away person copies of this contact are cleared in the same
+    // transaction (ADR 052 slice D).
+    expect(calls.some((c) => c.model === 'raw')).toBe(true);
   });
 
   it('is idempotent for already erased contacts', async () => {
