@@ -144,7 +144,25 @@ export function LeadsBoard(): ReactNode {
           )}
         </div>
       </div>
-      <LeadsFilters activePipelineId={active?.id} />
+      <LeadsFilters
+        filters={filters}
+        onChange={(next) => {
+          setOwnerId(next.ownerId);
+          setSource(next.source);
+          setCloseBefore(next.closeBefore);
+          setCloseAfter(next.closeAfter);
+          setTagId(next.tagId);
+          setScore(next.score);
+        }}
+        onClear={() => {
+          setOwnerId('');
+          setSource('');
+          setCloseBefore('');
+          setCloseAfter('');
+          setTagId('');
+          setScore('');
+        }}
+      />
       {stages.isPending ? (
         <div role="status">
           <span className="sr-only">{t('app.loading')}</span>
