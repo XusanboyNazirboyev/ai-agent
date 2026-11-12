@@ -105,6 +105,9 @@ export async function createThrowawayRole(
   await runRoleDdl(env, owner, [
     `CREATE ROLE ${name} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${password}'`,
     `GRANT USAGE ON SCHEMA public TO ${name}`,
+    // Triggers on conversations/messages/handovers insert into inbox_events (non-RLS).
+    `GRANT SELECT, INSERT ON "inbox_events" TO ${name}`,
+    `GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${name}`,
     ...RLS_TABLES.map(
       (t) => `GRANT SELECT, INSERT, UPDATE, DELETE ON "${t}" TO ${name}`,
     ),
