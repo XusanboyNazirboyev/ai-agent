@@ -30,6 +30,8 @@ import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
 import { PeopleController } from './people.controller.js';
 import { PeopleService } from '../persons/people.service.js';
+import { PersonErasureService } from '../persons/person-erasure.service.js';
+import { PersonMergeService } from '../persons/person-merge.service.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
 import { FacebookConnectController } from './facebook-connect.controller.js';
@@ -78,6 +80,8 @@ import { SessionService } from './session.service.js';
   ],
   providers: [
     PeopleService,
+    PersonMergeService,
+    PersonErasureService,
     AnalyticsService,
     TelegramManagement,
     InstagramGraphClient,

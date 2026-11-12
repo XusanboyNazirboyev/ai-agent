@@ -9,6 +9,11 @@ import {
   type PersonDetail,
   type PersonItem,
 } from './person-view.js';
+import {
+  PHONE_KEY_SQL,
+  buildDuplicateGroups,
+  canUnmerge,
+} from './person-merge.js';
 
 const DETAIL_CAP = 20;
 
@@ -83,6 +88,99 @@ export class PeopleService {
     };
   }
 
+  /** List items of the visible persons among `ids`, in the order of `ids`. */
+  async itemsByIds(tenantId: string, ids: string[]): Promise<PersonItem[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.person.findMany({
+      where: { ...visiblePerson(tenantId), id: { in: ids } },
+      select: {
+        id: true,
+        displayName: true,
+        createdAt: true,
+        contacts: { where: { deletedAt: null }, select: contactSelect },
+      },
+    });
+    const activity = await this.activity(
+      tenantId,
+      rows.flatMap((p) => p.contacts.map((c) => c.id)),
+    );
+    const byId = new Map(
+      rows.map((p) => [
+        p.id,
+        assemblePersonItem(p, p.contacts.map(toContactRow), activity),
+      ]),
+    );
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }
+
+  /** Persons sharing a phone key with `personId` (null = person not visible). */
+  async duplicatesOf(
+    tenantId: string,
+    personId: string,
+  ): Promise<PersonItem[] | null> {
+    const visible = await this.prisma.person.count({
+      where: { ...visiblePerson(tenantId), id: personId },
+    });
+    if (visible === 0) return null;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+      `WITH mine AS (
+         SELECT DISTINCT ${PHONE_KEY_SQL('c.phone')} AS key
+         FROM contacts c
+         WHERE c.tenant_id = $1::uuid AND c.person_id = $2::uuid
+           AND c.deleted_at IS NULL AND c.phone IS NOT NULL
+       )
+       SELECT DISTINCT p.id::text AS id
+       FROM contacts c
+       JOIN persons p ON p.tenant_id = c.tenant_id AND p.id = c.person_id
+       JOIN mine ON mine.key = ${PHONE_KEY_SQL('c.phone')}
+       WHERE c.tenant_id = $1::uuid AND c.deleted_at IS NULL
+         AND c.phone IS NOT NULL AND p.deleted_at IS NULL
+         AND p.merged_into_id IS NULL AND p.id <> $2::uuid
+       ORDER BY id DESC LIMIT 10`,
+      tenantId,
+      personId,
+    );
+    return this.itemsByIds(
+      tenantId,
+      rows.map((r) => r.id),
+    );
+  }
+
+  /** Tenant-wide duplicate groups by phone key (at most 50, computed on read). */
+  async duplicateGroups(
+    tenantId: string,
+  ): Promise<Array<{ reason: 'PHONE'; persons: PersonItem[] }>> {
+    const rows = await this.prisma.$queryRawUnsafe<
+      Array<{ key: string; person_id: string }>
+    >(
+      `WITH k AS (
+         SELECT DISTINCT ${PHONE_KEY_SQL('c.phone')} AS key, c.person_id::text AS person_id
+         FROM contacts c
+         JOIN persons p ON p.tenant_id = c.tenant_id AND p.id = c.person_id
+         WHERE c.tenant_id = $1::uuid AND c.deleted_at IS NULL
+           AND c.phone IS NOT NULL AND p.deleted_at IS NULL
+           AND p.merged_into_id IS NULL
+       ), top AS (
+         SELECT key FROM k WHERE key IS NOT NULL
+         GROUP BY key HAVING count(*) > 1
+         ORDER BY max(person_id) DESC LIMIT 50
+       )
+       SELECT k.key, k.person_id FROM k JOIN top ON top.key = k.key`,
+      tenantId,
+    );
+    const groups = buildDuplicateGroups(
+      rows.map((r) => ({ key: r.key, personId: r.person_id })),
+    );
+    const items = await this.itemsByIds(tenantId, [...new Set(groups.flat())]);
+    const byId = new Map(items.map((i) => [i.id, i]));
+    return groups
+      .map((ids) => ({
+        reason: 'PHONE' as const,
+        persons: ids.flatMap((id) => byId.get(id) ?? []),
+      }))
+      .filter((g) => g.persons.length >= 2);
+  }
+
   /** null = not found (unknown, other tenant, merged, or all contacts erased). */
   async detail(tenantId: string, id: string): Promise<PersonDetail | null> {
     const person = await this.prisma.person.findFirst({
@@ -128,6 +226,7 @@ export class PeopleService {
     const item = assemblePersonItem(person, contacts, activity);
     return {
       ...item,
+      lastMerge: await this.lastMerge(tenantId, id),
       contacts: contacts.map((c) => ({
         id: c.id,
         channelType: c.channelType,
@@ -154,6 +253,47 @@ export class PeopleService {
         stageName: l.pipelineStage?.name ?? null,
         updatedAt: l.updatedAt.toISOString(),
       })),
+    };
+  }
+
+  /** The survivor's latest un-undone merge, only while it can be undone. */
+  private async lastMerge(
+    tenantId: string,
+    survivorId: string,
+  ): Promise<PersonDetail['lastMerge']> {
+    const merge = await this.prisma.personMerge.findFirst({
+      where: { tenantId, survivorId, undoneAt: null },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    if (!merge) return null;
+    const [survivor, mergedPerson, contacts] = await Promise.all([
+      this.prisma.person.findFirst({
+        where: { tenantId, id: survivorId },
+        select: { id: true, mergedIntoId: true, deletedAt: true },
+      }),
+      this.prisma.person.findFirst({
+        where: { tenantId, id: merge.mergedId },
+        select: { mergedIntoId: true },
+      }),
+      this.prisma.contact.findMany({
+        where: { tenantId, id: { in: merge.contactIds } },
+        select: { id: true, personId: true, deletedAt: true },
+      }),
+    ]);
+    if (
+      !survivor ||
+      !canUnmerge({
+        survivor,
+        merge: { mergedId: merge.mergedId, contactIds: merge.contactIds },
+        mergedPerson,
+        contacts,
+      })
+    )
+      return null;
+    return {
+      id: merge.id,
+      mergedAt: merge.createdAt.toISOString(),
+      contacts: merge.contactIds.length,
     };
   }
 

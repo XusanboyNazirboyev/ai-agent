@@ -36,6 +36,8 @@ export interface PersonItem {
 }
 
 export interface PersonDetail extends PersonItem {
+  /** Latest un-undone merge into this person, while it can be undone. */
+  lastMerge: { id: string; mergedAt: string; contacts: number } | null;
   contacts: Array<{
     id: string;
     channelType: string;

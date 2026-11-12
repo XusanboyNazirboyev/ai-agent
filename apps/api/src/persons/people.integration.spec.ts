@@ -19,6 +19,8 @@ import {
   SessionService,
 } from '../webinbox/session.service.js';
 import { PeopleService } from './people.service.js';
+import { PersonErasureService } from './person-erasure.service.js';
+import { PersonMergeService } from './person-merge.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
@@ -39,8 +41,13 @@ const sessions = new SessionService(prisma, {
 const guard = new SessionGuard(sessions, {
   get: () => ['http://localhost:3000'],
 } as never);
-const controller = new PeopleController(new PeopleService(prisma));
+const peopleService = new PeopleService(prisma);
 const erasure = new ContactErasureService(prisma);
+const controller = new PeopleController(
+  peopleService,
+  new PersonMergeService(prisma, peopleService),
+  new PersonErasureService(prisma, erasure),
+);
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
 
