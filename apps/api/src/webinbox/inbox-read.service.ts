@@ -276,6 +276,7 @@ export class InboxReadService {
         ? await this.prisma.conversation.findMany({
             where: {
               tenantId: principal.tenantId,
+              state: 'WAITING_OPERATOR',
               id: { in: page.map((candidate) => candidate.id) },
             },
             include: {
