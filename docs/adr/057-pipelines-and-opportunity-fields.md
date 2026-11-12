@@ -38,3 +38,16 @@ Migration touches two hot tables (constraint swap): run on staging only after a 
 1. Default currency per tenant (a tenant setting) or always ask per lead: recommendation: the amount field requires an explicit currency choice in S2, with a remembered last choice in the browser; a tenant default can follow with settings.
 2. Should `WON`/`LOST` move the lead to a closed stage automatically? Recommendation: not in this slice; the status already tells it, and automatic moves interact with Bitrix24 stage sync (P2.8).
 3. Is "Sales" the right default pipeline label? (shown through i18n, easy to change.)
+
+## S1 status (API, 2026-11-12, branch `feat/p1-3-pipelines`, not merged/pushed/deployed)
+Built as decided: migration `20261121090000_pipelines_and_opportunity` (expand, idempotent set-based backfill, switch, `pipelines` RLS last in the file, partial unique default index and an amount/currency CHECK as SQL), schema models `Pipeline`, `LeadStage.pipelineId`, `Lead.pipelineId`, composite FKs (stage must be in the lead's pipeline), opportunity columns; `ensureLeadStages` ensures the default pipeline and four coded stages; routes for pipelines, stage create/reorder/delete, stage move across pipelines (one update, audit `lead.pipeline.changed` with both pipelines), `PATCH /leads/:id/opportunity`, `lostReason` on the status route, owner cleared on deactivation (same transaction, audit `lead.owner_cleared`), list filters and additive fields (owners read in one batched query), `GET /leads/stages?pipelineId=`. Tests: unit (rules, grep test that nothing in `core/agent` reads lead money), integration (backfill re-run on the old shape inside a rolled-back transaction, CRUD and limits, FK at database level, validations, role matrix, RLS).
+
+Deviations and decisions made while building:
+- A second migration `20261121100000_leads_default_pipeline_on_demand` and a BEFORE INSERT trigger on `leads`: `pipeline_id` has a nil-UUID default in Prisma so existing code and tests that create leads without a pipeline keep working; the trigger fills it from the stage's pipeline or the tenant's default pipeline (created on demand).
+- `pipelines.name` is nullable (default pipeline unnamed); on make-default the old default gets the stored name `Sales`.
+- New pipelines are seeded with the four coded stages; only the coded stages of the *default* pipeline are protected (`STAGE_IS_DEFAULT`).
+- Stage delete: a stage that holds leads is refused with `STAGE_HAS_LEADS` (not archived); an empty stage is hard-deleted. `lead_stages.archived_at` exists and is filtered on, but nothing sets it yet.
+- The stage limit keeps the existing code `LEAD_STAGE_LIMIT` (web i18n exists); the limit is 20 active stages per pipeline.
+- `amount` and `currency` must be sent together (both set or both null); amount as a number is `INVALID_BODY`. Clearing `lostReason` while LOST is `INVALID_VALUE`. `closeBefore`/`closeAfter` are inclusive. `source` filter is case-insensitive.
+- Status route: `lostReason` is additive; `LOST` without it is 400 `LOST_REASON_REQUIRED`, a reason with another status is 400 `INVALID_BODY`.
+- Not tested: running the migration against a populated production-sized database (only the backfill statements on the old shape inside a transaction).
