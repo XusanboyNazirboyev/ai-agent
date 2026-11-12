@@ -44,7 +44,7 @@ export interface SpeechPolicyInput {
 const DIGIT = /\p{Nd}/u;
 const CURRENCY_SYMBOL = /[\p{Sc}%№]/u;
 const CURRENCY_WORD =
-  /(?:^|[^\p{L}])(?:usd|eur|uzs|rub|sum|so['’ʼ`]?m|som|dollar\w*|euro|ruble\w*|руб\w*|сум\w*|сўм|доллар\w*|евро|процент\w*|percent|tiyin|тийин|копе\w*)(?=$|[^\p{L}])/iu;
+  /(?:^|[^\p{L}])(?:usd|eur|uzs|rub|sum|so['’ʼ`]?m|som|dollar\p{L}*|euro|ruble\p{L}*|руб\p{L}*|сум\p{L}*|сўм|доллар\p{L}*|евро|процент\p{L}*|percent|tiyin|тийин|копе\p{L}*)(?=$|[^\p{L}])/iu;
 const URL_LIKE =
   /(?:https?:\/\/|www\.|\b[\p{L}\d-]+\.(?:com|org|net|io|uz|ru|me|app|dev)\b|t\.me\/)/iu;
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/u;
