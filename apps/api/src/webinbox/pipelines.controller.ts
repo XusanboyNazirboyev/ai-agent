@@ -36,9 +36,15 @@ const PatchBody = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     position: z.number().int().min(0).max(1000).optional(),
+    aiStaging: z.enum(['OFF', 'SUGGEST', 'AUTO']).optional(),
   })
   .strict()
-  .refine((body) => body.name !== undefined || body.position !== undefined);
+  .refine(
+    (body) =>
+      body.name !== undefined ||
+      body.position !== undefined ||
+      body.aiStaging !== undefined,
+  );
 const OrderBody = z
   .object({ stageIds: z.array(z.string().uuid()).max(100) })
   .strict();
@@ -49,6 +55,8 @@ export interface PipelineView {
   name: string | null;
   position: number;
   isDefault: boolean;
+  /** ADR 058: who may move leads along the funnel automatically. */
+  aiStaging: 'OFF' | 'SUGGEST' | 'AUTO';
   stageCount: number;
   leadCount: number;
 }
@@ -68,7 +76,13 @@ async function view(db: Db, tenantId: string): Promise<PipelineView[]> {
   const pipelines = await db.pipeline.findMany({
     where: { tenantId, archivedAt: null },
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, name: true, position: true, isDefault: true },
+    select: {
+      id: true,
+      name: true,
+      position: true,
+      isDefault: true,
+      aiStaging: true,
+    },
   });
   const [stages, leads] = await Promise.all([
     db.leadStage.groupBy({
@@ -129,6 +143,8 @@ export class PipelinesController {
           tenantId: who.tenantId,
           name: parsed.data.name,
           position: Math.max(...active.map((p) => p.position)) + 1,
+          // ADR 058: new pipelines start with AI staging on.
+          aiStaging: 'AUTO',
         },
         select: { id: true },
       });
@@ -154,6 +170,9 @@ export class PipelinesController {
           ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
           ...(parsed.data.position !== undefined
             ? { position: parsed.data.position }
+            : {}),
+          ...(parsed.data.aiStaging !== undefined
+            ? { aiStaging: parsed.data.aiStaging }
             : {}),
         },
       });

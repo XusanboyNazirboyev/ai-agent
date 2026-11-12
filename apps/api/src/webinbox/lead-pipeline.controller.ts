@@ -135,6 +135,10 @@ interface LeadPipelineItem {
   source: string | null;
   expectedCloseDate: string | null;
   lostReason: string | null;
+  /** ADR 058 (additive). */
+  stageSetBy: 'AGENT' | 'OPERATOR';
+  suggestedStageId: string | null;
+  suggestedReasonCodes: string[];
   score: string;
   status: string;
   summary: string;
@@ -596,6 +600,9 @@ export class LeadPipelineController {
         source: true,
         expectedCloseDate: true,
         lostReason: true,
+        stageSetBy: true,
+        suggestedStageId: true,
+        suggestedReasonCodes: true,
         score: true,
         status: true,
         summary: true,
@@ -711,6 +718,74 @@ export class LeadPipelineController {
         id: { not: stage.id },
       },
     });
+  }
+
+  /** Accepts the AI's stage suggestion: moves the lead as the operator (ADR 058). */
+  @Post(':id/stage-suggestion/accept')
+  async acceptSuggestion(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{
+    id: string;
+    pipelineStageId: string;
+    pipelineId: string;
+    status: string;
+  }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    return this.prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.findFirst({
+        where: { tenantId: who.tenantId, id: leadId },
+        select: { suggestedStageId: true, suggestedReasonCodes: true },
+      });
+      if (!lead) throw notFound();
+      if (!lead.suggestedStageId) throw notFound();
+      const moved = await moveLeadToStage(tx, {
+        tenantId: who.tenantId,
+        leadId,
+        stageId: lead.suggestedStageId,
+        actor: 'OPERATOR',
+        actorId: who.operatorId,
+        reasonCodes: lead.suggestedReasonCodes,
+      });
+      return {
+        id: moved.id,
+        pipelineStageId: moved.pipelineStageId,
+        pipelineId: moved.pipelineId,
+        status: moved.status,
+      };
+    });
+  }
+
+  @Post(':id/stage-suggestion/dismiss')
+  async dismissSuggestion(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{ id: string; suggestedStageId: null }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    const updated = await this.prisma.lead.updateMany({
+      where: { tenantId: who.tenantId, id: leadId },
+      data: { suggestedStageId: null, suggestedReasonCodes: [] },
+    });
+    if (updated.count === 0) throw notFound();
+    return { id: leadId, suggestedStageId: null };
+  }
+
+  /** "Let the AI sort this lead": lifts the operator lock (ADR 058 decision 4). */
+  @Post(':id/hand-back-to-ai')
+  async handBackToAi(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{ id: string; stageSetBy: 'AGENT' }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    const updated = await this.prisma.lead.updateMany({
+      where: { tenantId: who.tenantId, id: leadId },
+      data: { stageSetBy: 'AGENT' },
+    });
+    if (updated.count === 0) throw notFound();
+    return { id: leadId, stageSetBy: 'AGENT' };
   }
 
   private requireManager(request: InboxRequest): {
