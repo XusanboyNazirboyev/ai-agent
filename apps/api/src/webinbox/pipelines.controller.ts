@@ -59,6 +59,7 @@ interface StageView {
   name: string | null;
   position: number;
   pipelineId: string;
+  kind: 'OPEN' | 'WON' | 'LOST';
 }
 
 type Db = Pick<PrismaService, 'pipeline' | 'leadStage' | 'lead'>;
@@ -288,6 +289,7 @@ export class PipelinesController {
           name: true,
           position: true,
           pipelineId: true,
+          kind: true,
         },
       });
     });

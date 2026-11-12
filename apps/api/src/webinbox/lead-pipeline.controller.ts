@@ -71,10 +71,17 @@ const ListQuery = z.object({
   fieldKey: z.string().max(64).optional(),
   fieldValue: z.string().max(600).optional(),
 });
-const StageBody = z.object({ name: z.string().trim().min(1).max(80) });
+const StageKind = z.enum(['OPEN', 'WON', 'LOST']);
+const StageBody = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    kind: StageKind.optional(),
+  })
+  .refine((body) => body.name !== undefined || body.kind !== undefined);
 const CreateStageBody = z.object({
   name: z.string().trim().min(1).max(80),
   pipelineId: z.string().uuid().optional(),
+  kind: StageKind.optional(),
 });
 const StagesQuery = z.object({ pipelineId: z.string().uuid().optional() });
 const MoveBody = z.object({
@@ -88,6 +95,7 @@ const STAGE_SELECT = {
   name: true,
   position: true,
   pipelineId: true,
+  kind: true,
 } as const;
 
 interface LeadStageView {
@@ -97,6 +105,8 @@ interface LeadStageView {
   position: number;
   /** ADR 057 (additive). */
   pipelineId: string;
+  /** ADR 058 (additive): OPEN stages are the funnel, WON/LOST are closed. */
+  kind: 'OPEN' | 'WON' | 'LOST';
 }
 
 export interface OpportunityView {
@@ -341,6 +351,7 @@ export class LeadPipelineController {
           tenantId: who.tenantId,
           pipelineId,
           name: parsed.data.name,
+          kind: parsed.data.kind ?? 'OPEN',
           position: (last?.position ?? -1) + 1,
         },
         select: STAGE_SELECT,
@@ -373,14 +384,44 @@ export class LeadPipelineController {
     const parsed = StageBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "tenants" WHERE "id" = ${who.tenantId}::uuid FOR UPDATE`;
       const stage = await tx.leadStage.findFirst({
         where: { tenantId: who.tenantId, id: stageId },
-        select: { id: true, code: true, position: true },
+        select: {
+          id: true,
+          code: true,
+          position: true,
+          kind: true,
+          pipelineId: true,
+        },
       });
       if (!stage) throw notFound();
+      const { name, kind } = parsed.data;
+      if (kind !== undefined && kind !== stage.kind) {
+        const leads = await tx.lead.count({
+          where: { tenantId: who.tenantId, pipelineStageId: stage.id },
+        });
+        if (leads > 0)
+          throw conflict(
+            'STAGE_HAS_LEADS',
+            'Move the leads out of this stage first',
+            { leadCount: leads },
+          );
+        if (
+          stage.kind === 'OPEN' &&
+          (await this.otherOpen(tx, who.tenantId, stage)) === 0
+        )
+          throw conflict(
+            'STAGE_LAST_OPEN',
+            'A pipeline needs at least one open stage',
+          );
+      }
       const updated = await tx.leadStage.update({
         where: { tenantId_id: { tenantId: who.tenantId, id: stageId } },
-        data: { name: parsed.data.name },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(kind !== undefined ? { kind } : {}),
+        },
         select: STAGE_SELECT,
       });
       await tx.auditEvent.create({
@@ -388,10 +429,14 @@ export class LeadPipelineController {
           tenantId: who.tenantId,
           actorType: 'OPERATOR',
           actorId: who.operatorId,
-          action: 'lead.stage.renamed',
+          action:
+            kind !== undefined ? 'lead.stage.updated' : 'lead.stage.renamed',
           entityType: 'lead_stage',
           entityId: stage.id,
-          safeInputSummary: { code: stage.code ?? 'CUSTOM' },
+          safeInputSummary: {
+            code: stage.code ?? 'CUSTOM',
+            ...(kind !== undefined ? { kind } : {}),
+          },
         },
       });
       return updated;
@@ -416,6 +461,8 @@ export class LeadPipelineController {
         select: {
           id: true,
           code: true,
+          kind: true,
+          position: true,
           pipelineId: true,
           pipeline: { select: { isDefault: true } },
         },
@@ -432,6 +479,19 @@ export class LeadPipelineController {
           'Move the leads out of this stage first',
           { leadCount: leads },
         );
+      if (
+        stage.kind === 'OPEN' &&
+        (await this.otherOpen(tx, who.tenantId, stage)) === 0
+      )
+        throw conflict(
+          'STAGE_LAST_OPEN',
+          'A pipeline needs at least one open stage',
+        );
+      // A pending AI suggestion of this stage is dropped with it.
+      await tx.lead.updateMany({
+        where: { tenantId: who.tenantId, suggestedStageId: stage.id },
+        data: { suggestedStageId: null, suggestedReasonCodes: [] },
+      });
       await tx.leadStage.deleteMany({
         where: { tenantId: who.tenantId, id: stage.id },
       });
@@ -633,6 +693,23 @@ export class LeadPipelineController {
         pipelineId: moved.pipelineId,
         status: moved.status,
       };
+    });
+  }
+
+  /** Number of other active OPEN stages in the stage's pipeline. */
+  private otherOpen(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    stage: { id: string; pipelineId: string },
+  ): Promise<number> {
+    return tx.leadStage.count({
+      where: {
+        tenantId,
+        pipelineId: stage.pipelineId,
+        kind: 'OPEN',
+        archivedAt: null,
+        id: { not: stage.id },
+      },
     });
   }
 
