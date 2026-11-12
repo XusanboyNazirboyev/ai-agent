@@ -10,7 +10,7 @@ export interface PersonContactRow {
   name: string | null;
   phone: string | null;
   language: string | null;
-  consentStatus: "UNKNOWN" | "GRANTED" | "REVOKED";
+  consentStatus: 'UNKNOWN' | 'GRANTED' | 'REVOKED';
   marketingOptOut: boolean;
   createdAt: Date;
 }
@@ -42,7 +42,7 @@ export interface PersonDetail extends PersonItem {
   customFields: Array<{
     key: string;
     label: string;
-    type: "TEXT" | "NUMBER" | "DATE" | "BOOLEAN" | "SELECT";
+    type: 'TEXT' | 'NUMBER' | 'DATE' | 'BOOLEAN' | 'SELECT';
     value: string | number | boolean | null;
   }>;
   /** Latest un-undone merge into this person, while it can be undone. */
@@ -54,7 +54,7 @@ export interface PersonDetail extends PersonItem {
     name: string | null;
     phone: string | null;
     language: string | null;
-    consentStatus: "UNKNOWN" | "GRANTED" | "REVOKED";
+    consentStatus: 'UNKNOWN' | 'GRANTED' | 'REVOKED';
     marketingOptOut: boolean;
     createdAt: string;
   }>;
@@ -62,14 +62,14 @@ export interface PersonDetail extends PersonItem {
     id: string;
     contactId: string;
     channelType: string;
-    state: "BOT_ACTIVE" | "WAITING_OPERATOR" | "OPERATOR_ACTIVE" | "CLOSED";
+    state: 'BOT_ACTIVE' | 'WAITING_OPERATOR' | 'OPERATOR_ACTIVE' | 'CLOSED';
     updatedAt: string;
   }>;
   leads: Array<{
     id: string;
     contactId: string;
-    status: "NEW" | "IN_PROGRESS" | "WON" | "LOST";
-    score: "HOT" | "WARM" | "COLD";
+    status: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
+    score: 'HOT' | 'WARM' | 'COLD';
     stageName: string | null;
     updatedAt: string;
   }>;
@@ -94,7 +94,7 @@ export function assemblePersonItem(
   person: { id: string; displayName: string | null; createdAt: Date },
   contactsInput: PersonContactRow[],
   activity: ReadonlyMap<string, ContactActivity>,
-  tags: PersonItem["tags"] = [],
+  tags: PersonItem['tags'] = [],
 ): PersonItem {
   const contacts = sortContactsOldestFirst(contactsInput);
   let conversationCount = 0;

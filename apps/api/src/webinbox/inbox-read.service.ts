@@ -1,15 +1,15 @@
-import { Injectable } from "@nestjs/common";
-import type { Prisma } from "../generated/prisma/client.js";
-import { PrismaService } from "../persistence/prisma.service.js";
-import { describeFields } from "../tags/custom-field-values.js";
+import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../persistence/prisma.service.js';
+import { describeFields } from '../tags/custom-field-values.js';
 import {
   activeFieldDefs,
   tagsOfLeads,
   type TagView,
-} from "../tags/tag-reads.js";
-import type { InboxPrincipal } from "./session.service.js";
+} from '../tags/tag-reads.js';
+import type { InboxPrincipal } from './session.service.js';
 
-export type InboxScope = "waiting" | "mine" | "all" | "closed";
+export type InboxScope = 'waiting' | 'mine' | 'all' | 'closed';
 
 export interface ConversationListItem {
   readonly id: string;
@@ -112,15 +112,15 @@ interface Cursor {
 }
 
 function encode(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+  return Buffer.from(JSON.stringify(cursor)).toString('base64url');
 }
 
 function decode(value: string | undefined): Cursor | undefined {
   if (!value || value.length > 300) return undefined;
   try {
-    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
-    return typeof parsed.t === "string" &&
-      typeof parsed.id === "string" &&
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    return typeof parsed.t === 'string' &&
+      typeof parsed.id === 'string' &&
       !Number.isNaN(Date.parse(parsed.t))
       ? { t: parsed.t, id: parsed.id }
       : undefined;
@@ -142,22 +142,22 @@ export class InboxReadService {
       limit?: number;
       q?: string;
       language?: string;
-      leadScore?: "HOT" | "WARM" | "COLD";
-      leadStatus?: "NEW" | "IN_PROGRESS" | "WON" | "LOST";
+      leadScore?: 'HOT' | 'WARM' | 'COLD';
+      leadStatus?: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
     },
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), MAX_PAGE);
     const cursor = decode(options.cursor);
     const where: Prisma.ConversationWhereInput = {
       tenantId: principal.tenantId,
-      ...(options.scope === "waiting" ? { state: "WAITING_OPERATOR" } : {}),
-      ...(options.scope === "mine"
+      ...(options.scope === 'waiting' ? { state: 'WAITING_OPERATOR' } : {}),
+      ...(options.scope === 'mine'
         ? {
-            state: "OPERATOR_ACTIVE",
+            state: 'OPERATOR_ACTIVE',
             assignedOperatorId: principal.operatorId,
           }
         : {}),
-      ...(options.scope === "closed" ? { state: "CLOSED" } : {}),
+      ...(options.scope === 'closed' ? { state: 'CLOSED' } : {}),
       ...(options.language ? { language: options.language } : {}),
       ...(options.leadScore || options.leadStatus
         ? {
@@ -176,7 +176,7 @@ export class InboxReadService {
                 contact: {
                   name: {
                     contains: options.q.slice(0, 80),
-                    mode: "insensitive",
+                    mode: 'insensitive',
                   },
                 },
               },
@@ -187,7 +187,7 @@ export class InboxReadService {
                     tenantId: principal.tenantId,
                     text: {
                       contains: options.q.slice(0, 80),
-                      mode: "insensitive",
+                      mode: 'insensitive',
                     },
                   },
                 },
@@ -210,18 +210,18 @@ export class InboxReadService {
     };
     const rows = await this.prisma.conversation.findMany({
       where,
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
       include: {
         contact: { select: { name: true } },
         leads: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: 'desc' },
           take: 1,
           select: { score: true, status: true, scoreSetByOperator: true },
         },
         handovers: {
-          where: { status: { in: ["OPEN", "TAKEN"] } },
-          orderBy: { openedAt: "asc" },
+          where: { status: { in: ['OPEN', 'TAKEN'] } },
+          orderBy: { openedAt: 'asc' },
           take: 1,
           select: { openedAt: true, slaDueAt: true },
         },
@@ -242,7 +242,7 @@ export class InboxReadService {
       updatedAt: row.updatedAt.toISOString(),
     }));
     // The default "waiting" view shows the longest wait first.
-    if (options.scope === "waiting")
+    if (options.scope === 'waiting')
       items.sort((a, b) =>
         (a.waitingSince ?? a.updatedAt).localeCompare(
           b.waitingSince ?? b.updatedAt,
@@ -270,7 +270,7 @@ export class InboxReadService {
           select: { name: true, phone: true, language: true, script: true },
         },
         handovers: {
-          orderBy: { openedAt: "desc" },
+          orderBy: { openedAt: 'desc' },
           take: 1,
           select: {
             id: true,
@@ -283,7 +283,7 @@ export class InboxReadService {
           },
         },
         leads: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { createdAt: 'desc' },
           take: 1,
           select: {
             id: true,
@@ -302,14 +302,14 @@ export class InboxReadService {
     const [leadTags, leadDefs] = lead
       ? await Promise.all([
           tagsOfLeads(this.prisma, principal.tenantId, [lead.id]),
-          activeFieldDefs(this.prisma, principal.tenantId, "LEAD"),
+          activeFieldDefs(this.prisma, principal.tenantId, 'LEAD'),
         ])
       : [new Map<string, TagView[]>(), []];
     const [messages, notes, shownOffers, quotes, slots, actions] =
       await Promise.all([
         this.prisma.message.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { sequence: "asc" },
+          orderBy: { sequence: 'asc' },
           take: 500,
           select: {
             id: true,
@@ -324,13 +324,13 @@ export class InboxReadService {
         }),
         this.prisma.internalNote.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
           take: 200,
           select: { id: true, operatorId: true, text: true, createdAt: true },
         }),
         this.prisma.shownOffer.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { shownAt: "asc" },
+          orderBy: { shownAt: 'asc' },
           take: 100,
           select: {
             id: true,
@@ -342,7 +342,7 @@ export class InboxReadService {
         }),
         this.prisma.quote.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
           take: 100,
           select: {
             id: true,
@@ -354,12 +354,12 @@ export class InboxReadService {
         }),
         this.prisma.conversationSlots.findFirst({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { version: "desc" },
+          orderBy: { version: 'desc' },
           select: { slots: true },
         }),
         this.prisma.actionProposal.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { createdAt: "asc" },
+          orderBy: { createdAt: 'asc' },
           take: 50,
           select: {
             id: true,
@@ -402,7 +402,7 @@ export class InboxReadService {
       // Customer values are shown only while a person must check the outcome.
       actions: actions.map((row) => ({
         ...row,
-        payload: row.status === "UNCERTAIN" ? row.payload : null,
+        payload: row.status === 'UNCERTAIN' ? row.payload : null,
       })),
     };
   }
