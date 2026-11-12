@@ -59,9 +59,11 @@ export async function setOperatorLeadStatus(
   tenantId: string,
   lead: { id: string },
   status: OperatorLeadStatus,
+  lostReason: string | null = null,
 ): Promise<void> {
+  // ADR 057: LOST carries its reason; leaving LOST clears it.
   await tx.lead.updateMany({
     where: { tenantId, id: lead.id },
-    data: { status },
+    data: { status, lostReason: status === 'LOST' ? lostReason : null },
   });
 }

@@ -18,13 +18,22 @@ import {
   setOperatorLeadStatus,
 } from '../leads/lead-operator.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { lostReasonRequired } from '../pipelines/pipeline-errors.js';
+import {
+  checkLostReason,
+  MAX_LOST_REASON,
+} from '../pipelines/pipeline-rules.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 
 const ScoreBody = z
   .object({ score: z.enum(['HOT', 'WARM', 'COLD']).nullable() })
   .strict();
 const StatusBody = z
-  .object({ status: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']) })
+  .object({
+    status: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']),
+    /** Required with LOST, refused with any other status (ADR 057). */
+    lostReason: z.string().trim().max(MAX_LOST_REASON).nullable().optional(),
+  })
   .strict();
 const OPERATING = new Set(['OWNER', 'ADMIN', 'OPERATOR']);
 
@@ -70,6 +79,10 @@ export class LeadsController {
     const parsed = StatusBody.safeParse(body);
     if (!parsed.success) throw invalid();
     const status = parsed.data.status;
+    const lostReason = parsed.data.lostReason || null;
+    const violation = checkLostReason(status, lostReason);
+    if (violation === 'REQUIRED') throw lostReasonRequired();
+    if (violation === 'NOT_ALLOWED') throw invalid();
     await this.change(
       request,
       conversationId,
@@ -78,7 +91,7 @@ export class LeadsController {
         leadStatus: status,
       },
       async (tx, tenantId, lead) =>
-        setOperatorLeadStatus(tx, tenantId, lead, status),
+        setOperatorLeadStatus(tx, tenantId, lead, status, lostReason),
     );
     return { status };
   }

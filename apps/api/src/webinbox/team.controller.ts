@@ -247,11 +247,20 @@ export class TeamController {
             : {}),
         },
       });
-      if (change.isActive === false)
+      let clearedLeadOwners = 0;
+      if (change.isActive === false) {
         await tx.operatorSession.updateMany({
           where: { tenantId: actor.tenantId, operatorId: id, revokedAt: null },
           data: { revokedAt: now },
         });
+        // ADR 057: a deactivated operator no longer owns leads.
+        clearedLeadOwners = (
+          await tx.lead.updateMany({
+            where: { tenantId: actor.tenantId, ownerOperatorId: id },
+            data: { ownerOperatorId: null },
+          })
+        ).count;
+      }
       await tx.auditEvent.create({
         data: {
           tenantId: actor.tenantId,
@@ -268,6 +277,18 @@ export class TeamController {
           },
         },
       });
+      if (clearedLeadOwners > 0)
+        await tx.auditEvent.create({
+          data: {
+            tenantId: actor.tenantId,
+            actorType: 'OPERATOR',
+            actorId: actor.operatorId,
+            action: 'lead.owner_cleared',
+            entityType: 'operator',
+            entityId: id,
+            safeInputSummary: { leads: String(clearedLeadOwners) },
+          },
+        });
       return 'OK' as const;
     });
     if (result === 'NOT_FOUND')

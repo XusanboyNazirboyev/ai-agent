@@ -641,8 +641,12 @@ describe('leads', () => {
       preferredTime: 'evening',
     });
     expect(warm).toMatchObject({ level: 'WARM', created: true });
-    const newStage = await db.leadStage.findUniqueOrThrow({
-      where: { tenantId_code: { tenantId: w.tenantId, code: 'NEW' } },
+    const newStage = await db.leadStage.findFirstOrThrow({
+      where: {
+        tenantId: w.tenantId,
+        code: 'NEW',
+        pipeline: { isDefault: true, archivedAt: null },
+      },
       select: { id: true },
     });
     expect(
