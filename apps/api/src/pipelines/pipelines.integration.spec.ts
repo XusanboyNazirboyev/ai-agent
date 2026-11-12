@@ -218,10 +218,14 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
       ),
       'utf8',
     );
-    const statements = [
-      ...sql.matchAll(/-- BACKFILL-\d[^\n]*\n([\s\S]*?;)\n/g),
-    ];
-    expect(statements.length).toBeGreaterThanOrEqual(3);
+    // The idempotent backfill statements: every INSERT/UPDATE after the
+    // first BACKFILL marker (comments and DDL are left out).
+    const statements = sql
+      .slice(sql.indexOf('-- BACKFILL-1'))
+      .split(';\n')
+      .map((chunk) => chunk.replace(/^(\s*--[^\n]*\n)+/g, '').trim())
+      .filter((chunk) => /^(INSERT|UPDATE)\b/.test(chunk));
+    expect(statements).toHaveLength(4);
     const rolledBack = new Error('rollback');
     let counts: unknown;
     await db
@@ -243,8 +247,7 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
           `DELETE FROM "pipelines" WHERE "tenant_id" = '${a.tenantId}'`,
         );
         for (let run = 0; run < 2; run++)
-          for (const match of statements)
-            await tx.$executeRawUnsafe(match[1]!.replace(/\n--[^\n]*/g, ''));
+          for (const match of statements) await tx.$executeRawUnsafe(match);
         const pipes = await tx.pipeline.findMany({
           where: { tenantId: a.tenantId },
         });
@@ -661,7 +664,7 @@ describe('opportunity fields', () => {
     const cases: Array<[Record<string, unknown>, string]> = [
       [{ amount: '5' }, 'INVALID_VALUE'],
       [{ currency: 'USD' }, 'INVALID_VALUE'],
-      [{ amount: 5, currency: 'USD' }, 'INVALID_VALUE'],
+      [{ amount: 5, currency: 'USD' }, 'INVALID_BODY'],
       [{ amount: '1.234', currency: 'USD' }, 'INVALID_VALUE'],
       [{ amount: '5', currency: 'ZZZ' }, 'INVALID_VALUE'],
       [{ expectedCloseDate: '2026-02-30' }, 'INVALID_VALUE'],
@@ -673,10 +676,7 @@ describe('opportunity fields', () => {
     ];
     for (const [body, code] of cases)
       expect(
-        {
-          body,
-          ...(await fail(leadsApi.opportunity(w.as.OWNER, lead.id, body))),
-        }.code,
+        (await fail(leadsApi.opportunity(w.as.OWNER, lead.id, body))).code,
       ).toBe(code);
     const inactive = await db.operator.create({
       data: {
