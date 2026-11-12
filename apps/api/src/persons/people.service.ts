@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import { Injectable } from "@nestjs/common";
+import type { Prisma } from "../generated/prisma/client.js";
+import { PrismaService } from "../persistence/prisma.service.js";
+import { describeFields } from "../tags/custom-field-values.js";
+import type { FieldFilter } from "../tags/field-filter.js";
+import { activeFieldDefs, tagsOfPersons } from "../tags/tag-reads.js";
 import {
   assemblePersonItem,
   sortContactsOldestFirst,
@@ -8,12 +11,12 @@ import {
   type PersonContactRow,
   type PersonDetail,
   type PersonItem,
-} from './person-view.js';
+} from "./person-view.js";
 import {
   PHONE_KEY_SQL,
   buildDuplicateGroups,
   canUnmerge,
-} from './person-merge.js';
+} from "./person-merge.js";
 
 const DETAIL_CAP = 20;
 
@@ -38,23 +41,33 @@ export class PeopleService {
 
   async list(
     tenantId: string,
-    params: { q?: string; cursor?: string; limit: number },
+    params: {
+      q?: string;
+      cursor?: string;
+      limit: number;
+      tagId?: string;
+      field?: FieldFilter;
+    },
   ): Promise<{ items: PersonItem[]; nextCursor: string | null }> {
-    const { q, cursor, limit } = params;
+    const { q, cursor, limit, tagId, field } = params;
     const rows = await this.prisma.person.findMany({
       where: {
         ...visiblePerson(tenantId),
         ...(cursor ? { id: { lt: cursor } } : {}),
+        ...(tagId ? { tags: { some: { tenantId, tagId } } } : {}),
+        ...(field
+          ? { customFields: { path: [field.key], equals: field.value } }
+          : {}),
         ...(q
           ? {
               OR: [
-                { displayName: { contains: q, mode: 'insensitive' } },
+                { displayName: { contains: q, mode: "insensitive" } },
                 {
                   contacts: {
                     some: {
                       deletedAt: null,
                       OR: [
-                        { name: { contains: q, mode: 'insensitive' } },
+                        { name: { contains: q, mode: "insensitive" } },
                         { phone: { contains: q } },
                       ],
                     },
@@ -65,7 +78,7 @@ export class PeopleService {
           : {}),
       },
       // Ids are time-ordered (uuid v7): newest first and a stable keyset.
-      orderBy: { id: 'desc' },
+      orderBy: { id: "desc" },
       take: limit + 1,
       select: {
         id: true,
@@ -79,10 +92,22 @@ export class PeopleService {
     });
     const page = rows.slice(0, limit);
     const contactIds = page.flatMap((p) => p.contacts.map((c) => c.id));
-    const activity = await this.activity(tenantId, contactIds);
+    const [activity, tags] = await Promise.all([
+      this.activity(tenantId, contactIds),
+      tagsOfPersons(
+        this.prisma,
+        tenantId,
+        page.map((p) => p.id),
+      ),
+    ]);
     return {
       items: page.map((p) =>
-        assemblePersonItem(p, p.contacts.map(toContactRow), activity),
+        assemblePersonItem(
+          p,
+          p.contacts.map(toContactRow),
+          activity,
+          tags.get(p.id),
+        ),
       ),
       nextCursor: rows.length > limit ? page[page.length - 1].id : null,
     };
@@ -100,14 +125,26 @@ export class PeopleService {
         contacts: { where: { deletedAt: null }, select: contactSelect },
       },
     });
-    const activity = await this.activity(
-      tenantId,
-      rows.flatMap((p) => p.contacts.map((c) => c.id)),
-    );
+    const [activity, tags] = await Promise.all([
+      this.activity(
+        tenantId,
+        rows.flatMap((p) => p.contacts.map((c) => c.id)),
+      ),
+      tagsOfPersons(
+        this.prisma,
+        tenantId,
+        rows.map((p) => p.id),
+      ),
+    ]);
     const byId = new Map(
       rows.map((p) => [
         p.id,
-        assemblePersonItem(p, p.contacts.map(toContactRow), activity),
+        assemblePersonItem(
+          p,
+          p.contacts.map(toContactRow),
+          activity,
+          tags.get(p.id),
+        ),
       ]),
     );
     return ids.flatMap((id) => byId.get(id) ?? []);
@@ -124,7 +161,7 @@ export class PeopleService {
     if (visible === 0) return null;
     const rows = await this.prisma.$queryRawUnsafe<Array<{ id: string }>>(
       `WITH mine AS (
-         SELECT DISTINCT ${PHONE_KEY_SQL('c.phone')} AS key
+         SELECT DISTINCT ${PHONE_KEY_SQL("c.phone")} AS key
          FROM contacts c
          WHERE c.tenant_id = $1::uuid AND c.person_id = $2::uuid
            AND c.deleted_at IS NULL AND c.phone IS NOT NULL
@@ -132,7 +169,7 @@ export class PeopleService {
        SELECT DISTINCT p.id::text AS id
        FROM contacts c
        JOIN persons p ON p.tenant_id = c.tenant_id AND p.id = c.person_id
-       JOIN mine ON mine.key = ${PHONE_KEY_SQL('c.phone')}
+       JOIN mine ON mine.key = ${PHONE_KEY_SQL("c.phone")}
        WHERE c.tenant_id = $1::uuid AND c.deleted_at IS NULL
          AND c.phone IS NOT NULL AND p.deleted_at IS NULL
          AND p.merged_into_id IS NULL AND p.id <> $2::uuid
@@ -149,12 +186,12 @@ export class PeopleService {
   /** Tenant-wide duplicate groups by phone key (at most 50, computed on read). */
   async duplicateGroups(
     tenantId: string,
-  ): Promise<Array<{ reason: 'PHONE'; persons: PersonItem[] }>> {
+  ): Promise<Array<{ reason: "PHONE"; persons: PersonItem[] }>> {
     const rows = await this.prisma.$queryRawUnsafe<
       Array<{ key: string; person_id: string }>
     >(
       `WITH k AS (
-         SELECT DISTINCT ${PHONE_KEY_SQL('c.phone')} AS key, c.person_id::text AS person_id
+         SELECT DISTINCT ${PHONE_KEY_SQL("c.phone")} AS key, c.person_id::text AS person_id
          FROM contacts c
          JOIN persons p ON p.tenant_id = c.tenant_id AND p.id = c.person_id
          WHERE c.tenant_id = $1::uuid AND c.deleted_at IS NULL
@@ -175,7 +212,7 @@ export class PeopleService {
     const byId = new Map(items.map((i) => [i.id, i]));
     return groups
       .map((ids) => ({
-        reason: 'PHONE' as const,
+        reason: "PHONE" as const,
         persons: ids.flatMap((id) => byId.get(id) ?? []),
       }))
       .filter((g) => g.persons.length >= 2);
@@ -189,17 +226,18 @@ export class PeopleService {
         id: true,
         displayName: true,
         createdAt: true,
+        customFields: true,
         contacts: { where: { deletedAt: null }, select: contactSelect },
       },
     });
     if (!person) return null;
     const contacts = sortContactsOldestFirst(person.contacts.map(toContactRow));
     const contactIds = contacts.map((c) => c.id);
-    const [activity, conversations, leads] = await Promise.all([
+    const [activity, conversations, leads, tags, defs] = await Promise.all([
       this.activity(tenantId, contactIds),
       this.prisma.conversation.findMany({
         where: { tenantId, contactId: { in: contactIds } },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         take: DETAIL_CAP,
         select: {
           id: true,
@@ -211,7 +249,7 @@ export class PeopleService {
       }),
       this.prisma.lead.findMany({
         where: { tenantId, contactId: { in: contactIds } },
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         take: DETAIL_CAP,
         select: {
           id: true,
@@ -222,10 +260,13 @@ export class PeopleService {
           pipelineStage: { select: { name: true } },
         },
       }),
+      tagsOfPersons(this.prisma, tenantId, [id]),
+      activeFieldDefs(this.prisma, tenantId, "PERSON"),
     ]);
-    const item = assemblePersonItem(person, contacts, activity);
+    const item = assemblePersonItem(person, contacts, activity, tags.get(id));
     return {
       ...item,
+      customFields: describeFields(defs, person.customFields),
       lastMerge: await this.lastMerge(tenantId, id),
       contacts: contacts.map((c) => ({
         id: c.id,
@@ -260,10 +301,10 @@ export class PeopleService {
   private async lastMerge(
     tenantId: string,
     survivorId: string,
-  ): Promise<PersonDetail['lastMerge']> {
+  ): Promise<PersonDetail["lastMerge"]> {
     const merge = await this.prisma.personMerge.findFirst({
       where: { tenantId, survivorId, undoneAt: null },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
     if (!merge) return null;
     const [survivor, mergedPerson, contacts] = await Promise.all([
@@ -306,13 +347,13 @@ export class PeopleService {
     if (contactIds.length === 0) return result;
     const [conversations, leads] = await Promise.all([
       this.prisma.conversation.groupBy({
-        by: ['contactId'],
+        by: ["contactId"],
         where: { tenantId, contactId: { in: contactIds } },
         _count: { _all: true },
         _max: { updatedAt: true },
       }),
       this.prisma.lead.groupBy({
-        by: ['contactId'],
+        by: ["contactId"],
         where: { tenantId, contactId: { in: contactIds } },
         _count: { _all: true },
       }),
@@ -327,7 +368,7 @@ export class PeopleService {
               updatedAt: g._max.updatedAt as Date,
             })),
           },
-          orderBy: { id: 'desc' },
+          orderBy: { id: "desc" },
           select: { id: true, contactId: true, updatedAt: true },
         })
       : [];
@@ -369,7 +410,7 @@ function toContactRow(c: {
   name: string | null;
   phone: string | null;
   language: string | null;
-  consentStatus: 'UNKNOWN' | 'GRANTED' | 'REVOKED';
+  consentStatus: "UNKNOWN" | "GRANTED" | "REVOKED";
   marketingOptOut: boolean;
   createdAt: Date;
   channelAccount: { channelType: string; displayName: string | null };

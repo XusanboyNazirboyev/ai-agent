@@ -1,50 +1,52 @@
-import { config as loadEnv } from 'dotenv';
-import { randomBytes, randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
-import type { ExecutionContext } from '@nestjs/common';
-import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
-import type { PrismaService } from '../persistence/prisma.service.js';
-import { HandoverService } from '../handover/handover.service.js';
-import { OperatorCommandsController } from '../handover/operator-commands.controller.js';
-import { OperatorTokenGuard } from '../handover/operator-auth.js';
-import { OperatorRequestGuard } from '../handover/operator-request-guard.js';
-import { EventEmitter } from 'node:events';
-import { AuthController } from './auth.controller.js';
-import { ChannelsController } from './channels.controller.js';
-import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
-import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
-import { ContactsController } from './contacts.controller.js';
-import { LeadPipelineController } from './lead-pipeline.controller.js';
-import { KnowledgeDocumentsController } from './knowledge-documents.controller.js';
-import { KnowledgeFaqController } from './knowledge-faq.controller.js';
-import { KnowledgeService } from '../knowledge/knowledge.service.js';
-import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
-import { EventsController, openStreams } from './events.controller.js';
-import { InboxEventBus, type BusEvent } from './inbox-event-bus.js';
-import { InboxEventsService, parseEventId } from './inbox-events.service.js';
-import { InboxReadService } from './inbox-read.service.js';
-import { LeadsController } from './leads.controller.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { CustomFieldsService } from "../tags/custom-fields.service.js";
+import { TagsService } from "../tags/tags.service.js";
+import { config as loadEnv } from "dotenv";
+import { randomBytes, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
+import type { ExecutionContext } from "@nestjs/common";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { PrismaClient } from "../generated/prisma/client.js";
+import { createPostgresAdapter } from "../persistence/postgres-adapter.js";
+import type { PrismaService } from "../persistence/prisma.service.js";
+import { HandoverService } from "../handover/handover.service.js";
+import { OperatorCommandsController } from "../handover/operator-commands.controller.js";
+import { OperatorTokenGuard } from "../handover/operator-auth.js";
+import { OperatorRequestGuard } from "../handover/operator-request-guard.js";
+import { EventEmitter } from "node:events";
+import { AuthController } from "./auth.controller.js";
+import { ChannelsController } from "./channels.controller.js";
+import { PrismaChannelSecretStore } from "../secrets/channel-secret-store.js";
+import { createKeyring, SecretCipher } from "../secrets/secret-cipher.js";
+import { ContactsController } from "./contacts.controller.js";
+import { LeadPipelineController } from "./lead-pipeline.controller.js";
+import { KnowledgeDocumentsController } from "./knowledge-documents.controller.js";
+import { KnowledgeFaqController } from "./knowledge-faq.controller.js";
+import { KnowledgeService } from "../knowledge/knowledge.service.js";
+import { HashingEmbeddingProvider } from "../llm/embeddings/hashing-embedding-provider.js";
+import { EventsController, openStreams } from "./events.controller.js";
+import { InboxEventBus, type BusEvent } from "./inbox-event-bus.js";
+import { InboxEventsService, parseEventId } from "./inbox-events.service.js";
+import { InboxReadService } from "./inbox-read.service.js";
+import { LeadsController } from "./leads.controller.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import {
   CSRF_HEADER,
   SESSION_COOKIE,
   SessionGuard,
   type InboxRequest,
-} from './session.guard.js';
+} from "./session.guard.js";
 import {
   DEFAULT_SESSION_POLICY,
   SessionService,
   type InboxPrincipal,
-} from './session.service.js';
+} from "./session.service.js";
 
-loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
-if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
-  throw new Error('Web inbox integration tests require agentcore_test');
+loadEnv({ path: resolve(process.cwd(), "../../.env"), quiet: true });
+if (process.env.TEST_POSTGRES_DATABASE !== "agentcore_test") {
+  throw new Error("Web inbox integration tests require agentcore_test");
 }
 const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+  adapter: createPostgresAdapter(process.env, "TEST_"),
 });
 const prisma = db as unknown as PrismaService;
 afterAll(async () => {
@@ -64,7 +66,7 @@ const sessions = new SessionService(prisma, policy);
 const events = new InboxEventsService(prisma);
 const read = new InboxReadService(prisma);
 const guard = new SessionGuard(sessions, {
-  get: () => ['http://localhost:3000'],
+  get: () => ["http://localhost:3000"],
 } as never);
 
 interface World {
@@ -77,26 +79,26 @@ interface World {
 }
 
 async function world(
-  role: 'OPERATOR' | 'VIEWER' | 'ADMIN' = 'OPERATOR',
+  role: "OPERATOR" | "VIEWER" | "ADMIN" = "OPERATOR",
 ): Promise<World> {
   const suffix = randomUUID();
   const tenant = await db.tenant.create({
     data: {
       slug: `web-${suffix}`,
-      name: 'Web fixture',
-      defaultLocale: 'en',
-      supportedLocales: ['en'],
-      timezone: 'UTC',
-      packKey: 'education',
-      packVersion: '1',
+      name: "Web fixture",
+      defaultLocale: "en",
+      supportedLocales: ["en"],
+      timezone: "UTC",
+      packKey: "education",
+      packVersion: "1",
     },
   });
   const account = await db.channelAccount.create({
     data: {
       tenantId: tenant.id,
-      channelType: 'telegram',
+      channelType: "telegram",
       externalAccountId: `web-${suffix}`,
-      status: 'ACTIVE',
+      status: "ACTIVE",
     },
   });
   const contact = await db.contact.create({
@@ -113,14 +115,14 @@ async function world(
       channelAccountId: account.id,
       contactId: contact.id,
       providerChatId: `c-${suffix}`,
-      state: 'WAITING_OPERATOR',
+      state: "WAITING_OPERATOR",
     },
   });
   const operator = await db.operator.create({
-    data: { tenantId: tenant.id, displayName: 'Op', role },
+    data: { tenantId: tenant.id, displayName: "Op", role },
   });
   const email = `op-${suffix}@example.test`;
-  await sessions.setPassword(tenant.id, operator.id, email, 'correct horse');
+  await sessions.setPassword(tenant.id, operator.id, email, "correct horse");
   return {
     tenantId: tenant.id,
     operatorId: operator.id,
@@ -134,8 +136,8 @@ async function world(
 async function signIn(
   w: World,
 ): Promise<{ cookie: string; csrf: string; principal: InboxPrincipal }> {
-  const result = await sessions.login(w.email, 'correct horse');
-  if (!result.ok) throw new Error('login failed');
+  const result = await sessions.login(w.email, "correct horse");
+  if (!result.ok) throw new Error("login failed");
   const resolved = await sessions.resolve(result.sessionToken);
   const principal: InboxPrincipal = {
     tenantId: resolved!.tenantId,
@@ -163,7 +165,7 @@ function sessionServiceBeforeTransaction(
   const transaction = prisma.$transaction.bind(prisma);
   const racingPrisma = new Proxy(prisma as object, {
     get(target: object, property: string | symbol): unknown {
-      if (property === '$transaction') {
+      if (property === "$transaction") {
         return async (operation: unknown): Promise<unknown> => {
           if (armed) {
             armed = false;
@@ -173,29 +175,29 @@ function sessionServiceBeforeTransaction(
         };
       }
       const value = Reflect.get(target, property, target);
-      return typeof value === 'function' ? value.bind(target) : value;
+      return typeof value === "function" ? value.bind(target) : value;
     },
   });
   return new SessionService(racingPrisma as PrismaService, policy);
 }
 
-describe('password hashing', () => {
-  it('verifies the right password only and carries its parameters', async () => {
-    const hash = await hashPassword('s3cret ü', FAST);
-    expect(hash.startsWith('scrypt$1024$8$1$')).toBe(true);
-    expect(await verifyPassword('s3cret ü', hash)).toBe(true);
-    expect(await verifyPassword('s3cret u', hash)).toBe(false);
-    expect(await verifyPassword('x', 'garbage')).toBe(false);
-    expect(await verifyPassword('x', 'scrypt$999999999$8$1$AAAA$AAAA')).toBe(
+describe("password hashing", () => {
+  it("verifies the right password only and carries its parameters", async () => {
+    const hash = await hashPassword("s3cret ü", FAST);
+    expect(hash.startsWith("scrypt$1024$8$1$")).toBe(true);
+    expect(await verifyPassword("s3cret ü", hash)).toBe(true);
+    expect(await verifyPassword("s3cret u", hash)).toBe(false);
+    expect(await verifyPassword("x", "garbage")).toBe(false);
+    expect(await verifyPassword("x", "scrypt$999999999$8$1$AAAA$AAAA")).toBe(
       false,
     );
   });
 });
 
-describe('login and sessions', () => {
-  it('stores only hashes and answers unknown email and wrong password alike', async () => {
+describe("login and sessions", () => {
+  it("stores only hashes and answers unknown email and wrong password alike", async () => {
     const w = await world();
-    const ok = await sessions.login(w.email.toUpperCase(), 'correct horse');
+    const ok = await sessions.login(w.email.toUpperCase(), "correct horse");
     expect(ok.ok).toBe(true);
     if (!ok.ok) return;
     const rows = await db.operatorSession.findMany({
@@ -204,34 +206,34 @@ describe('login and sessions', () => {
     expect(rows).toHaveLength(1);
     expect(JSON.stringify(rows)).not.toContain(ok.sessionToken);
     expect(JSON.stringify(rows)).not.toContain(ok.csrfToken);
-    const wrong = await sessions.login(w.email, 'nope');
+    const wrong = await sessions.login(w.email, "nope");
     const unknown = await sessions.login(
       `nobody-${randomUUID()}@example.test`,
-      'nope',
+      "nope",
     );
-    expect(wrong).toEqual({ ok: false, code: 'INVALID_CREDENTIALS' });
-    expect(unknown).toEqual({ ok: false, code: 'INVALID_CREDENTIALS' });
+    expect(wrong).toEqual({ ok: false, code: "INVALID_CREDENTIALS" });
+    expect(unknown).toEqual({ ok: false, code: "INVALID_CREDENTIALS" });
   });
 
-  it('locks the account after repeated failures, even for the right password', async () => {
+  it("locks the account after repeated failures, even for the right password", async () => {
     const w = await world();
     for (let i = 0; i < policy.maxFailedAttempts; i += 1)
-      await sessions.login(w.email, 'bad');
-    expect(await sessions.login(w.email, 'correct horse')).toEqual({
+      await sessions.login(w.email, "bad");
+    expect(await sessions.login(w.email, "correct horse")).toEqual({
       ok: false,
-      code: 'LOCKED',
+      code: "LOCKED",
     });
     const later = new Date(Date.now() + policy.lockMs + 1000);
-    expect((await sessions.login(w.email, 'correct horse', later)).ok).toBe(
+    expect((await sessions.login(w.email, "correct horse", later)).ok).toBe(
       true,
     );
   });
 
-  it('counts simultaneous failures atomically and restarts an expired lock window', async () => {
+  it("counts simultaneous failures atomically and restarts an expired lock window", async () => {
     const w = await world();
     const failures = await Promise.all(
       Array.from({ length: policy.maxFailedAttempts }, () =>
-        sessions.login(w.email, 'bad'),
+        sessions.login(w.email, "bad"),
       ),
     );
     expect(failures.every((result) => !result.ok)).toBe(true);
@@ -240,9 +242,9 @@ describe('login and sessions', () => {
     });
     expect(credential.failedAttempts).toBe(0);
     expect(credential.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
-    expect(await sessions.login(w.email, 'correct horse')).toEqual({
+    expect(await sessions.login(w.email, "correct horse")).toEqual({
       ok: false,
-      code: 'LOCKED',
+      code: "LOCKED",
     });
 
     await db.operatorCredential.update({
@@ -252,9 +254,9 @@ describe('login and sessions', () => {
         lockedUntil: new Date(Date.now() - 1000),
       },
     });
-    expect(await sessions.login(w.email, 'bad')).toEqual({
+    expect(await sessions.login(w.email, "bad")).toEqual({
       ok: false,
-      code: 'INVALID_CREDENTIALS',
+      code: "INVALID_CREDENTIALS",
     });
     const afterExpiredLock = await db.operatorCredential.findUniqueOrThrow({
       where: { operatorId: w.operatorId },
@@ -263,7 +265,7 @@ describe('login and sessions', () => {
     expect(afterExpiredLock.lockedUntil).toBeNull();
   });
 
-  it('rechecks a successful login when another failure creates a lock first', async () => {
+  it("rechecks a successful login when another failure creates a lock first", async () => {
     const w = await world();
     const lockedUntil = new Date(Date.now() + policy.lockMs);
     const racingSessions = sessionServiceBeforeTransaction(async () => {
@@ -272,9 +274,9 @@ describe('login and sessions', () => {
         data: { failedAttempts: 0, lockedUntil },
       });
     });
-    expect(await racingSessions.login(w.email, 'correct horse')).toEqual({
+    expect(await racingSessions.login(w.email, "correct horse")).toEqual({
       ok: false,
-      code: 'LOCKED',
+      code: "LOCKED",
     });
     expect(
       await db.operatorSession.count({
@@ -287,20 +289,20 @@ describe('login and sessions', () => {
     expect(credential.lockedUntil?.getTime()).toBe(lockedUntil.getTime());
   });
 
-  it('does not let a stale successful login reset a newer credential counter', async () => {
+  it("does not let a stale successful login reset a newer credential counter", async () => {
     const w = await world();
     const racingSessions = sessionServiceBeforeTransaction(async () => {
       await sessions.setPassword(
         w.tenantId,
         w.operatorId,
         w.email,
-        'new password',
+        "new password",
       );
-      await sessions.login(w.email, 'bad');
+      await sessions.login(w.email, "bad");
     });
-    expect(await racingSessions.login(w.email, 'correct horse')).toEqual({
+    expect(await racingSessions.login(w.email, "correct horse")).toEqual({
       ok: false,
-      code: 'INVALID_CREDENTIALS',
+      code: "INVALID_CREDENTIALS",
     });
     const credential = await db.operatorCredential.findUniqueOrThrow({
       where: { operatorId: w.operatorId },
@@ -309,35 +311,35 @@ describe('login and sessions', () => {
     expect(credential.lockedUntil).toBeNull();
   });
 
-  it('changes the password and revokes only that tenant operator’s active sessions', async () => {
+  it("changes the password and revokes only that tenant operator’s active sessions", async () => {
     const w = await world();
     const other = await world();
-    const existing = await sessions.login(w.email, 'correct horse');
-    const unrelated = await sessions.login(other.email, 'correct horse');
-    if (!existing.ok || !unrelated.ok) throw new Error('login failed');
+    const existing = await sessions.login(w.email, "correct horse");
+    const unrelated = await sessions.login(other.email, "correct horse");
+    if (!existing.ok || !unrelated.ok) throw new Error("login failed");
 
     await sessions.setPassword(
       w.tenantId,
       w.operatorId,
       w.email,
-      'replacement password',
+      "replacement password",
     );
 
     expect(await sessions.resolve(existing.sessionToken)).toBeUndefined();
     expect(await sessions.resolve(unrelated.sessionToken)).toBeDefined();
-    expect(await sessions.login(w.email, 'correct horse')).toMatchObject({
+    expect(await sessions.login(w.email, "correct horse")).toMatchObject({
       ok: false,
-      code: 'INVALID_CREDENTIALS',
+      code: "INVALID_CREDENTIALS",
     });
-    expect((await sessions.login(w.email, 'replacement password')).ok).toBe(
+    expect((await sessions.login(w.email, "replacement password")).ok).toBe(
       true,
     );
   });
 
-  it('refuses expired, idle, revoked sessions and deactivated operators', async () => {
+  it("refuses expired, idle, revoked sessions and deactivated operators", async () => {
     const w = await world();
-    const a = await sessions.login(w.email, 'correct horse');
-    if (!a.ok) throw new Error('login');
+    const a = await sessions.login(w.email, "correct horse");
+    if (!a.ok) throw new Error("login");
     expect(await sessions.resolve(a.sessionToken)).toBeDefined();
     expect(
       await sessions.resolve(
@@ -351,41 +353,41 @@ describe('login and sessions', () => {
         new Date(Date.now() + policy.absoluteTtlMs + 1),
       ),
     ).toBeUndefined();
-    expect(await sessions.resolve('x'.repeat(50))).toBeUndefined();
+    expect(await sessions.resolve("x".repeat(50))).toBeUndefined();
     const resolved = (await sessions.resolve(a.sessionToken))!;
     await sessions.logout(resolved.sessionId, w.tenantId);
     expect(await sessions.resolve(a.sessionToken)).toBeUndefined();
-    const b = await sessions.login(w.email, 'correct horse');
-    if (!b.ok) throw new Error('login');
+    const b = await sessions.login(w.email, "correct horse");
+    if (!b.ok) throw new Error("login");
     await db.operator.update({
       where: { id: w.operatorId },
       data: { isActive: false },
     });
     expect(await sessions.resolve(b.sessionToken)).toBeUndefined();
-    expect(await sessions.login(w.email, 'correct horse')).toMatchObject({
+    expect(await sessions.login(w.email, "correct horse")).toMatchObject({
       ok: false,
     });
   });
 
-  it('a logout under another tenant id does nothing', async () => {
+  it("a logout under another tenant id does nothing", async () => {
     const w = await world();
     const other = await world();
     const s = await signIn(w);
     await sessions.logout(s.principal.sessionId, other.tenantId);
-    expect(await sessions.resolve(s.cookie.split('=')[1])).toBeDefined();
+    expect(await sessions.resolve(s.cookie.split("=")[1])).toBeDefined();
   });
 });
 
-describe('session guard', () => {
-  it('refuses a request without a valid cookie with one 401', async () => {
-    for (const cookie of [undefined, `${SESSION_COOKIE}=nope`, 'other=1']) {
+describe("session guard", () => {
+  it("refuses a request without a valid cookie with one 401", async () => {
+    for (const cookie of [undefined, `${SESSION_COOKIE}=nope`, "other=1"]) {
       await expect(
-        guard.canActivate(context({ method: 'GET', headers: { cookie } })),
+        guard.canActivate(context({ method: "GET", headers: { cookie } })),
       ).rejects.toMatchObject({ status: 401 });
     }
   });
 
-  it('lets a GET through with the cookie and sets the principal from the session', async () => {
+  it("lets a GET through with the cookie and sets the principal from the session", async () => {
     const w = await world();
     const s = await signIn(w);
     const request: {
@@ -393,44 +395,44 @@ describe('session guard', () => {
       headers: Record<string, string>;
       principal?: InboxPrincipal;
     } = {
-      method: 'GET',
+      method: "GET",
       headers: { cookie: s.cookie },
     };
     expect(await guard.canActivate(context(request))).toBe(true);
     expect(request.principal).toMatchObject({
       tenantId: w.tenantId,
       operatorId: w.operatorId,
-      role: 'OPERATOR',
+      role: "OPERATOR",
     });
   });
 
-  it('requires the CSRF header and an allowed Origin for unsafe methods', async () => {
+  it("requires the CSRF header and an allowed Origin for unsafe methods", async () => {
     const w = await world();
     const s = await signIn(w);
     const post = (headers: Record<string, string>): Promise<boolean> =>
       guard.canActivate(
-        context({ method: 'POST', headers: { cookie: s.cookie, ...headers } }),
+        context({ method: "POST", headers: { cookie: s.cookie, ...headers } }),
       );
     await expect(post({})).rejects.toMatchObject({ status: 403 });
-    await expect(post({ [CSRF_HEADER]: 'wrong' })).rejects.toMatchObject({
+    await expect(post({ [CSRF_HEADER]: "wrong" })).rejects.toMatchObject({
       status: 403,
     });
     await expect(
-      post({ [CSRF_HEADER]: s.csrf, origin: 'https://evil.example' }),
+      post({ [CSRF_HEADER]: s.csrf, origin: "https://evil.example" }),
     ).rejects.toMatchObject({ status: 403 });
     expect(
-      await post({ [CSRF_HEADER]: s.csrf, origin: 'http://localhost:3000' }),
+      await post({ [CSRF_HEADER]: s.csrf, origin: "http://localhost:3000" }),
     ).toBe(true);
     expect(await post({ [CSRF_HEADER]: s.csrf })).toBe(true);
   });
 
-  it('a CSRF token of another session is refused', async () => {
+  it("a CSRF token of another session is refused", async () => {
     const a = await signIn(await world());
     const b = await signIn(await world());
     await expect(
       guard.canActivate(
         context({
-          method: 'POST',
+          method: "POST",
           headers: { cookie: a.cookie, [CSRF_HEADER]: b.csrf },
         }),
       ),
@@ -438,19 +440,19 @@ describe('session guard', () => {
   });
 });
 
-describe('inbox reads are tenant-scoped', () => {
-  it('lists and views only the session tenant’s conversations', async () => {
+describe("inbox reads are tenant-scoped", () => {
+  it("lists and views only the session tenant’s conversations", async () => {
     const a = await world();
     const b = await world();
     const sa = await signIn(a);
-    const listA = await read.list(sa.principal, { scope: 'all' });
+    const listA = await read.list(sa.principal, { scope: "all" });
     expect(listA.items.map((i) => i.id)).toEqual([a.conversationId]);
     expect(await read.view(sa.principal, b.conversationId)).toBeUndefined();
     const own = await read.view(sa.principal, a.conversationId);
     expect(own?.conversation.id).toBe(a.conversationId);
   });
 
-  it('shows the waiting queue by longest wait and paginates with a cursor', async () => {
+  it("shows the waiting queue by longest wait and paginates with a cursor", async () => {
     const w = await world();
     const s = await signIn(w);
     const now = Date.now();
@@ -468,43 +470,43 @@ describe('inbox reads are tenant-scoped', () => {
           channelAccountId: w.accountId,
           contactId: contact.id,
           providerChatId: `p-${i}-${randomUUID()}`,
-          state: 'WAITING_OPERATOR',
+          state: "WAITING_OPERATOR",
         },
       });
       await db.handover.create({
         data: {
           tenantId: w.tenantId,
           conversationId: conversation.id,
-          reasonCode: 'CUSTOMER_REQUEST',
+          reasonCode: "CUSTOMER_REQUEST",
           summary: {},
           openedAt: new Date(now - (i + 1) * 60_000),
         },
       });
     }
-    const first = await read.list(s.principal, { scope: 'waiting', limit: 3 });
+    const first = await read.list(s.principal, { scope: "waiting", limit: 3 });
     expect(first.items).toHaveLength(3);
     expect(first.nextCursor).not.toBeNull();
-    const waits = first.items.map((i) => i.waitingSince ?? '');
+    const waits = first.items.map((i) => i.waitingSince ?? "");
     expect([...waits].sort()).toEqual(waits);
     const second = await read.list(s.principal, {
-      scope: 'waiting',
+      scope: "waiting",
       limit: 3,
       cursor: first.nextCursor!,
     });
     const ids = new Set([...first.items, ...second.items].map((i) => i.id));
     expect(ids.size).toBe(first.items.length + second.items.length);
-    expect(await read.list(s.principal, { scope: 'mine' })).toMatchObject({
+    expect(await read.list(s.principal, { scope: "mine" })).toMatchObject({
       items: [],
     });
     expect(
-      (await read.list(s.principal, { scope: 'all', cursor: '!!!' })).items
+      (await read.list(s.principal, { scope: "all", cursor: "!!!" })).items
         .length,
     ).toBeGreaterThan(0);
   });
 });
 
-describe('inbox change feed', () => {
-  it('records conversation, message, handover and SLA events from triggers, tenant by tenant', async () => {
+describe("inbox change feed", () => {
+  it("records conversation, message, handover and SLA events from triggers, tenant by tenant", async () => {
     const a = await world();
     const b = await world();
     const before = await events.latestId(a.tenantId);
@@ -513,24 +515,24 @@ describe('inbox change feed', () => {
         tenantId: a.tenantId,
         conversationId: a.conversationId,
         channelAccountId: a.accountId,
-        authorType: 'CUSTOMER',
-        direction: 'INBOUND',
-        text: 'hello secret text',
+        authorType: "CUSTOMER",
+        direction: "INBOUND",
+        text: "hello secret text",
         sequence: 1,
-        providerChatId: 'c',
+        providerChatId: "c",
       },
     });
     const handover = await db.handover.create({
       data: {
         tenantId: a.tenantId,
         conversationId: a.conversationId,
-        reasonCode: 'X',
+        reasonCode: "X",
         summary: {},
       },
     });
     await db.conversation.update({
       where: { id: a.conversationId },
-      data: { state: 'OPERATOR_ACTIVE', assignedOperatorId: a.operatorId },
+      data: { state: "OPERATOR_ACTIVE", assignedOperatorId: a.operatorId },
     });
     await db.handover.update({
       where: { id: handover.id },
@@ -539,18 +541,18 @@ describe('inbox change feed', () => {
     const { events: got, gap } = await events.after(a.tenantId, before);
     expect(gap).toBe(false);
     expect(got.map((e) => e.type)).toEqual([
-      'message.created',
-      'handover.created',
-      'conversation.updated',
-      'handover.sla_breached',
+      "message.created",
+      "handover.created",
+      "conversation.updated",
+      "handover.sla_breached",
     ]);
-    expect(JSON.stringify(got)).not.toContain('secret');
+    expect(JSON.stringify(got)).not.toContain("secret");
     const ids = got.map((e) => BigInt(e.id));
     expect([...ids].sort((x, y) => (x < y ? -1 : 1))).toEqual(ids);
     const resumed = await events.after(a.tenantId, ids[1]);
     expect(resumed.events.map((e) => e.type)).toEqual([
-      'conversation.updated',
-      'handover.sla_breached',
+      "conversation.updated",
+      "handover.sla_breached",
     ]);
     const other = await events.after(b.tenantId, 0n);
     expect(
@@ -564,25 +566,25 @@ describe('inbox change feed', () => {
     ).toBe(false);
   });
 
-  it('does not emit an event for unrelated conversation updates', async () => {
+  it("does not emit an event for unrelated conversation updates", async () => {
     const w = await world();
     const before = await events.latestId(w.tenantId);
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { language: 'uz' },
+      data: { language: "uz" },
     });
     expect((await events.after(w.tenantId, before)).events).toEqual([]);
   });
 
-  it('signals a gap when needed events were pruned, and prunes only old rows', async () => {
+  it("signals a gap when needed events were pruned, and prunes only old rows", async () => {
     const w = await world();
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { state: 'CLOSED' },
+      data: { state: "CLOSED" },
     });
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { state: 'BOT_ACTIVE' },
+      data: { state: "BOT_ACTIVE" },
     });
     const all = (await events.after(w.tenantId, 0n)).events.map((e) =>
       BigInt(e.id),
@@ -603,14 +605,14 @@ describe('inbox change feed', () => {
     ).toBe(0);
   });
 
-  it('parses event ids strictly', () => {
-    expect(parseEventId('42')).toBe(42n);
-    for (const bad of [undefined, '', '-1', '1.5', 'abc', '9'.repeat(30)])
+  it("parses event ids strictly", () => {
+    expect(parseEventId("42")).toBe(42n);
+    for (const bad of [undefined, "", "-1", "1.5", "abc", "9".repeat(30)])
       expect(parseEventId(bad)).toBeUndefined();
   });
 });
 
-describe('operator commands through the browser session', () => {
+describe("operator commands through the browser session", () => {
   const requestGuard = new OperatorRequestGuard(
     new OperatorTokenGuard(prisma),
     guard,
@@ -624,7 +626,7 @@ describe('operator commands through the browser session', () => {
       data: {
         tenantId: w.tenantId,
         conversationId: w.conversationId,
-        reasonCode: 'CUSTOMER_REQUEST',
+        reasonCode: "CUSTOMER_REQUEST",
         summary: {},
       },
     });
@@ -640,14 +642,14 @@ describe('operator commands through the browser session', () => {
       headers: Record<string, string>;
       operator?: never;
     } = {
-      method: 'POST',
+      method: "POST",
       headers: { cookie: s.cookie, [CSRF_HEADER]: s.csrf, ...headers },
     };
     await requestGuard.canActivate(context(request));
     return request as never;
   }
 
-  it('takes over, replies and returns to the bot with the cookie, and the feed shows it', async () => {
+  it("takes over, replies and returns to the bot with the cookie, and the feed shows it", async () => {
     const w = await world();
     const handoverId = await handoverOf(w);
     const s = await signIn(w);
@@ -657,40 +659,40 @@ describe('operator commands through the browser session', () => {
       `key-${randomUUID()}`,
       await call(s),
     );
-    expect(taken).toMatchObject({ status: 'ok', state: 'OPERATOR_ACTIVE' });
+    expect(taken).toMatchObject({ status: "ok", state: "OPERATOR_ACTIVE" });
     const view = await read.view(s.principal, w.conversationId);
     expect(view?.conversation).toMatchObject({
-      state: 'OPERATOR_ACTIVE',
+      state: "OPERATOR_ACTIVE",
       assignedOperatorId: w.operatorId,
     });
     const types = (await events.after(w.tenantId, before)).events.map(
       (e) => e.type,
     );
-    expect(types).toContain('conversation.updated');
+    expect(types).toContain("conversation.updated");
     const back = await controller.returnToBot(
       handoverId,
       `key-${randomUUID()}`,
       await call(s),
     );
-    expect(back).toMatchObject({ status: 'ok' });
+    expect(back).toMatchObject({ status: "ok" });
   });
 
-  it('refuses a state-changing request without the CSRF token and changes nothing', async () => {
+  it("refuses a state-changing request without the CSRF token and changes nothing", async () => {
     const w = await world();
     const handoverId = await handoverOf(w);
     const s = await signIn(w);
     await expect(
-      call({ cookie: s.cookie, csrf: 'wrong' }),
+      call({ cookie: s.cookie, csrf: "wrong" }),
     ).rejects.toMatchObject({ status: 403 });
     const row = await db.conversation.findUnique({
       where: { id: w.conversationId },
     });
-    expect(row?.state).toBe('WAITING_OPERATOR');
+    expect(row?.state).toBe("WAITING_OPERATOR");
     expect(handoverId).toBeDefined();
   });
 
-  it('refuses a viewer and another tenant’s handover', async () => {
-    const viewer = await world('VIEWER');
+  it("refuses a viewer and another tenant’s handover", async () => {
+    const viewer = await world("VIEWER");
     const handoverId = await handoverOf(viewer);
     const sv = await signIn(viewer);
     await expect(
@@ -707,12 +709,12 @@ describe('operator commands through the browser session', () => {
     const untouched = await db.conversation.findUnique({
       where: { id: b.conversationId },
     });
-    expect(untouched?.state).toBe('WAITING_OPERATOR');
+    expect(untouched?.state).toBe("WAITING_OPERATOR");
   });
 });
 
-describe('search and filters', () => {
-  it('finds by contact name, phone and message text, only inside the tenant', async () => {
+describe("search and filters", () => {
+  it("finds by contact name, phone and message text, only inside the tenant", async () => {
     const a = await world();
     const b = await world();
     const sa = await signIn(a);
@@ -723,74 +725,74 @@ describe('search and filters', () => {
           tenantId: w.tenantId,
           conversationId: w.conversationId,
           channelAccountId: w.accountId,
-          authorType: 'CUSTOMER',
-          direction: 'INBOUND',
+          authorType: "CUSTOMER",
+          direction: "INBOUND",
           text: `please call about ${needle}`,
           sequence: 1,
-          providerChatId: 'c',
+          providerChatId: "c",
         },
       });
     }
     await db.contact.update({
       where: { id: a.contactId },
-      data: { phone: '+998901112233' },
+      data: { phone: "+998901112233" },
     });
     const byText = await read.list(sa.principal, {
-      scope: 'all',
+      scope: "all",
       q: needle.toUpperCase(),
     });
     expect(byText.items.map((i) => i.id)).toEqual([a.conversationId]);
     expect(
-      (await read.list(sa.principal, { scope: 'all', q: '90111' })).items,
+      (await read.list(sa.principal, { scope: "all", q: "90111" })).items,
     ).toHaveLength(1);
     const name = (await db.contact.findUnique({ where: { id: a.contactId } }))!
       .name!;
     expect(
-      (await read.list(sa.principal, { scope: 'all', q: name.toLowerCase() }))
+      (await read.list(sa.principal, { scope: "all", q: name.toLowerCase() }))
         .items,
     ).toHaveLength(1);
     expect(
-      (await read.list(sa.principal, { scope: 'all', q: 'zzz-no-match' }))
+      (await read.list(sa.principal, { scope: "all", q: "zzz-no-match" }))
         .items,
     ).toEqual([]);
   });
 
-  it('filters by language and lead score', async () => {
+  it("filters by language and lead score", async () => {
     const w = await world();
     const s = await signIn(w);
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { language: 'ru' },
+      data: { language: "ru" },
     });
     await db.lead.create({
       data: {
         tenantId: w.tenantId,
         contactId: w.contactId,
         conversationId: w.conversationId,
-        score: 'HOT',
-        summary: 's',
+        score: "HOT",
+        summary: "s",
         requirements: {},
         idempotencyKey: `lead-${randomUUID()}`,
       },
     });
     expect(
-      (await read.list(s.principal, { scope: 'all', language: 'ru' })).items,
+      (await read.list(s.principal, { scope: "all", language: "ru" })).items,
     ).toHaveLength(1);
     expect(
-      (await read.list(s.principal, { scope: 'all', language: 'uz' })).items,
+      (await read.list(s.principal, { scope: "all", language: "uz" })).items,
     ).toHaveLength(0);
     const hot = await read.list(s.principal, {
-      scope: 'all',
-      leadScore: 'HOT',
+      scope: "all",
+      leadScore: "HOT",
     });
-    expect(hot.items[0]?.leadScore).toBe('HOT');
+    expect(hot.items[0]?.leadScore).toBe("HOT");
     expect(
-      (await read.list(s.principal, { scope: 'all', leadScore: 'COLD' })).items,
+      (await read.list(s.principal, { scope: "all", leadScore: "COLD" })).items,
     ).toHaveLength(0);
   });
 });
 
-describe('lead status command', () => {
+describe("lead status command", () => {
   const controller = new OperatorCommandsController(
     new HandoverService(prisma),
   );
@@ -800,20 +802,20 @@ describe('lead status command', () => {
   );
   const as = async (s: { cookie: string; csrf: string }): Promise<never> => {
     const request = {
-      method: 'POST',
+      method: "POST",
       headers: { cookie: s.cookie, [CSRF_HEADER]: s.csrf },
     };
     await requestGuard.canActivate(context(request));
     return request as never;
   };
 
-  it('changes the latest lead, audits once, is idempotent, and refuses viewers', async () => {
+  it("changes the latest lead, audits once, is idempotent, and refuses viewers", async () => {
     const w = await world();
     const handover = await db.handover.create({
       data: {
         tenantId: w.tenantId,
         conversationId: w.conversationId,
-        reasonCode: 'X',
+        reasonCode: "X",
         summary: {},
       },
     });
@@ -822,7 +824,7 @@ describe('lead status command', () => {
       controller.leadStatus(
         handover.id,
         `k-${randomUUID()}`,
-        { status: 'WON' },
+        { status: "WON" },
         await as(s),
       ),
     ).rejects.toMatchObject({ status: 409 });
@@ -831,8 +833,8 @@ describe('lead status command', () => {
         tenantId: w.tenantId,
         contactId: w.contactId,
         conversationId: w.conversationId,
-        score: 'WARM',
-        summary: 's',
+        score: "WARM",
+        summary: "s",
         requirements: {},
         idempotencyKey: `lead-${randomUUID()}`,
       },
@@ -842,40 +844,40 @@ describe('lead status command', () => {
       await controller.leadStatus(
         handover.id,
         key,
-        { status: 'IN_PROGRESS' },
+        { status: "IN_PROGRESS" },
         await as(s),
       ),
-    ).toMatchObject({ status: 'ok' });
+    ).toMatchObject({ status: "ok" });
     expect(
       await controller.leadStatus(
         handover.id,
         key,
-        { status: 'IN_PROGRESS' },
+        { status: "IN_PROGRESS" },
         await as(s),
       ),
-    ).toMatchObject({ status: 'duplicate' });
+    ).toMatchObject({ status: "duplicate" });
     expect(
       (await db.lead.findFirst({ where: { tenantId: w.tenantId } }))?.status,
-    ).toBe('IN_PROGRESS');
+    ).toBe("IN_PROGRESS");
     const audits = await db.auditEvent.count({
-      where: { tenantId: w.tenantId, action: 'operator.set_lead_status' },
+      where: { tenantId: w.tenantId, action: "operator.set_lead_status" },
     });
     expect(audits).toBe(1);
     await expect(
       controller.leadStatus(
         handover.id,
         `k-${randomUUID()}`,
-        { status: 'bogus' },
+        { status: "bogus" },
         await as(s),
       ),
     ).rejects.toMatchObject({ status: 400 });
 
-    const viewer = await world('VIEWER');
+    const viewer = await world("VIEWER");
     const vh = await db.handover.create({
       data: {
         tenantId: viewer.tenantId,
         conversationId: viewer.conversationId,
-        reasonCode: 'X',
+        reasonCode: "X",
         summary: {},
       },
     });
@@ -884,20 +886,20 @@ describe('lead status command', () => {
       controller.leadStatus(
         vh.id,
         `k-${randomUUID()}`,
-        { status: 'WON' },
+        { status: "WON" },
         await as(sv),
       ),
     ).rejects.toMatchObject({ status: 403 });
   });
 
-  it('never touches another tenant’s lead', async () => {
+  it("never touches another tenant’s lead", async () => {
     const a = await world();
     const b = await world();
     const bh = await db.handover.create({
       data: {
         tenantId: b.tenantId,
         conversationId: b.conversationId,
-        reasonCode: 'X',
+        reasonCode: "X",
         summary: {},
       },
     });
@@ -906,19 +908,19 @@ describe('lead status command', () => {
       controller.leadStatus(
         bh.id,
         `k-${randomUUID()}`,
-        { status: 'LOST' },
+        { status: "LOST" },
         await as(sa),
       ),
     ).rejects.toMatchObject({ status: 404 });
   });
 });
 
-describe('login cookies', () => {
-  it('sets an httpOnly session cookie and a readable CSRF cookie, and clears both on logout', async () => {
+describe("login cookies", () => {
+  it("sets an httpOnly session cookie and a readable CSRF cookie, and clears both on logout", async () => {
     const w = await world();
     const controller = new AuthController(sessions, prisma, {
       get: (key: string) =>
-        key === 'SESSION_COOKIE_SECURE' ? true : undefined,
+        key === "SESSION_COOKIE_SECURE" ? true : undefined,
     } as never);
     const headers: Record<string, string | string[]> = {};
     const reply = {
@@ -926,7 +928,7 @@ describe('login cookies', () => {
         void (headers[n] = v),
     };
     const body = (await controller.login(
-      { email: w.email, password: 'correct horse' },
+      { email: w.email, password: "correct horse" },
       {
         headers: {},
         socket: {
@@ -935,18 +937,18 @@ describe('login cookies', () => {
       },
       reply,
     )) as { csrfToken: string };
-    const cookies = headers['Set-Cookie'] as string[];
+    const cookies = headers["Set-Cookie"] as string[];
     expect(cookies[0]).toMatch(
       /^ac_session=.+; HttpOnly; SameSite=Strict; Path=\/; Max-Age=\d+; Secure$/u,
     );
     expect(cookies[1]).toBe(
-      `ac_csrf=${body.csrfToken}; ${cookies[1].split('; ').slice(1).join('; ')}`,
+      `ac_csrf=${body.csrfToken}; ${cookies[1].split("; ").slice(1).join("; ")}`,
     );
-    expect(cookies[1]).not.toContain('HttpOnly');
-    expect(cookies[1]).toContain('SameSite=Strict');
+    expect(cookies[1]).not.toContain("HttpOnly");
+    expect(cookies[1]).toContain("SameSite=Strict");
   });
 
-  it('rate-limits login attempts per address and answers bad bodies as invalid credentials', async () => {
+  it("rate-limits login attempts per address and answers bad bodies as invalid credentials", async () => {
     const controller = new AuthController(sessions, prisma, {
       get: () => false,
     } as never);
@@ -963,14 +965,14 @@ describe('login cookies', () => {
     let last: unknown;
     for (let i = 0; i < 25; i += 1)
       last = await controller
-        .login({ email: 'x@y.test', password: 'p' }, ip, reply)
+        .login({ email: "x@y.test", password: "p" }, ip, reply)
         .catch((e: unknown) => e);
     expect(last).toMatchObject({ status: 429 });
   });
 });
 
-describe('inbox event bus', () => {
-  it('issues one query per tick for any number of listeners and delivers per tenant', async () => {
+describe("inbox event bus", () => {
+  it("issues one query per tick for any number of listeners and delivers per tenant", async () => {
     const a = await world();
     const b = await world();
     const bus = new InboxEventBus(prisma);
@@ -982,14 +984,14 @@ describe('inbox event bus', () => {
     const offB = await bus.subscribe(b.tenantId, (e) => gotB.push(e));
     await db.conversation.update({
       where: { id: a.conversationId },
-      data: { state: 'CLOSED' },
+      data: { state: "CLOSED" },
     });
     const calls: string[] = [];
     const original = prisma.inboxEvent.findMany.bind(prisma.inboxEvent);
     (prisma.inboxEvent as { findMany: unknown }).findMany = (
       ...args: Parameters<typeof original>
     ): ReturnType<typeof original> => {
-      calls.push('findMany');
+      calls.push("findMany");
       return original(...args);
     };
     try {
@@ -998,7 +1000,7 @@ describe('inbox event bus', () => {
       (prisma.inboxEvent as { findMany: unknown }).findMany = original;
     }
     expect(calls).toHaveLength(1);
-    expect(gotA1.map((e) => e.type)).toEqual(['conversation.updated']);
+    expect(gotA1.map((e) => e.type)).toEqual(["conversation.updated"]);
     expect(gotA2).toHaveLength(1);
     expect(gotB).toEqual([]);
     await bus.tick();
@@ -1009,23 +1011,23 @@ describe('inbox event bus', () => {
     bus.onModuleDestroy();
   });
 
-  it('a throwing listener does not stop the others, and events before subscribe are not replayed', async () => {
+  it("a throwing listener does not stop the others, and events before subscribe are not replayed", async () => {
     const w = await world();
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { state: 'CLOSED' },
+      data: { state: "CLOSED" },
     });
     const bus = new InboxEventBus(prisma);
     const got: BusEvent[] = [];
     const off1 = await bus.subscribe(w.tenantId, () => {
-      throw new Error('boom');
+      throw new Error("boom");
     });
     const off2 = await bus.subscribe(w.tenantId, (e) => got.push(e));
     await bus.tick();
     expect(got).toEqual([]);
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { state: 'BOT_ACTIVE' },
+      data: { state: "BOT_ACTIVE" },
     });
     await bus.tick();
     expect(got).toHaveLength(1);
@@ -1035,7 +1037,7 @@ describe('inbox event bus', () => {
   });
 });
 
-describe('event stream resource accounting', () => {
+describe("event stream resource accounting", () => {
   class FakeResponse extends EventEmitter {
     status = 0;
     frames: string[] = [];
@@ -1046,7 +1048,7 @@ describe('event stream resource accounting', () => {
     writeHead(status: number): void {
       this.status = status;
       // Simulates a client that disconnects while the stream is being set up.
-      if (this.closeOnHead) this.emit('close');
+      if (this.closeOnHead) this.emit("close");
     }
     write(chunk: string): boolean {
       this.frames.push(chunk);
@@ -1054,7 +1056,7 @@ describe('event stream resource accounting', () => {
     }
     end(): void {
       this.ended = true;
-      this.emit('close');
+      this.emit("close");
     }
   }
 
@@ -1067,7 +1069,7 @@ describe('event stream resource accounting', () => {
     );
   }
 
-  it('releases the slot, subscription and timers of a client that leaves during setup', async () => {
+  it("releases the slot, subscription and timers of a client that leaves during setup", async () => {
     const w = await world();
     const s = await signIn(w);
     const bus = new InboxEventBus(prisma);
@@ -1094,19 +1096,19 @@ describe('event stream resource accounting', () => {
     expect(live.status).toBe(200);
     expect(openStreams(w.tenantId, w.operatorId)).toBe(1);
     expect(bus.listenerCount(w.tenantId)).toBe(1);
-    live.emit('close');
-    live.emit('close');
+    live.emit("close");
+    live.emit("close");
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     expect(bus.listenerCount(w.tenantId)).toBe(0);
     bus.onModuleDestroy();
   });
 
-  it('closes streams after logout, expiry, idle expiry, or operator deactivation', async () => {
+  it("closes streams after logout, expiry, idle expiry, or operator deactivation", async () => {
     for (const invalidation of [
-      'logout',
-      'expiry',
-      'idle expiry',
-      'deactivation',
+      "logout",
+      "expiry",
+      "idle expiry",
+      "deactivation",
     ] as const) {
       const w = await world();
       const s = await signIn(w);
@@ -1120,14 +1122,14 @@ describe('event stream resource accounting', () => {
       );
       expect(response.status).toBe(200);
 
-      if (invalidation === 'logout') {
+      if (invalidation === "logout") {
         await sessions.logout(s.principal.sessionId, w.tenantId);
-      } else if (invalidation === 'expiry') {
+      } else if (invalidation === "expiry") {
         await db.operatorSession.update({
           where: { id: s.principal.sessionId },
           data: { expiresAt: new Date(Date.now() - 1000) },
         });
-      } else if (invalidation === 'idle expiry') {
+      } else if (invalidation === "idle expiry") {
         await db.operatorSession.update({
           where: { id: s.principal.sessionId },
           data: { lastSeenAt: new Date(Date.now() - policy.idleTtlMs - 1000) },
@@ -1140,12 +1142,12 @@ describe('event stream resource accounting', () => {
       }
       await db.conversation.update({
         where: { id: w.conversationId },
-        data: { state: 'BOT_ACTIVE' },
+        data: { state: "BOT_ACTIVE" },
       });
       await bus.tick();
 
       await vi.waitFor(() => expect(response.ended).toBe(true));
-      expect(response.frames.some((frame) => frame.startsWith('event:'))).toBe(
+      expect(response.frames.some((frame) => frame.startsWith("event:"))).toBe(
         false,
       );
       expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
@@ -1154,7 +1156,7 @@ describe('event stream resource accounting', () => {
     }
   });
 
-  it('limits concurrent streams per operator and frees them on close', async () => {
+  it("limits concurrent streams per operator and frees them on close", async () => {
     const w = await world();
     const s = await signIn(w);
     const bus = new InboxEventBus(prisma);
@@ -1178,7 +1180,7 @@ describe('event stream resource accounting', () => {
       undefined,
     );
     expect(sixth.status).toBe(429);
-    streams[0].emit('close');
+    streams[0].emit("close");
     const again = new FakeResponse();
     await controller.stream(
       { principal: s.principal } as never,
@@ -1187,12 +1189,12 @@ describe('event stream resource accounting', () => {
       undefined,
     );
     expect(again.status).toBe(200);
-    for (const response of [...streams, again]) response.emit('close');
+    for (const response of [...streams, again]) response.emit("close");
     expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
     bus.onModuleDestroy();
   });
 
-  it('streams only its own tenant’s events, also with a Last-Event-ID taken from another tenant', async () => {
+  it("streams only its own tenant’s events, also with a Last-Event-ID taken from another tenant", async () => {
     const a = await world();
     const b = await world();
     const sa = await signIn(a);
@@ -1200,13 +1202,13 @@ describe('event stream resource accounting', () => {
     const before = await events.latestId(a.tenantId);
     await db.conversation.update({
       where: { id: b.conversationId },
-      data: { state: 'BOT_ACTIVE' },
+      data: { state: "BOT_ACTIVE" },
     });
     const bEvents = (await events.after(b.tenantId, before)).events;
     expect(bEvents.length).toBeGreaterThan(0);
     // Adversarial resume: tenant A replays from 0 and from B's own event id.
     const streams: FakeResponse[] = [];
-    for (const lastEventId of ['0', String(bEvents[0]!.id)]) {
+    for (const lastEventId of ["0", String(bEvents[0]!.id)]) {
       const response = new FakeResponse();
       await controllerWith(bus).stream(
         { principal: sa.principal } as never,
@@ -1219,67 +1221,67 @@ describe('event stream resource accounting', () => {
     }
     await db.conversation.update({
       where: { id: a.conversationId },
-      data: { state: 'BOT_ACTIVE' },
+      data: { state: "BOT_ACTIVE" },
     });
     await db.conversation.update({
       where: { id: b.conversationId },
-      data: { state: 'CLOSED' },
+      data: { state: "CLOSED" },
     });
     await bus.tick();
     for (const response of streams)
       await vi.waitFor(() =>
-        expect(response.frames.join('')).toContain(a.conversationId),
+        expect(response.frames.join("")).toContain(a.conversationId),
       );
     for (const response of streams) {
-      expect(response.frames.join('')).not.toContain(b.conversationId);
-      response.emit('close');
+      expect(response.frames.join("")).not.toContain(b.conversationId);
+      response.emit("close");
     }
     bus.onModuleDestroy();
   });
 });
 
-describe('channels list', () => {
-  it('shows only the own tenant accounts and never a key, credential or chat id', async () => {
+describe("channels list", () => {
+  it("shows only the own tenant accounts and never a key, credential or chat id", async () => {
     const a = await world();
     const b = await world();
     await db.channelAccount.update({
       where: { id: a.accountId },
       data: {
-        credentialRef: 'env:SECRET_TOKEN_NAME',
-        webhookSecretRef: 'env:SECRET_HOOK_NAME',
-        operatorChatId: '-100123',
+        credentialRef: "env:SECRET_TOKEN_NAME",
+        webhookSecretRef: "env:SECRET_HOOK_NAME",
+        operatorChatId: "-100123",
       },
     });
     const store = new PrismaChannelSecretStore(
       prisma,
       new SecretCipher(
         createKeyring({
-          SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
+          SECRETS_MASTER_KEY: randomBytes(32).toString("base64"),
         }),
       ),
     );
     const owner = { tenantId: a.tenantId, channelAccountId: a.accountId };
-    await store.put(owner, 'bot_token', 'PLAINTEXT_BOT_TOKEN');
-    await store.put(owner, 'webhook_secret', 'PLAINTEXT_HOOK_SECRET');
+    await store.put(owner, "bot_token", "PLAINTEXT_BOT_TOKEN");
+    await store.put(owner, "webhook_secret", "PLAINTEXT_HOOK_SECRET");
     const s = await signIn(a);
     const result = await channelsController().list({
       principal: s.principal,
     } as never);
     expect(result.items.map((item) => item.id)).toEqual([a.accountId]);
     expect(result.items[0]).toMatchObject({
-      channelType: 'telegram',
-      status: 'ACTIVE',
-      credentialSource: 'ui',
+      channelType: "telegram",
+      status: "ACTIVE",
+      credentialSource: "ui",
       credentialsConfigured: true,
       operatorGroupConfigured: true,
     });
     const text = JSON.stringify(result);
     for (const secret of [
-      'SECRET_TOKEN_NAME',
-      'SECRET_HOOK_NAME',
-      '-100123',
-      'PLAINTEXT_BOT_TOKEN',
-      'PLAINTEXT_HOOK_SECRET',
+      "SECRET_TOKEN_NAME",
+      "SECRET_HOOK_NAME",
+      "-100123",
+      "PLAINTEXT_BOT_TOKEN",
+      "PLAINTEXT_HOOK_SECRET",
     ])
       expect(text).not.toContain(secret);
     expect(text).not.toContain(b.accountId);
@@ -1290,9 +1292,9 @@ function channelsController(
   overrides: Record<string, unknown> = {},
 ): ChannelsController {
   const settings: Record<string, unknown> = {
-    NODE_ENV: 'development',
-    LLM_PROVIDER: 'mock',
-    LLM_TRUSTED_PROVIDERS: ['mock'],
+    NODE_ENV: "development",
+    LLM_PROVIDER: "mock",
+    LLM_TRUSTED_PROVIDERS: ["mock"],
     LLM_ALLOW_REAL_CUSTOMER_DATA: false,
     ...overrides,
   };
@@ -1303,79 +1305,79 @@ function channelsController(
   );
 }
 
-describe('assistant mode', () => {
-  it('only an owner or admin may change it; the change is checked, scoped and audited', async () => {
-    const op = await world('OPERATOR');
-    const admin = await world('ADMIN');
-    const other = await world('ADMIN');
+describe("assistant mode", () => {
+  it("only an owner or admin may change it; the change is checked, scoped and audited", async () => {
+    const op = await world("OPERATOR");
+    const admin = await world("ADMIN");
+    const other = await world("ADMIN");
     const asOp = await signIn(op);
     const asAdmin = await signIn(admin);
     const controller = channelsController();
     await expect(
       controller.setMode({ principal: asOp.principal } as never, op.accountId, {
-        mode: 'SHADOW',
+        mode: "SHADOW",
       }),
-    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    ).rejects.toMatchObject({ response: { code: "FORBIDDEN" } });
     await expect(
       controller.setMode(
         { principal: asAdmin.principal } as never,
         other.accountId,
-        { mode: 'SHADOW' },
+        { mode: "SHADOW" },
       ),
-    ).rejects.toMatchObject({ response: { code: 'NOT_FOUND' } });
+    ).rejects.toMatchObject({ response: { code: "NOT_FOUND" } });
     await expect(
       controller.setMode(
         { principal: asAdmin.principal } as never,
         admin.accountId,
-        { mode: 'ON' },
+        { mode: "ON" },
       ),
-    ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    ).rejects.toMatchObject({ response: { code: "INVALID_BODY" } });
     const changed = await controller.setMode(
       { principal: asAdmin.principal } as never,
       admin.accountId,
-      { mode: 'LIVE' },
+      { mode: "LIVE" },
     );
-    expect(changed.agentMode).toBe('LIVE');
+    expect(changed.agentMode).toBe("LIVE");
     const row = await db.channelAccount.findUniqueOrThrow({
       where: { id: admin.accountId },
     });
-    expect(row.agentMode).toBe('LIVE');
+    expect(row.agentMode).toBe("LIVE");
     const audit = await db.auditEvent.findMany({
-      where: { tenantId: admin.tenantId, action: 'channel.agent_mode_changed' },
+      where: { tenantId: admin.tenantId, action: "channel.agent_mode_changed" },
     });
     expect(audit).toHaveLength(1);
-    expect(audit[0].safeInputSummary).toEqual({ from: 'OFF', to: 'LIVE' });
+    expect(audit[0].safeInputSummary).toEqual({ from: "OFF", to: "LIVE" });
     expect(
       (
         await db.channelAccount.findUniqueOrThrow({
           where: { id: other.accountId },
         })
       ).agentMode,
-    ).toBe('OFF');
+    ).toBe("OFF");
   });
 
-  it('allows LIVE without a Telegram group and still refuses untrusted providers', async () => {
-    const w = await world('ADMIN');
+  it("allows LIVE without a Telegram group and still refuses untrusted providers", async () => {
+    const w = await world("ADMIN");
     const s = await signIn(w);
-    const production = channelsController({ NODE_ENV: 'production' });
+    const production = channelsController({ NODE_ENV: "production" });
     const enabled = await production.setMode(
       { principal: s.principal } as never,
       w.accountId,
-      { mode: 'LIVE' },
+      { mode: "LIVE" },
     );
     expect(enabled).toMatchObject({
-      agentMode: 'LIVE',
-      effectiveMode: 'LIVE',
+      agentMode: "LIVE",
+      effectiveMode: "LIVE",
       operatorGroupConfigured: false,
     });
     const untrusted = channelsController({
-      LLM_PROVIDER: 'gemini',
-      LLM_TRUSTED_PROVIDERS: ['mock'],
+      LLM_PROVIDER: "gemini",
+      LLM_TRUSTED_PROVIDERS: ["mock"],
     });
     const listed = await untrusted.list({ principal: s.principal } as never);
     expect(listed.items[0].modeRefusals).toEqual({
-      LIVE: 'UNTRUSTED_PROVIDER',
-      SHADOW: 'UNTRUSTED_REAL_DATA',
+      LIVE: "UNTRUSTED_PROVIDER",
+      SHADOW: "UNTRUSTED_REAL_DATA",
     });
     expect(
       (
@@ -1383,33 +1385,33 @@ describe('assistant mode', () => {
           where: { id: w.accountId },
         })
       ).agentMode,
-    ).toBe('LIVE');
+    ).toBe("LIVE");
     // Turning the assistant off is always allowed.
     const off = await untrusted.setMode(
       { principal: s.principal } as never,
       w.accountId,
-      { mode: 'OFF' },
+      { mode: "OFF" },
     );
-    expect(off.agentMode).toBe('OFF');
+    expect(off.agentMode).toBe("OFF");
   });
 
-  it('lists what a stored LIVE really runs as: SHADOW on a test account, HOLD on a real one', async () => {
-    const w = await world('ADMIN');
+  it("lists what a stored LIVE really runs as: SHADOW on a test account, HOLD on a real one", async () => {
+    const w = await world("ADMIN");
     const s = await signIn(w);
     await db.channelAccount.update({
       where: { id: w.accountId },
-      data: { agentMode: 'LIVE' },
+      data: { agentMode: "LIVE" },
     });
     const untrusted = channelsController({
-      LLM_PROVIDER: 'gemini',
-      LLM_TRUSTED_PROVIDERS: ['mock'],
+      LLM_PROVIDER: "gemini",
+      LLM_TRUSTED_PROVIDERS: ["mock"],
     });
     const [real] = (await untrusted.list({ principal: s.principal } as never))
       .items;
     expect(real).toMatchObject({
-      agentMode: 'LIVE',
-      effectiveMode: 'HOLD',
-      effectiveReason: 'UNTRUSTED_PROVIDER',
+      agentMode: "LIVE",
+      effectiveMode: "HOLD",
+      effectiveReason: "UNTRUSTED_PROVIDER",
     });
     await db.channelAccount.update({
       where: { id: w.accountId },
@@ -1418,14 +1420,14 @@ describe('assistant mode', () => {
     const [test] = (await untrusted.list({ principal: s.principal } as never))
       .items;
     expect(test).toMatchObject({
-      agentMode: 'LIVE',
-      effectiveMode: 'SHADOW',
-      effectiveReason: 'UNTRUSTED_PROVIDER',
+      agentMode: "LIVE",
+      effectiveMode: "SHADOW",
+      effectiveReason: "UNTRUSTED_PROVIDER",
     });
   });
 });
 
-describe('FAQ import', () => {
+describe("FAQ import", () => {
   const controller = (): KnowledgeFaqController =>
     new KnowledgeFaqController(
       prisma,
@@ -1433,16 +1435,16 @@ describe('FAQ import', () => {
       new HashingEmbeddingProvider(),
     );
 
-  it('creates, updates by question instead of duplicating, and reports bad entries one by one', async () => {
-    const w = await world('ADMIN');
+  it("creates, updates by question instead of duplicating, and reports bad entries one by one", async () => {
+    const w = await world("ADMIN");
     const s = await signIn(w);
     const request = { principal: s.principal } as never;
     const c = controller();
     const batch = [
-      { question: 'Where are you?', answer: 'Tashkent.', language: 'en' },
-      { question: 'Opening hours?', answer: '9 to 6.' },
-      { question: 'x', answer: 'too short question' },
-      'not an object',
+      { question: "Where are you?", answer: "Tashkent.", language: "en" },
+      { question: "Opening hours?", answer: "9 to 6." },
+      { question: "x", answer: "too short question" },
+      "not an object",
     ];
     const first = await c.import(request, {
       entries: batch,
@@ -1452,13 +1454,13 @@ describe('FAQ import', () => {
       created: 2,
       updated: 0,
       failed: [
-        { index: 2, code: 'INVALID_ENTRY' },
-        { index: 3, code: 'INVALID_ENTRY' },
+        { index: 2, code: "INVALID_ENTRY" },
+        { index: 3, code: "INVALID_ENTRY" },
       ],
     });
     const again = await c.import(request, {
       entries: [
-        { question: '  where ARE   you? ', answer: 'Samarkand now.' },
+        { question: "  where ARE   you? ", answer: "Samarkand now." },
         batch[1],
       ],
       confirmProviderMayReadText: true,
@@ -1468,21 +1470,21 @@ describe('FAQ import', () => {
     expect(listed.items).toHaveLength(2);
     expect(
       listed.items.find(
-        (item) => item.question.toLowerCase() === 'where are you?',
+        (item) => item.question.toLowerCase() === "where are you?",
       )?.answer,
-    ).toBe('Samarkand now.');
+    ).toBe("Samarkand now.");
   });
 
-  it('needs the writer role, consent, a batch within the limit and an embedder', async () => {
-    const op = await world('OPERATOR');
-    const admin = await world('ADMIN');
+  it("needs the writer role, consent, a batch within the limit and an embedder", async () => {
+    const op = await world("OPERATOR");
+    const admin = await world("ADMIN");
     const asOp = { principal: (await signIn(op)).principal } as never;
     const asAdmin = { principal: (await signIn(admin)).principal } as never;
     const c = controller();
-    const entries = [{ question: 'Fine question', answer: 'Fine.' }];
+    const entries = [{ question: "Fine question", answer: "Fine." }];
     await expect(
       c.import(asOp, { entries, confirmProviderMayReadText: true }),
-    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    ).rejects.toMatchObject({ response: { code: "FORBIDDEN" } });
     for (const bad of [
       { entries, confirmProviderMayReadText: false },
       { entries: [], confirmProviderMayReadText: true },
@@ -1492,7 +1494,7 @@ describe('FAQ import', () => {
       },
     ])
       await expect(c.import(asAdmin, bad)).rejects.toMatchObject({
-        response: { code: 'INVALID_BODY' },
+        response: { code: "INVALID_BODY" },
       });
     await expect(
       new KnowledgeFaqController(
@@ -1500,21 +1502,21 @@ describe('FAQ import', () => {
         new KnowledgeService(prisma),
         undefined,
       ).import(asAdmin, { entries, confirmProviderMayReadText: true }),
-    ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
+    ).rejects.toMatchObject({ response: { code: "KNOWLEDGE_DISABLED" } });
   });
 
-  it('keeps imports per tenant: the same question in another tenant is a separate entry and never touches the first tenant', async () => {
-    const a = await world('ADMIN');
-    const b = await world('ADMIN');
+  it("keeps imports per tenant: the same question in another tenant is a separate entry and never touches the first tenant", async () => {
+    const a = await world("ADMIN");
+    const b = await world("ADMIN");
     const asA = { principal: (await signIn(a)).principal } as never;
     const asB = { principal: (await signIn(b)).principal } as never;
     const c = controller();
-    const question = 'Do you have parking?';
+    const question = "Do you have parking?";
     expect(
       await c.import(asA, {
         entries: [
-          { question, answer: 'Yes, free.' },
-          { question: 'Only in tenant A?', answer: 'A only.' },
+          { question, answer: "Yes, free." },
+          { question: "Only in tenant A?", answer: "A only." },
         ],
         confirmProviderMayReadText: true,
       }),
@@ -1522,11 +1524,11 @@ describe('FAQ import', () => {
     const snapshot = async (): Promise<unknown> => ({
       documents: await prisma.knowledgeDocument.findMany({
         where: { tenantId: a.tenantId },
-        orderBy: { source: 'asc' },
+        orderBy: { source: "asc" },
       }),
       chunks: await prisma.knowledgeChunk.findMany({
         where: { tenantId: a.tenantId },
-        orderBy: [{ documentId: 'asc' }, { ordinal: 'asc' }],
+        orderBy: [{ documentId: "asc" }, { ordinal: "asc" }],
         select: { id: true, documentId: true, ordinal: true, text: true },
       }),
     });
@@ -1539,26 +1541,26 @@ describe('FAQ import', () => {
     // a new entry for B, not an update of A's.
     expect(
       await c.import(asB, {
-        entries: [{ question: '  do YOU have   parking? ', answer: 'No.' }],
+        entries: [{ question: "  do YOU have   parking? ", answer: "No." }],
         confirmProviderMayReadText: true,
       }),
     ).toEqual({ created: 1, updated: 0, failed: [] });
     // B importing again updates only B's own entry.
     expect(
       await c.import(asB, {
-        entries: [{ question, answer: 'Paid now.' }],
+        entries: [{ question, answer: "Paid now." }],
         confirmProviderMayReadText: true,
       }),
     ).toEqual({ created: 0, updated: 1, failed: [] });
 
     const listedB = (await c.list(asB)).items;
     expect(listedB).toHaveLength(1);
-    expect(listedB[0]).toMatchObject({ answer: 'Paid now.' });
+    expect(listedB[0]).toMatchObject({ answer: "Paid now." });
     expect(listedB[0].id).not.toBe(aParking.id);
     const listedA = (await c.list(asA)).items;
     expect(listedA).toHaveLength(2);
     expect(listedA.find((item) => item.id === aParking.id)?.answer).toBe(
-      'Yes, free.',
+      "Yes, free.",
     );
     // A's stored documents and chunks are byte for byte what they were.
     expect(await snapshot()).toEqual(aBefore);
@@ -1572,14 +1574,14 @@ describe('FAQ import', () => {
       await prisma.auditEvent.count({
         where: {
           tenantId: b.tenantId,
-          action: { startsWith: 'knowledge.faq_' },
+          action: { startsWith: "knowledge.faq_" },
         },
       }),
     ).toBe(2);
   });
 });
 
-describe('FAQ knowledge', () => {
+describe("FAQ knowledge", () => {
   const faqController = (enabled = true): KnowledgeFaqController =>
     new KnowledgeFaqController(
       prisma,
@@ -1587,16 +1589,16 @@ describe('FAQ knowledge', () => {
       enabled ? new HashingEmbeddingProvider() : undefined,
     );
   const entry = {
-    question: '  How   long is the   course? ',
-    answer: 'Three months,\n  two evenings a week.',
-    language: 'en' as const,
+    question: "  How   long is the   course? ",
+    answer: "Three months,\n  two evenings a week.",
+    language: "en" as const,
     regulated: false,
     confirmProviderMayReadText: true as const,
   };
 
-  it('creates, reads back exactly, updates and withdraws an entry, per tenant, with audit', async () => {
-    const a = await world('ADMIN');
-    const b = await world('ADMIN');
+  it("creates, reads back exactly, updates and withdraws an entry, per tenant, with audit", async () => {
+    const a = await world("ADMIN");
+    const b = await world("ADMIN");
     const sa = await signIn(a);
     const sb = await signIn(b);
     const controller = faqController();
@@ -1609,9 +1611,9 @@ describe('FAQ knowledge', () => {
     expect(listed.items).toMatchObject([
       {
         id,
-        question: 'How long is the course?',
-        answer: 'Three months, two evenings a week.',
-        language: 'en',
+        question: "How long is the course?",
+        answer: "Three months, two evenings a week.",
+        language: "en",
         regulated: false,
       },
     ]);
@@ -1620,14 +1622,14 @@ describe('FAQ knowledge', () => {
     ).toEqual([]);
     await expect(
       controller.update({ principal: sb.principal } as never, id, entry),
-    ).rejects.toMatchObject({ response: { code: 'NOT_FOUND' } });
+    ).rejects.toMatchObject({ response: { code: "NOT_FOUND" } });
     await controller.update({ principal: sa.principal } as never, id, {
       ...entry,
-      answer: 'Four months.',
+      answer: "Four months.",
     });
     listed = await controller.list({ principal: sa.principal } as never);
     expect(listed.items).toHaveLength(1);
-    expect(listed.items[0].answer).toBe('Four months.');
+    expect(listed.items[0].answer).toBe("Four months.");
     await controller.remove({ principal: sa.principal } as never, id);
     expect(
       (await controller.list({ principal: sa.principal } as never)).items,
@@ -1635,51 +1637,51 @@ describe('FAQ knowledge', () => {
     const actions = (
       await db.auditEvent.findMany({
         where: { tenantId: a.tenantId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       })
     ).map((row) => row.action);
     expect(actions).toEqual([
-      'knowledge.faq_created',
-      'knowledge.faq_updated',
-      'knowledge.faq_deleted',
+      "knowledge.faq_created",
+      "knowledge.faq_updated",
+      "knowledge.faq_deleted",
     ]);
   });
 
-  it('refuses writers without the role, missing consent, oversize text and a missing embedder', async () => {
-    const op = await world('OPERATOR');
-    const admin = await world('ADMIN');
+  it("refuses writers without the role, missing consent, oversize text and a missing embedder", async () => {
+    const op = await world("OPERATOR");
+    const admin = await world("ADMIN");
     const asOp = await signIn(op);
     const asAdmin = await signIn(admin);
     const controller = faqController();
     await expect(
       controller.create({ principal: asOp.principal } as never, entry),
-    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    ).rejects.toMatchObject({ response: { code: "FORBIDDEN" } });
     // Operators may read.
     await expect(
       controller.list({ principal: asOp.principal } as never),
     ).resolves.toMatchObject({ items: [] });
     for (const bad of [
       { ...entry, confirmProviderMayReadText: false },
-      { ...entry, answer: 'x'.repeat(601) },
-      { ...entry, question: 'ab' },
+      { ...entry, answer: "x".repeat(601) },
+      { ...entry, question: "ab" },
     ])
       await expect(
         controller.create({ principal: asAdmin.principal } as never, bad),
-      ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+      ).rejects.toMatchObject({ response: { code: "INVALID_BODY" } });
     await expect(
       faqController(false).create(
         { principal: asAdmin.principal } as never,
         entry,
       ),
-    ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
+    ).rejects.toMatchObject({ response: { code: "KNOWLEDGE_DISABLED" } });
     expect(
       (await controller.list({ principal: asAdmin.principal } as never)).items,
     ).toEqual([]);
   });
 });
 
-describe('contacts list', () => {
-  it('lists only the own tenant, hides erased contacts and internals, searches and pages', async () => {
+describe("contacts list", () => {
+  it("lists only the own tenant, hides erased contacts and internals, searches and pages", async () => {
     const a = await world();
     const b = await world();
     for (let i = 0; i < 3; i += 1)
@@ -1697,52 +1699,52 @@ describe('contacts list', () => {
         tenantId: a.tenantId,
         channelAccountId: a.accountId,
         providerUserId: `gone-${randomUUID()}`,
-        name: 'Zed erased',
+        name: "Zed erased",
         deletedAt: new Date(),
       },
     });
     const s = await signIn(a);
     const controller = new ContactsController(prisma, {
       erase: async () => {
-        throw new Error('not used');
+        throw new Error("not used");
       },
     } as never);
     const request = { principal: s.principal } as never;
-    const first = await controller.list(request, { limit: '2' });
+    const first = await controller.list(request, { limit: "2" });
     expect(first.items).toHaveLength(2);
     expect(first.nextCursor).not.toBeNull();
     const second = await controller.list(request, {
-      limit: '2',
+      limit: "2",
       cursor: first.nextCursor!,
     });
     const ids = [...first.items, ...second.items].map((item) => item.id);
     expect(new Set(ids).size).toBe(ids.length);
-    const all = await controller.list(request, { limit: '50' });
+    const all = await controller.list(request, { limit: "50" });
     expect(all.items).toHaveLength(4);
-    expect(all.items.map((item) => item.name)).not.toContain('Zed erased');
-    expect(JSON.stringify(all)).not.toContain('providerUserId');
+    expect(all.items.map((item) => item.name)).not.toContain("Zed erased");
+    expect(JSON.stringify(all)).not.toContain("providerUserId");
     expect(all.items.find((item) => item.id === w(a))?.conversationCount).toBe(
       1,
     );
-    const found = await controller.list(request, { q: 'zed 1' });
-    expect(found.items.map((item) => item.name)).toEqual(['Zed 1']);
-    const byPhone = await controller.list(request, { q: '900000002' });
-    expect(byPhone.items.map((item) => item.name)).toEqual(['Zed 2']);
+    const found = await controller.list(request, { q: "zed 1" });
+    expect(found.items.map((item) => item.name)).toEqual(["Zed 1"]);
+    const byPhone = await controller.list(request, { q: "900000002" });
+    expect(byPhone.items.map((item) => item.name)).toEqual(["Zed 2"]);
     const other = await controller.list(
       { principal: (await signIn(b)).principal } as never,
-      { q: 'Zed' },
+      { q: "Zed" },
     );
     expect(other.items).toEqual([]);
     await expect(
-      controller.list(request, { cursor: 'not-a-uuid' }),
-    ).rejects.toMatchObject({ response: { code: 'INVALID_QUERY' } });
+      controller.list(request, { cursor: "not-a-uuid" }),
+    ).rejects.toMatchObject({ response: { code: "INVALID_QUERY" } });
   });
 });
 
 /** The fixture contact of a world. */
 const w = (world_: World): string => world_.contactId;
 
-describe('knowledge documents', () => {
+describe("knowledge documents", () => {
   const docs = (enabled = true): KnowledgeDocumentsController =>
     new KnowledgeDocumentsController(
       prisma,
@@ -1750,16 +1752,16 @@ describe('knowledge documents', () => {
       enabled ? new HashingEmbeddingProvider() : undefined,
     );
   const policy = {
-    title: '  Refund   policy ',
-    text: `Refunds are possible within 14 days.\n\n${'Details of the policy. '.repeat(80)}`,
-    language: 'en' as const,
+    title: "  Refund   policy ",
+    text: `Refunds are possible within 14 days.\n\n${"Details of the policy. ".repeat(80)}`,
+    language: "en" as const,
     regulated: true,
     confirmProviderMayReadText: true as const,
   };
 
-  it('uploads, lists with chunk counts, replaces by title, withdraws; scoped, audited; FAQ is not a document', async () => {
-    const a = await world('ADMIN');
-    const b = await world('ADMIN');
+  it("uploads, lists with chunk counts, replaces by title, withdraws; scoped, audited; FAQ is not a document", async () => {
+    const a = await world("ADMIN");
+    const b = await world("ADMIN");
     const sa = { principal: (await signIn(a)).principal } as never;
     const sb = { principal: (await signIn(b)).principal } as never;
     const c = docs();
@@ -1772,91 +1774,95 @@ describe('knowledge documents', () => {
       new KnowledgeService(prisma),
       new HashingEmbeddingProvider(),
     ).create(sa, {
-      question: 'Is there a refund?',
-      answer: 'Yes.',
+      question: "Is there a refund?",
+      answer: "Yes.",
       confirmProviderMayReadText: true,
     });
     let listed = await c.list(sa);
     expect(listed.items).toHaveLength(1);
     expect(listed.items[0]).toMatchObject({
       id: first.id,
-      title: 'Refund policy',
+      title: "Refund policy",
       regulated: true,
-      origin: 'upload',
+      origin: "upload",
       chunks: first.chunks,
     });
     expect((await c.list(sb)).items).toEqual([]);
     const again = await c.upload(sa, {
       ...policy,
-      title: 'refund POLICY',
-      text: 'Short new text.',
+      title: "refund POLICY",
+      text: "Short new text.",
     });
     expect(again).toMatchObject({ id: first.id, replaced: true, chunks: 1 });
     listed = await c.list(sa);
     expect(listed.items).toHaveLength(1);
-    expect(listed.items[0].preview).toBe('Short new text.');
+    expect(listed.items[0].preview).toBe("Short new text.");
     await expect(c.remove(sb, first.id)).rejects.toMatchObject({
-      response: { code: 'NOT_FOUND' },
+      response: { code: "NOT_FOUND" },
     });
     await c.remove(sa, first.id);
     expect((await c.list(sa)).items).toEqual([]);
     const actions = (
       await db.auditEvent.findMany({
-        where: { tenantId: a.tenantId, entityType: 'knowledge_document' },
-        orderBy: { createdAt: 'asc' },
+        where: { tenantId: a.tenantId, entityType: "knowledge_document" },
+        orderBy: { createdAt: "asc" },
       })
     ).map((row) => row.action);
     expect(actions).toEqual([
-      'knowledge.document_uploaded',
-      'knowledge.document_replaced',
-      'knowledge.document_deleted',
+      "knowledge.document_uploaded",
+      "knowledge.document_replaced",
+      "knowledge.document_deleted",
     ]);
   });
 
-  it('needs the writer role, consent, sane sizes and an embedder; the FAQ cannot be deleted here', async () => {
-    const op = await world('OPERATOR');
-    const admin = await world('ADMIN');
+  it("needs the writer role, consent, sane sizes and an embedder; the FAQ cannot be deleted here", async () => {
+    const op = await world("OPERATOR");
+    const admin = await world("ADMIN");
     const asOp = { principal: (await signIn(op)).principal } as never;
     const asAdmin = { principal: (await signIn(admin)).principal } as never;
     await expect(docs().upload(asOp, policy)).rejects.toMatchObject({
-      response: { code: 'FORBIDDEN' },
+      response: { code: "FORBIDDEN" },
     });
     for (const bad of [
       { ...policy, confirmProviderMayReadText: false },
-      { ...policy, title: 'x' },
-      { ...policy, text: '' },
-      { ...policy, text: 'a'.repeat(40_001) },
-      { ...policy, topic: '<script>' },
+      { ...policy, title: "x" },
+      { ...policy, text: "" },
+      { ...policy, text: "a".repeat(40_001) },
+      { ...policy, topic: "<script>" },
     ])
       await expect(docs().upload(asAdmin, bad)).rejects.toMatchObject({
-        response: { code: 'INVALID_BODY' },
+        response: { code: "INVALID_BODY" },
       });
     await expect(docs(false).upload(asAdmin, policy)).rejects.toMatchObject({
-      response: { code: 'KNOWLEDGE_DISABLED' },
+      response: { code: "KNOWLEDGE_DISABLED" },
     });
     const faq = await new KnowledgeFaqController(
       prisma,
       new KnowledgeService(prisma),
       new HashingEmbeddingProvider(),
     ).create(asAdmin, {
-      question: 'Is this a document?',
-      answer: 'No.',
+      question: "Is this a document?",
+      answer: "No.",
       confirmProviderMayReadText: true,
     });
     const faqDoc = await db.knowledgeDocument.findFirstOrThrow({
       where: { tenantId: admin.tenantId, source: `faq:${faq.id}` },
     });
     await expect(docs().remove(asAdmin, faqDoc.id)).rejects.toMatchObject({
-      response: { code: 'NOT_FOUND' },
+      response: { code: "NOT_FOUND" },
     });
   });
 
-  describe('lead pipeline', () => {
-    const controller = new LeadPipelineController(prisma);
+  describe("lead pipeline", () => {
+    const controller = new LeadPipelineController(
+      prisma,
+      new TagsService(prisma),
+      new CustomFieldsService(prisma),
+    );
 
-    function as(w: World, role: InboxPrincipal['role']): InboxRequest {
+    function as(w: World, role: InboxPrincipal["role"]): InboxRequest {
       return {
-        method: 'GET',
+        method: "GET",
         headers: {},
         principal: {
           tenantId: w.tenantId,
@@ -1867,26 +1873,26 @@ describe('knowledge documents', () => {
       };
     }
 
-    it('starts leads in New, keeps score separate, and scopes stages by tenant', async () => {
-      const a = await world('ADMIN');
-      const b = await world('ADMIN');
-      const stagesA = await controller.stages(as(a, 'ADMIN'));
-      const stagesB = await controller.stages(as(b, 'ADMIN'));
+    it("starts leads in New, keeps score separate, and scopes stages by tenant", async () => {
+      const a = await world("ADMIN");
+      const b = await world("ADMIN");
+      const stagesA = await controller.stages(as(a, "ADMIN"));
+      const stagesB = await controller.stages(as(b, "ADMIN"));
       expect(stagesA.map((stage) => stage.code)).toEqual([
-        'NEW',
-        'HOT',
-        'WARM',
-        'COLD',
+        "NEW",
+        "HOT",
+        "WARM",
+        "COLD",
       ]);
       expect(stagesA[0]?.id).not.toBe(stagesB[0]?.id);
 
-      const added = await controller.createStage(as(a, 'ADMIN'), {
-        name: 'Qualified',
+      const added = await controller.createStage(as(a, "ADMIN"), {
+        name: "Qualified",
       });
-      const renamed = await controller.renameStage(as(a, 'ADMIN'), added.id, {
-        name: 'In discussion',
+      const renamed = await controller.renameStage(as(a, "ADMIN"), added.id, {
+        name: "In discussion",
       });
-      expect(renamed.name).toBe('In discussion');
+      expect(renamed.name).toBe("In discussion");
 
       await db.lead.create({
         data: {
@@ -1894,62 +1900,62 @@ describe('knowledge documents', () => {
           contactId: a.contactId,
           conversationId: a.conversationId,
           pipelineStageId: stagesA[0]!.id,
-          score: 'HOT',
-          summary: 'test',
+          score: "HOT",
+          summary: "test",
           requirements: {},
           idempotencyKey: `pipeline-${randomUUID()}`,
         },
       });
-      const first = await controller.list(as(a, 'ADMIN'), {
+      const first = await controller.list(as(a, "ADMIN"), {
         stageId: stagesA[0]!.id,
       });
       expect(first.items).toHaveLength(1);
-      expect(first.items[0]?.score).toBe('HOT');
-      expect(first.items[0]?.conversation.channelType).toBe('telegram');
+      expect(first.items[0]?.score).toBe("HOT");
+      expect(first.items[0]?.conversation.channelType).toBe("telegram");
 
-      const moved = await controller.move(as(a, 'ADMIN'), first.items[0]!.id, {
+      const moved = await controller.move(as(a, "ADMIN"), first.items[0]!.id, {
         stageId: renamed.id,
       });
       expect(moved.pipelineStageId).toBe(renamed.id);
       expect(
-        (await controller.list(as(a, 'ADMIN'), { stageId: stagesA[0]!.id }))
+        (await controller.list(as(a, "ADMIN"), { stageId: stagesA[0]!.id }))
           .items,
       ).toHaveLength(0);
       expect(
-        (await controller.list(as(a, 'ADMIN'), { stageId: renamed.id })).items,
+        (await controller.list(as(a, "ADMIN"), { stageId: renamed.id })).items,
       ).toHaveLength(1);
       expect(
-        (await controller.list(as(b, 'ADMIN'), { stageId: stagesB[0]!.id }))
+        (await controller.list(as(b, "ADMIN"), { stageId: stagesB[0]!.id }))
           .items,
       ).toHaveLength(0);
       await expect(
-        controller.move(as(a, 'ADMIN'), moved.id, {
+        controller.move(as(a, "ADMIN"), moved.id, {
           stageId: stagesB[0]!.id,
         }),
       ).rejects.toMatchObject({ status: 404 });
     });
 
-    it('restricts stage configuration to managers and lead moves to non-viewers', async () => {
-      const w = await world('OPERATOR');
-      const stages = await controller.stages(as(w, 'OPERATOR'));
+    it("restricts stage configuration to managers and lead moves to non-viewers", async () => {
+      const w = await world("OPERATOR");
+      const stages = await controller.stages(as(w, "OPERATOR"));
       await expect(
-        controller.createStage(as(w, 'OPERATOR'), { name: 'Follow up' }),
+        controller.createStage(as(w, "OPERATOR"), { name: "Follow up" }),
       ).rejects.toMatchObject({ status: 403 });
 
       const viewer = await db.operator.create({
         data: {
           tenantId: w.tenantId,
-          displayName: 'Viewer',
-          role: 'VIEWER',
+          displayName: "Viewer",
+          role: "VIEWER",
         },
       });
       const viewerRequest: InboxRequest = {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {},
         principal: {
           tenantId: w.tenantId,
           operatorId: viewer.id,
-          role: 'VIEWER',
+          role: "VIEWER",
           sessionId: randomUUID(),
         },
       };
@@ -1962,7 +1968,7 @@ describe('knowledge documents', () => {
   });
 });
 
-describe('lead board moves (ADR 037)', () => {
+describe("lead board moves (ADR 037)", () => {
   const controller = new LeadsController(prisma);
   const lead = (w: World): Promise<{ id: string }> =>
     db.lead.create({
@@ -1970,51 +1976,51 @@ describe('lead board moves (ADR 037)', () => {
         tenantId: w.tenantId,
         contactId: w.contactId,
         conversationId: w.conversationId,
-        score: 'COLD',
-        summary: 's',
+        score: "COLD",
+        summary: "s",
         requirements: {},
-        crmSyncStatus: 'NOT_REQUIRED',
+        crmSyncStatus: "NOT_REQUIRED",
         idempotencyKey: `lead-${randomUUID()}`,
       },
       select: { id: true },
     });
 
-  it('moves a lead between score and status columns without a hand-over, and lists it there', async () => {
+  it("moves a lead between score and status columns without a hand-over, and lists it there", async () => {
     const w = await world();
     const s = await signIn(w);
     const request = { principal: s.principal } as never;
     await expect(
-      controller.score(request, w.conversationId, { score: 'HOT' }),
+      controller.score(request, w.conversationId, { score: "HOT" }),
     ).rejects.toMatchObject({ status: 409 });
     const { id } = await lead(w);
 
     expect(
-      await controller.score(request, w.conversationId, { score: 'HOT' }),
-    ).toEqual({ score: 'HOT' });
+      await controller.score(request, w.conversationId, { score: "HOT" }),
+    ).toEqual({ score: "HOT" });
     expect(
       await controller.status(request, w.conversationId, {
-        status: 'IN_PROGRESS',
+        status: "IN_PROGRESS",
       }),
-    ).toEqual({ status: 'IN_PROGRESS' });
+    ).toEqual({ status: "IN_PROGRESS" });
     expect(await db.lead.findUniqueOrThrow({ where: { id } })).toMatchObject({
-      score: 'HOT',
+      score: "HOT",
       scoreSetByOperator: true,
-      status: 'IN_PROGRESS',
+      status: "IN_PROGRESS",
     });
     const hot = await read.list(s.principal, {
-      scope: 'all',
-      leadScore: 'HOT',
+      scope: "all",
+      leadScore: "HOT",
     });
     expect(hot.items.map((item) => item.id)).toContain(w.conversationId);
     expect(
       hot.items.find((item) => item.id === w.conversationId),
     ).toMatchObject({
-      leadStatus: 'IN_PROGRESS',
+      leadStatus: "IN_PROGRESS",
       leadScoreSetByOperator: true,
     });
     const won = await read.list(s.principal, {
-      scope: 'all',
-      leadStatus: 'WON',
+      scope: "all",
+      leadStatus: "WON",
     });
     expect(won.items.map((item) => item.id)).not.toContain(w.conversationId);
     expect(
@@ -2023,7 +2029,7 @@ describe('lead board moves (ADR 037)', () => {
           tenantId: w.tenantId,
           entityId: id,
           action: {
-            in: ['operator.set_lead_score', 'operator.set_lead_status'],
+            in: ["operator.set_lead_score", "operator.set_lead_status"],
           },
         },
       }),
@@ -2034,12 +2040,12 @@ describe('lead board moves (ADR 037)', () => {
       (await db.lead.findUniqueOrThrow({ where: { id } })).scoreSetByOperator,
     ).toBe(false);
     await expect(
-      controller.status(request, w.conversationId, { status: 'DONE' }),
+      controller.status(request, w.conversationId, { status: "DONE" }),
     ).rejects.toMatchObject({ status: 400 });
   });
 
-  it('refuses viewers and another tenant’s conversation', async () => {
-    const viewer = await world('VIEWER');
+  it("refuses viewers and another tenant’s conversation", async () => {
+    const viewer = await world("VIEWER");
     await lead(viewer);
     const sv = await signIn(viewer);
     await expect(
@@ -2047,7 +2053,7 @@ describe('lead board moves (ADR 037)', () => {
         { principal: sv.principal } as never,
         viewer.conversationId,
         {
-          status: 'WON',
+          status: "WON",
         },
       ),
     ).rejects.toMatchObject({ status: 403 });
@@ -2061,7 +2067,7 @@ describe('lead board moves (ADR 037)', () => {
         { principal: sa.principal } as never,
         b.conversationId,
         {
-          status: 'WON',
+          status: "WON",
         },
       ),
     ).rejects.toMatchObject({ status: 404 });
@@ -2071,11 +2077,11 @@ describe('lead board moves (ADR 037)', () => {
           where: { conversationId: b.conversationId },
         })
       ).status,
-    ).toBe('NEW');
+    ).toBe("NEW");
   });
 });
 
-describe('operator-initiated take-over (ADR 038)', () => {
+describe("operator-initiated take-over (ADR 038)", () => {
   const requestGuard = new OperatorRequestGuard(
     new OperatorTokenGuard(prisma),
     guard,
@@ -2085,18 +2091,18 @@ describe('operator-initiated take-over (ADR 038)', () => {
   );
   const as = async (s: { cookie: string; csrf: string }): Promise<never> => {
     const request = {
-      method: 'POST',
+      method: "POST",
       headers: { cookie: s.cookie, [CSRF_HEADER]: s.csrf },
     };
     await requestGuard.canActivate(context(request));
     return request as never;
   };
 
-  it('takes a conversation the bot is answering, replies, and gives it back', async () => {
+  it("takes a conversation the bot is answering, replies, and gives it back", async () => {
     const w = await world();
     await db.conversation.update({
       where: { id: w.conversationId },
-      data: { state: 'BOT_ACTIVE' },
+      data: { state: "BOT_ACTIVE" },
     });
     const s = await signIn(w);
     const key = `k-${randomUUID()}`;
@@ -2105,19 +2111,19 @@ describe('operator-initiated take-over (ADR 038)', () => {
       key,
       await as(s),
     );
-    expect(taken).toMatchObject({ status: 'ok', state: 'OPERATOR_ACTIVE' });
+    expect(taken).toMatchObject({ status: "ok", state: "OPERATOR_ACTIVE" });
     const handoverId = (taken as { handoverId: string }).handoverId;
     expect(
       await db.handover.findUniqueOrThrow({ where: { id: handoverId } }),
     ).toMatchObject({
-      reasonCode: 'OPERATOR_INITIATED',
-      status: 'TAKEN',
+      reasonCode: "OPERATOR_INITIATED",
+      status: "TAKEN",
       assignedOperatorId: w.operatorId,
       slaDueAt: null,
     });
     expect(
       await controller.takeOverConversation(w.conversationId, key, await as(s)),
-    ).toMatchObject({ status: 'duplicate', handoverId });
+    ).toMatchObject({ status: "duplicate", handoverId });
     // Taking again with a new key is a no-op for the owner.
     expect(
       await controller.takeOverConversation(
@@ -2125,36 +2131,36 @@ describe('operator-initiated take-over (ADR 038)', () => {
         `k-${randomUUID()}`,
         await as(s),
       ),
-    ).toMatchObject({ status: 'ok', handoverId });
+    ).toMatchObject({ status: "ok", handoverId });
 
     expect(
       await controller.reply(
         handoverId,
         `k-${randomUUID()}`,
-        { text: 'Salom, operatorman.' },
+        { text: "Salom, operatorman." },
         await as(s),
       ),
-    ).toMatchObject({ status: 'ok' });
+    ).toMatchObject({ status: "ok" });
     expect(
       await controller.returnToBot(
         handoverId,
         `k-${randomUUID()}`,
         await as(s),
       ),
-    ).toMatchObject({ status: 'ok', state: 'BOT_ACTIVE' });
+    ).toMatchObject({ status: "ok", state: "BOT_ACTIVE" });
     expect(
       (await db.handover.findUniqueOrThrow({ where: { id: handoverId } }))
         .status,
-    ).toBe('RESOLVED');
+    ).toBe("RESOLVED");
   });
 
-  it('takes an open bot hand-over instead of creating another', async () => {
+  it("takes an open bot hand-over instead of creating another", async () => {
     const w = await world();
     const open = await db.handover.create({
       data: {
         tenantId: w.tenantId,
         conversationId: w.conversationId,
-        reasonCode: 'COMPLAINT',
+        reasonCode: "COMPLAINT",
         summary: {},
       },
     });
@@ -2165,14 +2171,14 @@ describe('operator-initiated take-over (ADR 038)', () => {
         `k-${randomUUID()}`,
         await as(s),
       ),
-    ).toMatchObject({ status: 'ok', handoverId: open.id });
+    ).toMatchObject({ status: "ok", handoverId: open.id });
     expect(
       await db.handover.count({ where: { conversationId: w.conversationId } }),
     ).toBe(1);
   });
 
-  it('refuses viewers, other tenants and a conversation another operator holds', async () => {
-    const viewer = await world('VIEWER');
+  it("refuses viewers, other tenants and a conversation another operator holds", async () => {
+    const viewer = await world("VIEWER");
     await expect(
       controller.takeOverConversation(
         viewer.conversationId,
@@ -2192,11 +2198,11 @@ describe('operator-initiated take-over (ADR 038)', () => {
     ).rejects.toMatchObject({ status: 404 });
 
     const other = await db.operator.create({
-      data: { tenantId: a.tenantId, displayName: 'Other', role: 'OPERATOR' },
+      data: { tenantId: a.tenantId, displayName: "Other", role: "OPERATOR" },
     });
     await db.conversation.update({
       where: { id: a.conversationId },
-      data: { state: 'OPERATOR_ACTIVE', assignedOperatorId: other.id },
+      data: { state: "OPERATOR_ACTIVE", assignedOperatorId: other.id },
     });
     await expect(
       controller.takeOverConversation(

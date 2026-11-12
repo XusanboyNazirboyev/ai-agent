@@ -10,19 +10,45 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { z } from 'zod';
-import { PrismaService } from '../persistence/prisma.service.js';
-import { ensureLeadStages } from '../leads/lead-stage.util.js';
-import { SessionGuard, type InboxRequest } from './session.guard.js';
+} from "@nestjs/common";
+import { z } from "zod";
+import { PrismaService } from "../persistence/prisma.service.js";
+import { ensureLeadStages } from "../leads/lead-stage.util.js";
+import {
+  describeFields,
+  type FieldValue,
+} from "../tags/custom-field-values.js";
+import {
+  CustomFieldsService,
+  type FieldValueView,
+} from "../tags/custom-fields.service.js";
+import { parseFieldFilter } from "../tags/field-filter.js";
+import { invalidQuery } from "../tags/tag-errors.js";
+import {
+  activeFieldDefs,
+  tagsOfLeads,
+  type TagView,
+} from "../tags/tag-reads.js";
+import { TagsService } from "../tags/tags.service.js";
+import { SessionGuard, type InboxRequest } from "./session.guard.js";
+import {
+  operating,
+  parseId,
+  parseTagIds,
+  parseValues,
+} from "./tag-assignment.js";
 
 const ListQuery = z.object({
   stageId: z.string().uuid().optional(),
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
+  tagId: z.string().uuid().optional(),
+  fieldKey: z.string().max(64).optional(),
+  fieldValue: z.string().max(600).optional(),
 });
 const StageBody = z.object({ name: z.string().trim().min(1).max(80) });
 const MoveBody = z.object({ stageId: z.string().uuid() });
@@ -46,14 +72,62 @@ interface LeadPipelineItem {
   contact: { name: string | null; phone: string | null };
   /** `channelType` of the conversation's channel account (card badge). */
   conversation: { id: string; state: string; channelType: string };
+  /** Active tags and custom field values (ADR 053). */
+  tags: TagView[];
+  customFields: Array<{
+    key: string;
+    label: string;
+    type: string;
+    value: FieldValue | null;
+  }>;
 }
 
-@Controller('api/v1/leads')
+@Controller("api/v1/leads")
 @UseGuards(SessionGuard)
 export class LeadPipelineController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tags: TagsService,
+    private readonly fields: CustomFieldsService,
+  ) {}
 
-  @Get('stages')
+  /** Replaces the tag set of a lead (ADR 053). */
+  @Put(":id/tags")
+  async setTags(
+    @Req() request: InboxRequest,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<{ tags: TagView[] }> {
+    const principal = operating(request);
+    const tagIds = parseTagIds(body);
+    return this.tags.setTags(
+      principal.tenantId,
+      principal.operatorId,
+      "lead",
+      parseId(id),
+      tagIds,
+    );
+  }
+
+  /** Merges custom field values into a lead (ADR 053). */
+  @Patch(":id/custom-fields")
+  async setCustomFields(
+    @Req() request: InboxRequest,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ): Promise<{ customFields: FieldValueView[] }> {
+    const principal = operating(request);
+    const values = parseValues(body);
+    return this.fields.patchValues(
+      principal.tenantId,
+      principal.operatorId,
+      "lead",
+      parseId(id),
+      values,
+    );
+  }
+
+  @Get("stages")
   async stages(@Req() request: InboxRequest): Promise<LeadStageView[]> {
     const tenantId = request.principal!.tenantId;
     await this.prisma.$transaction((tx) =>
@@ -61,12 +135,12 @@ export class LeadPipelineController {
     );
     return this.prisma.leadStage.findMany({
       where: { tenantId },
-      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: { id: true, code: true, name: true, position: true },
     });
   }
 
-  @Post('stages')
+  @Post("stages")
   async createStage(
     @Req() request: InboxRequest,
     @Body() body: unknown,
@@ -82,13 +156,13 @@ export class LeadPipelineController {
       });
       if (count >= MAX_STAGES)
         throw new ConflictException({
-          code: 'LEAD_STAGE_LIMIT',
-          message: 'Maximum number of lead stages reached',
-          i18nKey: 'errors.LEAD_STAGE_LIMIT',
+          code: "LEAD_STAGE_LIMIT",
+          message: "Maximum number of lead stages reached",
+          i18nKey: "errors.LEAD_STAGE_LIMIT",
         });
       const last = await tx.leadStage.findFirst({
         where: { tenantId: who.tenantId },
-        orderBy: { position: 'desc' },
+        orderBy: { position: "desc" },
         select: { position: true },
       });
       const stage = await tx.leadStage.create({
@@ -102,10 +176,10 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
-          action: 'lead.stage.created',
-          entityType: 'lead_stage',
+          action: "lead.stage.created",
+          entityType: "lead_stage",
           entityId: stage.id,
           safeInputSummary: { position: String(stage.position) },
         },
@@ -114,10 +188,10 @@ export class LeadPipelineController {
     });
   }
 
-  @Patch('stages/:id')
+  @Patch("stages/:id")
   async renameStage(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) stageId: string,
+    @Param("id", ParseUUIDPipe) stageId: string,
     @Body() body: unknown,
   ): Promise<LeadStageView> {
     const who = this.requireManager(request);
@@ -137,12 +211,12 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
-          action: 'lead.stage.renamed',
-          entityType: 'lead_stage',
+          action: "lead.stage.renamed",
+          entityType: "lead_stage",
           entityId: stage.id,
-          safeInputSummary: { code: stage.code ?? 'CUSTOM' },
+          safeInputSummary: { code: stage.code ?? "CUSTOM" },
         },
       });
       return updated;
@@ -157,18 +231,34 @@ export class LeadPipelineController {
     const parsed = ListQuery.safeParse(query);
     if (!parsed.success)
       throw new BadRequestException({
-        code: 'INVALID_QUERY',
-        message: 'Invalid query',
-        i18nKey: 'errors.invalidQuery',
+        code: "INVALID_QUERY",
+        message: "Invalid query",
+        i18nKey: "errors.invalidQuery",
       });
-    const { stageId, cursor, limit } = parsed.data;
+    const { stageId, cursor, limit, tagId, fieldKey, fieldValue } = parsed.data;
     const tenantId = request.principal!.tenantId;
+    if ((fieldKey === undefined) !== (fieldValue === undefined))
+      throw invalidQuery();
+    const field =
+      fieldKey !== undefined && fieldValue !== undefined
+        ? await parseFieldFilter(
+            this.prisma,
+            tenantId,
+            "LEAD",
+            fieldKey,
+            fieldValue,
+          )
+        : undefined;
     const rows = await this.prisma.lead.findMany({
       where: {
         tenantId,
         ...(stageId ? { pipelineStageId: stageId } : {}),
+        ...(tagId ? { tags: { some: { tenantId, tagId } } } : {}),
+        ...(field
+          ? { customFields: { path: [field.key], equals: field.value } }
+          : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
       ...(cursor
         ? { cursor: { tenantId_id: { tenantId, id: cursor } }, skip: 1 }
@@ -181,6 +271,7 @@ export class LeadPipelineController {
         summary: true,
         createdAt: true,
         updatedAt: true,
+        customFields: true,
         contact: { select: { name: true, phone: true } },
         conversation: {
           select: {
@@ -191,31 +282,44 @@ export class LeadPipelineController {
         },
       },
     });
-    const items = rows
-      .slice(0, limit)
-      .map(
-        ({ conversation: { channelAccount, ...conversation }, ...lead }) => ({
-          ...lead,
-          conversation: {
-            ...conversation,
-            channelType: channelAccount.channelType,
-          },
-        }),
-      );
+    const page = rows.slice(0, limit);
+    const [tags, defs] = await Promise.all([
+      tagsOfLeads(
+        this.prisma,
+        tenantId,
+        page.map((l) => l.id),
+      ),
+      activeFieldDefs(this.prisma, tenantId, "LEAD"),
+    ]);
+    const items: LeadPipelineItem[] = page.map(
+      ({
+        conversation: { channelAccount, ...conversation },
+        customFields,
+        ...lead
+      }) => ({
+        ...lead,
+        conversation: {
+          ...conversation,
+          channelType: channelAccount.channelType,
+        },
+        tags: tags.get(lead.id) ?? [],
+        customFields: describeFields(defs, customFields),
+      }),
+    );
     return {
       items,
       nextCursor: rows.length > limit ? items[items.length - 1].id : null,
     };
   }
 
-  @Patch(':id/stage')
+  @Patch(":id/stage")
   async move(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
+    @Param("id", ParseUUIDPipe) leadId: string,
     @Body() body: unknown,
   ): Promise<{ id: string; pipelineStageId: string }> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw this.forbidden();
+    if (who.role === "VIEWER") throw this.forbidden();
     const parsed = MoveBody.safeParse(body);
     if (!parsed.success) throw this.invalidBody();
     return this.prisma.$transaction(async (tx) => {
@@ -238,13 +342,13 @@ export class LeadPipelineController {
         await tx.auditEvent.create({
           data: {
             tenantId: who.tenantId,
-            actorType: 'OPERATOR',
+            actorType: "OPERATOR",
             actorId: who.operatorId,
-            action: 'lead.stage.changed',
-            entityType: 'lead',
+            action: "lead.stage.changed",
+            entityType: "lead",
             entityId: lead.id,
             safeInputSummary: {
-              fromStageId: lead.pipelineStageId ?? '',
+              fromStageId: lead.pipelineStageId ?? "",
               toStageId: stage.id,
             },
           },
@@ -259,31 +363,31 @@ export class LeadPipelineController {
     operatorId: string;
   } {
     const { tenantId, operatorId, role } = request.principal!;
-    if (role !== 'OWNER' && role !== 'ADMIN') throw this.forbidden();
+    if (role !== "OWNER" && role !== "ADMIN") throw this.forbidden();
     return { tenantId, operatorId };
   }
 
   private invalidBody(): BadRequestException {
     return new BadRequestException({
-      code: 'INVALID_BODY',
-      message: 'Invalid request body',
-      i18nKey: 'errors.invalidBody',
+      code: "INVALID_BODY",
+      message: "Invalid request body",
+      i18nKey: "errors.invalidBody",
     });
   }
 
   private notFound(): NotFoundException {
     return new NotFoundException({
-      code: 'NOT_FOUND',
-      message: 'Not found',
-      i18nKey: 'errors.NOT_FOUND',
+      code: "NOT_FOUND",
+      message: "Not found",
+      i18nKey: "errors.NOT_FOUND",
     });
   }
 
   private forbidden(): ForbiddenException {
     return new ForbiddenException({
-      code: 'FORBIDDEN',
-      message: 'Not allowed',
-      i18nKey: 'errors.forbidden',
+      code: "FORBIDDEN",
+      message: "Not allowed",
+      i18nKey: "errors.forbidden",
     });
   }
 }

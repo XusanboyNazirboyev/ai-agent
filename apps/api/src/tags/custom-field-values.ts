@@ -40,7 +40,8 @@ export function isValidFieldKey(key: string): boolean {
 
 export function isTagColor(value: unknown): value is TagColor {
   return (
-    typeof value === 'string' && (TAG_COLORS as readonly string[]).includes(value)
+    typeof value === 'string' &&
+    (TAG_COLORS as readonly string[]).includes(value)
   );
 }
 
@@ -153,7 +154,12 @@ export function asValues(stored: unknown): Record<string, unknown> {
 export function describeFields(
   defs: readonly FieldDef[],
   stored: unknown,
-): Array<{ key: string; label: string; type: FieldType; value: FieldValue | null }> {
+): Array<{
+  key: string;
+  label: string;
+  type: FieldType;
+  value: FieldValue | null;
+}> {
   const values = asValues(stored);
   return [...defs]
     .sort((a, b) => a.position - b.position)
@@ -161,9 +167,10 @@ export function describeFields(
       key: d.key,
       label: d.label,
       type: d.type,
-      value: Object.hasOwn(values, d.key) && values[d.key] !== null
-        ? (values[d.key] as FieldValue)
-        : null,
+      value:
+        Object.hasOwn(values, d.key) && values[d.key] !== null
+          ? (values[d.key] as FieldValue)
+          : null,
     }));
 }
 

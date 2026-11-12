@@ -109,7 +109,10 @@ export class CustomFieldsService {
         select: { id: true, type: true, archivedAt: true },
       });
       // A key is never reused for another type: stored values may remain.
-      if (existing && (existing.archivedAt === null || existing.type !== input.type))
+      if (
+        existing &&
+        (existing.archivedAt === null || existing.type !== input.type)
+      )
         throw conflict('FIELD_KEY_TAKEN');
       const active = await tx.customFieldDef.count({
         where: { tenantId, entity: input.entity, archivedAt: null },
@@ -140,12 +143,20 @@ export class CustomFieldsService {
             },
             select: defSelect,
           });
-      await audit(tx, tenantId, operatorId, 'custom_field.created', 'custom_field', row.id, {
-        entity: input.entity,
-        key: input.key,
-        type: input.type,
-        reactivated: existing !== null,
-      });
+      await audit(
+        tx,
+        tenantId,
+        operatorId,
+        'custom_field.created',
+        'custom_field',
+        row.id,
+        {
+          entity: input.entity,
+          key: input.key,
+          type: input.type,
+          reactivated: existing !== null,
+        },
+      );
       return toItem(row);
     });
   }
@@ -173,13 +184,21 @@ export class CustomFieldsService {
         },
         select: defSelect,
       });
-      await audit(tx, tenantId, operatorId, 'custom_field.updated', 'custom_field', id, {
-        entity: def.entity,
-        key: def.key,
-        label: input.label !== undefined,
-        options: input.options !== undefined,
-        position: input.position !== undefined,
-      });
+      await audit(
+        tx,
+        tenantId,
+        operatorId,
+        'custom_field.updated',
+        'custom_field',
+        id,
+        {
+          entity: def.entity,
+          key: def.key,
+          label: input.label !== undefined,
+          options: input.options !== undefined,
+          position: input.position !== undefined,
+        },
+      );
       return toItem(row);
     });
   }
@@ -200,10 +219,18 @@ export class CustomFieldsService {
         where: { tenantId_id: { tenantId, id } },
         data: { archivedAt: new Date() },
       });
-      await audit(tx, tenantId, operatorId, 'custom_field.archived', 'custom_field', id, {
-        entity: def.entity,
-        key: def.key,
-      });
+      await audit(
+        tx,
+        tenantId,
+        operatorId,
+        'custom_field.archived',
+        'custom_field',
+        id,
+        {
+          entity: def.entity,
+          key: def.key,
+        },
+      );
       return { id };
     });
   }
