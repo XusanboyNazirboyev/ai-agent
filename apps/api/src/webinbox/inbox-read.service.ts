@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { describeFields } from '../tags/custom-field-values.js';
 import {
@@ -195,7 +195,7 @@ export class InboxReadService {
             ],
           }
         : {}),
-      ...(cursor
+      ...(cursor && options.scope !== 'waiting'
         ? {
             AND: [
               {
@@ -208,6 +208,124 @@ export class InboxReadService {
           }
         : {}),
     };
+    if (options.scope === 'waiting') {
+      // The waiting queue is ordered and paginated in PostgreSQL. Sorting only
+      // the current Prisma page would miss older handovers on later pages.
+      const filters = [
+        Prisma.sql`c.tenant_id = ${principal.tenantId}::uuid`,
+        Prisma.sql`c.state = 'WAITING_OPERATOR'`,
+      ];
+      if (options.language)
+        filters.push(Prisma.sql`c.language = ${options.language}`);
+      if (options.leadScore || options.leadStatus) {
+        filters.push(Prisma.sql`EXISTS (
+          SELECT 1
+          FROM leads l
+          WHERE l.tenant_id = c.tenant_id
+            AND l.conversation_id = c.id
+            ${options.leadScore ? Prisma.sql`AND l.score::text = ${options.leadScore}` : Prisma.empty}
+            ${options.leadStatus ? Prisma.sql`AND l.status::text = ${options.leadStatus}` : Prisma.empty}
+        )`);
+      }
+      if (options.q) {
+        const nameQuery = `%${options.q.slice(0, 80)}%`;
+        const phoneQuery = `%${options.q.slice(0, 40)}%`;
+        filters.push(Prisma.sql`(
+          ct.name ILIKE ${nameQuery}
+          OR ct.phone LIKE ${phoneQuery}
+          OR EXISTS (
+            SELECT 1
+            FROM messages m
+            WHERE m.tenant_id = c.tenant_id
+              AND m.conversation_id = c.id
+              AND m.text ILIKE ${nameQuery}
+          )
+        )`);
+      }
+      const candidates = await this.prisma.$queryRaw<
+        { id: string; sortAt: Date }[]
+      >(Prisma.sql`
+        WITH waiting_candidates AS (
+          SELECT
+            c.id,
+            COALESCE(MIN(h.opened_at), c.updated_at) AS "sortAt"
+          FROM conversations c
+          LEFT JOIN handovers h
+            ON h.tenant_id = c.tenant_id
+            AND h.conversation_id = c.id
+            AND h.status IN ('OPEN', 'TAKEN')
+          LEFT JOIN contacts ct
+            ON ct.tenant_id = c.tenant_id
+            AND ct.id = c.contact_id
+          WHERE ${Prisma.join(filters, ' AND ')}
+          GROUP BY c.id, c.updated_at
+        )
+        SELECT id, "sortAt"
+        FROM waiting_candidates
+        ${cursor
+          ? Prisma.sql`WHERE (
+              "sortAt" > ${new Date(cursor.t)}
+              OR ("sortAt" = ${new Date(cursor.t)} AND id::text > ${cursor.id})
+            )`
+          : Prisma.empty}
+        ORDER BY "sortAt" ASC, id ASC
+        LIMIT ${limit + 1}
+      `);
+      const page = candidates.slice(0, limit);
+      const rows = page.length
+        ? await this.prisma.conversation.findMany({
+            where: {
+              tenantId: principal.tenantId,
+              id: { in: page.map((candidate) => candidate.id) },
+            },
+            include: {
+              contact: { select: { name: true } },
+              leads: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: {
+                  score: true,
+                  status: true,
+                  scoreSetByOperator: true,
+                },
+              },
+              handovers: {
+                where: { status: { in: ['OPEN', 'TAKEN'] } },
+                orderBy: { openedAt: 'asc' },
+                take: 1,
+                select: { openedAt: true, slaDueAt: true },
+              },
+            },
+          })
+        : [];
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const items = page.flatMap((candidate) => {
+        const row = byId.get(candidate.id);
+        if (!row) return [];
+        return [{
+          id: row.id,
+          state: row.state,
+          contactName: row.contact.name,
+          language: row.language,
+          leadScore: row.leads[0]?.score ?? null,
+          leadStatus: row.leads[0]?.status ?? null,
+          leadScoreSetByOperator: row.leads[0]?.scoreSetByOperator ?? false,
+          assignedOperatorId: row.assignedOperatorId,
+          waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
+          slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
+          updatedAt: row.updatedAt.toISOString(),
+        }];
+      });
+      const last = page.at(-1);
+      return {
+        items,
+        nextCursor:
+          candidates.length > limit && last
+            ? encode({ t: last.sortAt.toISOString(), id: last.id })
+            : null,
+      };
+    }
+
     const rows = await this.prisma.conversation.findMany({
       where,
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
@@ -241,13 +359,6 @@ export class InboxReadService {
       slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
     }));
-    // The default "waiting" view shows the longest wait first.
-    if (options.scope === 'waiting')
-      items.sort((a, b) =>
-        (a.waitingSince ?? a.updatedAt).localeCompare(
-          b.waitingSince ?? b.updatedAt,
-        ),
-      );
     const last = page.at(-1);
     return {
       items,
