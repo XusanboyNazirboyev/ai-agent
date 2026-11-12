@@ -30,6 +30,14 @@ vi.mock('@/lib/api', () => ({
   errorKey: () => 'errors.UNKNOWN',
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => vi.fn(),
+}));
+
+vi.mock('@/lib/export-csv', () => ({
+  downloadCsv: vi.fn(),
+}));
+
 const person: PersonItem = {
   id: 'person-1',
   displayName: 'Ada Lovelace',

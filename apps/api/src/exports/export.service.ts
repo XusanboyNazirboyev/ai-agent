@@ -85,7 +85,11 @@ export class ExportService {
         get: (r) => r.conversationCount,
       },
       { header: 'leads', kind: 'number', get: (r) => r.leadCount },
-      { header: 'last_activity_at', kind: 'date', get: (r) => r.lastActivityAt },
+      {
+        header: 'last_activity_at',
+        kind: 'date',
+        get: (r) => r.lastActivityAt,
+      },
       {
         header: 'marketing_opt_out',
         kind: 'boolean',
@@ -239,7 +243,9 @@ export class ExportService {
       ...(filters.tagId
         ? { tags: { some: { tenantId, tagId: filters.tagId } } }
         : {}),
-      ...(field ? { customFields: { path: [field.key], equals: field.value } } : {}),
+      ...(field
+        ? { customFields: { path: [field.key], equals: field.value } }
+        : {}),
     };
   }
 
@@ -252,7 +258,13 @@ export class ExportService {
     if ((fieldKey === undefined) !== (fieldValue === undefined))
       throw invalidQuery();
     if (fieldKey !== undefined && fieldValue !== undefined) {
-      return parseFieldFilter(this.prisma, tenantId, entity, fieldKey, fieldValue);
+      return parseFieldFilter(
+        this.prisma,
+        tenantId,
+        entity,
+        fieldKey,
+        fieldValue,
+      );
     }
     return undefined;
   }

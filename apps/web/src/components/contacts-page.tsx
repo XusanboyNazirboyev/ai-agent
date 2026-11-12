@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { downloadCsv } from '@/lib/export-csv';
+import { useToast } from '@/components/ui/toast';
 import { channelName } from '@/lib/channel-names';
 import type {
   PersonDuplicateGroup,
@@ -36,7 +38,12 @@ export function ContactsPage(): ReactNode {
   const [search, setSearch] = useState('');
   const [tagId, setTagId] = useState('');
   const [tab, setTab] = useState<'people' | 'duplicates'>('people');
+  const [exporting, setExporting] = useState(false);
+  const toast = useToast();
   const q = useDebounced(search.trim(), 300);
+  const canExport =
+    useShell().operator.role === 'OWNER' ||
+    useShell().operator.role === 'ADMIN';
 
   const tagsQuery = useQuery({
     queryKey: ['tags'],
@@ -76,7 +83,7 @@ export function ContactsPage(): ReactNode {
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('people.intro')}</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant={tab === 'people' ? 'primary' : 'secondary'}
@@ -93,6 +100,30 @@ export function ContactsPage(): ReactNode {
           >
             {t('people.duplicatesReview')}
           </Button>
+          {tab === 'people' && canExport ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={exporting}
+              data-testid="people-export"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (q) params.set('q', q);
+                if (tagId) params.set('tagId', tagId);
+                const qs = params.toString();
+                setExporting(true);
+                void downloadCsv(
+                  `/api/v1/exports/people.csv${qs ? `?${qs}` : ''}`,
+                  'people.csv',
+                )
+                  .then(() => toast(t('toast.exportStarted')))
+                  .catch((e) => toast(t(errorKey(e)), 'error'))
+                  .finally(() => setExporting(false));
+              }}
+            >
+              {t('export.people')}
+            </Button>
+          ) : null}
         </div>
 
         {tab === 'people' ? (

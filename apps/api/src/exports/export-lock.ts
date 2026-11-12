@@ -24,8 +24,19 @@ export class ExportTooLargeError extends Error {
 }
 
 interface LockRedis {
-  set(key: string, value: string, px: 'PX', ttlMs: number, nx: 'NX'): Promise<string | null>;
-  eval(script: string, numkeys: number, key: string, value: string): Promise<unknown>;
+  set(
+    key: string,
+    value: string,
+    px: 'PX',
+    ttlMs: number,
+    nx: 'NX',
+  ): Promise<string | null>;
+  eval(
+    script: string,
+    numkeys: number,
+    key: string,
+    value: string,
+  ): Promise<unknown>;
   quit(): Promise<unknown>;
 }
 
@@ -60,7 +71,13 @@ export class ExportLock implements OnModuleDestroy {
     let timer: NodeJS.Timeout | undefined;
     try {
       const ok = await Promise.race([
-        this.redis().set(lockKey(tenantId), token, 'PX', EXPORT_LOCK_TTL_MS, 'NX'),
+        this.redis().set(
+          lockKey(tenantId),
+          token,
+          'PX',
+          EXPORT_LOCK_TTL_MS,
+          'NX',
+        ),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS);
         }),
@@ -80,7 +97,9 @@ export class ExportLock implements OnModuleDestroy {
       if (this.local.get(tenantId) === token) this.local.delete(tenantId);
       const script =
         "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end";
-      await this.redis().eval(script, 1, lockKey(tenantId), token).catch(() => undefined);
+      await this.redis()
+        .eval(script, 1, lockKey(tenantId), token)
+        .catch(() => undefined);
     };
   }
 

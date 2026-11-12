@@ -44,7 +44,9 @@ export function formatCell(
     if (value instanceof Date) return value.toISOString();
     if (typeof value === 'string' && value) {
       const d = new Date(value);
-      return Number.isNaN(d.getTime()) ? neutraliseCell(value) : d.toISOString();
+      return Number.isNaN(d.getTime())
+        ? neutraliseCell(value)
+        : d.toISOString();
     }
     return '';
   }
@@ -67,10 +69,7 @@ export function csvHeader<T>(columns: readonly CsvColumn<T>[]): string {
   return columns.map((c) => formatCell(c.header, 'text')).join(',');
 }
 
-export function csvRow<T>(
-  columns: readonly CsvColumn<T>[],
-  row: T,
-): string {
+export function csvRow<T>(columns: readonly CsvColumn<T>[], row: T): string {
   return columns.map((c) => formatCell(c.get(row), c.kind)).join(',');
 }
 
@@ -88,7 +87,10 @@ export function csvChunk<T>(
   return parts.join(CSV_EOL) + CSV_EOL;
 }
 
-export function exportFilename(kind: 'people' | 'leads', now = new Date()): string {
+export function exportFilename(
+  kind: 'people' | 'leads',
+  now = new Date(),
+): string {
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, '0');
   const d = String(now.getUTCDate()).padStart(2, '0');

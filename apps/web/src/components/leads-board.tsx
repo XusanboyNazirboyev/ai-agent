@@ -10,6 +10,8 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { downloadCsv } from '@/lib/export-csv';
+import { useToast } from '@/components/ui/toast';
 import { channelName } from '@/lib/channel-names';
 import type {
   ConversationState,
@@ -54,7 +56,11 @@ function stageName(stage: LeadStage, t: (key: string) => string): string {
 /** Tenant-configured funnel stages; lead score remains a separate attribute. */
 export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
+  const { operator } = useShell();
+  const toast = useToast();
   const [tagId, setTagId] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const stages = useQuery({
     queryKey: ['lead-stages'],
     queryFn: () => api<LeadStage[]>('/api/v1/leads/stages'),
@@ -88,6 +94,29 @@ export function LeadsBoard(): ReactNode {
             ))}
           </select>
         </label>
+        {canExport ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={exporting}
+            data-testid="leads-export"
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (tagId) params.set('tagId', tagId);
+              const qs = params.toString();
+              setExporting(true);
+              void downloadCsv(
+                `/api/v1/exports/leads.csv${qs ? `?${qs}` : ''}`,
+                'leads.csv',
+              )
+                .then(() => toast(t('toast.exportStarted')))
+                .catch((e) => toast(t(errorKey(e)), 'error'))
+                .finally(() => setExporting(false));
+            }}
+          >
+            {t('export.leads')}
+          </Button>
+        ) : null}
       </div>
       {stages.isPending ? (
         <div role="status">
