@@ -167,9 +167,15 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
       where: { tenantId: w.tenantId },
       orderBy: { position: 'asc' },
     });
-    expect(stages.map((s) => s.code)).toEqual(
-      ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'],
-    );
+    expect(stages.map((s) => s.code)).toEqual([
+      'NEW',
+      'CONTACTED',
+      'QUALIFIED',
+      'PROPOSAL',
+      'NEGOTIATION',
+      'WON',
+      'LOST',
+    ]);
     expect(stages[0]!.id).toBe(first);
     expect(stages.every((s) => s.pipelineId === all[0]!.id)).toBe(true);
   });
@@ -436,9 +442,15 @@ describe('stages per pipeline', () => {
     });
     expect(custom.pipelineId).toBe(sup.id);
     const dflt = await leadsApi.stages(w.as.VIEWER);
-    expect(dflt.map((s) => s.code)).toEqual(
-      ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'],
-    );
+    expect(dflt.map((s) => s.code)).toEqual([
+      'NEW',
+      'CONTACTED',
+      'QUALIFIED',
+      'PROPOSAL',
+      'NEGOTIATION',
+      'WON',
+      'LOST',
+    ]);
     const inSup = await leadsApi.stages(w.as.VIEWER, { pipelineId: sup.id });
     expect(inSup.map((s) => s.name ?? s.code)).toEqual([
       'NEW',

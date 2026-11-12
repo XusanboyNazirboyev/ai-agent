@@ -191,3 +191,20 @@ describe('the agent never reads the opportunity amount (ADR 057, AGENTS.md rule 
     },
   );
 });
+
+describe('agent staging reads no money (ADR 058 decision 8)', () => {
+  const dir = resolve(process.cwd(), 'src/core/leads/staging');
+  const files = readdirSync(dir).filter(
+    (name) => name.endsWith('.ts') && !name.endsWith('.spec.ts'),
+  );
+
+  it('has files to scan', () => {
+    expect(files.length).toBeGreaterThan(0);
+  });
+
+  it.each(files)('%s names no amount, currency or price', (name) => {
+    const source = readFileSync(resolve(dir, name), 'utf8');
+    expect(source).not.toMatch(/\b(amount|currency|price|money)\b/i);
+    expect(source).not.toMatch(/from\s+['"][^'"]*\/pipelines\//);
+  });
+});

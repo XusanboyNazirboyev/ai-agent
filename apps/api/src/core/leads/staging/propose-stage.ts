@@ -1,7 +1,7 @@
 /**
  * Rule table for the agent's funnel staging (ADR 058 decisions 3-6). Pure and
  * locale-neutral: it sees booleans and counts about the conversation and the
- * pipeline's stages, never customer text and never money. A model does not
+ * pipeline's stages, never customer text and never opportunity data. A model does not
  * decide; every proposal carries reason codes.
  */
 export interface StageSignals {
