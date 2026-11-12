@@ -56,6 +56,11 @@ describe('formatCell', () => {
   it('neutralises dangerous first chars in text fields', () => {
     expect(formatCell('=1+1', 'text')).toBe(`'=1+1`);
     expect(formatCell('+cmd', 'text')).toBe(`'+cmd`);
+    expect(formatCell('+998 90 111-22-33', 'phone')).toBe('+998 90 111-22-33');
+    expect(formatCell('+1(2)3-4', 'phone')).toBe('+1(2)3-4');
+    expect(formatCell('+cmd|calc', 'phone')).toBe(`'+cmd|calc`);
+    expect(formatCell('+998901112233=1+1', 'phone')).toBe(`'+998901112233=1+1`);
+    expect(formatCell('=1+1', 'phone')).toBe(`'=1+1`);
     expect(formatCell('-cmd', 'text')).toBe(`'-cmd`);
     expect(formatCell('@sum', 'text')).toBe(`'@sum`);
     expect(formatCell('\tcmd', 'text')).toBe("'\tcmd");

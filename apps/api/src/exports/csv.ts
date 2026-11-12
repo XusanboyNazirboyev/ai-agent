@@ -17,6 +17,7 @@ export const CSV_PAGE_SIZE = 500;
 export const EXPORT_ROW_LIMIT = 50_000;
 export const EXPORT_LOCK_TTL_MS = 10 * 60 * 1000;
 
+const PLAIN_PHONE = /^\+[0-9][0-9 ()-]{3,30}$/;
 const DANGEROUS_FIRST = new Set(['=', '+', '-', '@', '\t', '\r']);
 
 /** Neutralise a user-controlled string value for CSV cells. */
@@ -33,7 +34,7 @@ function quoteIfNeeded(value: string): string {
 /** Formats one cell. `kind` controls injection handling. */
 export function formatCell(
   value: unknown,
-  kind: 'text' | 'number' | 'boolean' | 'date' | 'id' = 'text',
+  kind: 'text' | 'number' | 'boolean' | 'date' | 'id' | 'phone' = 'text',
 ): string {
   if (value === null || value === undefined) return '';
   if (kind === 'boolean') return value ? 'true' : 'false';
@@ -57,12 +58,15 @@ export function formatCell(
     return quoteIfNeeded(String(value));
   }
   const s = typeof value === 'string' ? value : String(value);
+  // A strict international phone number (+ and digits, spaces, hyphens,
+  // parentheses only) cannot carry a formula, so it keeps its leading `+`.
+  if (kind === 'phone' && PLAIN_PHONE.test(s)) return quoteIfNeeded(s);
   return quoteIfNeeded(neutraliseCell(s));
 }
 
 export type CsvColumn<T> = {
   header: string;
-  kind: 'text' | 'number' | 'boolean' | 'date' | 'id';
+  kind: 'text' | 'number' | 'boolean' | 'date' | 'id' | 'phone';
   get: (row: T) => unknown;
 };
 

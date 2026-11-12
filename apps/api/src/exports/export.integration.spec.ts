@@ -581,11 +581,18 @@ describe('CSV export: formula injection end to end', () => {
     expect(row[11]).toBe("'@SUM(A1)");
   });
 
-  it('neutralises a real-looking international phone number too', async () => {
+  it('keeps the leading + of a plain international phone number', async () => {
     const f = await fixture();
     await person(f, 'Ada', { phone: '+998901112233' });
     const { res } = await call(f, 'OWNER', 'people');
-    expect(parse(res.body)[1]![2]).toBe("'+998901112233");
+    expect(parse(res.body)[1]![2]).toBe('+998901112233');
+  });
+
+  it('still neutralises a phone-looking value that carries a formula', async () => {
+    const f = await fixture();
+    await person(f, 'Ada', { phone: '+998901112233+cmd' });
+    const { res } = await call(f, 'OWNER', 'people');
+    expect(parse(res.body)[1]![2]).toBe("'+998901112233+cmd");
   });
 });
 

@@ -106,7 +106,7 @@ export class ExportService {
     const cols: CsvColumn<PersonExportRow>[] = [
       { header: 'person_id', kind: 'id', get: (r) => r.id },
       { header: 'name', kind: 'text', get: (r) => r.displayName },
-      { header: 'phone', kind: 'text', get: (r) => r.phone },
+      { header: 'phone', kind: 'phone', get: (r) => r.phone },
       { header: 'channels', kind: 'text', get: (r) => r.channels.join('; ') },
       { header: 'contacts', kind: 'number', get: (r) => r.contactsCount },
       {
