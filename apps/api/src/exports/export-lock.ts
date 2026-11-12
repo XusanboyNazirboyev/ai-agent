@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Injectable, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
@@ -20,6 +20,14 @@ export class ExportTooLargeError extends Error {
   constructor() {
     super('Export too large');
     this.name = 'ExportTooLargeError';
+  }
+}
+
+/** The client went away or the stream was cancelled: stop reading. */
+export class ExportAbortedError extends Error {
+  constructor() {
+    super('Export aborted');
+    this.name = 'ExportAbortedError';
   }
 }
 
@@ -65,7 +73,7 @@ export class ExportLock implements OnModuleDestroy {
   }
 
   async acquire(tenantId: string): Promise<() => Promise<void>> {
-    const token = `${tenantId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const token = randomUUID();
     if (this.local.has(tenantId)) throw new ExportInProgressError();
     this.local.set(tenantId, token);
     let timer: NodeJS.Timeout | undefined;
@@ -85,8 +93,8 @@ export class ExportLock implements OnModuleDestroy {
       if (ok !== 'OK') throw new ExportInProgressError();
     } catch (e) {
       if (this.local.get(tenantId) === token) this.local.delete(tenantId);
-      if (e instanceof ExportInProgressError) throw e;
-      throw new ExportInProgressError();
+      // Redis trouble is not "in progress": let it surface as a server error.
+      throw e;
     } finally {
       clearTimeout(timer);
     }

@@ -1,16 +1,21 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { PeopleService } from '../persons/people.service.js';
+import {
+  PeopleService,
+  type PersonExportRow,
+} from '../persons/people.service.js';
+import type { FieldDef } from '../tags/custom-field-values.js';
 import { parseFieldFilter, type FieldFilter } from '../tags/field-filter.js';
-import { activeFieldDefs, tagsOfLeads } from '../tags/tag-reads.js';
 import { invalidQuery } from '../tags/tag-errors.js';
+import { activeFieldDefs, tagsOfLeads } from '../tags/tag-reads.js';
 import {
   CSV_PAGE_SIZE,
   EXPORT_ROW_LIMIT,
   csvChunk,
   type CsvColumn,
 } from './csv.js';
-import { ExportTooLargeError } from './export-lock.js';
+import { ExportAbortedError, ExportTooLargeError } from './export-lock.js';
 
 export interface PeopleExportFilters {
   q?: string;
@@ -26,18 +31,62 @@ export interface LeadsExportFilters {
   fieldValue?: string;
 }
 
-type StreamOut = { write: (chunk: string) => boolean | void };
+/** Where the CSV goes. `write` resolves when the chunk was flushed. */
+export interface CsvSink {
+  readonly closed: boolean;
+  write(chunk: string): Promise<void>;
+}
+
+interface LeadExportRow {
+  id: string;
+  personId: string | null;
+  contactName: string | null;
+  stage: string | null;
+  score: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+  tags: string[];
+  customFields: Record<string, unknown>;
+}
+
+type CustomFieldHolder = { customFields: Record<string, unknown> };
+
+/** Custom field values are typed: numbers stay numbers (not sniffed). */
+function customFieldColumns<T extends CustomFieldHolder>(
+  defs: readonly FieldDef[],
+): CsvColumn<T>[] {
+  return defs.map((d): CsvColumn<T> => {
+    const kind =
+      d.type === 'NUMBER'
+        ? 'number'
+        : d.type === 'BOOLEAN'
+          ? 'boolean'
+          : 'text';
+    return {
+      header: d.label,
+      kind,
+      get: (r) => r.customFields[d.key] ?? null,
+    };
+  });
+}
+
+function asRecord(value: Prisma.JsonValue): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
 
 @Injectable()
 export class ExportService {
+  /** Public so tests can lower them (ADR 056). */
+  rowLimit = EXPORT_ROW_LIMIT;
+  pageSize = CSV_PAGE_SIZE;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly people: PeopleService,
   ) {}
-
-  get rowLimit(): number {
-    return EXPORT_ROW_LIMIT;
-  }
 
   async countPeople(
     tenantId: string,
@@ -57,23 +106,25 @@ export class ExportService {
   ): Promise<number> {
     const field = await this.resolveField(tenantId, 'LEAD', filters);
     return this.prisma.lead.count({
-      where: await this.leadWhere(tenantId, filters, field),
+      where: this.leadWhere(tenantId, filters, field),
     });
   }
 
+  /**
+   * Streams the people CSV. Throws ExportTooLargeError BEFORE the first write
+   * when the filtered set is over the limit, so the caller can still answer
+   * with a normal error response.
+   */
   async streamPeople(
     tenantId: string,
     filters: PeopleExportFilters,
-    out: StreamOut,
-    opts?: { checked?: boolean },
+    sink: CsvSink,
   ): Promise<{ rows: number }> {
-    if (!opts?.checked) {
-      const total = await this.countPeople(tenantId, filters);
-      if (total > EXPORT_ROW_LIMIT) throw new ExportTooLargeError();
-    }
-    const defs = await activeFieldDefs(this.prisma, tenantId, 'PERSON');
+    const total = await this.countPeople(tenantId, filters);
+    if (total > this.rowLimit) throw new ExportTooLargeError();
     const field = await this.resolveField(tenantId, 'PERSON', filters);
-    const baseCols: CsvColumn<any>[] = [
+    const defs = await activeFieldDefs(this.prisma, tenantId, 'PERSON');
+    const cols: CsvColumn<PersonExportRow>[] = [
       { header: 'person_id', kind: 'id', get: (r) => r.id },
       { header: 'name', kind: 'text', get: (r) => r.displayName },
       { header: 'phone', kind: 'text', get: (r) => r.phone },
@@ -97,52 +148,41 @@ export class ExportService {
       },
       { header: 'created_at', kind: 'date', get: (r) => r.createdAt },
       { header: 'tags', kind: 'text', get: (r) => r.tags.join('; ') },
+      ...customFieldColumns<PersonExportRow>(defs),
     ];
-    const dynCols: CsvColumn<any>[] = defs.map((d) => ({
-      header: d.label,
-      kind: 'text' as const,
-      get: (r: any) => {
-        const v = r.customFields?.[d.key];
-        if (v === null || v === undefined) return null;
-        if (d.type === 'BOOLEAN') return v ? 'true' : 'false';
-        return String(v);
-      },
-    }));
-    const cols = [...baseCols, ...dynCols];
     let cursor: string | undefined;
     let first = true;
     let rows = 0;
-    for (;;) {
+    do {
+      if (sink.closed) throw new ExportAbortedError();
       const page = await this.people.listForExport(tenantId, {
         q: filters.q?.trim() || undefined,
         tagId: filters.tagId,
         field,
         cursor,
-        limit: CSV_PAGE_SIZE,
+        limit: this.pageSize,
       });
-      if (page.items.length === 0) break;
-      out.write(csvChunk(cols, page.items, first));
-      first = false;
       rows += page.items.length;
+      if (rows > this.rowLimit) throw new ExportTooLargeError();
+      if (page.items.length > 0 || first) {
+        await sink.write(csvChunk(cols, page.items, first));
+        first = false;
+      }
       cursor = page.nextCursor ?? undefined;
-      if (!cursor) break;
-    }
-    if (first) out.write(csvChunk(cols, [], true));
+    } while (cursor);
     return { rows };
   }
 
   async streamLeads(
     tenantId: string,
     filters: LeadsExportFilters,
-    out: StreamOut,
-    opts?: { checked?: boolean },
+    sink: CsvSink,
   ): Promise<{ rows: number }> {
-    if (!opts?.checked) {
-      const total = await this.countLeads(tenantId, filters);
-      if (total > EXPORT_ROW_LIMIT) throw new ExportTooLargeError();
-    }
+    const total = await this.countLeads(tenantId, filters);
+    if (total > this.rowLimit) throw new ExportTooLargeError();
+    const field = await this.resolveField(tenantId, 'LEAD', filters);
     const defs = await activeFieldDefs(this.prisma, tenantId, 'LEAD');
-    const baseCols: CsvColumn<any>[] = [
+    const cols: CsvColumn<LeadExportRow>[] = [
       { header: 'lead_id', kind: 'id', get: (r) => r.id },
       { header: 'person_id', kind: 'id', get: (r) => r.personId },
       { header: 'contact_name', kind: 'text', get: (r) => r.contactName },
@@ -152,31 +192,18 @@ export class ExportService {
       { header: 'created_at', kind: 'date', get: (r) => r.createdAt },
       { header: 'updated_at', kind: 'date', get: (r) => r.updatedAt },
       { header: 'tags', kind: 'text', get: (r) => r.tags.join('; ') },
+      ...customFieldColumns<LeadExportRow>(defs),
     ];
-    const dynCols: CsvColumn<any>[] = defs.map((d) => ({
-      header: d.label,
-      kind: 'text' as const,
-      get: (r: any) => {
-        const v = r.customFields?.[d.key];
-        if (v === null || v === undefined) return null;
-        if (d.type === 'BOOLEAN') return v ? 'true' : 'false';
-        return String(v);
-      },
-    }));
-    const cols = [...baseCols, ...dynCols];
-    const field = await this.resolveField(tenantId, 'LEAD', filters);
-    const where = await this.leadWhere(tenantId, filters, field);
+    const where = this.leadWhere(tenantId, filters, field);
     let cursor: string | undefined;
     let first = true;
     let rows = 0;
-    for (;;) {
+    do {
+      if (sink.closed) throw new ExportAbortedError();
       const batch = await this.prisma.lead.findMany({
-        where: {
-          ...where,
-          ...(cursor ? { id: { lt: cursor } } : {}),
-        },
-        orderBy: [{ id: 'desc' }],
-        take: CSV_PAGE_SIZE,
+        where: { ...where, ...(cursor ? { id: { lt: cursor } } : {}) },
+        orderBy: { id: 'desc' },
+        take: this.pageSize,
         select: {
           id: true,
           score: true,
@@ -185,58 +212,54 @@ export class ExportService {
           updatedAt: true,
           customFields: true,
           pipelineStage: { select: { name: true, code: true } },
-          contact: {
-            select: { name: true, personId: true, deletedAt: true },
-          },
+          contact: { select: { name: true, personId: true } },
         },
       });
-      if (batch.length === 0) break;
       const tagMap = await tagsOfLeads(
         this.prisma,
         tenantId,
         batch.map((l) => l.id),
       );
-      const mapped = batch
-        .filter((l) => l.contact.deletedAt === null)
-        .map((l) => ({
+      const mapped = batch.map(
+        (l): LeadExportRow => ({
           id: l.id,
           personId: l.contact.personId,
           contactName: l.contact.name,
           stage: l.pipelineStage?.name ?? l.pipelineStage?.code ?? null,
           score: l.score,
           status: l.status,
-          createdAt: l.createdAt.toISOString(),
-          updatedAt: l.updatedAt.toISOString(),
+          createdAt: l.createdAt,
+          updatedAt: l.updatedAt,
           tags: (tagMap.get(l.id) ?? []).map((t) => t.name),
-          customFields:
-            l.customFields &&
-            typeof l.customFields === 'object' &&
-            !Array.isArray(l.customFields)
-              ? (l.customFields as Record<string, unknown>)
-              : {},
-        }));
-      if (mapped.length > 0) {
-        out.write(csvChunk(cols, mapped, first));
+          customFields: asRecord(l.customFields),
+        }),
+      );
+      rows += mapped.length;
+      if (rows > this.rowLimit) throw new ExportTooLargeError();
+      if (mapped.length > 0 || first) {
+        await sink.write(csvChunk(cols, mapped, first));
         first = false;
-        rows += mapped.length;
       }
-      cursor = batch[batch.length - 1]?.id;
-      if (!cursor || batch.length < CSV_PAGE_SIZE) break;
-    }
-    if (first) out.write(csvChunk(cols, [], true));
+      cursor =
+        batch.length === this.pageSize ? batch[batch.length - 1]!.id : undefined;
+    } while (cursor);
     return { rows };
   }
 
-  private async leadWhere(
+  /** Live contact, and a person that is neither merged away nor deleted. */
+  private leadWhere(
     tenantId: string,
     filters: LeadsExportFilters,
     field?: FieldFilter,
-  ): Promise<any> {
+  ): Prisma.LeadWhereInput {
     return {
       tenantId,
       contact: {
         deletedAt: null,
-        person: { deletedAt: null, mergedIntoId: null },
+        OR: [
+          { personId: null },
+          { person: { deletedAt: null, mergedIntoId: null } },
+        ],
       },
       ...(filters.stage ? { pipelineStageId: filters.stage } : {}),
       ...(filters.score ? { score: filters.score } : {}),
@@ -257,15 +280,7 @@ export class ExportService {
     const { fieldKey, fieldValue } = filters;
     if ((fieldKey === undefined) !== (fieldValue === undefined))
       throw invalidQuery();
-    if (fieldKey !== undefined && fieldValue !== undefined) {
-      return parseFieldFilter(
-        this.prisma,
-        tenantId,
-        entity,
-        fieldKey,
-        fieldValue,
-      );
-    }
-    return undefined;
+    if (fieldKey === undefined || fieldValue === undefined) return undefined;
+    return parseFieldFilter(this.prisma, tenantId, entity, fieldKey, fieldValue);
   }
 }

@@ -20,6 +20,23 @@ import {
 
 const DETAIL_CAP = 20;
 
+/** One person as the CSV export reads it (ADR 056). */
+export interface PersonExportRow {
+  id: string;
+  displayName: string | null;
+  phone: string | null;
+  /** Distinct channel types of the live contacts. */
+  channels: string[];
+  contactsCount: number;
+  conversationCount: number;
+  leadCount: number;
+  lastActivityAt: string | null;
+  marketingOptOut: boolean;
+  createdAt: string;
+  tags: string[];
+  customFields: Record<string, unknown>;
+}
+
 /** Persons that can be shown: live, not merged away, with a live contact. */
 function visiblePerson(tenantId: string): Prisma.PersonWhereInput {
   return {
@@ -87,7 +104,7 @@ export class PeopleService {
       field?: FieldFilter;
     },
   ): Promise<{ items: PersonItem[]; nextCursor: string | null }> {
-    const { cursor, limit } = params;
+    const { limit } = params;
     const rows = await this.prisma.person.findMany({
       where: this.listWhere(tenantId, params),
       // Ids are time-ordered (uuid v7): newest first and a stable keyset.
@@ -145,23 +162,7 @@ export class PeopleService {
       tagId?: string;
       field?: FieldFilter;
     },
-  ): Promise<{
-    items: Array<{
-      id: string;
-      displayName: string | null;
-      phone: string | null;
-      channels: string[];
-      contactsCount: number;
-      conversationCount: number;
-      leadCount: number;
-      lastActivityAt: string | null;
-      marketingOptOut: boolean;
-      createdAt: string;
-      tags: string[];
-      customFields: Record<string, unknown>;
-    }>;
-    nextCursor: string | null;
-  }> {
+  ): Promise<{ items: PersonExportRow[]; nextCursor: string | null }> {
     const { limit } = params;
     const rows = await this.prisma.person.findMany({
       where: this.listWhere(tenantId, params),
@@ -206,7 +207,7 @@ export class PeopleService {
           id: item.id,
           displayName: item.displayName,
           phone: item.phone,
-          channels: item.channels.map((c) => c.channelType),
+          channels: [...new Set(item.channels.map((c) => c.channelType))],
           contactsCount: item.channels.length,
           conversationCount: item.conversationCount,
           leadCount: item.leadCount,

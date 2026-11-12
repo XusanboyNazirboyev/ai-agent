@@ -1,6 +1,6 @@
+import type { ServerResponse } from 'node:http';
 import {
   Controller,
-  ForbiddenException,
   Get,
   HttpException,
   Query,
@@ -9,44 +9,47 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { SessionGuard, type InboxRequest } from './session.guard.js';
+import { exportFilename } from '../exports/csv.js';
 import {
+  ExportAbortedError,
   ExportInProgressError,
   ExportLock,
   ExportTooLargeError,
 } from '../exports/export-lock.js';
-import {
-  ExportService,
-  type LeadsExportFilters,
-  type PeopleExportFilters,
-} from '../exports/export.service.js';
-import { invalidQuery } from '../tags/tag-errors.js';
+import { ExportService, type CsvSink } from '../exports/export.service.js';
+import { forbidden, invalidQuery } from '../tags/tag-errors.js';
+import { SessionGuard, type InboxRequest } from './session.guard.js';
+import type { InboxPrincipal } from './session.service.js';
 
-interface StreamResponse {
-  setHeader?(name: string, value: string): void;
-  writeHead?(status: number, headers: Record<string, string>): void;
-  write(chunk: string): boolean | void;
-  end(): void;
-}
+const FieldPair = {
+  fieldKey: z.string().max(64).optional(),
+  fieldValue: z.string().max(600).optional(),
+};
 
 const PeopleQuery = z.object({
   q: z.string().trim().max(80).optional(),
   tagId: z.string().uuid().optional(),
-  fieldKey: z.string().max(64).optional(),
-  fieldValue: z.string().max(600).optional(),
+  ...FieldPair,
 });
 
 const LeadsQuery = z.object({
   stage: z.string().uuid().optional(),
   score: z.enum(['HOT', 'WARM', 'COLD']).optional(),
   tagId: z.string().uuid().optional(),
-  fieldKey: z.string().max(64).optional(),
-  fieldValue: z.string().max(600).optional(),
+  ...FieldPair,
 });
 
-const allowed = new Set(['OWNER', 'ADMIN']);
+/** A bulk copy of personal data: owners and admins only (ADR 056). */
+const ALLOWED_ROLES = new Set(['OWNER', 'ADMIN']);
 
+/**
+ * CSV exports of people and leads (ADR 056). Errors found before the first
+ * byte are normal JSON errors. An error AFTER the headers went out cannot
+ * change the status line, so the connection is destroyed: the client gets a
+ * failed download instead of a file that looks complete but is cut short.
+ */
 @Controller('api/v1/exports')
 @UseGuards(SessionGuard)
 export class ExportsController {
@@ -60,79 +63,92 @@ export class ExportsController {
   async people(
     @Req() request: InboxRequest,
     @Query() query: unknown,
-    @Res() res: StreamResponse,
+    @Res() res: ServerResponse,
   ): Promise<void> {
-    const principal = request.principal!;
-    if (!allowed.has(principal.role)) throw forbidden();
+    const principal = this.authorise(request);
     const parsed = PeopleQuery.safeParse(query);
     if (!parsed.success) throw invalidQuery();
-    const { fieldKey, fieldValue, ...rest } = parsed.data;
-    if ((fieldKey === undefined) !== (fieldValue === undefined))
+    const filters = parsed.data;
+    if ((filters.fieldKey === undefined) !== (filters.fieldValue === undefined))
       throw invalidQuery();
-    const filters: PeopleExportFilters = { ...rest, fieldKey, fieldValue };
-
-    const release = await this.acquire(principal.tenantId);
-    try {
-      const total = await this.exports.countPeople(principal.tenantId, filters);
-      if (total > this.exports.rowLimit) throw tooLarge();
-      this.writeHeaders(res, this.filename('people'));
-      const result = await this.exports.streamPeople(
-        principal.tenantId,
-        filters,
-        res,
-        { checked: true },
-      );
-      res.end();
-      await this.audit(principal, 'export.people', 'people', result.rows, {
+    await this.run(principal, res, 'people', 'export.people', {
+      stream: (sink) =>
+        this.exports.streamPeople(principal.tenantId, filters, sink),
+      summary: {
         ...(filters.q ? { q: true } : {}),
         ...(filters.tagId ? { tagId: filters.tagId } : {}),
         ...(filters.fieldKey ? { fieldKey: filters.fieldKey } : {}),
-      });
-    } catch (e) {
-      if (e instanceof ExportTooLargeError) throw tooLarge();
-      if (e instanceof ExportInProgressError) throw inProgress();
-      throw e;
-    } finally {
-      await release();
-    }
+      },
+    });
   }
 
   @Get('leads.csv')
   async leads(
     @Req() request: InboxRequest,
     @Query() query: unknown,
-    @Res() res: StreamResponse,
+    @Res() res: ServerResponse,
   ): Promise<void> {
-    const principal = request.principal!;
-    if (!allowed.has(principal.role)) throw forbidden();
+    const principal = this.authorise(request);
     const parsed = LeadsQuery.safeParse(query);
     if (!parsed.success) throw invalidQuery();
-    const { fieldKey, fieldValue, ...rest } = parsed.data;
-    if ((fieldKey === undefined) !== (fieldValue === undefined))
+    const filters = parsed.data;
+    if ((filters.fieldKey === undefined) !== (filters.fieldValue === undefined))
       throw invalidQuery();
-    const filters: LeadsExportFilters = { ...rest, fieldKey, fieldValue };
-
-    const release = await this.acquire(principal.tenantId);
-    try {
-      const total = await this.exports.countLeads(principal.tenantId, filters);
-      if (total > this.exports.rowLimit) throw tooLarge();
-      this.writeHeaders(res, this.filename('leads'));
-      const result = await this.exports.streamLeads(
-        principal.tenantId,
-        filters,
-        res,
-        { checked: true },
-      );
-      res.end();
-      await this.audit(principal, 'export.leads', 'leads', result.rows, {
-        ...(filters.tagId ? { tagId: filters.tagId } : {}),
-        ...(filters.fieldKey ? { fieldKey: filters.fieldKey } : {}),
+    await this.run(principal, res, 'leads', 'export.leads', {
+      stream: (sink) =>
+        this.exports.streamLeads(principal.tenantId, filters, sink),
+      summary: {
         ...(filters.stage ? { stage: filters.stage } : {}),
         ...(filters.score ? { score: filters.score } : {}),
+        ...(filters.tagId ? { tagId: filters.tagId } : {}),
+        ...(filters.fieldKey ? { fieldKey: filters.fieldKey } : {}),
+      },
+    });
+  }
+
+  private authorise(request: InboxRequest): InboxPrincipal {
+    const principal = request.principal!;
+    if (!ALLOWED_ROLES.has(principal.role)) throw forbidden();
+    return principal;
+  }
+
+  private async run(
+    principal: InboxPrincipal,
+    res: ServerResponse,
+    kind: 'people' | 'leads',
+    action: 'export.people' | 'export.leads',
+    job: {
+      stream: (sink: CsvSink) => Promise<{ rows: number }>;
+      summary: Prisma.InputJsonObject;
+    },
+  ): Promise<void> {
+    const release = await this.acquire(principal.tenantId);
+    try {
+      const sink = csvSink(res, exportFilename(kind));
+      const { rows } = await job.stream(sink);
+      // Audited before the last byte: a failed audit fails the download.
+      await this.prisma.auditEvent.create({
+        data: {
+          tenantId: principal.tenantId,
+          actorType: 'OPERATOR',
+          actorId: principal.operatorId,
+          action,
+          entityType: 'export',
+          entityId: kind,
+          safeInputSummary: { rows, filters: job.summary },
+        },
       });
+      res.end();
     } catch (e) {
+      if (e instanceof ExportAbortedError) {
+        res.destroy();
+        return;
+      }
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
       if (e instanceof ExportTooLargeError) throw tooLarge();
-      if (e instanceof ExportInProgressError) throw inProgress();
       throw e;
     } finally {
       await release();
@@ -147,55 +163,41 @@ export class ExportsController {
       throw e;
     }
   }
-
-  private writeHeaders(res: StreamResponse, filename: string): void {
-    const headers = {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Cache-Control': 'no-store',
-    };
-    if (res.writeHead) res.writeHead(200, headers);
-    else if (res.setHeader) {
-      for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
-    }
-  }
-
-  private filename(kind: 'people' | 'leads'): string {
-    const d = new Date();
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${kind}-${y}${m}${day}.csv`;
-  }
-
-  private async audit(
-    principal: { tenantId: string; operatorId: string },
-    action: string,
-    entityId: string,
-    rows: number,
-    filters: Record<string, unknown>,
-  ): Promise<void> {
-    await this.prisma.auditEvent.create({
-      data: {
-        tenantId: principal.tenantId,
-        actorType: 'OPERATOR',
-        actorId: principal.operatorId,
-        action,
-        entityType: 'export',
-        entityId,
-        safeInputSummary: { rows, filters } as any,
-      },
-    });
-  }
 }
 
-function forbidden(): ForbiddenException {
-  return new ForbiddenException({
-    code: 'FORBIDDEN',
-    message: 'Not allowed',
-    i18nKey: 'errors.forbidden',
+/** Sends the headers with the first chunk, honours back-pressure and abort. */
+function csvSink(res: ServerResponse, filename: string): CsvSink {
+  let closed = false;
+  res.once('close', () => {
+    closed = true;
   });
+  return {
+    get closed(): boolean {
+      return closed;
+    },
+    async write(chunk: string): Promise<void> {
+      if (closed) throw new ExportAbortedError();
+      if (!res.headersSent)
+        res.writeHead(200, {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'no-store',
+        });
+      if (!res.write(chunk))
+        await new Promise<void>((resolve) => {
+          const done = (): void => {
+            res.off('drain', done);
+            res.off('close', done);
+            resolve();
+          };
+          res.once('drain', done);
+          res.once('close', done);
+        });
+      if (closed) throw new ExportAbortedError();
+    },
+  };
 }
+
 function tooLarge(): HttpException {
   return new HttpException(
     {
@@ -206,6 +208,7 @@ function tooLarge(): HttpException {
     413,
   );
 }
+
 function inProgress(): HttpException {
   return new HttpException(
     {

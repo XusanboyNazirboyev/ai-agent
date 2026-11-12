@@ -45,15 +45,14 @@ export function formatCell(
     if (typeof value === 'string' && value) {
       const d = new Date(value);
       return Number.isNaN(d.getTime())
-        ? neutraliseCell(value)
+        ? quoteIfNeeded(neutraliseCell(value))
         : d.toISOString();
     }
     return '';
   }
   if (kind === 'id') {
-    const s = String(value);
-    // ids are system-generated but still pass through quoting; no formula prefix
-    return quoteIfNeeded(/[",\r\n]/.test(s) ? s : s);
+    // System-generated ids: quoted if needed, never prefixed.
+    return quoteIfNeeded(String(value));
   }
   const s = typeof value === 'string' ? value : String(value);
   return quoteIfNeeded(neutraliseCell(s));
