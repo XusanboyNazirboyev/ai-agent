@@ -100,6 +100,7 @@ export function ConversationViewPane(props: {
   );
   const timelineRef = useRef<HTMLElement>(null);
   const stickToBottom = useRef(true);
+  const activeConversationId = useRef(props.id);
 
   const query = useQuery({
     queryKey: ['conversation', props.id],
@@ -109,6 +110,7 @@ export function ConversationViewPane(props: {
   const view = query.data;
 
   useEffect(() => {
+    activeConversationId.current = props.id;
     setError(undefined);
     setReply('');
     setNote('');
@@ -225,10 +227,14 @@ export function ConversationViewPane(props: {
     event?.preventDefault();
     const text = reply.trim();
     if (!text || busy) return;
+    const conversationId = props.id;
+    const clearDraftIfStillActive = (): void => {
+      if (activeConversationId.current === conversationId) setReply('');
+    };
     const deliver = (id?: string): void =>
       command.mutate(
         { action: 'reply', body: { text }, ...(id ? { handoverId: id } : {}) },
-        { onSuccess: () => setReply('') },
+        { onSuccess: clearDraftIfStillActive },
       );
     if (canAct) deliver();
     else
