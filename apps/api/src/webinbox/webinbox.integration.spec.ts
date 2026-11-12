@@ -1125,14 +1125,16 @@ describe('event stream resource accounting', () => {
     // The retry frame fills the writable buffer; later events must stay in
     // the bounded application queue until Node emits drain.
     expect(response.frames).toEqual(['retry: 3000\n\n']);
+    const afterSpy = vi.spyOn(events, 'after');
     await db.conversation.update({
       where: { id: w.conversationId },
       data: { state: 'BOT_ACTIVE' },
     });
     await bus.tick();
-    // Let the asynchronous wake/poll complete while the writable side is blocked.
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await vi.waitFor(() => expect(afterSpy).toHaveBeenCalledTimes(1));
+    await afterSpy.mock.results[0]!.value;
     expect(response.frames).toHaveLength(1);
+    afterSpy.mockRestore();
 
     response.emit('drain');
     await vi.waitFor(() =>
