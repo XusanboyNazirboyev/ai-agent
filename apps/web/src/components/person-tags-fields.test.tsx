@@ -65,10 +65,8 @@ afterEach(() => {
 });
 
 describe('PersonTagsSection', () => {
-  it('adds and removes tags for OPERATOR', async () => {
-    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string; body?: unknown }) => {
-      if (path === '/api/v1/tags')
-        return Promise.resolve({ items: [{ id: 't1', name: 'VIP', color: 'blue', usage: { people: 1, leads: 0 } }, { id: 't2', name: 'New', color: null, usage: { people: 0, leads: 0 } }] });
+  it('removes a tag for OPERATOR', async () => {
+    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string }) => {
       if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
         return Promise.resolve({ tags: [] });
       return Promise.reject(new Error(path));
@@ -81,12 +79,17 @@ describe('PersonTagsSection', () => {
         body: { tagIds: [] },
       }),
     );
+  });
 
-    cleanup();
-    vi.clearAllMocks();
-    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string; body?: unknown }) => {
+  it('adds a tag for OPERATOR', async () => {
+    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string }) => {
       if (path === '/api/v1/tags')
-        return Promise.resolve({ items: [{ id: 't1', name: 'VIP', color: 'blue', usage: { people: 1, leads: 0 } }, { id: 't2', name: 'New', color: null, usage: { people: 0, leads: 0 } }] });
+        return Promise.resolve({
+          items: [
+            { id: 't1', name: 'VIP', color: 'blue', usage: { people: 1, leads: 0 } },
+            { id: 't2', name: 'New', color: null, usage: { people: 0, leads: 0 } },
+          ],
+        });
       if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
         return Promise.resolve({ tags: [] });
       return Promise.reject(new Error(path));
