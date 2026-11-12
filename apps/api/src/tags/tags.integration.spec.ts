@@ -1109,8 +1109,69 @@ describe('Erasure clears tags and values (ADR 053)', () => {
     });
     await contactErasure.erase(f.tenantId, merged.contacts[0].id, f.operatorId);
     expect(await state(merged.person.id)).toEqual({ fields: {}, tags: 0 });
-    // The survivor keeps its own tag and the one it carried at merge time.
-    expect((await state(survivor.person.id)).tags).toBe(2);
+    // The tag the survivor carried over from the erased customer is removed
+    // again; only the survivor's own tag stays.
+    expect((await state(survivor.person.id)).tags).toBe(1);
+  });
+
+  it('removes what a merge carried onto the survivor once the merged customer is erased; later edits stay', async () => {
+    const f = await fixture();
+    await fieldDef(f, 'note', 'TEXT').catch(() => undefined);
+    await fieldDef(f, 'city', 'TEXT').catch(() => undefined);
+    const own = await tag(f);
+    const carriedTag = await tag(f);
+    const survivor = await person(f, { fields: { city: 'Samarkand' } });
+    const source = await person(f, {
+      fields: { note: 'private note', city: 'Tashkent' },
+    });
+    await db.personTag.createMany({
+      data: [
+        { personId: survivor.person.id, tagId: own.id },
+        { personId: source.person.id, tagId: carriedTag.id },
+      ].map((r) => ({ tenantId: f.tenantId, ...r })),
+    });
+    const res = await peopleC.merge(f.as.OWNER, source.person.id, {
+      intoId: survivor.person.id,
+      reason: 'same customer',
+    });
+    // Survivor now holds the carried note and tag; the operator edits city.
+    expect((await state(survivor.person.id)).fields).toEqual({
+      city: 'Samarkand',
+      note: 'private note',
+    });
+    await db.person.update({
+      where: { id: survivor.person.id },
+      data: { customFields: { city: 'Bukhara', note: 'edited by operator' } },
+    });
+
+    await contactErasure.erase(f.tenantId, source.contacts[0].id, f.operatorId);
+    const after = await state(survivor.person.id);
+    // The carried tag is gone, the survivor's own tag stays.
+    expect(after.tags).toBe(1);
+    // The carried note was edited since the merge, so it stays; nothing else changes.
+    expect(after.fields).toEqual({
+      city: 'Bukhara',
+      note: 'edited by operator',
+    });
+    const merge = await db.personMerge.findUniqueOrThrow({
+      where: { id: res.mergeId },
+    });
+    expect(merge.carried).toBeNull();
+
+    // Unedited carried values are removed.
+    const f2 = await fixture();
+    await fieldDef(f2, 'note', 'TEXT').catch(() => undefined);
+    const s2 = await person(f2, {});
+    const m2 = await person(f2, { fields: { note: 'private note' } });
+    await peopleC.merge(f2.as.OWNER, m2.person.id, {
+      intoId: s2.person.id,
+      reason: 'same customer',
+    });
+    expect((await state(s2.person.id)).fields).toEqual({
+      note: 'private note',
+    });
+    await contactErasure.erase(f2.tenantId, m2.contacts[0].id, f2.operatorId);
+    expect((await state(s2.person.id)).fields).toEqual({});
   });
 
   it('clears the lead tags and values of an erased contact', async () => {

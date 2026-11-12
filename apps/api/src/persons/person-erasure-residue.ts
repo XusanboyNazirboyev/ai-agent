@@ -1,4 +1,9 @@
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
+import {
+  applyFieldValues,
+  parseCarried,
+  planUnmergeCarry,
+} from '../tags/custom-field-values.js';
 
 const ERASED_TEXT = '[erased]';
 
@@ -112,6 +117,7 @@ export async function clearErasedMergeCopies(
   tenantId: string,
   contactId: string,
 ): Promise<number> {
+  await removeCarriedFromSurvivors(tx, tenantId, contactId);
   const done = await tx.$queryRaw<Array<{ id: string }>>`
     WITH done AS (
       SELECT m.id, m.merged_id FROM person_merges m
@@ -147,4 +153,75 @@ export async function clearErasedMergeCopies(
     )
     SELECT id::text AS id FROM redacted`;
   return done.length;
+}
+
+/**
+ * Tags and field values that a merge copied from the merged-away person onto
+ * the survivor (`person_merges.carried`, ADR 053) belong to the merged
+ * person's customer. When every contact of that merge snapshot is erased they
+ * are removed from the survivor again, exactly as an unmerge would (a value
+ * the operator changed since stays), and `carried` is dropped from the merge.
+ * Same selection as `clearErasedMergeCopies`; call before it, in the same
+ * transaction.
+ */
+async function removeCarriedFromSurvivors(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  contactId: string,
+): Promise<void> {
+  const merges = await tx.$queryRaw<
+    Array<{ id: string; survivor_id: string; carried: unknown }>
+  >`
+    SELECT m.id::text AS id, m.survivor_id::text AS survivor_id, m.carried
+    FROM person_merges m
+    WHERE m.tenant_id = ${tenantId}::uuid
+      AND m.undone_at IS NULL
+      AND m.carried IS NOT NULL
+      AND ${contactId}::uuid = ANY (m.contact_ids)
+      AND NOT EXISTS (
+        SELECT 1 FROM contacts c
+        WHERE c.tenant_id = ${tenantId}::uuid
+          AND c.id = ANY (m.contact_ids)
+          AND c.deleted_at IS NULL)`;
+  for (const merge of merges) {
+    const [tags, survivor] = await Promise.all([
+      tx.personTag.findMany({
+        where: { tenantId, personId: merge.survivor_id },
+        select: { tagId: true },
+      }),
+      tx.person.findFirst({
+        where: { tenantId, id: merge.survivor_id },
+        select: { customFields: true },
+      }),
+    ]);
+    if (!survivor) continue;
+    const fields = (survivor.customFields ?? {}) as Record<string, unknown>;
+    const plan = planUnmergeCarry({
+      carried: parseCarried(merge.carried),
+      survivorTagIds: tags.map((t) => t.tagId),
+      survivorFields: fields,
+    });
+    if (plan.removeTagIds.length > 0)
+      await tx.personTag.deleteMany({
+        where: {
+          tenantId,
+          personId: merge.survivor_id,
+          tagId: { in: plan.removeTagIds },
+        },
+      });
+    if (plan.clearKeys.length > 0)
+      await tx.person.updateMany({
+        where: { tenantId, id: merge.survivor_id },
+        data: {
+          customFields: applyFieldValues(fields, {
+            set: {},
+            clear: plan.clearKeys,
+          }) as Prisma.InputJsonObject,
+        },
+      });
+    await tx.personMerge.updateMany({
+      where: { tenantId, id: merge.id },
+      data: { carried: Prisma.DbNull },
+    });
+  }
 }

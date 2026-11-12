@@ -30,5 +30,5 @@ Built: `/api/v1/tags` and `/api/v1/custom-fields` CRUD (archive = DELETE), `PUT 
 Deviations and notes:
 - Extra error codes: `FIELD_LIMIT` (409, 51st definition), `FIELD_KEY_TAKEN` also for an active duplicate key (an archived key of the same type is reactivated). Tag count above 20 on a person or lead is 409 `TAG_LIMIT`. Filter errors: `UNKNOWN_FIELD` / `INVALID_VALUE` (400) for a bad `fieldKey`/`fieldValue`, `INVALID_QUERY` when only one of the pair is given.
 - Beyond the brief: erasing a contact also clears `custom_fields` and `lead_tags` of that contact's leads.
-- Known residual: values and tags carried to a survivor at merge time are not removed from the survivor when only the merged person's contacts are erased (the survivor still has a live owner; the merged copy row is cleared).
+- Review fix: when every contact of a merge snapshot is erased, what the merge carried onto the survivor (`person_merges.carried`) is removed from the survivor again, exactly like an unmerge (a value edited since stays), and `carried` is cleared (`removeCarriedFromSurvivors` in `person-erasure-residue.ts`).
 - Query count of list reads is asserted for the tags batch only (one `person_tags` query per page).
