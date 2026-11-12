@@ -268,7 +268,7 @@ export class InboxReadService {
               OR ("sortAt" = ${new Date(cursor.t)} AND id::text > ${cursor.id})
             )`
           : Prisma.empty}
-        ORDER BY "sortAt" ASC, id ASC
+        ORDER BY "sortAt" ASC, id::text ASC
         LIMIT ${limit + 1}
       `);
       const page = candidates.slice(0, limit);
