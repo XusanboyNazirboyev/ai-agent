@@ -1130,7 +1130,9 @@ describe('event stream resource accounting', () => {
       data: { state: 'BOT_ACTIVE' },
     });
     await bus.tick();
-    await vi.waitFor(() => expect(response.frames).toHaveLength(1));
+    // Let the asynchronous wake/poll complete while the writable side is blocked.
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(response.frames).toHaveLength(1);
 
     response.emit('drain');
     await vi.waitFor(() =>
