@@ -1,6 +1,6 @@
 # ADR 053 — Tags and custom fields (P1.5)
 
-- Status: proposed/implemented in task 011
+- Status: API half implemented (branch `feat/p1-5-tags-api`); web half separate
 - Date: 2026-11-12
 - Scope: Person (ADR 052) and Lead only. No companies, no conversations.
 
@@ -23,3 +23,12 @@ Operators need lightweight segmentation and per-tenant structured attributes on 
 - Removing a SELECT option in use leaves stored value orphaned for display as unknown (intentional, documented).
 - `person_merges.carried` is additive nullable column; existing rows remain null.
 - Integration/e2e and `db:test:drift` not executed by builder per standing rules unless explicitly run and reported.
+
+## Status (API half, 2026-11-12)
+Built: `/api/v1/tags` and `/api/v1/custom-fields` CRUD (archive = DELETE), `PUT /people|leads/:id/tags`, `PATCH /people|leads/:id/custom-fields`, additive `tags` (person list/detail, lead list, conversation lead panel) and `customFields` (person detail, lead list, lead panel), `tagId` filter on people and leads lists, `fieldKey`+`fieldValue` filter on both lists (all five types, typed exact match). Code: `apps/api/src/tags/*` (pure rules in `custom-field-values.ts`), controllers in `webinbox/`. Merge stores `person_merges.carried`; unmerge removes only what was carried and is still unchanged. Erasure of the last contact, whole-person erase and merged lineage/copies clear `custom_fields` and `person_tags`. Migration and schema untouched; `db:test:drift` reports no drift.
+
+Deviations and notes:
+- Extra error codes: `FIELD_LIMIT` (409, 51st definition), `FIELD_KEY_TAKEN` also for an active duplicate key (an archived key of the same type is reactivated). Tag count above 20 on a person or lead is 409 `TAG_LIMIT`. Filter errors: `UNKNOWN_FIELD` / `INVALID_VALUE` (400) for a bad `fieldKey`/`fieldValue`, `INVALID_QUERY` when only one of the pair is given.
+- Beyond the brief: erasing a contact also clears `custom_fields` and `lead_tags` of that contact's leads.
+- Known residual: values and tags carried to a survivor at merge time are not removed from the survivor when only the merged person's contacts are erased (the survivor still has a live owner; the merged copy row is cleared).
+- Query count of list reads is asserted for the tags batch only (one `person_tags` query per page).
