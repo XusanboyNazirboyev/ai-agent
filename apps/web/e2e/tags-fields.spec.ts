@@ -6,18 +6,25 @@ test.describe('tags and custom fields (P1.5, web)', () => {
     browser,
   }) => {
     const f = fixtures();
-    const { page, context } = await newSession(browser, f.a.operators.owner.email);
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
 
     await page.goto('/settings/fields', { waitUntil: 'networkidle' });
     await expect(page.getByTestId('tag-name-input')).toBeVisible();
     await page.getByTestId('tag-name-input').fill('E2E VIP');
     await page.getByTestId('tag-create').click();
-    await expect(page.getByTestId('tag-row').filter({ hasText: 'E2E VIP' })).toBeVisible();
+    await expect(
+      page.getByTestId('tag-row').filter({ hasText: 'E2E VIP' }),
+    ).toBeVisible();
 
     await page.getByTestId('def-label-input').fill('Company');
     await page.getByTestId('def-key-input').fill('company');
     await page.getByTestId('def-create').click();
-    await expect(page.getByTestId('def-row').filter({ hasText: 'Company' })).toBeVisible();
+    await expect(
+      page.getByTestId('def-row').filter({ hasText: 'Company' }),
+    ).toBeVisible();
 
     // attach to a seeded person card
     await page.goto('/contacts', { waitUntil: 'networkidle' });
@@ -25,12 +32,20 @@ test.describe('tags and custom fields (P1.5, web)', () => {
     await row.getByTestId('person-open-card').click();
     await expect(page.getByTestId('person-header')).toBeVisible();
     await page.getByTestId('person-tag-add').click();
-    await page.getByTestId('person-tag-select').selectOption({ label: 'E2E VIP' });
-    await expect(page.getByTestId('person-tag-chip').filter({ hasText: 'E2E VIP' })).toBeVisible();
+    await page
+      .getByTestId('person-tag-select')
+      .selectOption({ label: 'E2E VIP' });
+    await expect(
+      page.getByTestId('person-tag-chip').filter({ hasText: 'E2E VIP' }),
+    ).toBeVisible();
 
     await page.goto('/contacts', { waitUntil: 'networkidle' });
-    await page.getByTestId('people-tag-filter').selectOption({ label: 'E2E VIP' });
-    await expect(page.getByTestId('person-row-tag').filter({ hasText: 'E2E VIP' }).first()).toBeVisible();
+    await page
+      .getByTestId('people-tag-filter')
+      .selectOption({ label: 'E2E VIP' });
+    await expect(
+      page.getByTestId('person-row-tag').filter({ hasText: 'E2E VIP' }).first(),
+    ).toBeVisible();
 
     await context.close();
 

@@ -4,7 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
-import type { CustomFieldEntry, CustomFieldType, CustomFieldValue, Role, Tag, TagRef } from '@/lib/types';
+import type {
+  CustomFieldEntry,
+  CustomFieldType,
+  CustomFieldValue,
+  Role,
+  Tag,
+  TagRef,
+} from '@/lib/types';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
@@ -64,7 +71,11 @@ export function LeadTagsEditor(props: {
           <span className="text-xs text-muted">{t('leads.noTags')}</span>
         ) : null}
         {tags.map((tag) => (
-          <span key={tag.id} data-testid="lead-tag-chip" className="inline-flex items-center gap-1">
+          <span
+            key={tag.id}
+            data-testid="lead-tag-chip"
+            className="inline-flex items-center gap-1"
+          >
             <Badge>{tag.name}</Badge>
             {editable ? (
               <button
@@ -104,13 +115,23 @@ export function LeadTagsEditor(props: {
               </Button>
             </>
           ) : (
-            <Button size="sm" icon="plus" onClick={() => setOpen(true)} data-testid="lead-tag-add" disabled={save.isPending}>
+            <Button
+              size="sm"
+              icon="plus"
+              onClick={() => setOpen(true)}
+              data-testid="lead-tag-add"
+              disabled={save.isPending}
+            >
               {t('leads.addTag')}
             </Button>
           )}
         </div>
       ) : null}
-      {save.isError ? <p role="alert" className="text-sm text-danger-fg">{t(errorKey(save.error))}</p> : null}
+      {save.isError ? (
+        <p role="alert" className="text-sm text-danger-fg">
+          {t(errorKey(save.error))}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -127,29 +148,44 @@ export function LeadCustomFieldsEditor(props: {
   if (fields.length === 0) {
     return (
       <div data-testid="lead-custom-fields" className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted">{t('leads.customFields')}</span>
+        <span className="text-xs font-medium text-muted">
+          {t('leads.customFields')}
+        </span>
         <span className="text-xs text-muted">{t('leads.noCustomFields')}</span>
       </div>
     );
   }
   return (
     <div data-testid="lead-custom-fields" className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted">{t('leads.customFields')}</span>
+      <span className="text-xs font-medium text-muted">
+        {t('leads.customFields')}
+      </span>
       <ul className="flex flex-col gap-2">
         {fields.map((field) => (
-          <LeadFieldRow key={field.key} leadId={leadId} field={field} editable={editable} />
+          <LeadFieldRow
+            key={field.key}
+            leadId={leadId}
+            field={field}
+            editable={editable}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-function LeadFieldRow(props: { leadId: string; field: CustomFieldEntry; editable: boolean }): ReactNode {
+function LeadFieldRow(props: {
+  leadId: string;
+  field: CustomFieldEntry;
+  editable: boolean;
+}): ReactNode {
   const { leadId, field, editable } = props;
   const { t } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
-  const [draft, setDraft] = useState<string>(() => toDraft(field.type, field.value));
+  const [draft, setDraft] = useState<string>(() =>
+    toDraft(field.type, field.value),
+  );
   const [touched, setTouched] = useState(false);
   const value = touched ? draft : toDraft(field.type, field.value);
   const save = useMutation({
@@ -167,38 +203,110 @@ function LeadFieldRow(props: { leadId: string; field: CustomFieldEntry; editable
   });
 
   return (
-    <li data-testid="lead-custom-field" data-field-key={field.key} className="flex min-w-0 flex-col gap-1">
+    <li
+      data-testid="lead-custom-field"
+      data-field-key={field.key}
+      className="flex min-w-0 flex-col gap-1"
+    >
       <div className="flex min-w-0 flex-wrap items-end gap-2">
         <label className="flex min-w-0 flex-1 basis-32 flex-col gap-1 text-xs text-muted">
           {field.label}
-          <FieldEditor type={field.type} value={value} disabled={!editable || save.isPending} label={field.label} onChange={(v) => { setTouched(true); setDraft(v); }} />
+          <FieldEditor
+            type={field.type}
+            value={value}
+            disabled={!editable || save.isPending}
+            label={field.label}
+            onChange={(v) => {
+              setTouched(true);
+              setDraft(v);
+            }}
+          />
         </label>
         {editable ? (
-          <Button size="sm" onClick={() => save.mutate(fromDraft(field.type, value))} loading={save.isPending} disabled={save.isPending} data-testid="lead-field-save">
+          <Button
+            size="sm"
+            onClick={() => save.mutate(fromDraft(field.type, value))}
+            loading={save.isPending}
+            disabled={save.isPending}
+            data-testid="lead-field-save"
+          >
             {t('leads.fieldSave')}
           </Button>
         ) : null}
       </div>
-      {save.isError ? <p role="alert" className="text-xs text-danger-fg">{t(errorKey(save.error))}</p> : null}
+      {save.isError ? (
+        <p role="alert" className="text-xs text-danger-fg">
+          {t(errorKey(save.error))}
+        </p>
+      ) : null}
     </li>
   );
 }
 
-function FieldEditor(props: { type: CustomFieldType; value: string; disabled: boolean; label: string; onChange: (value: string) => void }): ReactNode {
+function FieldEditor(props: {
+  type: CustomFieldType;
+  value: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+}): ReactNode {
   const { type, value, disabled, label, onChange } = props;
-  if (type === 'BOOLEAN') return <input type="checkbox" aria-label={label} checked={value === 'true'} disabled={disabled} onChange={(e) => onChange(e.target.checked ? 'true' : 'false')} className="h-5 w-5 accent-primary-fg" />;
-  if (type === 'NUMBER') return <input type="number" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={fieldClass} />;
-  if (type === 'DATE') return <input type="date" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={fieldClass} />;
-  return <input type="text" aria-label={label} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={fieldClass} />;
+  if (type === 'BOOLEAN')
+    return (
+      <input
+        type="checkbox"
+        aria-label={label}
+        checked={value === 'true'}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
+        className="h-5 w-5 accent-primary-fg"
+      />
+    );
+  if (type === 'NUMBER')
+    return (
+      <input
+        type="number"
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={fieldClass}
+      />
+    );
+  if (type === 'DATE')
+    return (
+      <input
+        type="date"
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={fieldClass}
+      />
+    );
+  return (
+    <input
+      type="text"
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={fieldClass}
+    />
+  );
 }
 function toDraft(type: CustomFieldType, value: CustomFieldValue): string {
-  if (value === null || value === undefined) return type === 'BOOLEAN' ? 'false' : '';
+  if (value === null || value === undefined)
+    return type === 'BOOLEAN' ? 'false' : '';
   if (type === 'BOOLEAN') return value ? 'true' : 'false';
   return String(value);
 }
 function fromDraft(type: CustomFieldType, draft: string): CustomFieldValue {
   if (type === 'BOOLEAN') return draft === 'true';
   if (draft === '') return null;
-  if (type === 'NUMBER') { const n = Number(draft); return Number.isFinite(n) ? n : null; }
+  if (type === 'NUMBER') {
+    const n = Number(draft);
+    return Number.isFinite(n) ? n : null;
+  }
   return draft;
 }

@@ -20,7 +20,10 @@ import { Icon } from './ui/icons';
 import { Section } from './ui/section';
 import { useToast } from './ui/toast';
 
-const COLOR_TONE: Record<string, 'neutral' | 'accent' | 'success' | 'warning' | 'danger'> = {
+const COLOR_TONE: Record<
+  string,
+  'neutral' | 'accent' | 'success' | 'warning' | 'danger'
+> = {
   gray: 'neutral',
   blue: 'accent',
   green: 'success',
@@ -89,7 +92,11 @@ export function PersonTagsSection(props: {
             data-testid="person-tag-chip"
             className="inline-flex items-center gap-1"
           >
-            <Badge tone={tag.color ? (COLOR_TONE[tag.color] ?? 'neutral') : 'neutral'}>
+            <Badge
+              tone={
+                tag.color ? (COLOR_TONE[tag.color] ?? 'neutral') : 'neutral'
+              }
+            >
               {tag.name}
             </Badge>
             {editable ? (
@@ -193,7 +200,9 @@ function PersonFieldRow(props: {
   const { t } = useI18n();
   const toast = useToast();
   const qc = useQueryClient();
-  const [draft, setDraft] = useState<string>(() => toDraft(field.type, field.value));
+  const [draft, setDraft] = useState<string>(() =>
+    toDraft(field.type, field.value),
+  );
   const [touched, setTouched] = useState(false);
   const value = touched ? draft : toDraft(field.type, field.value);
 
@@ -326,7 +335,8 @@ function FieldEditor(props: {
 }
 
 function toDraft(type: CustomFieldType, value: CustomFieldValue): string {
-  if (value === null || value === undefined) return type === 'BOOLEAN' ? 'false' : '';
+  if (value === null || value === undefined)
+    return type === 'BOOLEAN' ? 'false' : '';
   if (type === 'BOOLEAN') return value ? 'true' : 'false';
   return String(value);
 }

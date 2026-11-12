@@ -1,9 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import type { PersonDetail, Role } from '@/lib/types';
-import { PersonCustomFieldsSection, PersonTagsSection } from './person-tags-fields';
+import {
+  PersonCustomFieldsSection,
+  PersonTagsSection,
+} from './person-tags-fields';
 
 const toastMock = vi.fn();
 
@@ -66,12 +75,16 @@ afterEach(() => {
 
 describe('PersonTagsSection', () => {
   it('removes a tag for OPERATOR', async () => {
-    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string }) => {
-      if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
-        return Promise.resolve({ tags: [] });
-      return Promise.reject(new Error(path));
-    });
-    renderWith(<PersonTagsSection person={basePerson()} role={'OPERATOR' as Role} />);
+    vi.mocked(api).mockImplementation(
+      (path: string, opts?: { method?: string }) => {
+        if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
+          return Promise.resolve({ tags: [] });
+        return Promise.reject(new Error(path));
+      },
+    );
+    renderWith(
+      <PersonTagsSection person={basePerson()} role={'OPERATOR' as Role} />,
+    );
     fireEvent.click(screen.getByTestId('person-tag-remove'));
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith('/api/v1/people/p1/tags', {
@@ -82,28 +95,30 @@ describe('PersonTagsSection', () => {
   });
 
   it('adds a tag for OPERATOR', async () => {
-    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string }) => {
-      if (path === '/api/v1/tags')
-        return Promise.resolve({
-          items: [
-            {
-              id: 't1',
-              name: 'VIP',
-              color: 'blue',
-              usage: { people: 1, leads: 0 },
-            },
-            {
-              id: 't2',
-              name: 'New',
-              color: null,
-              usage: { people: 0, leads: 0 },
-            },
-          ],
-        });
-      if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
-        return Promise.resolve({ tags: [] });
-      return Promise.reject(new Error(path));
-    });
+    vi.mocked(api).mockImplementation(
+      (path: string, opts?: { method?: string }) => {
+        if (path === '/api/v1/tags')
+          return Promise.resolve({
+            items: [
+              {
+                id: 't1',
+                name: 'VIP',
+                color: 'blue',
+                usage: { people: 1, leads: 0 },
+              },
+              {
+                id: 't2',
+                name: 'New',
+                color: null,
+                usage: { people: 0, leads: 0 },
+              },
+            ],
+          });
+        if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
+          return Promise.resolve({ tags: [] });
+        return Promise.reject(new Error(path));
+      },
+    );
     renderWith(
       <PersonTagsSection person={basePerson()} role={'OPERATOR' as Role} />,
     );
@@ -120,18 +135,24 @@ describe('PersonTagsSection', () => {
   });
 
   it('hides edit controls for VIEWER', () => {
-    renderWith(<PersonTagsSection person={basePerson()} role={'VIEWER' as Role} />);
+    renderWith(
+      <PersonTagsSection person={basePerson()} role={'VIEWER' as Role} />,
+    );
     expect(screen.queryByTestId('person-tag-remove')).toBeNull();
     expect(screen.queryByTestId('person-tag-add')).toBeNull();
   });
 
   it('shows API error via errorKey', async () => {
-    vi.mocked(api).mockImplementation((path: string, opts?: { method?: string }) => {
-      if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
-        return Promise.reject({ code: 'UNKNOWN_TAG' });
-      return Promise.reject(new Error(path));
-    });
-    renderWith(<PersonTagsSection person={basePerson()} role={'ADMIN' as Role} />);
+    vi.mocked(api).mockImplementation(
+      (path: string, opts?: { method?: string }) => {
+        if (path === '/api/v1/people/p1/tags' && opts?.method === 'PUT')
+          return Promise.reject({ code: 'UNKNOWN_TAG' });
+        return Promise.reject(new Error(path));
+      },
+    );
+    renderWith(
+      <PersonTagsSection person={basePerson()} role={'ADMIN' as Role} />,
+    );
     fireEvent.click(screen.getByTestId('person-tag-remove'));
     expect(await screen.findByText('errors.UNKNOWN_TAG')).toBeInTheDocument();
   });
@@ -140,11 +161,18 @@ describe('PersonTagsSection', () => {
 describe('PersonCustomFieldsSection', () => {
   it('saves edited text field', async () => {
     vi.mocked(api).mockResolvedValue({});
-    renderWith(<PersonCustomFieldsSection person={basePerson()} role={'OPERATOR' as Role} />);
+    renderWith(
+      <PersonCustomFieldsSection
+        person={basePerson()}
+        role={'OPERATOR' as Role}
+      />,
+    );
     const row = screen.getAllByTestId('person-custom-field')[0];
     const input = row.querySelector('input') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'NewCo' } });
-    fireEvent.click(row.querySelector('[data-testid="person-field-save"]') as HTMLElement);
+    fireEvent.click(
+      row.querySelector('[data-testid="person-field-save"]') as HTMLElement,
+    );
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith('/api/v1/people/p1/custom-fields', {
         method: 'PATCH',
@@ -155,12 +183,21 @@ describe('PersonCustomFieldsSection', () => {
 
   it('saves boolean and number types', async () => {
     vi.mocked(api).mockResolvedValue({});
-    renderWith(<PersonCustomFieldsSection person={basePerson()} role={'ADMIN' as Role} />);
+    renderWith(
+      <PersonCustomFieldsSection
+        person={basePerson()}
+        role={'ADMIN' as Role}
+      />,
+    );
     const rows = screen.getAllByTestId('person-custom-field');
     const boolRow = rows[1];
-    const check = boolRow.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const check = boolRow.querySelector(
+      'input[type="checkbox"]',
+    ) as HTMLInputElement;
     fireEvent.click(check);
-    fireEvent.click(boolRow.querySelector('[data-testid="person-field-save"]') as HTMLElement);
+    fireEvent.click(
+      boolRow.querySelector('[data-testid="person-field-save"]') as HTMLElement,
+    );
     await waitFor(() =>
       expect(api).toHaveBeenCalledWith('/api/v1/people/p1/custom-fields', {
         method: 'PATCH',
