@@ -335,7 +335,7 @@ function DuplicatesReview(props: {
                 key={person.id}
                 className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-line p-3"
               >
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
                   <span className="truncate font-medium">
                     {person.displayName ?? t('list.unnamed')}
                   </span>

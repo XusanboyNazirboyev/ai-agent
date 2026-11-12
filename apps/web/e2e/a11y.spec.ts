@@ -479,7 +479,7 @@ test.describe('people, person card, merge/erase, and fields (P1.1/P1.5)', () => 
         .fill('__no_such_person_012__');
       await expect(
         page.getByText(
-          /No people match|Никто не найден|Mos odam topilmadi|No people yet|Пока нет людей|Hali odamlar yo/i,
+          /No person matches your search|Люди по запросу не найдены|So‘rov bo‘yicha odam topilmadi/i,
         ),
       ).toBeVisible();
       await audit(page, `contacts empty ${language}`);

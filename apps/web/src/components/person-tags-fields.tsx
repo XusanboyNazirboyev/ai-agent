@@ -81,7 +81,7 @@ export function PersonTagsSection(props: {
   }
 
   return (
-    <Section title={t('people.tags')} icon="tag" testId="person-tags">
+    <Section title={t('people.tags')} icon="tag" testId="person-tags" level={2}>
       <div className="flex flex-wrap items-center gap-2">
         {tags.length === 0 ? (
           <span className="text-sm text-muted">{t('people.noTags')}</span>
@@ -172,6 +172,7 @@ export function PersonCustomFieldsSection(props: {
       title={t('people.customFields')}
       icon="sliders"
       testId="person-custom-fields"
+      level={2}
     >
       {fields.length === 0 ? (
         <p className="text-sm text-muted">{t('people.noCustomFields')}</p>
