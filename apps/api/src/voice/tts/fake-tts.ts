@@ -6,8 +6,8 @@ import {
   type TextToSpeech,
   TtsError,
   type TtsErrorCode,
-} from './ports.js';
-import { buildWav } from './wav.js';
+} from "./ports.js";
+import { buildWav } from "./wav.js";
 
 export interface FakeTtsOptions {
   readonly languages?: readonly string[];
@@ -22,13 +22,13 @@ export interface FakeTtsOptions {
 }
 
 export class FakeTextToSpeech implements TextToSpeech {
-  readonly provider = 'fake';
+  readonly provider = "fake";
   readonly calls: SynthesizeInput[] = [];
 
   constructor(private readonly options: FakeTtsOptions = {}) {}
 
   supportsLanguage(language: string): boolean {
-    return (this.options.languages ?? ['ru', 'en']).includes(
+    return (this.options.languages ?? ["ru", "en"]).includes(
       languagePrefix(language),
     );
   }
@@ -38,20 +38,20 @@ export class FakeTextToSpeech implements TextToSpeech {
     if (this.options.latencyMs) {
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(resolve, this.options.latencyMs);
-        input.signal?.addEventListener('abort', () => {
+        input.signal?.addEventListener("abort", () => {
           clearTimeout(timer);
-          reject(new TtsError('TIMEOUT', 'aborted'));
+          reject(new TtsError("TIMEOUT", "aborted"));
         });
       });
     }
     if (this.options.failWith) {
-      throw new TtsError(this.options.failWith, 'fake failure');
+      throw new TtsError(this.options.failWith, "fake failure");
     }
     const rate = this.options.sampleRateHz ?? 48_000;
     const samples = this.options.samples ?? 480;
     return {
       bytes: this.options.bytes ?? buildWav(rate, samples),
-      mimeType: this.options.mimeType ?? 'audio/wav',
+      mimeType: this.options.mimeType ?? "audio/wav",
       sampleRateHz: rate,
       durationMs: Math.round((samples / rate) * 1000),
     };

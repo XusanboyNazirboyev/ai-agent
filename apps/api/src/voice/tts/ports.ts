@@ -13,13 +13,15 @@ export interface SpeechAudio {
 }
 
 export type TtsErrorCode =
-  | 'UNSUPPORTED_LANGUAGE'
-  | 'PROVIDER_UNAVAILABLE'
-  | 'TIMEOUT'
-  | 'EMPTY_AUDIO'
-  | 'INVALID_RESPONSE'
-  | 'TEXT_TOO_LONG'
-  | 'EMPTY_TEXT';
+  | "UNSUPPORTED_LANGUAGE"
+  | "PROVIDER_UNAVAILABLE"
+  | "TIMEOUT"
+  | "EMPTY_AUDIO"
+  | "INVALID_RESPONSE"
+  | "TEXT_TOO_LONG"
+  | "TRANSCODE_FAILED"
+  | "AUDIO_TOO_LARGE"
+  | "EMPTY_TEXT";
 
 /** Typed failure. The message never contains the text or the audio. */
 export class TtsError extends Error {
@@ -28,7 +30,7 @@ export class TtsError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = 'TtsError';
+    this.name = "TtsError";
   }
 }
 
@@ -47,5 +49,5 @@ export interface TextToSpeech {
 
 /** ISO 639-1 prefix of a locale tag (`ru-RU` -> `ru`), lower case. */
 export function languagePrefix(language: string): string {
-  return language.trim().split(/[-_]/u)[0]?.toLowerCase() ?? '';
+  return language.trim().split(/[-_]/u)[0]?.toLowerCase() ?? "";
 }
