@@ -450,3 +450,328 @@ test.describe('platform console and the ADR 047 tenant pages', () => {
     });
   }
 });
+
+test.describe('people, person card, merge/erase, and fields (P1.1/P1.5)', () => {
+  for (const language of ['en', 'ru', 'uz-Latn'] as const) {
+    test(`people list, duplicates tab and empty state have no violations (${language})`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const { page, context } = await newSession(
+        browser,
+        f.a.operators.owner.email,
+      );
+      await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
+
+      await page.goto('/contacts', { waitUntil: 'networkidle' });
+      await expect(page.getByTestId('person-item').first()).toBeVisible();
+      await audit(page, `contacts list ${language}`);
+
+      await page.getByTestId('people-tab-duplicates').click();
+      // Seeded tenant A has shared-phone customers, so duplicates exist.
+      await expect(page.getByTestId('duplicate-group').first()).toBeVisible();
+      await audit(page, `contacts duplicates ${language}`);
+
+      // Force an empty state by filtering to a tag that cannot exist.
+      await page.getByTestId('people-tab-list').click();
+      await page
+        .getByLabel(/search by name or phone|поиск|qidir/i)
+        .fill('__no_such_person_012__');
+      await expect(
+        page.getByText(
+          /No people match|Никто не найден|Mos odam topilmadi|No people yet|Пока нет людей|Hali odamlar yo/i,
+        ),
+      ).toBeVisible();
+      await audit(page, `contacts empty ${language}`);
+      await context.close();
+    });
+  }
+
+  test('person card as owner: duplicate banner, merge dialog, erase confirm, tag picker and custom field editors have no violations', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+
+    // Prepare P1.5 definitions so the card shows tag picker and all field types.
+    await page.goto('/settings/fields', { waitUntil: 'networkidle' });
+    await page.getByTestId('tag-name-input').fill('A11y tag');
+    await page.getByTestId('tag-create').click();
+    await expect(
+      page.getByTestId('tag-row').filter({ hasText: 'A11y tag' }),
+    ).toBeVisible();
+
+    const defs = [
+      { label: 'A11y text', key: 'a11y_text', type: 'TEXT' },
+      { label: 'A11y number', key: 'a11y_number', type: 'NUMBER' },
+      { label: 'A11y date', key: 'a11y_date', type: 'DATE' },
+      { label: 'A11y bool', key: 'a11y_bool', type: 'BOOLEAN' },
+      {
+        label: 'A11y select',
+        key: 'a11y_select',
+        type: 'SELECT',
+        options: 'A\nB',
+      },
+    ];
+    for (const def of defs) {
+      await page.getByTestId('def-label-input').fill(def.label);
+      await page.getByTestId('def-key-input').fill(def.key);
+      await page.getByTestId('def-type-select').selectOption(def.type);
+      if (def.options) {
+        await page.getByTestId('def-options-input').fill(def.options);
+      }
+      await page.getByTestId('def-create').click();
+      await expect(
+        page.getByTestId('def-row').filter({ hasText: def.label }),
+      ).toBeVisible();
+    }
+
+    await page.goto('/contacts', { waitUntil: 'networkidle' });
+    const row = page
+      .getByTestId('person-item')
+      .filter({ hasText: f.a.conversations[0].contactName });
+    await row.getByTestId('person-open-card').click();
+    await expect(page.getByTestId('person-header')).toBeVisible();
+    await expect(page.getByTestId('person-duplicates')).toBeVisible();
+    await audit(page, 'person card with duplicates banner');
+
+    // Tag picker open.
+    await page.getByTestId('person-tag-add').click();
+    await expect(page.getByTestId('person-tag-select')).toBeVisible();
+    await audit(page, 'person card tag picker open');
+
+    // Custom field editors for all types are present.
+    await expect(
+      page.getByTestId('person-custom-field').filter({ hasText: 'A11y text' }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId('person-custom-field')
+        .filter({ hasText: 'A11y number' }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('person-custom-field').filter({ hasText: 'A11y date' }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('person-custom-field').filter({ hasText: 'A11y bool' }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId('person-custom-field')
+        .filter({ hasText: 'A11y select' }),
+    ).toBeVisible();
+    await audit(page, 'person card custom field editors');
+
+    // Merge dialog open.
+    await page.getByTestId('merge-candidate-into-person').first().click();
+    await expect(page.getByTestId('merge-dialog')).toBeVisible();
+    await audit(page, 'merge dialog open');
+    await page.getByTestId('merge-cancel').click();
+    await expect(page.getByTestId('merge-dialog')).toBeHidden();
+
+    // Person erase confirm open.
+    await page.getByTestId('person-erase').click();
+    const eraseDialog = page
+      .getByTestId('person-header')
+      .getByTestId('confirm-dialog');
+    await expect(eraseDialog).toBeVisible();
+    await audit(page, 'person erase confirm open');
+    await eraseDialog.getByTestId('confirm-cancel').click();
+    await expect(eraseDialog).toBeHidden();
+    await context.close();
+  });
+
+  for (const language of ['en', 'ru', 'uz-Latn'] as const) {
+    test(`settings fields as owner and operator have no violations (${language})`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const owner = await newSession(browser, f.a.operators.owner.email);
+      await owner.page
+        .getByLabel(/^(Language|Язык|Til)$/u)
+        .selectOption(language);
+      await owner.page.goto('/settings/fields', { waitUntil: 'networkidle' });
+      await expect(owner.page.getByTestId('tag-name-input')).toBeVisible();
+
+      // Create a tag and all field types for the owner audit.
+      await owner.page.getByTestId('tag-name-input').fill(`Tag ${language}`);
+      await owner.page.getByTestId('tag-create').click();
+      await expect(
+        owner.page
+          .getByTestId('tag-row')
+          .filter({ hasText: `Tag ${language}` }),
+      ).toBeVisible();
+
+      for (const [type, label, key] of [
+        ['TEXT', `T ${language}`, `t_${language.slice(0, 2)}`],
+        ['NUMBER', `N ${language}`, `n_${language.slice(0, 2)}`],
+        ['DATE', `D ${language}`, `d_${language.slice(0, 2)}`],
+        ['BOOLEAN', `B ${language}`, `b_${language.slice(0, 2)}`],
+        ['SELECT', `S ${language}`, `s_${language.slice(0, 2)}`],
+      ] as const) {
+        await owner.page.getByTestId('def-label-input').fill(label);
+        await owner.page
+          .getByTestId('def-key-input')
+          .fill(key.replace(/-/g, '_'));
+        await owner.page.getByTestId('def-type-select').selectOption(type);
+        if (type === 'SELECT') {
+          await owner.page.getByTestId('def-options-input').fill('One\nTwo');
+        }
+        await owner.page.getByTestId('def-create').click();
+        await expect(
+          owner.page.getByTestId('def-row').filter({ hasText: label }),
+        ).toBeVisible();
+      }
+      await audit(owner.page, `settings fields owner ${language}`);
+      await owner.context.close();
+
+      const op = await newSession(browser, f.a.operators.op1.email);
+      await op.page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
+      await op.page.goto('/settings/fields', { waitUntil: 'networkidle' });
+      await expect(op.page.getByRole('region')).toBeVisible();
+      await expect(op.page.getByTestId('tag-name-input')).toHaveCount(0);
+      await expect(op.page.getByTestId('def-label-input')).toHaveCount(0);
+      await audit(op.page, `settings fields operator read-only ${language}`);
+      await op.context.close();
+    });
+  }
+
+  test('keyboard: merge dialog focus trap and Escape returns focus; confirm dialogs Escape/cancel return focus', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/contacts', { waitUntil: 'networkidle' });
+    const row = page
+      .getByTestId('person-item')
+      .filter({ hasText: f.a.conversations[0].contactName });
+    await row.getByTestId('person-open-card').click();
+    await expect(page.getByTestId('person-duplicates')).toBeVisible();
+
+    const opener = page.getByTestId('merge-candidate-into-person').first();
+    await opener.click();
+    const merge = page.getByTestId('merge-dialog');
+    await expect(merge).toBeVisible();
+    // Native <dialog> traps focus; Escape closes and returns focus to opener.
+    await page.keyboard.press('Tab');
+    await expect(merge.locator(':focus')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(merge).toBeHidden();
+    await expect(opener).toBeFocused();
+
+    const eraseOpener = page.getByTestId('person-erase');
+    await eraseOpener.click();
+    const erase = page
+      .getByTestId('person-header')
+      .getByTestId('confirm-dialog');
+    await expect(erase).toBeVisible();
+    await expect(erase.getByTestId('confirm-cancel')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(erase).toBeHidden();
+    await expect(eraseOpener).toBeFocused();
+
+    await eraseOpener.click();
+    await expect(erase).toBeVisible();
+    await erase.getByTestId('confirm-cancel').click();
+    await expect(erase).toBeHidden();
+    await expect(eraseOpener).toBeFocused();
+    await context.close();
+  });
+
+  test('keyboard: tag picker and person tag add/remove are reachable', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/settings/fields', { waitUntil: 'networkidle' });
+    await page.getByTestId('tag-name-input').fill('KB tag');
+    await page.getByTestId('tag-create').click();
+    await expect(
+      page.getByTestId('tag-row').filter({ hasText: 'KB tag' }),
+    ).toBeVisible();
+
+    await page.goto('/contacts', { waitUntil: 'networkidle' });
+    await page
+      .getByTestId('person-item')
+      .first()
+      .getByTestId('person-open-card')
+      .click();
+    await expect(page.getByTestId('person-tags')).toBeVisible();
+
+    const add = page.getByTestId('person-tag-add');
+    await add.focus();
+    await expect(add).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('person-tag-select')).toBeVisible();
+    await page
+      .getByTestId('person-tag-select')
+      .selectOption({ label: 'KB tag' });
+    await expect(
+      page.getByTestId('person-tag-chip').filter({ hasText: 'KB tag' }),
+    ).toBeVisible();
+
+    const remove = page.getByTestId('person-tag-remove').first();
+    await remove.focus();
+    await expect(remove).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(
+      page.getByTestId('person-tag-chip').filter({ hasText: 'KB tag' }),
+    ).toHaveCount(0);
+    await context.close();
+  });
+});
+
+test.describe('mobile 320px overflow: contacts and fields (P1.1/P1.5)', () => {
+  for (const language of ['ru', 'uz-Latn'] as const) {
+    test(`contacts list, person card and settings fields have no overflow (${language}, 320px)`, async ({
+      browser,
+    }) => {
+      const f = fixtures();
+      const { page, context } = await newSession(
+        browser,
+        f.a.operators.owner.email,
+        { viewport: { width: 320, height: 640 } },
+      );
+      await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
+
+      await page.goto('/contacts', { waitUntil: 'networkidle' });
+      await expect(page.getByTestId('person-item').first()).toBeVisible();
+      expect(await findOverflow(page), `/contacts ${language} 320`).toEqual([]);
+
+      await page.getByTestId('people-tab-duplicates').click();
+      await expect(page.getByTestId('duplicate-group').first()).toBeVisible();
+      expect(
+        await findOverflow(page),
+        `/contacts duplicates ${language} 320`,
+      ).toEqual([]);
+
+      await page.getByTestId('people-tab-list').click();
+      await page
+        .getByTestId('person-item')
+        .first()
+        .getByTestId('person-open-card')
+        .click();
+      await expect(page.getByTestId('person-header')).toBeVisible();
+      expect(await findOverflow(page), `/contacts/:id ${language} 320`).toEqual(
+        [],
+      );
+
+      await page.goto('/settings/fields', { waitUntil: 'networkidle' });
+      await expect(page.getByRole('region')).toBeVisible();
+      expect(
+        await findOverflow(page),
+        `/settings/fields ${language} 320`,
+      ).toEqual([]);
+      await context.close();
+    });
+  }
+});
