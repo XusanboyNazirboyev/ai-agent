@@ -944,5 +944,10 @@
   "people.unmergeSuccess": "Объединение отменено.",
   "errors.MERGE_REFUSED": "Это объединение недоступно.",
   "errors.SAME_PERSON": "Нельзя объединить человека с самим собой.",
-  "errors.UNMERGE_BLOCKED": "Это объединение нельзя отменить."
+  "errors.UNMERGE_BLOCKED": "Это объединение нельзя отменить.",
+  "people.erasePerson": "Удалить человека",
+  "people.erasePersonTitle": "Удалить этого человека?",
+  "people.erasePersonBody": "{name}: будут удалены {contacts, plural, one {# контакт} few {# контакта} many {# контактов} other {# контакта}} и {conversations, plural, one {# диалог} few {# диалога} many {# диалогов} other {# диалога}}. Это действие нельзя отменить.",
+  "people.erasePersonConfirm": "Удалить человека",
+  "toast.personErased": "Человек удалён: {contacts, plural, one {удалён # контакт} few {удалено # контакта} many {удалено # контактов} other {удалено # контакта}}."
 }

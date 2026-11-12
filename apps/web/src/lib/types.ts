@@ -271,6 +271,14 @@ export interface ContactErasureResult {
   messagesRedacted: number;
 }
 
+/** Result of owner-initiated whole-person erasure (ADR 052 slice D). */
+export interface PersonErasureResult {
+  personId: string;
+  contacts: number;
+  conversations: number;
+  messagesRedacted: number;
+}
+
 export interface PersonItem {
   id: string;
   displayName: string | null;

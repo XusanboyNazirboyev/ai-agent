@@ -43,3 +43,42 @@ test('only the owner sees and can open the erase contact flow', async ({
     await other.context.close();
   }
 });
+
+test('owner sees person erase action and can cancel; others do not', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const owner = await newSession(browser, f.a.operators.owner.email);
+  await owner.page.goto('/contacts');
+  await owner.page
+    .getByTestId('person-item')
+    .first()
+    .getByTestId('person-open-card')
+    .click();
+  await expect(owner.page.getByTestId('person-header')).toBeVisible();
+  const erasePerson = owner.page.getByTestId('person-erase');
+  await expect(erasePerson).toBeVisible();
+  await erasePerson.click();
+  const header = owner.page.getByTestId('person-header');
+  const dialog = header.getByTestId('confirm-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(
+    dialog.getByRole('heading', { name: 'Erase this person?' }),
+  ).toBeVisible();
+  await dialog.getByTestId('confirm-cancel').click();
+  await expect(dialog).toBeHidden();
+  await owner.context.close();
+
+  for (const key of ['admin', 'viewer'] as const) {
+    const other = await newSession(browser, f.a.operators[key].email);
+    await other.page.goto('/contacts');
+    await other.page
+      .getByTestId('person-item')
+      .first()
+      .getByTestId('person-open-card')
+      .click();
+    await expect(other.page.getByTestId('person-header')).toBeVisible();
+    await expect(other.page.getByTestId('person-erase')).toHaveCount(0);
+    await other.context.close();
+  }
+});

@@ -944,5 +944,10 @@
   "people.unmergeSuccess": "Merge undone.",
   "errors.MERGE_REFUSED": "This merge is not allowed.",
   "errors.SAME_PERSON": "Cannot merge a person into itself.",
-  "errors.UNMERGE_BLOCKED": "This merge cannot be undone."
+  "errors.UNMERGE_BLOCKED": "This merge cannot be undone.",
+  "people.erasePerson": "Erase person",
+  "people.erasePersonTitle": "Erase this person?",
+  "people.erasePersonBody": "{name}: this will erase {contacts, plural, one {# contact} other {# contacts}} and {conversations, plural, one {# conversation} other {# conversations}}. This cannot be undone.",
+  "people.erasePersonConfirm": "Erase person",
+  "toast.personErased": "Person erased: {contacts, plural, one {# contact removed} other {# contacts removed}}."
 }

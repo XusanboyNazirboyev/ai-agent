@@ -944,5 +944,10 @@
   "people.unmergeSuccess": "Birlashtirish bekor qilindi.",
   "errors.MERGE_REFUSED": "Bu birlashtirishga ruxsat berilmagan.",
   "errors.SAME_PERSON": "Shaxsni o‘ziga birlashtirib bo‘lmaydi.",
-  "errors.UNMERGE_BLOCKED": "Bu birlashtirishni bekor qilib bo‘lmaydi."
+  "errors.UNMERGE_BLOCKED": "Bu birlashtirishni bekor qilib bo‘lmaydi.",
+  "people.erasePerson": "Shaxsni o‘chirish",
+  "people.erasePersonTitle": "Bu shaxs o‘chirilsinmi?",
+  "people.erasePersonBody": "{name}: {contacts, plural, one {# ta kontakt} other {# ta kontakt}} va {conversations, plural, one {# ta suhbat} other {# ta suhbat}} o‘chiriladi. Buni qaytarib bo‘lmaydi.",
+  "people.erasePersonConfirm": "Shaxsni o‘chirish",
+  "toast.personErased": "Shaxs o‘chirildi: {contacts, plural, one {# ta kontakt o‘chirildi} other {# ta kontakt o‘chirildi}}."
 }
