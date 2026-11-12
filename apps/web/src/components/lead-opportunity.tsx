@@ -178,20 +178,27 @@ export function LeadOpportunity(props: {
     <div className="flex min-w-0 flex-col gap-3" data-testid="lead-opportunity">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         {ownerName ? (
-          <span className="flex items-center gap-1.5" data-testid="lead-owner-summary">
+          <span
+            className="flex items-center gap-1.5"
+            data-testid="lead-owner-summary"
+          >
             <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-2 text-[10px] font-semibold">
               {initials(ownerName)}
             </span>
             <span className="truncate">{ownerName}</span>
           </span>
         ) : (
-          <span data-testid="lead-owner-summary">{t('opportunity.unassigned')}</span>
+          <span data-testid="lead-owner-summary">
+            {t('opportunity.unassigned')}
+          </span>
         )}
         {amountText !== '—' ? (
           <span data-testid="lead-amount-summary">{amountText}</span>
         ) : null}
         {props.item.expectedCloseDate ? (
-          <span data-testid="lead-close-summary">{props.item.expectedCloseDate}</span>
+          <span data-testid="lead-close-summary">
+            {props.item.expectedCloseDate}
+          </span>
         ) : null}
       </div>
       {canEdit || isViewer ? (
@@ -303,7 +310,9 @@ export function LeadOpportunity(props: {
                 {canEdit && !isViewer ? (
                   <Button
                     size="sm"
-                    onClick={() => save.mutate({ lostReason: lostReason.trim() || null })}
+                    onClick={() =>
+                      save.mutate({ lostReason: lostReason.trim() || null })
+                    }
                     disabled={save.isPending}
                     data-testid="opportunity-save-lost"
                   >
@@ -330,7 +339,10 @@ export function LeadOpportunity(props: {
           const value = lostDraft.trim();
           if (value === '') return;
           setLostReason(value);
-          save.mutate({ lostReason: value }, { onSuccess: () => setLostOpen(false) });
+          save.mutate(
+            { lostReason: value },
+            { onSuccess: () => setLostOpen(false) },
+          );
         }}
         footer={
           <>

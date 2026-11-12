@@ -28,7 +28,9 @@ test('leads offer a contact list and configurable funnel stages', async ({
   await expect(defaultCard.getByTestId('pipeline-stage-row')).toHaveCount(5);
 
   const lastRow = defaultCard.getByTestId('pipeline-stage-row').last();
-  const customName = lastRow.getByLabel(/stage name|Название этапа|Bosqich nomi/i);
+  const customName = lastRow.getByLabel(
+    /stage name|Название этапа|Bosqich nomi/i,
+  );
   await expect(customName).toHaveValue('Prospect');
   await customName.fill('Qualified');
   await lastRow.getByTestId('stage-save').click();
@@ -37,9 +39,7 @@ test('leads offer a contact list and configurable funnel stages', async ({
   const operator = await newSession(browser, f.a.operators.op1.email);
   await operator.page.goto('/settings/pipeline');
   await expect(operator.page.getByTestId('pipeline-create')).toHaveCount(0);
-  await expect(
-    operator.page.getByTestId('pipeline-rename'),
-  ).toHaveCount(0);
+  await expect(operator.page.getByTestId('pipeline-rename')).toHaveCount(0);
   await operator.context.close();
   await context.close();
 });

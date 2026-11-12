@@ -702,7 +702,10 @@ export function ConversationViewPane(props: {
                     value={view.lead.status}
                     disabled={!operating || busy || !handoverId}
                     onChange={(e) => {
-                      if (e.target.value === 'LOST' && view.lead?.status !== 'LOST') {
+                      if (
+                        e.target.value === 'LOST' &&
+                        view.lead?.status !== 'LOST'
+                      ) {
                         setLostDraft('');
                         setLostDialog(true);
                         return;
@@ -739,7 +742,10 @@ export function ConversationViewPane(props: {
                   }}
                   footer={
                     <>
-                      <Button variant="secondary" onClick={() => setLostDialog(false)}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setLostDialog(false)}
+                      >
                         {t('app.cancel')}
                       </Button>
                       <Button type="submit" variant="primary" loading={busy}>

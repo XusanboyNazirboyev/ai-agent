@@ -776,7 +776,6 @@ test.describe('mobile 320px overflow: contacts and fields (P1.1/P1.5)', () => {
   }
 });
 
-
 test.describe('pipelines (P1.3)', () => {
   test('pipelines settings page has no violations and dialogs are keyboard accessible', async ({
     browser,

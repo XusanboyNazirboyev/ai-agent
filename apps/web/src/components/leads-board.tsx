@@ -198,12 +198,7 @@ function LeadColumn(props: {
 }): ReactNode {
   const { t } = useI18n();
   const query = useInfiniteQuery({
-    queryKey: [
-      'leads',
-      props.stage.id,
-      props.pipelineId,
-      props.filters,
-    ],
+    queryKey: ['leads', props.stage.id, props.pipelineId, props.filters],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
@@ -212,10 +207,13 @@ function LeadColumn(props: {
         limit: '25',
       });
       if (pageParam) params.set('cursor', pageParam);
-      if (props.filters.ownerId) params.set('ownerOperatorId', props.filters.ownerId);
+      if (props.filters.ownerId)
+        params.set('ownerOperatorId', props.filters.ownerId);
       if (props.filters.source) params.set('source', props.filters.source);
-      if (props.filters.closeBefore) params.set('closeBefore', props.filters.closeBefore);
-      if (props.filters.closeAfter) params.set('closeAfter', props.filters.closeAfter);
+      if (props.filters.closeBefore)
+        params.set('closeBefore', props.filters.closeBefore);
+      if (props.filters.closeAfter)
+        params.set('closeAfter', props.filters.closeAfter);
       if (props.filters.tagId) params.set('tagId', props.filters.tagId);
       if (props.filters.score) params.set('score', props.filters.score);
       return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
@@ -444,7 +442,9 @@ function LeadCard(props: {
                   data-testid="lead-card-close"
                   className="truncate text-xs text-muted"
                 >
-                  {t('opportunity.closeDate', { date: props.item.expectedCloseDate })}
+                  {t('opportunity.closeDate', {
+                    date: props.item.expectedCloseDate,
+                  })}
                 </span>
               ) : null}
             </span>
@@ -580,7 +580,11 @@ function LeadCard(props: {
               <Button variant="secondary" onClick={() => setLostDialog(false)}>
                 {t('app.cancel')}
               </Button>
-              <Button type="submit" variant="primary" loading={setField.isPending}>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={setField.isPending}
+              >
                 {t('app.save')}
               </Button>
             </>
@@ -624,9 +628,9 @@ function LeadsFilters(props: {
   const team = useQuery({
     queryKey: ['team'],
     queryFn: () =>
-      api<{ operators: { id: string; displayName: string; isActive: boolean }[] }>(
-        '/api/v1/team',
-      ),
+      api<{
+        operators: { id: string; displayName: string; isActive: boolean }[];
+      }>('/api/v1/team'),
     enabled: operator.role === 'OWNER' || operator.role === 'ADMIN',
   });
   const tags = useQuery({

@@ -50,7 +50,10 @@ export function PipelinesSettingsPage(): ReactNode {
 
   const create = useMutation({
     mutationFn: (name: string) =>
-      api<PipelineView>('/api/v1/pipelines', { method: 'POST', body: { name } }),
+      api<PipelineView>('/api/v1/pipelines', {
+        method: 'POST',
+        body: { name },
+      }),
     onSuccess: () => {
       setCreateOpen(false);
       setCreateName('');
@@ -90,7 +93,8 @@ export function PipelinesSettingsPage(): ReactNode {
   });
 
   const list = pipelines.data?.items ?? [];
-  const err = create.error ?? rename.error ?? makeDefault.error ?? archive.error;
+  const err =
+    create.error ?? rename.error ?? makeDefault.error ?? archive.error;
 
   return (
     <SettingsSubPage active="pipeline">
@@ -259,7 +263,6 @@ export function PipelinesSettingsPage(): ReactNode {
   );
 }
 
-
 function PipelineCard(props: {
   pipeline: PipelineView;
   manage: boolean;
@@ -275,9 +278,7 @@ function PipelineCard(props: {
   const stages = useQuery({
     queryKey: ['lead-stages', props.pipeline.id],
     queryFn: () =>
-      api<LeadStage[]>(
-        `/api/v1/leads/stages?pipelineId=${props.pipeline.id}`,
-      ),
+      api<LeadStage[]>(`/api/v1/leads/stages?pipelineId=${props.pipeline.id}`),
   });
   const list = stages.data ?? [];
 
@@ -359,11 +360,19 @@ function PipelineCard(props: {
         </div>
         {props.manage ? (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={props.onRename} data-testid="pipeline-rename">
+            <Button
+              size="sm"
+              onClick={props.onRename}
+              data-testid="pipeline-rename"
+            >
               {t('pipelines.rename')}
             </Button>
             {!props.pipeline.isDefault ? (
-              <Button size="sm" onClick={props.onDefault} data-testid="pipeline-make-default">
+              <Button
+                size="sm"
+                onClick={props.onDefault}
+                data-testid="pipeline-make-default"
+              >
                 {t('pipelines.makeDefault')}
               </Button>
             ) : null}
@@ -444,7 +453,6 @@ function PipelineCard(props: {
     </li>
   );
 }
-
 
 function StageRow(props: {
   stage: LeadStage;
