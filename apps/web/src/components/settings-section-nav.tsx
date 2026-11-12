@@ -12,6 +12,7 @@ export type SettingsSection =
   | 'channels'
   | 'crm'
   | 'pipeline'
+  | 'fields'
   | 'team'
   | 'subscription'
   | 'security'
@@ -28,6 +29,7 @@ const SECTIONS: {
   { key: 'channels', href: '/settings/channels', icon: 'link' },
   { key: 'crm', href: '/settings/crm', icon: 'database' },
   { key: 'pipeline', href: '/settings/pipeline', icon: 'target' },
+  { key: 'fields', href: '/settings/fields', icon: 'tag' },
   { key: 'team', href: '/settings/team', icon: 'users', managers: true },
   {
     key: 'subscription',

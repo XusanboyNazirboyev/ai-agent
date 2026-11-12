@@ -18,11 +18,13 @@ import type {
   LeadScore,
   LeadStage,
   LeadStatus,
+  Tag,
 } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
+import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 
@@ -52,15 +54,41 @@ function stageName(stage: LeadStage, t: (key: string) => string): string {
 /** Tenant-configured funnel stages; lead score remains a separate attribute. */
 export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
+  const [tagId, setTagId] = useState('');
   const stages = useQuery({
     queryKey: ['lead-stages'],
     queryFn: () => api<LeadStage[]>('/api/v1/leads/stages'),
+  });
+  const tags = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
   });
   const rows = stages.data ?? [];
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-      <p className="text-sm text-muted">{t('leads.funnelIntro')}</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <p className="min-w-0 flex-1 text-sm text-muted">
+          {t('leads.funnelIntro')}
+        </p>
+        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm sm:max-w-xs">
+          <span className="sr-only">{t('people.filterByTag')}</span>
+          <select
+            aria-label={t('people.filterByTag')}
+            data-testid="leads-tag-filter"
+            value={tagId}
+            onChange={(e) => setTagId(e.target.value)}
+            className={fieldClass}
+          >
+            <option value="">{t('people.allTags')}</option>
+            {(tags.data?.items ?? []).map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {stages.isPending ? (
         <div role="status">
           <span className="sr-only">{t('app.loading')}</span>
@@ -92,7 +120,12 @@ export function LeadsBoard(): ReactNode {
           className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
         >
           {rows.map((stage) => (
-            <LeadColumn key={stage.id} stage={stage} stages={rows} />
+            <LeadColumn
+              key={stage.id}
+              stage={stage}
+              stages={rows}
+              tagId={tagId}
+            />
           ))}
         </div>
       ) : null}
@@ -103,10 +136,11 @@ export function LeadsBoard(): ReactNode {
 function LeadColumn(props: {
   stage: LeadStage;
   stages: LeadStage[];
+  tagId: string;
 }): ReactNode {
   const { t } = useI18n();
   const query = useInfiniteQuery({
-    queryKey: ['leads', props.stage.id],
+    queryKey: ['leads', props.stage.id, props.tagId],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
@@ -114,6 +148,7 @@ function LeadColumn(props: {
         limit: '25',
       });
       if (pageParam) params.set('cursor', pageParam);
+      if (props.tagId) params.set('tagId', props.tagId);
       return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -303,6 +338,11 @@ function LeadCard(props: {
                   {channelName(props.item.conversation.channelType)}
                 </span>
               </Badge>
+              {(props.item.tags ?? []).map((tag) => (
+                <Badge key={tag.id} data-testid="lead-card-tag">
+                  {tag.name}
+                </Badge>
+              ))}
             </span>
             <span className="text-xs text-muted">
               {t('leads.updated', {

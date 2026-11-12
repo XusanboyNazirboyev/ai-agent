@@ -6,7 +6,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { channelName } from '@/lib/channel-names';
-import type { PersonDuplicateGroup, PersonItem, PersonList } from '@/lib/types';
+import type {
+  PersonDuplicateGroup,
+  PersonItem,
+  PersonList,
+  Tag,
+} from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -29,17 +34,25 @@ export function ContactsPage(): ReactNode {
   const { t } = useI18n();
   const { timeZone } = useShell();
   const [search, setSearch] = useState('');
+  const [tagId, setTagId] = useState('');
   const [tab, setTab] = useState<'people' | 'duplicates'>('people');
   const q = useDebounced(search.trim(), 300);
 
+  const tagsQuery = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
+    enabled: tab === 'people',
+  });
+
   const query = useInfiniteQuery({
-    queryKey: ['people', q],
+    queryKey: ['people', q, tagId],
     initialPageParam: '',
     enabled: tab === 'people',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ limit: '25' });
       if (pageParam) params.set('cursor', pageParam);
       if (q) params.set('q', q);
+      if (tagId) params.set('tagId', tagId);
       return api<PersonList>(`/api/v1/people?${params.toString()}`);
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -84,18 +97,37 @@ export function ContactsPage(): ReactNode {
 
         {tab === 'people' ? (
           <>
-            <div className="relative">
-              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted">
-                <Icon name="search" />
-              </span>
-              <input
-                type="search"
-                aria-label={t('people.search')}
-                placeholder={t('people.search')}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className={`${fieldClass} pl-9`}
-              />
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-0 flex-1 basis-56">
+                <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted">
+                  <Icon name="search" />
+                </span>
+                <input
+                  type="search"
+                  aria-label={t('people.search')}
+                  placeholder={t('people.search')}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className={`${fieldClass} pl-9`}
+                />
+              </div>
+              <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm">
+                <span className="sr-only">{t('people.filterByTag')}</span>
+                <select
+                  aria-label={t('people.filterByTag')}
+                  data-testid="people-tag-filter"
+                  value={tagId}
+                  onChange={(e) => setTagId(e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">{t('people.allTags')}</option>
+                  {(tagsQuery.data?.items ?? []).map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {query.isPending ? (
@@ -190,6 +222,11 @@ function PersonRow(props: {
           {item.channels.map((ch) => (
             <Badge key={`${ch.contactId}-${ch.channelType}`}>
               {channelName(ch.channelType)}
+            </Badge>
+          ))}
+          {(item.tags ?? []).map((tag) => (
+            <Badge key={tag.id} tone="accent" data-testid="person-row-tag">
+              {tag.name}
             </Badge>
           ))}
           <Badge tone="accent">
