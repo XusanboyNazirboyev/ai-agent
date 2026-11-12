@@ -452,6 +452,33 @@ describe('inbox reads are tenant-scoped', () => {
     expect(own?.conversation.id).toBe(a.conversationId);
   });
 
+  it('returns the newest 500 messages in chronological order', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    for (let sequence = 1; sequence <= 501; sequence += 1) {
+      await db.message.create({
+        data: {
+          tenantId: w.tenantId,
+          conversationId: w.conversationId,
+          channelAccountId: w.accountId,
+          authorType: 'CUSTOMER',
+          direction: 'INBOUND',
+          text: `message-${sequence}`,
+          sequence,
+          providerChatId: `chat-${w.conversationId}`,
+        },
+      });
+    }
+
+    const view = await read.view(s.principal, w.conversationId);
+    expect(view?.messages).toHaveLength(500);
+    expect(view?.messages[0]?.text).toBe('message-2');
+    expect(view?.messages.at(-1)?.text).toBe('message-501');
+    expect(view?.messages.map((message) => message.text)).toEqual(
+      Array.from({ length: 500 }, (_, index) => `message-${index + 2}`),
+    );
+  });
+
   it('shows the waiting queue by longest wait and paginates with a cursor', async () => {
     const w = await world();
     const s = await signIn(w);
