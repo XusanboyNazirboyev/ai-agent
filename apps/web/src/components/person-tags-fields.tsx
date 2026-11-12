@@ -1,11 +1,10 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import type {
-  CustomFieldDef,
   CustomFieldEntry,
   CustomFieldType,
   CustomFieldValue,

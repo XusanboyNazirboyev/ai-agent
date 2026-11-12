@@ -1,13 +1,23 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
-import type { CustomFieldDef, CustomFieldEntity, CustomFieldType, Tag } from '@/lib/types';
+import type {
+  CustomFieldDef,
+  CustomFieldEntity,
+  CustomFieldType,
+  Tag,
+} from '@/lib/types';
 import { useShell } from './app-shell';
 import { SettingsSubPage } from './settings-section-nav';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass, textareaClass } from './ui/fields';
@@ -25,7 +35,13 @@ const COLOR_DOT: Record<string, string> = {
   red: 'bg-danger-fg',
   purple: 'bg-accent-fg',
 };
-const TYPES: CustomFieldType[] = ['TEXT', 'NUMBER', 'DATE', 'BOOLEAN', 'SELECT'];
+const TYPES: CustomFieldType[] = [
+  'TEXT',
+  'NUMBER',
+  'DATE',
+  'BOOLEAN',
+  'SELECT',
+];
 
 function slugKey(label: string): string {
   return label
@@ -88,8 +104,7 @@ function TagsManager(): ReactNode {
     },
   });
   const archive = useMutation({
-    mutationFn: (id: string) =>
-      api(`/api/v1/tags/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/api/v1/tags/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       setArchiveId(null);
       toast(t('toast.tagArchived'));
@@ -201,8 +216,12 @@ function TagsManager(): ReactNode {
                 <span className="truncate font-medium">{tag.name}</span>
               </span>
               <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>{t('fields.usage.people', { count: tag.usage?.people ?? 0 })}</span>
-                <span>{t('fields.usage.leads', { count: tag.usage?.leads ?? 0 })}</span>
+                <span>
+                  {t('fields.usage.people', { count: tag.usage?.people ?? 0 })}
+                </span>
+                <span>
+                  {t('fields.usage.leads', { count: tag.usage?.leads ?? 0 })}
+                </span>
               </span>
               {canEdit ? (
                 <Button
@@ -267,7 +286,9 @@ function CustomFieldsManager(): ReactNode {
   );
 }
 
-function CustomFieldEntityPanel(props: { entity: CustomFieldEntity }): ReactNode {
+function CustomFieldEntityPanel(props: {
+  entity: CustomFieldEntity;
+}): ReactNode {
   const { entity } = props;
   const { t } = useI18n();
   const { operator } = useShell();
@@ -314,7 +335,8 @@ function CustomFieldEntityPanel(props: { entity: CustomFieldEntity }): ReactNode
       type: CustomFieldType;
       options?: string[] | null;
       position: number;
-    }) => api<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body }),
+    }) =>
+      api<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body }),
     onSuccess: () => {
       setLabel('');
       setKey('');
@@ -355,9 +377,7 @@ function CustomFieldEntityPanel(props: { entity: CustomFieldEntity }): ReactNode
     },
   });
 
-  const archiveTarget = archiveId
-    ? defs.find((d) => d.id === archiveId)
-    : null;
+  const archiveTarget = archiveId ? defs.find((d) => d.id === archiveId) : null;
   const err = create.error ?? patch.error ?? archive.error;
 
   function parseOptions(): string[] | undefined {
