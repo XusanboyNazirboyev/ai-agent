@@ -23,3 +23,11 @@ P1.9 requires exporting people and leads as CSV for bulk review. Exports expose 
 - Row source service pages with keyset and reuses existing read/filter code. 
 - Web: "Export CSV" button on People and Leads toolbars for OWNER/ADMIN only, hidden otherwise; downloads via normal link/fetch with session cookie; busy state, success toast, error mapping via `errorKey` for `EXPORT_TOO_LARGE`, `EXPORT_IN_PROGRESS`, `FORBIDDEN` (add keys to en/ru/uz-Latn, parity green). Respects current tag filter/search. 320px safe in ru/uz-Latn. Unit tests with mocks in exact API shapes; e2e spec added but not run.
 
+
+## Implementation notes (review 2026-11-12)
+- **Lock:** the codebase has a Redis `SET NX PX` helper pattern (Instagram OAuth state ledger) but no reusable lock, so `ExportLock` uses an in-process per-tenant map plus Redis `SET NX PX` (10 min TTL, expires on its own), released with a compare-and-delete script in a `finally` (success, error, abort, client disconnect). Redis failure surfaces as a server error, not as 429.
+- **Row limit:** `ExportService.rowLimit` (default 50 000) and `pageSize` (500) are instance fields that tests can lower. The count check runs before the first byte (413 JSON); the limit is also enforced while streaming.
+- **Errors after the headers:** the status line is already sent, so the connection is destroyed (client sees a failed download, never a complete-looking truncated file). The audit row is written before the last byte; a failed audit fails the download the same way. Client abort stops reading at the next page and writes no audit row.
+- **Typed columns:** numbers, booleans and dates written by code are never prefixed; custom field NUMBER/BOOLEAN definitions use typed columns, TEXT/DATE/SELECT values and every header label (custom field labels are user text) are neutralised.
+- **Audit summary:** `{ rows, filters }`; `q` is recorded only as `true`, never its text.
+- **Visibility:** same as the people list (`visiblePerson`); leads require a live contact whose person (if any) is neither deleted nor merged away. Channels are distinct channel types.

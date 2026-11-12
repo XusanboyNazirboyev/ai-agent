@@ -61,6 +61,12 @@ describe('downloadCsv', () => {
     );
   });
 
+  it('does not revoke the object URL before the browser can save it', async () => {
+    fetchMock.mockResolvedValue(csvResponse());
+    await downloadCsv('/p', 'p.csv');
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  });
+
   it('falls back to the given name without a filename header', async () => {
     fetchMock.mockResolvedValue(csvResponse());
     expect(await downloadCsv('/p', 'people.csv')).toBe('people.csv');
