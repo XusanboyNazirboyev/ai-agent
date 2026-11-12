@@ -252,7 +252,7 @@ const codeOf = (e: HttpException | undefined) =>
 
 /** Splits CSV text into rows of cells (handles quoted fields). */
 function parse(csv: string): string[][] {
-  const text = csv.replace(/^﻿/, '');
+  const text = csv.replace(/^\ufeff/, '');
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';
