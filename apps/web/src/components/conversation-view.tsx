@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/i18n';
+import { FormDialog } from './ui/form-dialog';
+import { fieldClass } from './ui/fields';
 import { api, errorKey } from '@/lib/api';
 import { factLines } from '@/lib/facts';
 import { handoverSummaryLines, reasonLabel } from '@/lib/handover-text';
@@ -31,6 +33,7 @@ import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { Select } from './ui/select';
 import { Icon, type IconName } from './ui/icons';
 import { Section } from './ui/section';
+import { MoveToPipeline } from './move-to-pipeline';
 import { useToast } from './ui/toast';
 
 const CANNED = ['greeting', 'wait', 'details', 'thanks', 'bye'];
@@ -98,6 +101,8 @@ export function ConversationViewPane(props: {
   const [confirm, setConfirm] = useState<'close' | 'return-to-bot' | null>(
     null,
   );
+  const [lostDialog, setLostDialog] = useState(false);
+  const [lostDraft, setLostDraft] = useState('');
   const timelineRef = useRef<HTMLElement>(null);
   const stickToBottom = useRef(true);
 
@@ -696,12 +701,17 @@ export function ConversationViewPane(props: {
                   <Select
                     value={view.lead.status}
                     disabled={!operating || busy || !handoverId}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      if (e.target.value === 'LOST' && view.lead?.status !== 'LOST') {
+                        setLostDraft('');
+                        setLostDialog(true);
+                        return;
+                      }
                       command.mutate({
                         action: 'lead-status',
                         body: { status: e.target.value },
-                      })
-                    }
+                      });
+                    }}
                   >
                     {LEAD_STATUSES.map((status) => (
                       <option key={status} value={status}>
@@ -710,6 +720,46 @@ export function ConversationViewPane(props: {
                     ))}
                   </Select>
                 </label>
+                <FormDialog
+                  open={lostDialog}
+                  title={t('opportunity.lostReason')}
+                  description={t('opportunity.lostReasonBody')}
+                  testId="lead-lost-dialog"
+                  onClose={() => setLostDialog(false)}
+                  onSubmit={() => {
+                    const reason = lostDraft.trim();
+                    if (!reason) return;
+                    command.mutate(
+                      {
+                        action: 'lead-status',
+                        body: { status: 'LOST', lostReason: reason },
+                      },
+                      { onSuccess: () => setLostDialog(false) },
+                    );
+                  }}
+                  footer={
+                    <>
+                      <Button variant="secondary" onClick={() => setLostDialog(false)}>
+                        {t('app.cancel')}
+                      </Button>
+                      <Button type="submit" variant="primary" loading={busy}>
+                        {t('app.save')}
+                      </Button>
+                    </>
+                  }
+                >
+                  <label className="flex flex-col gap-1 text-sm font-medium">
+                    {t('opportunity.lostReason')}
+                    <input
+                      value={lostDraft}
+                      onChange={(e) => setLostDraft(e.target.value)}
+                      maxLength={200}
+                      className={fieldClass}
+                      autoFocus
+                      aria-label={t('opportunity.lostReason')}
+                    />
+                  </label>
+                </FormDialog>
                 <LeadTagsEditor
                   leadId={view.lead.id}
                   tags={view.lead.tags ?? []}
@@ -720,6 +770,7 @@ export function ConversationViewPane(props: {
                   fields={view.lead.customFields ?? []}
                   role={props.me.role}
                 />
+                {operating ? <MoveToPipeline leadId={view.lead.id} /> : null}
               </>
             ) : (
               <p className="text-muted">{t('view.noLead')}</p>

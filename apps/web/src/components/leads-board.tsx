@@ -28,6 +28,7 @@ import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 import { LeadOpportunity } from './lead-opportunity';
@@ -327,8 +328,14 @@ function LeadCard(props: {
   }, [props.item.status, statusChoice]);
 
   // Operator-set score and status (ADR 037) stay next to the funnel stage.
+  const [lostDialog, setLostDialog] = useState(false);
+  const [lostReasonDraft, setLostReasonDraft] = useState('');
   const setField = useMutation({
-    mutationFn: (input: { field: 'score' | 'status'; value: string }) =>
+    mutationFn: (input: {
+      field: 'score' | 'status';
+      value: string;
+      lostReason?: string;
+    }) =>
       api(
         `/api/v1/leads/conversations/${props.item.conversation.id}/${input.field}`,
         {
@@ -336,7 +343,9 @@ function LeadCard(props: {
           body:
             input.field === 'score'
               ? { score: input.value === 'AUTO' ? null : input.value }
-              : { status: input.value },
+              : input.lostReason !== undefined
+                ? { status: input.value, lostReason: input.lostReason }
+                : { status: input.value },
         },
       ),
     onSettled: (_data, _error, input) => {
@@ -515,11 +524,13 @@ function LeadCard(props: {
                 disabled={setField.isPending}
                 onChange={(event) => {
                   const value = event.target.value as LeadStatus;
+                  if (value === 'LOST' && statusValue !== 'LOST') {
+                    setLostReasonDraft('');
+                    setLostDialog(true);
+                    return;
+                  }
                   setStatusChoice(value);
-                  setField.mutate({
-                    field: 'status',
-                    value,
-                  });
+                  setField.mutate({ field: 'status', value });
                 }}
                 className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
               >
@@ -549,6 +560,44 @@ function LeadCard(props: {
             {t(errorKey(move.error))}
           </p>
         ) : null}
+        <FormDialog
+          open={lostDialog}
+          title={t('opportunity.lostReason')}
+          description={t('opportunity.lostReasonBody')}
+          testId="lead-lost-dialog"
+          onClose={() => setLostDialog(false)}
+          onSubmit={() => {
+            const reason = lostReasonDraft.trim();
+            if (!reason) return;
+            setStatusChoice('LOST');
+            setField.mutate(
+              { field: 'status', value: 'LOST', lostReason: reason },
+              { onSuccess: () => setLostDialog(false) },
+            );
+          }}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setLostDialog(false)}>
+                {t('app.cancel')}
+              </Button>
+              <Button type="submit" variant="primary" loading={setField.isPending}>
+                {t('app.save')}
+              </Button>
+            </>
+          }
+        >
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            {t('opportunity.lostReason')}
+            <input
+              value={lostReasonDraft}
+              onChange={(e) => setLostReasonDraft(e.target.value)}
+              maxLength={200}
+              className={fieldClass}
+              autoFocus
+              aria-label={t('opportunity.lostReason')}
+            />
+          </label>
+        </FormDialog>
       </article>
     </li>
   );

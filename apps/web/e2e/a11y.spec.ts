@@ -775,3 +775,42 @@ test.describe('mobile 320px overflow: contacts and fields (P1.1/P1.5)', () => {
     });
   }
 });
+
+
+test.describe('pipelines (P1.3)', () => {
+  test('pipelines settings page has no violations and dialogs are keyboard accessible', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/settings/pipeline');
+    await expect(page.getByTestId('pipelines-list')).toBeVisible();
+    await audit(page, 'pipelines settings');
+
+    await page.getByTestId('pipeline-create').click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await audit(page, 'pipeline create dialog');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId('pipeline-create')).toBeFocused();
+    await context.close();
+  });
+
+  test('leads board with pipeline switcher has no violations', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
+    await audit(page, 'leads board with pipeline');
+    await context.close();
+  });
+});

@@ -19,26 +19,26 @@ test('leads offer a contact list and configurable funnel stages', async ({
   ).toBeVisible();
 
   await page.goto('/settings/pipeline');
-  const stages = page.getByLabel('Stage name');
-  await expect(stages).toHaveCount(4);
-  await page.getByLabel('New stage').fill('Prospect');
-  await page.getByRole('button', { name: 'Add stage' }).click();
-  await expect(stages).toHaveCount(5);
+  await expect(page.getByTestId('pipelines-list')).toBeVisible();
+  const defaultCard = page.getByTestId('pipeline-card').first();
+  await expect(defaultCard).toBeVisible();
 
-  const customName = stages.last();
+  await defaultCard.getByTestId('stage-add-name').fill('Prospect');
+  await defaultCard.getByTestId('stage-add').click();
+  await expect(defaultCard.getByTestId('pipeline-stage-row')).toHaveCount(5);
+
+  const lastRow = defaultCard.getByTestId('pipeline-stage-row').last();
+  const customName = lastRow.getByLabel(/stage name|Название этапа|Bosqich nomi/i);
   await expect(customName).toHaveValue('Prospect');
   await customName.fill('Qualified');
-  await customName
-    .locator('xpath=ancestor::li')
-    .getByRole('button', { name: 'Save' })
-    .click();
+  await lastRow.getByTestId('stage-save').click();
   await expect(customName).toHaveValue('Qualified');
 
   const operator = await newSession(browser, f.a.operators.op1.email);
   await operator.page.goto('/settings/pipeline');
-  await expect(operator.page.getByLabel('Stage name').first()).toBeDisabled();
+  await expect(operator.page.getByTestId('pipeline-create')).toHaveCount(0);
   await expect(
-    operator.page.getByRole('button', { name: 'Add stage' }),
+    operator.page.getByTestId('pipeline-rename'),
   ).toHaveCount(0);
   await operator.context.close();
   await context.close();

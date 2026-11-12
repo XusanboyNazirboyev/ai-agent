@@ -32,16 +32,27 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const stages = [
-  { id: 'stage-new', code: 'NEW', name: 'New', position: 0 },
-  { id: 'stage-won', code: 'WON', name: 'Won', position: 1 },
+  { id: 'stage-new', code: 'NEW', name: 'New', position: 0, pipelineId: 'pipe-1' },
+  { id: 'stage-won', code: 'WON', name: 'Won', position: 1, pipelineId: 'pipe-1' },
 ];
 
 const leadPage = {
   items: [
     {
       id: 'lead-1',
+      pipelineId: 'pipe-1',
+      pipelineStageId: 'stage-new',
+      ownerOperatorId: null,
+      owner: null,
+      amount: null,
+      currency: null,
+      source: null,
+      expectedCloseDate: null,
+      lostReason: null,
       score: 'HOT',
       status: 'NEW',
+      summary: '',
+      createdAt: '2026-11-11T09:00:00.000Z',
       updatedAt: '2026-11-11T10:00:00.000Z',
       contact: { name: 'Ada Lovelace', phone: null },
       conversation: {
@@ -49,6 +60,8 @@ const leadPage = {
         state: 'BOT_ACTIVE',
         channelType: 'telegram',
       },
+      tags: [],
+      customFields: [],
     },
   ],
   nextCursor: null,
@@ -57,8 +70,25 @@ const leadPage = {
 function setupApi(): void {
   const mockedApi = vi.mocked(api);
   mockedApi.mockImplementation((path: string) => {
-    if (path === '/api/v1/leads/stages') return Promise.resolve(stages);
+    if (path === '/api/v1/pipelines')
+      return Promise.resolve({
+        items: [
+          {
+            id: 'pipe-1',
+            name: null,
+            position: 0,
+            isDefault: true,
+            stageCount: 2,
+            leadCount: 1,
+          },
+        ],
+      });
+    if (path.startsWith('/api/v1/leads/stages'))
+      return Promise.resolve(stages);
     if (path.startsWith('/api/v1/leads?')) return Promise.resolve(leadPage);
+    if (path === '/api/v1/team')
+      return Promise.resolve({ operators: [], invites: [], limits: { maxOperators: null, seatsUsed: 0 } });
+    if (path === '/api/v1/tags') return Promise.resolve({ items: [] });
     return new Promise(() => {
       // Keep mutations pending so optimistic select values can be asserted.
     });
