@@ -385,11 +385,16 @@ export class InboxReadService {
       contact: conversation.contact,
       handover: conversation.handovers[0] ?? null,
       lead: lead
-        ? (({ customFields, ...rest }) => ({
-            ...rest,
+        ? {
+            id: lead.id,
+            score: lead.score,
+            status: lead.status,
+            summary: lead.summary,
+            scoreSetByOperator: lead.scoreSetByOperator,
+            crmSyncStatus: lead.crmSyncStatus,
             tags: leadTags.get(lead.id) ?? [],
-            customFields: describeFields(leadDefs, customFields),
-          }))(lead)
+            customFields: describeFields(leadDefs, lead.customFields),
+          }
         : null,
       messages,
       notes,
