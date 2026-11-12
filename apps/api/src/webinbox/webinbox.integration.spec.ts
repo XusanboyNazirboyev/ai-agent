@@ -1124,7 +1124,7 @@ describe('event stream resource accounting', () => {
 
     // The retry frame fills the writable buffer; later events must stay in
     // the bounded application queue until Node emits drain.
-    expect(response.frames).toEqual(['retry: 3000\\n\\n']);
+    expect(response.frames).toEqual(['retry: 3000\n\n']);
     await db.conversation.update({
       where: { id: w.conversationId },
       data: { state: 'BOT_ACTIVE' },
