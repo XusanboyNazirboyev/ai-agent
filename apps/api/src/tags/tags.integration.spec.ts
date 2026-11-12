@@ -1109,7 +1109,8 @@ describe('Erasure clears tags and values (ADR 053)', () => {
     });
     await contactErasure.erase(f.tenantId, merged.contacts[0].id, f.operatorId);
     expect(await state(merged.person.id)).toEqual({ fields: {}, tags: 0 });
-    expect((await state(survivor.person.id)).tags).toBe(1);
+    // The survivor keeps its own tag and the one it carried at merge time.
+    expect((await state(survivor.person.id)).tags).toBe(2);
   });
 
   it('clears the lead tags and values of an erased contact', async () => {
