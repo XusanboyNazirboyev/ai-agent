@@ -80,6 +80,20 @@ async function ensureTagsRlsMigration(): Promise<void> {
   );
 }
 
+async function ensurePipelinesRlsMigration(): Promise<void> {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'prisma/migrations/20261121090000_pipelines_and_opportunity/migration.sql',
+    ),
+    'utf8',
+  );
+  // Only the RLS part is re-applied (idempotent: DROP POLICY IF EXISTS).
+  await db.$executeRawUnsafe(
+    sql.slice(sql.indexOf('ALTER TABLE "pipelines" ENABLE ROW LEVEL SECURITY')),
+  );
+}
+
 /**
  * Policies exist, RLS is on, and a foreign tenant sees no row of `table`
  * while the owning tenant does (same probe as persons, ADR 050).
@@ -443,6 +457,22 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
       tenantB.id,
       async (tx) =>
         (await tx.customFieldDef.findMany({ where: { id: def.id } })).length,
+    );
+  });
+
+  it('isolates pipelines (ADR 057) per tenant under RLS', async () => {
+    await ensurePipelinesRlsMigration();
+    const tenantA = await createTenant();
+    const tenantB = await createTenant();
+    const pipeline = await db.pipeline.create({
+      data: { tenantId: tenantA.id, name: 'RLS pipeline', isDefault: true },
+    });
+    await expectTenantIsolation(
+      'pipelines',
+      tenantA.id,
+      tenantB.id,
+      async (tx) =>
+        (await tx.pipeline.findMany({ where: { id: pipeline.id } })).length,
     );
   });
 });

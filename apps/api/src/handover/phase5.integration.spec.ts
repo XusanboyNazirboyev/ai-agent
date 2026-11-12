@@ -656,6 +656,13 @@ describe('leads', () => {
         })
       ).pipelineStageId,
     ).toBe(newStage.id);
+    // ADR 057: the lead starts in the default pipeline, sourced from its channel.
+    const created = await db.lead.findFirstOrThrow({
+      where: { conversationId: w.conversationId },
+      include: { pipeline: true },
+    });
+    expect(created.pipeline.isDefault).toBe(true);
+    expect(created.source).toBe('telegram');
     const again = await rescore(w, {
       subject: 'IELTS',
       format: 'online',
