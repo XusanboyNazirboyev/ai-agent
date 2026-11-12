@@ -68,7 +68,7 @@ export function newClient(
  * superuser connection is used instead (RLS_SPIKE_ADMIN_USER, default the OS
  * user; Postgres.app trusts local connections, no password is read or stored).
  */
-async function runRoleDdl(
+export async function runRoleDdl(
   env: Env,
   owner: PrismaClient,
   statements: string[],
