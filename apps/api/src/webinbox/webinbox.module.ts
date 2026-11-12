@@ -38,6 +38,7 @@ import { TagsService } from '../tags/tags.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
+import { PipelinesController } from './pipelines.controller.js';
 import { FacebookConnectController } from './facebook-connect.controller.js';
 import { FacebookOAuthClient } from '../channels/facebook/facebook-oauth.js';
 import { EventsController } from './events.controller.js';
@@ -83,6 +84,7 @@ import { ExportLock } from '../exports/export-lock.js';
     LeadsController,
     AnalyticsController,
     LeadPipelineController,
+    PipelinesController,
     FacebookConnectController,
     TeamController,
     SubscriptionController,

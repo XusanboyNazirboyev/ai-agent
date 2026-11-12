@@ -262,6 +262,7 @@ model Tenant {
   quotes          Quote[]
   leads           Lead[]
   leadStages      LeadStage[]
+  pipelines       Pipeline[]
   handovers       Handover[]
   bookings        Booking[]
   inboundEvents   InboundEvent[]
@@ -539,6 +540,7 @@ model Operator {
   assignedHandovers     Handover[]     @relation("AssignedHandoverOperator")
   personMerges          PersonMerge[]  @relation("PersonMergeBy")
   personUnmerges        PersonMerge[]  @relation("PersonMergeUndoneBy")
+  ownedLeads            Lead[]         @relation("LeadOwner")
 
   @@unique([tenantId, id])
   @@unique([tenantId, telegramUserId])
@@ -846,7 +848,17 @@ model Lead {
   tenantId        String       @map("tenant_id") @db.Uuid
   contactId       String       @map("contact_id") @db.Uuid
   conversationId  String       @map("conversation_id") @db.Uuid
+  /// ADR 057: the lead's pipeline. A BEFORE INSERT trigger fills the nil
+  /// default with the stage's pipeline or the tenant's default pipeline.
+  pipelineId      String       @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid")) @map("pipeline_id") @db.Uuid
   pipelineStageId String?      @map("pipeline_stage_id") @db.Uuid
+  /// ADR 057 opportunity fields (operator data, never shown as a fact).
+  ownerOperatorId String?      @map("owner_operator_id") @db.Uuid
+  amount          Decimal?     @db.Decimal(14, 2)
+  currency        String?      @db.Char(3)
+  source          String?      @db.VarChar(60)
+  expectedCloseDate DateTime?  @map("expected_close_date") @db.Date
+  lostReason      String?      @map("lost_reason") @db.VarChar(200)
   score           LeadScore    @default(COLD)
   /// Set by an operator: automatic rescoring keeps it until the operator
   /// returns the lead to automatic scoring.
@@ -869,33 +881,62 @@ model Lead {
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact         Contact      @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
   conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
-  pipelineStage   LeadStage?   @relation(fields: [tenantId, pipelineStageId], references: [tenantId, id], onDelete: Restrict)
+  pipeline        Pipeline     @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Restrict)
+  pipelineStage   LeadStage?   @relation(fields: [tenantId, pipelineId, pipelineStageId], references: [tenantId, pipelineId, id], onDelete: Restrict)
+  owner           Operator?    @relation("LeadOwner", fields: [tenantId, ownerOperatorId], references: [tenantId, id], onDelete: Restrict)
   tags            LeadTag[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
   @@index([tenantId, status, score])
   @@index([tenantId, pipelineStageId, createdAt])
+  @@index([tenantId, pipelineId, createdAt])
+  @@index([tenantId, ownerOperatorId])
   @@index([tenantId, crmSyncStatus, updatedAt])
   @@index([tenantId, contactId])
   @@index([tenantId, conversationId])
   @@map("leads")
 }
 
+/// ADR 057: a tenant's lead pipeline. The default pipeline's name is null
+/// (localised by the web); exactly one active default per tenant (partial
+/// unique index in migration SQL).
+model Pipeline {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String?   @db.VarChar(80)
+  position   Int       @default(0)
+  isDefault  Boolean   @default(false) @map("is_default")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stages     LeadStage[]
+  leads      Lead[]
+
+  @@unique([tenantId, id])
+  // One active default per tenant: partial unique index (SQL only).
+  @@index([tenantId, archivedAt, position])
+  @@map("pipelines")
+}
+
 model LeadStage {
   id        String   @id @default(uuid(7)) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
+  pipelineId String  @map("pipeline_id") @db.Uuid
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
   code      String?  @db.VarChar(40)
   name      String?  @db.VarChar(80)
   position  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pipeline  Pipeline @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Restrict)
   leads     Lead[]
 
   @@unique([tenantId, id])
-  @@unique([tenantId, code])
-  @@index([tenantId, position])
+  @@unique([tenantId, pipelineId, id])
+  @@unique([tenantId, pipelineId, code])
+  @@index([tenantId, pipelineId, position])
   @@map("lead_stages")
 }
 

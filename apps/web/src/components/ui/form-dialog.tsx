@@ -24,15 +24,36 @@ export function FormDialog(props: {
   footer: ReactNode;
 }): ReactNode {
   const ref = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (props.open && !dialog.open) dialog.showModal();
-    if (!props.open && dialog.open) dialog.close();
+    if (props.open && !dialog.open) {
+      // Remember what had focus, so closing returns it there (WCAG 2.4.3).
+      opener.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      dialog.showModal();
+    }
+    if (!props.open && dialog.open) {
+      dialog.close();
+      if (opener.current?.isConnected) opener.current.focus();
+      opener.current = null;
+    }
   }, [props.open]);
+
+  // A parent may unmount the dialog instead of closing it: give focus back then too.
+  useEffect(
+    () => () => {
+      const element = opener.current;
+      if (element?.isConnected) element.focus();
+    },
+    [],
+  );
 
   function submit(event: FormEvent): void {
     event.preventDefault();
