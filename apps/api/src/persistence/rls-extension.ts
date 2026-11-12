@@ -26,6 +26,8 @@ export interface RlsOptions {
   readonly warn?: (message: string) => void;
 }
 
+export type RlsClient = PrismaClient;
+
 type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 /**
@@ -36,13 +38,23 @@ type TxClient = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
  * The hook queries through `base` (the un-extended client) so the wrapping
  * transaction does not re-enter the hook.
  */
-export function withRlsExtension(base: PrismaClient, options: RlsOptions) {
+export function withRlsExtension(
+  base: PrismaClient,
+  options: RlsOptions,
+): RlsClient {
   const warned = new Set<string>();
-  const warn = options.warn ?? ((m: string) => console.warn(m));
-  const setTenant = (tx: Pick<TxClient, '$executeRaw'>, tenantId: string) =>
+  const warn =
+    options.warn ??
+    ((m: string): void => {
+      console.warn(m);
+    });
+  const setTenant = (
+    tx: Pick<TxClient, '$executeRaw'>,
+    tenantId: string,
+  ): ReturnType<TxClient['$executeRaw']> =>
     tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
 
-  return base.$extends({
+  const extended = base.$extends({
     name: 'rls',
     client: {
       /**
@@ -57,7 +69,7 @@ export function withRlsExtension(base: PrismaClient, options: RlsOptions) {
           a: unknown,
           o?: unknown,
         ) => unknown;
-        if (options.mode === 'off' || store?.system || store?.inTransaction)
+        if (options.mode === 'off' || store?.system)
           return baseTx.call(base, arg, txOptions);
         if (typeof arg === 'function') {
           const fn = arg as (tx: TxClient) => Promise<unknown>;
@@ -67,13 +79,15 @@ export function withRlsExtension(base: PrismaClient, options: RlsOptions) {
             // calls inside will be judged by the hook (mode policy) per operation.
             return baseTx.call(base, fn, txOptions);
           }
+          // The callback receives the un-extended `tx`, so model calls on it never
+          // re-enter the hook. A call on the outer extended client inside the
+          // callback is a different connection and is wrapped on its own.
           return baseTx.call(
             base,
-            (tx: TxClient) =>
-              runInTransaction(async () => {
-                await setTenant(tx, tenantId);
-                return fn(tx);
-              }),
+            async (tx: TxClient) => {
+              await setTenant(tx, tenantId);
+              return fn(tx);
+            },
             txOptions,
           );
         }
@@ -121,4 +135,6 @@ export function withRlsExtension(base: PrismaClient, options: RlsOptions) {
       },
     },
   });
+  // The `$transaction` override above is typed loosely; expose the client type.
+  return extended as unknown as RlsClient;
 }

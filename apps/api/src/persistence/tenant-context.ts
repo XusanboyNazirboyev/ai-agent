@@ -14,18 +14,38 @@ export interface TenantStore {
 
 const storage = new AsyncLocalStorage<TenantStore>();
 
+/**
+ * A Prisma call is a lazy PrismaPromise: it executes when `.then` is called,
+ * not when the call is written. `runWithTenant(id, () => prisma.x.findMany())`
+ * returns that promise to the caller, who awaits it OUTSIDE this scope, so the
+ * hook would see no context. Thenable results are therefore awaited inside the
+ * scope (found by the S0 spike).
+ */
+function runScoped<T>(store: TenantStore, fn: () => T): T {
+  return storage.run(store, () => {
+    const result = fn();
+    if (
+      result !== null &&
+      typeof result === 'object' &&
+      typeof (result as { then?: unknown }).then === 'function'
+    )
+      return (async (): Promise<unknown> => await result)() as T;
+    return result;
+  });
+}
+
 export function runWithTenant<T>(tenantId: string, fn: () => T): T {
   if (!tenantId) throw new Error('runWithTenant requires a tenant id');
-  return storage.run({ tenantId }, fn);
+  return runScoped({ tenantId }, fn);
 }
 
 export function runAsSystem<T>(fn: () => T): T {
-  return storage.run({ system: true }, fn);
+  return runScoped({ system: true }, fn);
 }
 
 /** Internal: marks the current async scope as already inside a tenant-set transaction. */
 export function runInTransaction<T>(fn: () => T): T {
-  return storage.run({ ...storage.getStore(), inTransaction: true }, fn);
+  return runScoped({ ...storage.getStore(), inTransaction: true }, fn);
 }
 
 export function currentTenant(): string | undefined {
