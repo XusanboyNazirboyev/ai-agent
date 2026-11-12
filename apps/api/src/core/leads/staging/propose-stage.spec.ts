@@ -138,6 +138,20 @@ describe('proposeStage guarantees', () => {
     ).toBeNull();
   });
 
+  it('a lead in a closed stage that sorts before the open ones is still left alone', () => {
+    const odd = [
+      stage('WON', 0, 'WON'),
+      stage('NEW', 1),
+      stage('CONTACTED', 2),
+    ];
+    expect(
+      proposeStage({ ...NONE, customerMessageCount: 3 }, odd, odd[0]!),
+    ).toBeNull();
+    expect(
+      proposeStage({ ...NONE, customerMessageCount: 3 }, odd, odd[1]!)?.code,
+    ).toBe('CONTACTED');
+  });
+
   it('only uses stage codes that exist in the pipeline', () => {
     const small = [
       stage('NEW', 0),
