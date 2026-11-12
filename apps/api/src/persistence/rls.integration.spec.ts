@@ -66,6 +66,76 @@ async function ensurePersonMergesRlsMigration(): Promise<void> {
   );
 }
 
+async function ensureTagsRlsMigration(): Promise<void> {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'prisma/migrations/20261120090000_tags_and_custom_fields/migration.sql',
+    ),
+    'utf8',
+  );
+  // Only the RLS part is re-applied (idempotent: DROP POLICY IF EXISTS).
+  await db.$executeRawUnsafe(
+    sql.slice(sql.indexOf('ALTER TABLE "tags" ENABLE ROW LEVEL SECURITY')),
+  );
+}
+
+/**
+ * Policies exist, RLS is on, and a foreign tenant sees no row of `table`
+ * while the owning tenant does (same probe as persons, ADR 050).
+ */
+async function expectTenantIsolation(
+  table: string,
+  tenantA: string,
+  tenantB: string,
+  count: (
+    tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  ) => Promise<number>,
+): Promise<void> {
+  const policies = await db.$queryRaw<Array<{ cmd: string }>>`
+    SELECT cmd::text AS cmd FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = ${table}
+    ORDER BY cmd`;
+  expect(policies.map((p) => p.cmd)).toEqual([
+    'DELETE',
+    'INSERT',
+    'SELECT',
+    'UPDATE',
+  ]);
+  const rel = await db.$queryRawUnsafe<Array<{ relrowsecurity: boolean }>>(
+    `SELECT relrowsecurity FROM pg_class WHERE oid = 'public.${table}'::regclass`,
+  );
+  expect(rel[0]?.relrowsecurity).toBe(true);
+  const rolledBack = new Error('rollback');
+  let foreign: number | null = null;
+  let own: number | null = null;
+  await db
+    .$transaction(async (tx) => {
+      const [role] = await tx.$queryRaw<Array<{ rolsuper: boolean }>>`
+        SELECT rolsuper FROM pg_roles WHERE rolname = current_user`;
+      if (role?.rolsuper) {
+        const probe = `rls_probe_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        await tx.$executeRawUnsafe(`CREATE ROLE ${probe} NOLOGIN`);
+        await tx.$executeRawUnsafe(`GRANT SELECT ON "${table}" TO ${probe}`);
+        await tx.$executeRawUnsafe(`SET LOCAL ROLE ${probe}`);
+      } else {
+        await tx.$executeRawUnsafe(
+          `ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`,
+        );
+      }
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantB}, true)`;
+      foreign = await count(tx);
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantA}, true)`;
+      own = await count(tx);
+      throw rolledBack;
+    })
+    .catch((error: unknown) => {
+      if (error !== rolledBack) throw error;
+    });
+  expect(foreign).toBe(0);
+  expect(own).toBe(1);
+}
+
 async function createTenant(slug = unique('rls')): Promise<{ id: string }> {
   return db.tenant.create({
     data: {
@@ -286,5 +356,93 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
       });
     expect(foreign).toBe(0);
     expect(own2).toBe(1);
+  });
+
+  it('isolates tags, person_tags, lead_tags and custom_field_defs (ADR 053) per tenant under RLS', async () => {
+    await ensureTagsRlsMigration();
+    const tenantA = await createTenant();
+    const tenantB = await createTenant();
+    const person = await db.person.create({
+      data: { tenantId: tenantA.id, displayName: 'RLS Tagged' },
+    });
+    const account = await db.channelAccount.create({
+      data: {
+        tenantId: tenantA.id,
+        channelType: 'telegram',
+        externalAccountId: unique('tg'),
+        status: 'ACTIVE',
+      },
+    });
+    const contact = await db.contact.create({
+      data: {
+        tenantId: tenantA.id,
+        channelAccountId: account.id,
+        providerUserId: unique('u'),
+        personId: person.id,
+      },
+    });
+    const conversation = await db.conversation.create({
+      data: {
+        tenantId: tenantA.id,
+        channelAccountId: account.id,
+        contactId: contact.id,
+        providerChatId: unique('chat'),
+        state: 'BOT_ACTIVE',
+      },
+    });
+    const lead = await db.lead.create({
+      data: {
+        tenantId: tenantA.id,
+        contactId: contact.id,
+        conversationId: conversation.id,
+        summary: 'rls',
+        idempotencyKey: unique('lead'),
+      },
+    });
+    const tag = await db.tag.create({
+      data: { tenantId: tenantA.id, name: 'RLS tag' },
+    });
+    await db.personTag.create({
+      data: { tenantId: tenantA.id, personId: person.id, tagId: tag.id },
+    });
+    await db.leadTag.create({
+      data: { tenantId: tenantA.id, leadId: lead.id, tagId: tag.id },
+    });
+    const def = await db.customFieldDef.create({
+      data: {
+        tenantId: tenantA.id,
+        entity: 'PERSON',
+        key: 'rls_field',
+        label: 'RLS',
+        type: 'TEXT',
+      },
+    });
+    await expectTenantIsolation(
+      'tags',
+      tenantA.id,
+      tenantB.id,
+      async (tx) => (await tx.tag.findMany({ where: { id: tag.id } })).length,
+    );
+    await expectTenantIsolation(
+      'person_tags',
+      tenantA.id,
+      tenantB.id,
+      async (tx) =>
+        (await tx.personTag.findMany({ where: { tagId: tag.id } })).length,
+    );
+    await expectTenantIsolation(
+      'lead_tags',
+      tenantA.id,
+      tenantB.id,
+      async (tx) =>
+        (await tx.leadTag.findMany({ where: { tagId: tag.id } })).length,
+    );
+    await expectTenantIsolation(
+      'custom_field_defs',
+      tenantA.id,
+      tenantB.id,
+      async (tx) =>
+        (await tx.customFieldDef.findMany({ where: { id: def.id } })).length,
+    );
   });
 });
