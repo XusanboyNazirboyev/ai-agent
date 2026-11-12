@@ -194,6 +194,20 @@ enum AuditActorType {
   ADMIN
 }
 
+
+enum CustomFieldEntity {
+  PERSON
+  LEAD
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+}
+
 model Tenant {
   id                 String       @id @default(uuid(7)) @db.Uuid
   slug               String       @unique @db.VarChar(80)
@@ -258,6 +272,10 @@ model Tenant {
   operatorInvites      OperatorInvite[]
   platformAuditEvents  PlatformAuditEvent[]
   mfaChallenges        MfaChallenge[]
+  tags                 Tag[]
+  personTags           PersonTag[]
+  leadTags             LeadTag[]
+  customFieldDefs      CustomFieldDef[]
 
   @@map("tenants")
 }
@@ -568,6 +586,8 @@ model Person {
   primaryPhone  String?   @map("primary_phone") @db.VarChar(40)
   mergedIntoId  String?   @map("merged_into_id") @db.Uuid
   deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+  /// ADR 053: tenant-validated custom field values (key -> value), personal data.
+  customFields  Json      @default("{}") @map("custom_fields") @db.JsonB
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -577,6 +597,7 @@ model Person {
   contacts Contact[]
   mergesAsSurvivor PersonMerge[] @relation("PersonMergeSurvivor")
   mergesAsMerged   PersonMerge[] @relation("PersonMergeMerged")
+  tags PersonTag[]
 
   @@unique([tenantId, id])
   @@index([tenantId, primaryPhone])
@@ -593,6 +614,8 @@ model PersonMerge {
   contactIds         String[]  @map("contact_ids") @db.Uuid
   byOperatorId       String    @map("by_operator_id") @db.Uuid
   reason             String    @db.VarChar(500)
+  /// ADR 053: reversible carry-over { tagIds: string[], fields: Record<string, unknown> }.
+  carried            Json?     @db.JsonB
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   undoneAt           DateTime? @map("undone_at") @db.Timestamptz(6)
   undoneByOperatorId String?   @map("undone_by_operator_id") @db.Uuid
@@ -833,6 +856,8 @@ model Lead {
   status          LeadStatus   @default(NEW)
   /// Collected requirements (slot key -> value) at the last update.
   requirements    Json         @default("{}") @db.JsonB
+  /// ADR 053: tenant-validated custom field values (key -> value).
+  customFields    Json         @default("{}") @map("custom_fields") @db.JsonB
   nextAttemptAt   DateTime?    @map("next_attempt_at") @db.Timestamptz(6)
   crmSyncStatus   CrmSyncStatus @default(PENDING) @map("crm_sync_status")
   crmLeadId       String?      @map("crm_lead_id") @db.VarChar(200)
@@ -845,6 +870,7 @@ model Lead {
   contact         Contact      @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
   conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
   pipelineStage   LeadStage?   @relation(fields: [tenantId, pipelineStageId], references: [tenantId, id], onDelete: Restrict)
+  tags            LeadTag[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
@@ -1678,3 +1704,74 @@ model MfaChallenge {
   @@index([expiresAt])
   @@map("mfa_challenges")
 }
+
+/// ADR 053: tenant-defined label attached to persons and leads.
+model Tag {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  name       String    @db.VarChar(40)
+  /// Palette token: gray|blue|green|amber|red|purple (validated in API).
+  color      String?   @db.VarChar(16)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  personTags PersonTag[]
+  leadTags   LeadTag[]
+
+  @@unique([tenantId, id])
+  // Active-name uniqueness is partial (lower(name), archived_at IS NULL) in
+  // migration SQL; Prisma cannot express it (see 20261120090000 migration).
+  @@index([tenantId, archivedAt])
+  @@map("tags")
+}
+
+model PersonTag {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  personId  String   @map("person_id") @db.Uuid
+  tagId     String   @map("tag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  person    Person   @relation(fields: [tenantId, personId], references: [tenantId, id], onDelete: Restrict)
+  tag       Tag      @relation(fields: [tenantId, tagId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, personId, tagId])
+  @@index([tenantId, tagId])
+  @@map("person_tags")
+}
+
+model LeadTag {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  leadId    String   @map("lead_id") @db.Uuid
+  tagId     String   @map("tag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead      Lead     @relation(fields: [tenantId, leadId], references: [tenantId, id], onDelete: Restrict)
+  tag       Tag      @relation(fields: [tenantId, tagId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, leadId, tagId])
+  @@index([tenantId, tagId])
+  @@map("lead_tags")
+}
+
+/// ADR 053: tenant-defined custom field on Person or Lead.
+model CustomFieldDef {
+  id         String            @id @default(uuid(7)) @db.Uuid
+  tenantId   String            @map("tenant_id") @db.Uuid
+  entity     CustomFieldEntity
+  /// Immutable slug ^[a-z][a-z0-9_]{0,39}$.
+  key        String            @db.VarChar(40)
+  label      String            @db.VarChar(80)
+  type       CustomFieldType
+  /// SELECT only: array of 1..50 unique option strings (1..60 chars).
+  options    Json?             @db.JsonB
+  position   Int               @default(0)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(6)
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, entity, key])
+  @@index([tenantId, entity, archivedAt, position])
+  @@map("custom_field_defs")
+}
+
