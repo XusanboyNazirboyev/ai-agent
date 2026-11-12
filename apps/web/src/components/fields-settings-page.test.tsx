@@ -188,6 +188,59 @@ describe('FieldsSettingsPage', () => {
     expect(toastMock).toHaveBeenCalledWith('toast.fieldCreated');
   });
 
+  it('reorders by writing contiguous positions, never a position below 0 (tied positions)', async () => {
+    const a: CustomFieldDef = {
+      ...def,
+      id: 'f-a',
+      key: 'a',
+      label: 'A',
+      position: 0,
+    };
+    const b: CustomFieldDef = {
+      ...def,
+      id: 'f-b',
+      key: 'b',
+      label: 'B',
+      position: 0,
+    };
+    const c: CustomFieldDef = {
+      ...def,
+      id: 'f-c',
+      key: 'c',
+      label: 'C',
+      position: 2,
+    };
+    vi.mocked(api).mockImplementation(
+      (path: string, opts?: { method?: string; body?: unknown }) => {
+        if (path === '/api/v1/tags') return Promise.resolve({ items: [] });
+        if (path === '/api/v1/custom-fields?entity=PERSON')
+          return Promise.resolve({ items: [a, b, c] });
+        if (path === '/api/v1/custom-fields?entity=LEAD')
+          return Promise.resolve({ items: [] });
+        if (opts?.method === 'PATCH') return Promise.resolve(a);
+        return Promise.reject(new Error(path));
+      },
+    );
+
+    renderPage();
+    const ups = await screen.findAllByTestId('def-move-up');
+    // Second row (B, tied with A at 0): up swaps B and A.
+    fireEvent.click(ups[1]!);
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith('/api/v1/custom-fields/f-a', {
+        method: 'PATCH',
+        body: { position: 1 },
+      }),
+    );
+    const patches = vi
+      .mocked(api)
+      .mock.calls.filter(
+        ([, o]) => (o as { method?: string } | undefined)?.method === 'PATCH',
+      );
+    // B already sits at index 0 and C at index 2: only A is written.
+    expect(patches).toHaveLength(1);
+  });
+
   it('maps TAG_EXISTS and INVALID_VALUE through errorKey', async () => {
     vi.mocked(api).mockImplementation(
       (path: string, opts?: { method?: string }) => {

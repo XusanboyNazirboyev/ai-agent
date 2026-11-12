@@ -346,21 +346,24 @@ function CustomFieldEntityPanel(props: {
       invalidate();
     },
   });
-  const patch = useMutation({
-    mutationFn: (body: {
-      id: string;
-      label?: string;
-      options?: string[] | null;
-      position?: number;
-    }) =>
-      api<CustomFieldDef>(`/api/v1/custom-fields/${body.id}`, {
-        method: 'PATCH',
-        body: {
-          ...(body.label !== undefined ? { label: body.label } : {}),
-          ...(body.options !== undefined ? { options: body.options } : {}),
-          ...(body.position !== undefined ? { position: body.position } : {}),
-        },
-      }),
+  // Reordering writes the new index of every definition whose stored position
+  // differs from it, so positions end up contiguous (0..n-1) and unique. A
+  // "position +-1" patch of one row would tie with its neighbour and could go
+  // below 0, which the API refuses with 400.
+  const reorder = useMutation({
+    mutationFn: async (move: { from: number; to: number }) => {
+      const next = [...sorted];
+      const [moved] = next.splice(move.from, 1);
+      if (!moved) return;
+      next.splice(move.to, 0, moved);
+      for (const [index, def] of next.entries()) {
+        if (def.position === index) continue;
+        await api<CustomFieldDef>(`/api/v1/custom-fields/${def.id}`, {
+          method: 'PATCH',
+          body: { position: index },
+        });
+      }
+    },
     onSuccess: () => {
       toast(t('toast.fieldUpdated'));
       invalidate();
@@ -377,7 +380,7 @@ function CustomFieldEntityPanel(props: {
   });
 
   const archiveTarget = archiveId ? defs.find((d) => d.id === archiveId) : null;
-  const err = create.error ?? patch.error ?? archive.error;
+  const err = create.error ?? reorder.error ?? archive.error;
 
   function parseOptions(): string[] | undefined {
     if (type !== 'SELECT') return undefined;
@@ -528,10 +531,8 @@ function CustomFieldEntityPanel(props: {
                 <span className="flex flex-wrap items-center gap-1">
                   <Button
                     size="sm"
-                    disabled={idx === 0 || patch.isPending}
-                    onClick={() =>
-                      patch.mutate({ id: def.id, position: def.position - 1 })
-                    }
+                    disabled={idx === 0 || reorder.isPending}
+                    onClick={() => reorder.mutate({ from: idx, to: idx - 1 })}
                     aria-label={t('fields.moveUp')}
                     data-testid="def-move-up"
                   >
@@ -539,10 +540,8 @@ function CustomFieldEntityPanel(props: {
                   </Button>
                   <Button
                     size="sm"
-                    disabled={idx === sorted.length - 1 || patch.isPending}
-                    onClick={() =>
-                      patch.mutate({ id: def.id, position: def.position + 1 })
-                    }
+                    disabled={idx === sorted.length - 1 || reorder.isPending}
+                    onClick={() => reorder.mutate({ from: idx, to: idx + 1 })}
                     aria-label={t('fields.moveDown')}
                     data-testid="def-move-down"
                   >
