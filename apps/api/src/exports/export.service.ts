@@ -5,7 +5,6 @@ import {
   PeopleService,
   type PersonExportRow,
 } from '../persons/people.service.js';
-import type { FieldDef } from '../tags/custom-field-values.js';
 import { parseFieldFilter, type FieldFilter } from '../tags/field-filter.js';
 import { invalidQuery } from '../tags/tag-errors.js';
 import { activeFieldDefs, tagsOfLeads } from '../tags/tag-reads.js';
@@ -13,6 +12,7 @@ import {
   CSV_PAGE_SIZE,
   EXPORT_ROW_LIMIT,
   csvChunk,
+  customFieldColumns,
   type CsvColumn,
 } from './csv.js';
 import { ExportAbortedError, ExportTooLargeError } from './export-lock.js';
@@ -48,27 +48,6 @@ interface LeadExportRow {
   updatedAt: Date;
   tags: string[];
   customFields: Record<string, unknown>;
-}
-
-type CustomFieldHolder = { customFields: Record<string, unknown> };
-
-/** Custom field values are typed: numbers stay numbers (not sniffed). */
-function customFieldColumns<T extends CustomFieldHolder>(
-  defs: readonly FieldDef[],
-): CsvColumn<T>[] {
-  return defs.map((d): CsvColumn<T> => {
-    const kind =
-      d.type === 'NUMBER'
-        ? 'number'
-        : d.type === 'BOOLEAN'
-          ? 'boolean'
-          : 'text';
-    return {
-      header: d.label,
-      kind,
-      get: (r) => r.customFields[d.key] ?? null,
-    };
-  });
 }
 
 function asRecord(value: Prisma.JsonValue): Record<string, unknown> {
@@ -220,20 +199,18 @@ export class ExportService {
         tenantId,
         batch.map((l) => l.id),
       );
-      const mapped = batch.map(
-        (l): LeadExportRow => ({
-          id: l.id,
-          personId: l.contact.personId,
-          contactName: l.contact.name,
-          stage: l.pipelineStage?.name ?? l.pipelineStage?.code ?? null,
-          score: l.score,
-          status: l.status,
-          createdAt: l.createdAt,
-          updatedAt: l.updatedAt,
-          tags: (tagMap.get(l.id) ?? []).map((t) => t.name),
-          customFields: asRecord(l.customFields),
-        }),
-      );
+      const mapped = batch.map((l): LeadExportRow => ({
+        id: l.id,
+        personId: l.contact.personId,
+        contactName: l.contact.name,
+        stage: l.pipelineStage?.name ?? l.pipelineStage?.code ?? null,
+        score: l.score,
+        status: l.status,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+        tags: (tagMap.get(l.id) ?? []).map((t) => t.name),
+        customFields: asRecord(l.customFields),
+      }));
       rows += mapped.length;
       if (rows > this.rowLimit) throw new ExportTooLargeError();
       if (mapped.length > 0 || first) {
@@ -241,7 +218,9 @@ export class ExportService {
         first = false;
       }
       cursor =
-        batch.length === this.pageSize ? batch[batch.length - 1]!.id : undefined;
+        batch.length === this.pageSize
+          ? batch[batch.length - 1]!.id
+          : undefined;
     } while (cursor);
     return { rows };
   }
@@ -281,6 +260,12 @@ export class ExportService {
     if ((fieldKey === undefined) !== (fieldValue === undefined))
       throw invalidQuery();
     if (fieldKey === undefined || fieldValue === undefined) return undefined;
-    return parseFieldFilter(this.prisma, tenantId, entity, fieldKey, fieldValue);
+    return parseFieldFilter(
+      this.prisma,
+      tenantId,
+      entity,
+      fieldKey,
+      fieldValue,
+    );
   }
 }

@@ -9,6 +9,8 @@
  * negative number is only produced by the numeric formatter).
  */
 
+import type { FieldDef } from '../tags/custom-field-values.js';
+
 export const CSV_BOM = '\ufeff';
 export const CSV_EOL = '\r\n';
 export const CSV_PAGE_SIZE = 500;
@@ -94,4 +96,25 @@ export function exportFilename(
   const m = String(now.getUTCMonth() + 1).padStart(2, '0');
   const d = String(now.getUTCDate()).padStart(2, '0');
   return `${kind}-${y}${m}${d}.csv`;
+}
+
+type CustomFieldHolder = { customFields: Record<string, unknown> };
+
+/** Custom field values are typed: numbers stay numbers (not sniffed). */
+export function customFieldColumns<T extends CustomFieldHolder>(
+  defs: readonly FieldDef[],
+): CsvColumn<T>[] {
+  return defs.map((d): CsvColumn<T> => {
+    const kind =
+      d.type === 'NUMBER'
+        ? 'number'
+        : d.type === 'BOOLEAN'
+          ? 'boolean'
+          : 'text';
+    return {
+      header: d.label,
+      kind,
+      get: (r) => r.customFields[d.key] ?? null,
+    };
+  });
 }
