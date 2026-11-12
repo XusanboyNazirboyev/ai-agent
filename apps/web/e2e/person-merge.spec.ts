@@ -6,9 +6,8 @@ test.describe('person merge (P1.1 slice C)', () => {
     browser,
   }) => {
     const f = fixtures();
-    // Reviewer must add a shared-phone pair fixture for tenant A so that
-    // GET /api/v1/people/:id/duplicates returns a non-empty group for this
-    // person and merge/unmerge flows are executable end-to-end.
+    // Every fixture contact of tenant A shares one phone number, so each
+    // person already has duplicate candidates.
     const { page, context } = await newSession(
       browser,
       f.a.operators.admin.email,
@@ -28,5 +27,61 @@ test.describe('person merge (P1.1 slice C)', () => {
     await expect(page.getByTestId('merge-confirm')).toBeEnabled();
     await page.getByTestId('merge-cancel').click();
     await context.close();
+  });
+
+  test('owner merges a duplicate into the open person and undoes it', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/contacts', { waitUntil: 'networkidle' });
+    await page
+      .getByTestId('person-item')
+      .first()
+      .getByTestId('person-open-card')
+      .click();
+    await expect(page.getByTestId('person-duplicates')).toBeVisible();
+    const survivorUrl = page.url();
+    await page.getByTestId('merge-candidate-into-person').first().click();
+    const dialog = page.getByTestId('merge-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('merge-preview-counts')).toBeVisible();
+    await dialog.getByTestId('merge-reason-input').fill('same customer');
+    await dialog.getByTestId('merge-confirm').click();
+    await expect(dialog).toBeHidden();
+
+    // The survivor card now shows the merge and offers the undo.
+    await expect(page).toHaveURL(survivorUrl);
+    await expect(page.getByTestId('person-last-merge')).toBeVisible();
+    await page.getByTestId('person-unmerge').click();
+    await page.getByTestId('confirm-accept').click();
+    await expect(page.getByTestId('person-last-merge')).toBeHidden();
+    await context.close();
+  });
+
+  test('operator and viewer see the duplicates but cannot merge', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    for (const key of ['op1', 'viewer'] as const) {
+      const { page, context } = await newSession(
+        browser,
+        f.a.operators[key].email,
+      );
+      await page.goto('/contacts', { waitUntil: 'networkidle' });
+      await page
+        .getByTestId('person-item')
+        .first()
+        .getByTestId('person-open-card')
+        .click();
+      await expect(page.getByTestId('person-duplicates')).toBeVisible();
+      await expect(page.getByTestId('merge-candidate-into-person')).toHaveCount(
+        0,
+      );
+      await context.close();
+    }
   });
 });
