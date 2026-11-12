@@ -74,6 +74,10 @@ export class EventsController {
     // the stream is being set up must still release its slot, its bus
     // subscription and its timers (they are created only if still open).
     let closed = false;
+    let blocked = false;
+    let pendingBytes = 0;
+    const pendingFrames: string[] = [];
+    let drainListener: (() => void) | undefined;
     const subscription: { off?: () => void } = {};
     const timers: ReturnType<typeof setInterval>[] = [];
     let released = false;
@@ -115,10 +119,6 @@ export class EventsController {
     let cursor = resume ?? (await this.events.latestId(principal.tenantId));
     if (closed) return;
     let busy = false;
-    let blocked = false;
-    let pendingBytes = 0;
-    const pendingFrames: string[] = [];
-    let drainListener: (() => void) | undefined;
 
     const flushPending = (): void => {
       if (closed || blocked) return;
