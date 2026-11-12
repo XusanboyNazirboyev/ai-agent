@@ -167,7 +167,9 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
       where: { tenantId: w.tenantId },
       orderBy: { position: 'asc' },
     });
-    expect(stages.map((s) => s.code)).toEqual(['NEW', 'HOT', 'WARM', 'COLD']);
+    expect(stages.map((s) => s.code)).toEqual(
+      ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'],
+    );
     expect(stages[0]!.id).toBe(first);
     expect(stages.every((s) => s.pipelineId === all[0]!.id)).toBe(true);
   });
@@ -207,7 +209,7 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
     const defA = await defaultPipeline(a);
     const defB = await defaultPipeline(b);
     const stageA = await db.leadStage.findFirstOrThrow({
-      where: { tenantId: a.tenantId, code: 'HOT' },
+      where: { tenantId: a.tenantId, code: 'QUALIFIED' },
     });
     const staged = await newLead(a, { pipelineStageId: stageA.id });
     const bare = await newLead(a);
@@ -297,7 +299,7 @@ describe('pipelines CRUD, limits and make-default', () => {
       expect(items[0]).toMatchObject({
         name: null,
         isDefault: true,
-        stageCount: 4,
+        stageCount: 7,
         leadCount: 0,
       });
     }
@@ -314,7 +316,7 @@ describe('pipelines CRUD, limits and make-default', () => {
     expect(created).toMatchObject({
       name: 'Support',
       isDefault: false,
-      stageCount: 4,
+      stageCount: 7,
     });
     const renamed = await pipelines.update(w.as.OWNER, created.id, {
       name: 'Care',
@@ -434,13 +436,18 @@ describe('stages per pipeline', () => {
     });
     expect(custom.pipelineId).toBe(sup.id);
     const dflt = await leadsApi.stages(w.as.VIEWER);
-    expect(dflt.map((s) => s.code)).toEqual(['NEW', 'HOT', 'WARM', 'COLD']);
+    expect(dflt.map((s) => s.code)).toEqual(
+      ['NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL', 'NEGOTIATION', 'WON', 'LOST'],
+    );
     const inSup = await leadsApi.stages(w.as.VIEWER, { pipelineId: sup.id });
     expect(inSup.map((s) => s.name ?? s.code)).toEqual([
       'NEW',
-      'HOT',
-      'WARM',
-      'COLD',
+      'CONTACTED',
+      'QUALIFIED',
+      'PROPOSAL',
+      'NEGOTIATION',
+      'WON',
+      'LOST',
       'Triage',
     ]);
     expect(
@@ -462,7 +469,7 @@ describe('stages per pipeline', () => {
   it('refuses the 21st stage of a pipeline but each pipeline has its own budget', async () => {
     const w = await world();
     const sup = await pipelines.create(w.as.OWNER, { name: 'Support' });
-    for (let i = 0; i < 16; i++)
+    for (let i = 0; i < 13; i++)
       await leadsApi.createStage(w.as.OWNER, {
         name: `S${i}`,
         pipelineId: sup.id,
@@ -543,7 +550,7 @@ describe('moving a lead across pipelines', () => {
     const def = await defaultPipeline(w);
     const sup = await pipelines.create(w.as.OWNER, { name: 'Support' });
     const target = await db.leadStage.findFirstOrThrow({
-      where: { tenantId: w.tenantId, pipelineId: sup.id, code: 'HOT' },
+      where: { tenantId: w.tenantId, pipelineId: sup.id, code: 'CONTACTED' },
     });
     const lead = await newLead(w);
     const moved = await leadsApi.move(w.as.OPERATOR, lead.id, {
@@ -553,6 +560,7 @@ describe('moving a lead across pipelines', () => {
       id: lead.id,
       pipelineStageId: target.id,
       pipelineId: sup.id,
+      status: 'NEW',
     });
     const row = await db.lead.findFirstOrThrow({ where: { id: lead.id } });
     expect(row).toMatchObject({
@@ -562,11 +570,12 @@ describe('moving a lead across pipelines', () => {
     const event = await db.auditEvent.findFirstOrThrow({
       where: { tenantId: w.tenantId, entityId: lead.id },
     });
-    expect(event.action).toBe('lead.pipeline.changed');
+    expect(event.action).toBe('lead.stage.moved');
     expect(event.safeInputSummary).toMatchObject({
       fromPipelineId: def.id,
       toPipelineId: sup.id,
-      toStageId: target.id,
+      to: target.id,
+      actor: 'OPERATOR',
     });
     expect(
       (await leadsApi.list(w.as.OWNER, { pipelineId: sup.id })).items.map(
