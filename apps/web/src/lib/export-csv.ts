@@ -1,4 +1,4 @@
-import { ApiError, readCookie, TENANT_CSRF_COOKIE } from './api';
+import { ApiError } from './api';
 
 function filenameFromDisposition(
   value: string | null,
@@ -19,10 +19,7 @@ export async function downloadCsv(
       method: 'GET',
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: {
-        accept: 'text/csv',
-        'x-csrf-token': readCookie(TENANT_CSRF_COOKIE) ?? '',
-      },
+      headers: { accept: 'text/csv' },
     });
   } catch {
     throw new ApiError(0, 'NETWORK');
@@ -60,7 +57,8 @@ export async function downloadCsv(
     a.click();
     a.remove();
   } finally {
-    URL.revokeObjectURL(url);
+    // Revoked later: some browsers start the save after click() returns.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
   return name;
 }

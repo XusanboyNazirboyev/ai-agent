@@ -100,6 +100,7 @@ export function LeadsBoard(): ReactNode {
             variant="secondary"
             loading={exporting}
             data-testid="leads-export"
+            className="min-w-0 max-w-full"
             onClick={() => {
               const params = new URLSearchParams();
               if (tagId) params.set('tagId', tagId);
@@ -110,7 +111,7 @@ export function LeadsBoard(): ReactNode {
                 'leads.csv',
               )
                 .then(() => toast(t('toast.exportStarted')))
-                .catch((e) => toast(t(errorKey(e)), 'error'))
+                .catch((e: unknown) => toast(t(errorKey(e))))
                 .finally(() => setExporting(false));
             }}
           >

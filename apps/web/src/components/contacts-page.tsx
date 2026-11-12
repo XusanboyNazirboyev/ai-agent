@@ -34,16 +34,14 @@ function useDebounced<T>(value: T, ms: number): T {
 /** People list (P1.1): one row per person across channels. */
 export function ContactsPage(): ReactNode {
   const { t } = useI18n();
-  const { timeZone } = useShell();
+  const { timeZone, operator } = useShell();
   const [search, setSearch] = useState('');
   const [tagId, setTagId] = useState('');
   const [tab, setTab] = useState<'people' | 'duplicates'>('people');
   const [exporting, setExporting] = useState(false);
   const toast = useToast();
   const q = useDebounced(search.trim(), 300);
-  const canExport =
-    useShell().operator.role === 'OWNER' ||
-    useShell().operator.role === 'ADMIN';
+  const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
 
   const tagsQuery = useQuery({
     queryKey: ['tags'],
@@ -106,6 +104,7 @@ export function ContactsPage(): ReactNode {
               variant="secondary"
               loading={exporting}
               data-testid="people-export"
+              className="min-w-0 max-w-full"
               onClick={() => {
                 const params = new URLSearchParams();
                 if (q) params.set('q', q);
@@ -117,7 +116,7 @@ export function ContactsPage(): ReactNode {
                   'people.csv',
                 )
                   .then(() => toast(t('toast.exportStarted')))
-                  .catch((e) => toast(t(errorKey(e)), 'error'))
+                  .catch((e: unknown) => toast(t(errorKey(e))))
                   .finally(() => setExporting(false));
               }}
             >
