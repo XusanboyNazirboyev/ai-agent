@@ -1,23 +1,23 @@
-import { z } from "zod";
-import { ANY_MODEL, usdToNano } from "../core/llm/pricing.js";
-import { MOCK_MODEL } from "../core/llm/scripted-llm-provider.js";
-import { PRICING_CATALOG } from "../llm/pricing-catalog.js";
-import { postgresEnvironmentSchema } from "./postgres-config.js";
+import { z } from 'zod';
+import { ANY_MODEL, usdToNano } from '../core/llm/pricing.js';
+import { MOCK_MODEL } from '../core/llm/scripted-llm-provider.js';
+import { PRICING_CATALOG } from '../llm/pricing-catalog.js';
+import { postgresEnvironmentSchema } from './postgres-config.js';
 
 /** USD amount as a decimal string ("0.02"), validated exactly. */
 const usdAmount = z
   .string()
-  .regex(/^\d{1,6}(\.\d{1,9})?$/, "must be a USD amount such as 0.02")
-  .refine((value) => usdToNano(value) > 0, "must be greater than zero");
+  .regex(/^\d{1,6}(\.\d{1,9})?$/, 'must be a USD amount such as 0.02')
+  .refine((value) => usdToNano(value) > 0, 'must be greater than zero');
 
 const environmentSchema = postgresEnvironmentSchema
   .extend({
     NODE_ENV: z
-      .enum(["development", "test", "production"])
-      .default("development"),
+      .enum(['development', 'test', 'production'])
+      .default('development'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(4000),
     /** Interface the API listens on. Deployment default stays 0.0.0.0. */
-    API_HOST: z.string().min(1).default("0.0.0.0"),
+    API_HOST: z.string().min(1).default('0.0.0.0'),
     /**
      * A stream is closed after this long so proxies and load balancers never
      * keep a stale connection; the browser reconnects with Last-Event-ID.
@@ -43,20 +43,20 @@ const environmentSchema = postgresEnvironmentSchema
     /** Browser origins allowed to make state-changing inbox requests. */
     WEB_ORIGINS: z
       .string()
-      .default("http://localhost:3000")
+      .default('http://localhost:3000')
       .transform((value) =>
         value
-          .split(",")
+          .split(',')
           .map((origin) => origin.trim())
           .filter(Boolean),
       ),
     /** `Secure` flag of the session cookie; off only for plain-http local development. */
     SESSION_COOKIE_SECURE: z
-      .enum(["true", "false"])
-      .default("true")
-      .transform((value) => value === "true"),
-    LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-    REDIS_URL: z.url().default("redis://localhost:6379"),
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+    REDIS_URL: z.url().default('redis://localhost:6379'),
     TELEGRAM_CHANNEL_ACCOUNT_ID: z.uuid().optional(),
     TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
     TELEGRAM_WEBHOOK_SECRET: z
@@ -119,14 +119,14 @@ const environmentSchema = postgresEnvironmentSchema
      * machine only and is refused in production.
      */
     CONNECTOR_OUTBOUND_POLICY: z
-      .enum(["strict", "permissive"])
-      .default("strict"),
+      .enum(['strict', 'permissive'])
+      .default('strict'),
     /**
      * `on` registers the mock connector (fictional courses and prices) even
      * with NODE_ENV=production, for a staging server that holds test data
      * only (ADR 035 amendment 6). Never on a server real customers write to.
      */
-    CONNECTOR_DEMO_CATALOG: z.enum(["off", "on"]).default("off"),
+    CONNECTOR_DEMO_CATALOG: z.enum(['off', 'on']).default('off'),
     /** Scheduled catalog sync per active connector; 0 disables scheduling. */
     CATALOG_SYNC_INTERVAL_MINUTES: z.coerce
       .number()
@@ -154,8 +154,8 @@ const environmentSchema = postgresEnvironmentSchema
      * is no automatic fallback between providers.
      */
     LLM_PROVIDER: z
-      .enum(["mock", "anthropic", "openai-compatible", "routed"])
-      .default("mock"),
+      .enum(['mock', 'anthropic', 'openai-compatible', 'routed'])
+      .default('mock'),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
     /**
      * openai-compatible: Chat Completions base URL (".../chat/completions"
@@ -170,8 +170,8 @@ const environmentSchema = postgresEnvironmentSchema
      * answers every voice note with "please type"; `gemini` uses
      * gemini-3.5-transcribe with STT_API_KEY (a paid-tier Gemini key).
      */
-    STT_PROVIDER: z.enum(["none", "gemini"]).default("none"),
-    STT_MODEL: z.string().min(1).max(100).default("gemini-3.5-transcribe"),
+    STT_PROVIDER: z.enum(['none', 'gemini']).default('none'),
+    STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
     STT_API_KEY: z.string().min(1).optional(),
     /**
      * The project's Gemini key (also read by the `gemini` provider preset).
@@ -184,28 +184,28 @@ const environmentSchema = postgresEnvironmentSchema
      * budget before each transcription (4x the provider's own ~$0.005/min
      * estimate); the reported tokens are recorded afterwards.
      */
-    STT_WORST_CASE_USD_PER_MINUTE: usdAmount.default("0.02"),
+    STT_WORST_CASE_USD_PER_MINUTE: usdAmount.default('0.02'),
     /**
      * ADR 042: digits a machine heard. `typed` (default): a phone number is
      * taken only from text the customer typed, never from a voice-note
      * transcript; `accept`: transcripts are used like typed text.
      */
-    VOICE_DIGITS_POLICY: z.enum(["typed", "accept"]).default("typed"),
+    VOICE_DIGITS_POLICY: z.enum(['typed', 'accept']).default('typed'),
     /**
      * ADR 042: backup speech-to-text when Gemini errors or times out.
      * `elevenlabs` (default) is active only when ELEVENLABS_API_KEY is set.
      */
-    STT_FALLBACK: z.enum(["none", "elevenlabs"]).default("elevenlabs"),
+    STT_FALLBACK: z.enum(['none', 'elevenlabs']).default('elevenlabs'),
     ELEVENLABS_API_KEY: z.string().min(1).optional(),
     /**
      * ADR 055: spoken replies to voice notes (Russian and English only).
      * `off` (default) never speaks; `voxcpm` uses a VoxCPM2 server behind the
      * vLLM-Omni OpenAI-compatible endpoint at TTS_VOXCPM_BASE_URL.
      */
-    TTS_PROVIDER: z.enum(["off", "voxcpm"]).default("off"),
+    TTS_PROVIDER: z.enum(['off', 'voxcpm']).default('off'),
     TTS_VOXCPM_BASE_URL: z.url().optional(),
-    TTS_VOXCPM_MODEL: z.string().min(1).max(100).default("openbmb/VoxCPM2"),
-    TTS_VOXCPM_VOICE: z.string().min(1).max(100).default("default"),
+    TTS_VOXCPM_MODEL: z.string().min(1).max(100).default('openbmb/VoxCPM2'),
+    TTS_VOXCPM_VOICE: z.string().min(1).max(100).default('default'),
     TTS_VOXCPM_API_KEY: z.string().min(1).optional(),
     TTS_TIMEOUT_MS: z.coerce
       .number()
@@ -218,11 +218,11 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z
-      .enum(["json_schema", "json_object"])
-      .default("json_schema"),
+      .enum(['json_schema', 'json_object'])
+      .default('json_schema'),
     LLM_MAX_TOKENS_PARAM: z
-      .enum(["max_tokens", "max_completion_tokens"])
-      .default("max_tokens"),
+      .enum(['max_tokens', 'max_completion_tokens'])
+      .default('max_tokens'),
     /**
      * openai-compatible only: sent as `reasoning_effort` when set. Gemini's
      * OpenAI-compatible endpoint documents minimal, low, medium and high
@@ -231,7 +231,7 @@ const environmentSchema = postgresEnvironmentSchema
      * a third of the extraction calls as truncated (2026-11-04 measurement).
      */
     LLM_REASONING_EFFORT: z
-      .enum(["minimal", "low", "medium", "high"])
+      .enum(['minimal', 'low', 'medium', 'high'])
       .optional(),
     /**
      * Latency experiment 2026-11-10: `reasoning_effort` for FAST (extraction)
@@ -240,7 +240,7 @@ const environmentSchema = postgresEnvironmentSchema
      * (Groq rejects `minimal`).
      */
     LLM_FAST_REASONING_EFFORT: z
-      .enum(["minimal", "low", "medium", "high"])
+      .enum(['minimal', 'low', 'medium', 'high'])
       .optional(),
     /** Client-side limits to stay inside a provider quota (any provider). */
     LLM_RATE_LIMIT_RPM: z.coerce.number().int().min(1).max(100_000).optional(),
@@ -269,21 +269,21 @@ const environmentSchema = postgresEnvironmentSchema
      */
     LLM_TRUSTED_PROVIDERS: z
       .string()
-      .default("mock")
+      .default('mock')
       .transform((value) =>
         value
-          .split(",")
+          .split(',')
           .map((entry) => entry.trim())
           .filter(Boolean),
       ),
     LLM_ALLOW_REAL_CUSTOMER_DATA: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
-    LLM_FAST_MODEL: z.string().min(1).default("claude-haiku-5-5"),
-    LLM_STRONG_MODEL: z.string().min(1).default("claude-haiku-5-5"),
-    LLM_EFFORT: z.enum(["low", "medium", "high"]).default("low"),
-    LLM_PRICING_VERSION: z.string().min(1).default("anthropic-2026-10-23"),
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    LLM_FAST_MODEL: z.string().min(1).default('claude-haiku-5-5'),
+    LLM_STRONG_MODEL: z.string().min(1).default('claude-haiku-5-5'),
+    LLM_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
+    LLM_PRICING_VERSION: z.string().min(1).default('anthropic-2026-10-23'),
     LLM_REQUEST_TIMEOUT_MS: z.coerce
       .number()
       .int()
@@ -312,8 +312,8 @@ const environmentSchema = postgresEnvironmentSchema
       .min(1)
       .max(20)
       .default(6),
-    LLM_TURN_BUDGET_USD: usdAmount.default("0.02"),
-    LLM_CONVERSATION_BUDGET_USD: usdAmount.default("0.25"),
+    LLM_TURN_BUDGET_USD: usdAmount.default('0.02'),
+    LLM_CONVERSATION_BUDGET_USD: usdAmount.default('0.25'),
     LLM_TENANT_MONTHLY_BUDGET_USD: usdAmount.optional(),
     /** Token caps (input + output); they also bound zero-priced models. */
     LLM_TURN_TOKEN_BUDGET: z.coerce
@@ -388,8 +388,8 @@ const environmentSchema = postgresEnvironmentSchema
      */
     SECRETS_MASTER_KEY: z
       .string()
-      .refine((value) => Buffer.from(value.trim(), "base64").length === 32, {
-        message: "must be 32 bytes, base64 encoded",
+      .refine((value) => Buffer.from(value.trim(), 'base64').length === 32, {
+        message: 'must be 32 bytes, base64 encoded',
       })
       .optional(),
     SECRETS_KEY_ID: z
@@ -407,22 +407,22 @@ const environmentSchema = postgresEnvironmentSchema
     /** https base URL of this API as Telegram sees it (webhook target). */
     PUBLIC_BASE_URL: z
       .url()
-      .refine((value) => value.startsWith("https://"), {
-        message: "must be an https URL",
+      .refine((value) => value.startsWith('https://'), {
+        message: 'must be an https URL',
       })
       .optional(),
     KNOWLEDGE_EMBEDDINGS: z
-      .enum(["off", "gemini", "openai-compatible", "hashing"])
-      .default("off"),
+      .enum(['off', 'gemini', 'openai-compatible', 'hashing'])
+      .default('off'),
     KNOWLEDGE_EMBEDDING_MODEL: z.string().min(1).max(100).optional(),
     KNOWLEDGE_EMBEDDING_BASE_URL: z.string().url().optional(),
     /** Local hour from which the daily operator digest is posted. */
     DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(9),
     /** Follow-ups to silent customers are off until the owner enables them. */
     FOLLOWUP_ENABLED: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     FOLLOWUP_AFTER_HOURS: z.coerce.number().int().min(1).max(720).default(24),
     FOLLOWUP_MAX_PER_CONVERSATION: z.coerce
       .number()
@@ -438,18 +438,18 @@ const environmentSchema = postgresEnvironmentSchema
       .default(200),
     /** The daily operator digest is off until the owner enables it. */
     DIGEST_ENABLED: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     /**
      * Phase 7.3 alerts (ADR 030): operator alerts in the tenant's Telegram
      * operator group and platform `alert.*` log lines. Off until the owner
      * enables them.
      */
     ALERTS_ENABLED: z
-      .enum(["true", "false"])
-      .default("false")
-      .transform((value) => value === "true"),
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     /** Share of LLM_TENANT_MONTHLY_BUDGET_USD that triggers the budget alert. */
     ALERT_BUDGET_PERCENT: z.coerce.number().int().min(1).max(100).default(80),
     /** Leads that failed CRM sync within one hour before the alert fires. */
@@ -487,112 +487,112 @@ const environmentSchema = postgresEnvironmentSchema
   })
   .superRefine((environment, context) => {
     if (
-      environment.STT_PROVIDER === "gemini" &&
+      environment.STT_PROVIDER === 'gemini' &&
       !environment.STT_API_KEY &&
       !environment.GEMINI_API_KEY
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["STT_API_KEY"],
+        code: 'custom',
+        path: ['STT_API_KEY'],
         message:
-          "STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini",
+          'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
       });
     }
     if (
-      environment.TTS_PROVIDER === "voxcpm" &&
+      environment.TTS_PROVIDER === 'voxcpm' &&
       !environment.TTS_VOXCPM_BASE_URL
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["TTS_VOXCPM_BASE_URL"],
-        message: "TTS_VOXCPM_BASE_URL is required when TTS_PROVIDER=voxcpm",
+        code: 'custom',
+        path: ['TTS_VOXCPM_BASE_URL'],
+        message: 'TTS_VOXCPM_BASE_URL is required when TTS_PROVIDER=voxcpm',
       });
     }
     if (
       environment.BITRIX24_TEST_BASE_URL &&
-      environment.NODE_ENV === "production"
+      environment.NODE_ENV === 'production'
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["BITRIX24_TEST_BASE_URL"],
+        code: 'custom',
+        path: ['BITRIX24_TEST_BASE_URL'],
         message:
-          "BITRIX24_TEST_BASE_URL is a test setting and is refused in production",
+          'BITRIX24_TEST_BASE_URL is a test setting and is refused in production',
       });
     }
     if (
       environment.TELEGRAM_API_BASE_URL &&
-      environment.NODE_ENV === "production"
+      environment.NODE_ENV === 'production'
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["TELEGRAM_API_BASE_URL"],
+        code: 'custom',
+        path: ['TELEGRAM_API_BASE_URL'],
         message:
-          "TELEGRAM_API_BASE_URL is a test setting and is refused in production",
+          'TELEGRAM_API_BASE_URL is a test setting and is refused in production',
       });
     }
     if (
       environment.INSTAGRAM_API_BASE_URL &&
-      environment.NODE_ENV === "production"
+      environment.NODE_ENV === 'production'
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["INSTAGRAM_API_BASE_URL"],
+        code: 'custom',
+        path: ['INSTAGRAM_API_BASE_URL'],
         message:
-          "INSTAGRAM_API_BASE_URL is a test setting and is refused in production",
+          'INSTAGRAM_API_BASE_URL is a test setting and is refused in production',
       });
     }
     if (
       environment.INSTAGRAM_OAUTH_BASE_URL &&
-      environment.NODE_ENV === "production"
+      environment.NODE_ENV === 'production'
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["INSTAGRAM_OAUTH_BASE_URL"],
+        code: 'custom',
+        path: ['INSTAGRAM_OAUTH_BASE_URL'],
         message:
-          "INSTAGRAM_OAUTH_BASE_URL is a test setting and is refused in production",
+          'INSTAGRAM_OAUTH_BASE_URL is a test setting and is refused in production',
       });
     }
     if (
       environment.INSTAGRAM_OAUTH_REDIRECT_URI &&
-      environment.NODE_ENV === "production" &&
-      !environment.INSTAGRAM_OAUTH_REDIRECT_URI.startsWith("https://")
+      environment.NODE_ENV === 'production' &&
+      !environment.INSTAGRAM_OAUTH_REDIRECT_URI.startsWith('https://')
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["INSTAGRAM_OAUTH_REDIRECT_URI"],
-        message: "INSTAGRAM_OAUTH_REDIRECT_URI must use https in production",
+        code: 'custom',
+        path: ['INSTAGRAM_OAUTH_REDIRECT_URI'],
+        message: 'INSTAGRAM_OAUTH_REDIRECT_URI must use https in production',
       });
     }
     if (
       environment.FACEBOOK_OAUTH_REDIRECT_URI &&
-      environment.NODE_ENV === "production" &&
-      !environment.FACEBOOK_OAUTH_REDIRECT_URI.startsWith("https://")
+      environment.NODE_ENV === 'production' &&
+      !environment.FACEBOOK_OAUTH_REDIRECT_URI.startsWith('https://')
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["FACEBOOK_OAUTH_REDIRECT_URI"],
-        message: "FACEBOOK_OAUTH_REDIRECT_URI must use https in production",
+        code: 'custom',
+        path: ['FACEBOOK_OAUTH_REDIRECT_URI'],
+        message: 'FACEBOOK_OAUTH_REDIRECT_URI must use https in production',
       });
     }
     if (
-      environment.LLM_PROVIDER === "anthropic" &&
+      environment.LLM_PROVIDER === 'anthropic' &&
       !environment.ANTHROPIC_API_KEY
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["ANTHROPIC_API_KEY"],
-        message: "ANTHROPIC_API_KEY is required when LLM_PROVIDER is anthropic",
+        code: 'custom',
+        path: ['ANTHROPIC_API_KEY'],
+        message: 'ANTHROPIC_API_KEY is required when LLM_PROVIDER is anthropic',
       });
     }
-    if (environment.LLM_PROVIDER === "openai-compatible") {
+    if (environment.LLM_PROVIDER === 'openai-compatible') {
       for (const key of [
-        "LLM_BASE_URL",
-        "LLM_MODEL_FAST",
-        "LLM_MODEL_STRONG",
+        'LLM_BASE_URL',
+        'LLM_MODEL_FAST',
+        'LLM_MODEL_STRONG',
       ] as const) {
         if (!environment[key]) {
           context.addIssue({
-            code: "custom",
+            code: 'custom',
             path: [key],
             message: `${key} is required when LLM_PROVIDER is openai-compatible`,
           });
@@ -600,30 +600,30 @@ const environmentSchema = postgresEnvironmentSchema
       }
       if (environment.LLM_BASE_URL) {
         const url = new URL(environment.LLM_BASE_URL);
-        const local = ["localhost", "127.0.0.1", "[::1]"].includes(
+        const local = ['localhost', '127.0.0.1', '[::1]'].includes(
           url.hostname,
         );
         // Plain http only for a local server (e.g. Ollama) outside production.
         if (
-          url.protocol !== "https:" &&
+          url.protocol !== 'https:' &&
           !(
-            url.protocol === "http:" &&
+            url.protocol === 'http:' &&
             local &&
-            environment.NODE_ENV !== "production"
+            environment.NODE_ENV !== 'production'
           )
         ) {
           context.addIssue({
-            code: "custom",
-            path: ["LLM_BASE_URL"],
+            code: 'custom',
+            path: ['LLM_BASE_URL'],
             message:
-              "must use https (plain http is allowed only for localhost outside production)",
+              'must use https (plain http is allowed only for localhost outside production)',
           });
         }
         if (url.username || url.password) {
           context.addIssue({
-            code: "custom",
-            path: ["LLM_BASE_URL"],
-            message: "must not contain credentials; use LLM_API_KEY",
+            code: 'custom',
+            path: ['LLM_BASE_URL'],
+            message: 'must not contain credentials; use LLM_API_KEY',
           });
         }
       }
@@ -633,52 +633,52 @@ const environmentSchema = postgresEnvironmentSchema
       environment.LLM_CONVERSATION_TOKEN_BUDGET
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["LLM_TURN_TOKEN_BUDGET"],
-        message: "must not exceed LLM_CONVERSATION_TOKEN_BUDGET",
+        code: 'custom',
+        path: ['LLM_TURN_TOKEN_BUDGET'],
+        message: 'must not exceed LLM_CONVERSATION_TOKEN_BUDGET',
       });
     }
     if (
-      environment.LLM_PROVIDER === "routed" &&
+      environment.LLM_PROVIDER === 'routed' &&
       !PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["LLM_PRICING_VERSION"],
+        code: 'custom',
+        path: ['LLM_PRICING_VERSION'],
         message:
-          "routed requires a pricing version covering every routed model",
+          'routed requires a pricing version covering every routed model',
       });
     }
     if (!PRICING_CATALOG.has(environment.LLM_PRICING_VERSION)) {
       context.addIssue({
-        code: "custom",
-        path: ["LLM_PRICING_VERSION"],
-        message: "unknown pricing version",
+        code: 'custom',
+        path: ['LLM_PRICING_VERSION'],
+        message: 'unknown pricing version',
       });
     } else {
       const snapshot = PRICING_CATALOG.snapshot(
         environment.LLM_PRICING_VERSION,
       );
       const models: ReadonlyArray<readonly [string, string | undefined]> =
-        environment.LLM_PROVIDER === "anthropic"
+        environment.LLM_PROVIDER === 'anthropic'
           ? [
-              ["LLM_FAST_MODEL", environment.LLM_FAST_MODEL],
-              ["LLM_STRONG_MODEL", environment.LLM_STRONG_MODEL],
+              ['LLM_FAST_MODEL', environment.LLM_FAST_MODEL],
+              ['LLM_STRONG_MODEL', environment.LLM_STRONG_MODEL],
             ]
-          : environment.LLM_PROVIDER === "openai-compatible"
+          : environment.LLM_PROVIDER === 'openai-compatible'
             ? [
-                ["LLM_MODEL_FAST", environment.LLM_MODEL_FAST],
-                ["LLM_MODEL_STRONG", environment.LLM_MODEL_STRONG],
+                ['LLM_MODEL_FAST', environment.LLM_MODEL_FAST],
+                ['LLM_MODEL_STRONG', environment.LLM_MODEL_STRONG],
               ]
-            : environment.LLM_PROVIDER === "routed"
+            : environment.LLM_PROVIDER === 'routed'
               ? [] // every routed candidate is priced when the router is built
-              : [["LLM_PROVIDER", MOCK_MODEL]];
+              : [['LLM_PROVIDER', MOCK_MODEL]];
       for (const [key, model] of models) {
         if (!model) continue;
         const pricing = snapshot.models[model] ?? snapshot.models[ANY_MODEL];
         if (!pricing) {
           context.addIssue({
-            code: "custom",
+            code: 'custom',
             path: [key],
             message: `model has no price in ${environment.LLM_PRICING_VERSION}; an unpriced model cannot be budgeted`,
           });
@@ -693,8 +693,8 @@ const environmentSchema = postgresEnvironmentSchema
           environment.LLM_MAX_INPUT_BYTES + overhead > threshold
         ) {
           context.addIssue({
-            code: "custom",
-            path: ["LLM_MAX_INPUT_BYTES"],
+            code: 'custom',
+            path: ['LLM_MAX_INPUT_BYTES'],
             message: `must keep prompts under the ${threshold}-token long-prompt price threshold of ${model}`,
           });
         }
@@ -705,9 +705,9 @@ const environmentSchema = postgresEnvironmentSchema
       usdToNano(environment.LLM_CONVERSATION_BUDGET_USD)
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["LLM_TURN_BUDGET_USD"],
-        message: "must not exceed LLM_CONVERSATION_BUDGET_USD",
+        code: 'custom',
+        path: ['LLM_TURN_BUDGET_USD'],
+        message: 'must not exceed LLM_CONVERSATION_BUDGET_USD',
       });
     }
     if (
@@ -715,41 +715,41 @@ const environmentSchema = postgresEnvironmentSchema
       environment.AGENT_TURN_TIMEOUT_MS + 10_000
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["AGENT_TURN_LEASE_MS"],
+        code: 'custom',
+        path: ['AGENT_TURN_LEASE_MS'],
         message:
-          "must exceed AGENT_TURN_TIMEOUT_MS by at least 10000 so a live turn is never taken over",
+          'must exceed AGENT_TURN_TIMEOUT_MS by at least 10000 so a live turn is never taken over',
       });
     }
     if (
-      environment.NODE_ENV === "production" &&
-      environment.CONNECTOR_OUTBOUND_POLICY !== "strict"
+      environment.NODE_ENV === 'production' &&
+      environment.CONNECTOR_OUTBOUND_POLICY !== 'strict'
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["CONNECTOR_OUTBOUND_POLICY"],
-        message: "CONNECTOR_OUTBOUND_POLICY must be strict in production",
+        code: 'custom',
+        path: ['CONNECTOR_OUTBOUND_POLICY'],
+        message: 'CONNECTOR_OUTBOUND_POLICY must be strict in production',
       });
     }
     if (
-      environment.NODE_ENV === "production" &&
+      environment.NODE_ENV === 'production' &&
       !environment.WEB_PROXY_SECRET
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["WEB_PROXY_SECRET"],
+        code: 'custom',
+        path: ['WEB_PROXY_SECRET'],
         message:
-          "WEB_PROXY_SECRET is required in production (per-client login limits behind the web server)",
+          'WEB_PROXY_SECRET is required in production (per-client login limits behind the web server)',
       });
     }
     if (
-      environment.NODE_ENV === "production" &&
+      environment.NODE_ENV === 'production' &&
       !environment.SESSION_COOKIE_SECURE
     ) {
       context.addIssue({
-        code: "custom",
-        path: ["SESSION_COOKIE_SECURE"],
-        message: "SESSION_COOKIE_SECURE=false is refused in production",
+        code: 'custom',
+        path: ['SESSION_COOKIE_SECURE'],
+        message: 'SESSION_COOKIE_SECURE=false is refused in production',
       });
     }
     const configured = [
@@ -759,9 +759,9 @@ const environmentSchema = postgresEnvironmentSchema
     ].filter(Boolean).length;
     if (configured > 0 && configured < 3) {
       context.addIssue({
-        code: "custom",
+        code: 'custom',
         message:
-          "TELEGRAM_CHANNEL_ACCOUNT_ID, TELEGRAM_BOT_TOKEN, and TELEGRAM_WEBHOOK_SECRET must be configured together",
+          'TELEGRAM_CHANNEL_ACCOUNT_ID, TELEGRAM_BOT_TOKEN, and TELEGRAM_WEBHOOK_SECRET must be configured together',
       });
     }
   });

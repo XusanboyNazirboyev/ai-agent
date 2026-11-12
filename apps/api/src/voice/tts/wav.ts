@@ -12,8 +12,8 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
 export function isWav(bytes: Uint8Array): boolean {
   return (
     bytes.length >= 12 &&
-    ascii(bytes, 0, 4) === "RIFF" &&
-    ascii(bytes, 8, 4) === "WAVE"
+    ascii(bytes, 0, 4) === 'RIFF' &&
+    ascii(bytes, 8, 4) === 'WAVE'
   );
 }
 
@@ -29,10 +29,10 @@ export function parseWav(bytes: Uint8Array): WavInfo | null {
     const id = ascii(bytes, offset, 4);
     const size = view.getUint32(offset + 4, true);
     const body = offset + 8;
-    if (id === "fmt " && body + 16 <= bytes.length) {
+    if (id === 'fmt ' && body + 16 <= bytes.length) {
       sampleRate = view.getUint32(body + 4, true);
       byteRate = view.getUint32(body + 8, true);
-    } else if (id === "data") {
+    } else if (id === 'data') {
       // A streamed WAV may carry 0 or 0xFFFFFFFF; use what is present.
       dataBytes =
         size === 0 || size === 0xffff_ffff || body + size > bytes.length
@@ -60,10 +60,10 @@ export function buildWav(sampleRateHz: number, samples: number): Uint8Array {
       out[offset + i] = text.charCodeAt(i);
     }
   };
-  put(0, "RIFF");
+  put(0, 'RIFF');
   view.setUint32(4, 36 + dataBytes, true);
-  put(8, "WAVE");
-  put(12, "fmt ");
+  put(8, 'WAVE');
+  put(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, 1, true);
@@ -71,7 +71,7 @@ export function buildWav(sampleRateHz: number, samples: number): Uint8Array {
   view.setUint32(28, sampleRateHz * 2, true);
   view.setUint16(32, 2, true);
   view.setUint16(34, 16, true);
-  put(36, "data");
+  put(36, 'data');
   view.setUint32(40, dataBytes, true);
   for (let i = 0; i < samples; i += 1) {
     view.setInt16(

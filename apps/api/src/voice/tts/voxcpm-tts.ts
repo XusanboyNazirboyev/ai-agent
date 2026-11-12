@@ -28,12 +28,12 @@ import {
   type SynthesizeInput,
   type TextToSpeech,
   TtsError,
-} from "./ports.js";
-import { parseWav } from "./wav.js";
+} from './ports.js';
+import { parseWav } from './wav.js';
 
-export const VOXCPM_SUPPORTED_LANGUAGES: readonly string[] = ["ru", "en"];
-export const VOXCPM_DEFAULT_MODEL = "openbmb/VoxCPM2";
-export const VOXCPM_DEFAULT_VOICE = "default";
+export const VOXCPM_SUPPORTED_LANGUAGES: readonly string[] = ['ru', 'en'];
+export const VOXCPM_DEFAULT_MODEL = 'openbmb/VoxCPM2';
+export const VOXCPM_DEFAULT_VOICE = 'default';
 export const TTS_DEFAULT_MAX_CHARS = 600;
 
 export interface VoxCpmOptions {
@@ -47,18 +47,18 @@ export interface VoxCpmOptions {
   readonly fetchImpl?: typeof fetch;
 }
 
-// eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS =
+  // eslint-disable-next-line no-control-regex
   /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/gu;
-const OPENING = new Set(["(", "\uff08"]);
-const CLOSING = new Set([")", "\uff09"]);
+const OPENING = new Set(['(', '\uff08']);
+const CLOSING = new Set([')', '\uff09']);
 
 /** Removes control characters and leading parenthesised groups; collapses whitespace. */
 export function sanitizeSpeechText(raw: string): string {
   let text = raw
-    .replace(/[\t\n\r\u2028\u2029]+/gu, " ")
-    .replace(CONTROL_CHARACTERS, "")
-    .replace(/\s+/gu, " ")
+    .replace(/[\t\n\r\u2028\u2029]+/gu, ' ')
+    .replace(CONTROL_CHARACTERS, '')
+    .replace(/\s+/gu, ' ')
     .trim();
   for (;;) {
     const first = text[0];
@@ -83,7 +83,7 @@ export function sanitizeSpeechText(raw: string): string {
 }
 
 export class VoxCpmTextToSpeech implements TextToSpeech {
-  readonly provider = "voxcpm";
+  readonly provider = 'voxcpm';
   private readonly endpoint: string;
   private readonly model: string;
   private readonly voice: string;
@@ -92,7 +92,7 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: VoxCpmOptions) {
-    this.endpoint = `${options.baseUrl.replace(/\/+$/u, "")}/v1/audio/speech`;
+    this.endpoint = `${options.baseUrl.replace(/\/+$/u, '')}/v1/audio/speech`;
     this.model = options.model ?? VOXCPM_DEFAULT_MODEL;
     this.voice = options.voice ?? VOXCPM_DEFAULT_VOICE;
     this.timeoutMs = options.timeoutMs ?? 20_000;
@@ -107,17 +107,17 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
   async synthesize(input: SynthesizeInput): Promise<SpeechAudio> {
     if (!this.supportsLanguage(input.language)) {
       throw new TtsError(
-        "UNSUPPORTED_LANGUAGE",
-        "VoxCPM TTS supports only ru and en",
+        'UNSUPPORTED_LANGUAGE',
+        'VoxCPM TTS supports only ru and en',
       );
     }
     const text = sanitizeSpeechText(input.text);
     if (text.length === 0) {
-      throw new TtsError("EMPTY_TEXT", "nothing to speak after sanitising");
+      throw new TtsError('EMPTY_TEXT', 'nothing to speak after sanitising');
     }
     if (text.length > this.maxChars) {
       throw new TtsError(
-        "TEXT_TOO_LONG",
+        'TEXT_TOO_LONG',
         `text is longer than ${this.maxChars} characters`,
       );
     }
@@ -126,7 +126,7 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
       ? AbortSignal.any([input.signal, timeout])
       : timeout;
     const headers: Record<string, string> = {
-      "content-type": "application/json",
+      'content-type': 'application/json',
     };
     if (this.options.apiKey) {
       headers.authorization = `Bearer ${this.options.apiKey}`;
@@ -135,7 +135,7 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
     let bytes: Uint8Array;
     try {
       response = await this.fetchImpl(this.endpoint, {
-        method: "POST",
+        method: 'POST',
         headers,
         body: JSON.stringify({
           model: this.model,
@@ -147,7 +147,7 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined);
         throw new TtsError(
-          "PROVIDER_UNAVAILABLE",
+          'PROVIDER_UNAVAILABLE',
           `TTS provider answered HTTP ${response.status}`,
         );
       }
@@ -155,21 +155,21 @@ export class VoxCpmTextToSpeech implements TextToSpeech {
     } catch (error) {
       if (error instanceof TtsError) throw error;
       if (signal.aborted) {
-        throw new TtsError("TIMEOUT", "TTS request timed out or was aborted");
+        throw new TtsError('TIMEOUT', 'TTS request timed out or was aborted');
       }
-      throw new TtsError("PROVIDER_UNAVAILABLE", "TTS provider unreachable");
+      throw new TtsError('PROVIDER_UNAVAILABLE', 'TTS provider unreachable');
     }
-    const contentType = (response.headers.get("content-type") ?? "")
-      .split(";")[0]
+    const contentType = (response.headers.get('content-type') ?? '')
+      .split(';')[0]
       ?.trim()
       .toLowerCase();
     if (bytes.length === 0) {
-      throw new TtsError("EMPTY_AUDIO", "TTS provider returned no audio");
+      throw new TtsError('EMPTY_AUDIO', 'TTS provider returned no audio');
     }
-    if (!contentType?.startsWith("audio/")) {
+    if (!contentType?.startsWith('audio/')) {
       throw new TtsError(
-        "INVALID_RESPONSE",
-        "TTS provider response is not audio",
+        'INVALID_RESPONSE',
+        'TTS provider response is not audio',
       );
     }
     const wav = parseWav(bytes);
