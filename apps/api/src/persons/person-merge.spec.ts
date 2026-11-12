@@ -92,7 +92,7 @@ describe('planMerge', () => {
 });
 
 describe('canUnmerge', () => {
-  const base = () => ({
+  const base = (): Parameters<typeof canUnmerge>[0] => ({
     survivor: {
       id: 'S',
       mergedIntoId: null as string | null,
