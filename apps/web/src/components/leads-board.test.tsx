@@ -187,4 +187,3 @@ describe('LeadsBoard', () => {
     );
   });
 });
-// mutation sanity demo
