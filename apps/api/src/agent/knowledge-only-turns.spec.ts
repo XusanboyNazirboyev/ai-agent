@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DomainPackSchema } from '@agentcore/shared';
 import type {
   KnowledgePassage,
   KnowledgeSearch,
@@ -225,5 +226,36 @@ describe('knowledge turn (ADR 060)', () => {
       found(),
     );
     expect(result.handover).toBe('NO_DATA');
+  });
+
+  it('a catalog pack whose catalog connector is unavailable answers from knowledge (decision 5)', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({}, 'other'),
+        { kind: 'tools', text: '{{F1}}' },
+      ]),
+      text: 'When are you open?',
+      now: NOW,
+      pack: EDUCATION_PACK,
+      connector: null,
+      knowledge: found(),
+    });
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.reply).toContain(HOURS);
+  });
+
+  it('never asks a search slot in a knowledge turn, even if the pack declares one', async () => {
+    const pack = DomainPackSchema.parse({
+      ...KNOWLEDGE_ONLY_PACK,
+      slots: EDUCATION_PACK.slots,
+    });
+    expect(pack.slots.some((s) => s.requiredFor.includes('search'))).toBe(true);
+    const { result } = await ask(
+      'When are you open?',
+      [extraction({}, 'search'), { kind: 'tools', text: '{{F1}}' }],
+      found(),
+      { pack },
+    );
+    expect(result.outcome).toBe('ANSWERED');
   });
 });
