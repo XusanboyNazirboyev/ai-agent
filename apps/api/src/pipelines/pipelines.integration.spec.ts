@@ -458,9 +458,9 @@ describe('stages per pipeline', () => {
       'QUALIFIED',
       'PROPOSAL',
       'NEGOTIATION',
+      'Triage',
       'WON',
       'LOST',
-      'Triage',
     ]);
     expect(
       (await fail(leadsApi.stages(other.as.OWNER, { pipelineId: sup.id })))

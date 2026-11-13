@@ -504,6 +504,26 @@ describe('stage rules', () => {
       ).toBe(403);
   });
 
+  it('a new open stage is inserted before the closed columns, which stay last', async () => {
+    const w = await world();
+    await db.$transaction((tx) => ensureLeadStages(tx, w.tenantId));
+    const stage = await leadsApi.createStage(w.as.ADMIN, { name: 'Demo call' });
+    const list = await leadsApi.stages(w.as.ADMIN, {});
+    const order = list.map((s) => s.name ?? s.code);
+    expect(order).toEqual([
+      'NEW',
+      'CONTACTED',
+      'QUALIFIED',
+      'PROPOSAL',
+      'NEGOTIATION',
+      'Demo call',
+      'WON',
+      'LOST',
+    ]);
+    expect(stage.kind).toBe('OPEN');
+    expect(list.map((s) => s.position)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
   it('coded stages of the default pipeline stay protected', async () => {
     const w = await world();
     const def = await defaultPipeline(w);

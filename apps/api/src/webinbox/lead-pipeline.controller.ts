@@ -350,13 +350,35 @@ export class LeadPipelineController {
         orderBy: { position: 'desc' },
         select: { position: true },
       });
+      const kind = parsed.data.kind ?? 'OPEN';
+      let position = (last?.position ?? -1) + 1;
+      if (kind === 'OPEN') {
+        // A new open stage goes before the closed (WON/LOST) columns, which
+        // stay last, as in a CRM funnel.
+        const firstClosed = await tx.leadStage.findFirst({
+          where: { tenantId: who.tenantId, pipelineId, kind: { not: 'OPEN' } },
+          orderBy: { position: 'asc' },
+          select: { position: true },
+        });
+        if (firstClosed) {
+          position = firstClosed.position;
+          await tx.leadStage.updateMany({
+            where: {
+              tenantId: who.tenantId,
+              pipelineId,
+              position: { gte: position },
+            },
+            data: { position: { increment: 1 } },
+          });
+        }
+      }
       const stage = await tx.leadStage.create({
         data: {
           tenantId: who.tenantId,
           pipelineId,
           name: parsed.data.name,
-          kind: parsed.data.kind ?? 'OPEN',
-          position: (last?.position ?? -1) + 1,
+          kind,
+          position,
         },
         select: STAGE_SELECT,
       });
