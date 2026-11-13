@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
-import { downloadCsv } from "@/lib/export-csv";
-import { useToast } from "@/components/ui/toast";
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
+import { downloadCsv } from '@/lib/export-csv';
+import { useToast } from '@/components/ui/toast';
 import type {
   BoardStageView,
   LeadPipelineItem,
   PipelineView,
-} from "@/lib/types";
-import { useShell } from "./app-shell";
-import { Button } from "./ui/button";
-import { fieldClass } from "./ui/fields";
-import { FormDialog } from "./ui/form-dialog";
-import { Icon } from "./ui/icons";
-import { SkeletonRows } from "./ui/skeleton";
+} from '@/lib/types';
+import { useShell } from './app-shell';
+import { Button } from './ui/button';
+import { fieldClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
+import { Icon } from './ui/icons';
+import { SkeletonRows } from './ui/skeleton';
 import {
   NO_FILTERS,
   currentStageId,
@@ -27,12 +27,12 @@ import {
   useCachedLead,
   writeCollapsed,
   type LeadFilters,
-} from "./lead-board-utils";
-import { LeadColumn } from "./lead-column";
-import { useLeadMove } from "./lead-move";
-import { LeadPanel } from "./lead-panel";
-import { FilterChips, FiltersMenu } from "./leads-filters";
-import { LeadsList } from "./leads-list";
+} from './lead-board-utils';
+import { LeadColumn } from './lead-column';
+import { useLeadMove } from './lead-move';
+import { LeadPanel } from './lead-panel';
+import { FilterChips, FiltersMenu } from './leads-filters';
+import { LeadsList } from './leads-list';
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -41,8 +41,8 @@ function useIsMobile(): boolean {
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
   return isMobile;
 }
@@ -50,8 +50,8 @@ function useIsMobile(): boolean {
 function toggleClass(selected: boolean): string {
   return `min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
     selected
-      ? "bg-primary text-white"
-      : "text-muted hover:bg-surface-2 hover:text-fg"
+      ? 'bg-primary text-white'
+      : 'text-muted hover:bg-surface-2 hover:text-fg'
   }`;
 }
 
@@ -66,14 +66,14 @@ export function LeadsBoard(): ReactNode {
   const toast = useToast();
   const isMobile = useIsMobile();
   const [exporting, setExporting] = useState(false);
-  const canExport = operator.role === "OWNER" || operator.role === "ADMIN";
+  const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
 
   const pipelines = useQuery({
-    queryKey: ["pipelines"],
-    queryFn: () => api<{ items: PipelineView[] }>("/api/v1/pipelines"),
+    queryKey: ['pipelines'],
+    queryFn: () => api<{ items: PipelineView[] }>('/api/v1/pipelines'),
   });
   const list = pipelines.data?.items ?? [];
-  const urlPipeline = params.get("pipeline");
+  const urlPipeline = params.get('pipeline');
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -87,18 +87,18 @@ export function LeadsBoard(): ReactNode {
     setActiveId((def ?? list[0]).id);
   }, [list, urlPipeline]);
 
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [filters, setFilters] = useState<LeadFilters>(NO_FILTERS);
 
   const active = list.find((p) => p.id === activeId) ?? list[0];
   const board = useQuery({
-    queryKey: ["board", active?.id, fromDate, toDate],
+    queryKey: ['board', active?.id, fromDate, toDate],
     enabled: !!active,
     queryFn: () => {
       const qs = new URLSearchParams();
-      if (fromDate) qs.set("from", fromDate);
-      if (toDate) qs.set("to", toDate);
+      if (fromDate) qs.set('from', fromDate);
+      if (toDate) qs.set('to', toDate);
       return api<{ stages: BoardStageView[] }>(
         `/api/v1/pipelines/${active!.id}/board?${qs.toString()}`,
       );
@@ -106,7 +106,7 @@ export function LeadsBoard(): ReactNode {
   });
   const columns = board.data?.stages ?? [];
 
-  const [view, setView] = useState<"board" | "list">("board");
+  const [view, setView] = useState<'board' | 'list'>('board');
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
   const [funnelOpen, setFunnelOpen] = useState<boolean | null>(null);
   const showFunnel = funnelOpen ?? !isMobile;
@@ -117,7 +117,7 @@ export function LeadsBoard(): ReactNode {
     setCollapsedMap(readCollapsed(operator.id));
   }, [operator.id]);
   function isCollapsed(stage: BoardStageView): boolean {
-    if (stage.kind === "OPEN") return false;
+    if (stage.kind === 'OPEN') return false;
     return collapsedMap[stage.id] ?? isMobile;
   }
   function toggleCollapsed(stage: BoardStageView): void {
@@ -130,7 +130,7 @@ export function LeadsBoard(): ReactNode {
   // `draggedToStageId` is the column the drop would target.
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedToStageId, setDraggedToStageId] = useState<string | null>(null);
-  const [dragStatus, setDragStatus] = useState("");
+  const [dragStatus, setDragStatus] = useState('');
 
   // Moving into a LOST stage asks for the reason first.
   const [lost, setLost] = useState<{
@@ -138,15 +138,15 @@ export function LeadsBoard(): ReactNode {
     fromStageId: string;
     toStageId: string;
   } | null>(null);
-  const [lostReasonDraft, setLostReasonDraft] = useState("");
+  const [lostReasonDraft, setLostReasonDraft] = useState('');
   const move = useLeadMove();
 
   function requestMove(item: LeadPipelineItem, toStageId: string): void {
     const from = currentStageId(item, columns);
     if (from === toStageId) return;
     const target = columns.find((s) => s.id === toStageId);
-    if (target?.kind === "LOST") {
-      setLostReasonDraft("");
+    if (target?.kind === 'LOST') {
+      setLostReasonDraft('');
       setLost({ leadId: item.id, fromStageId: from, toStageId });
       return;
     }
@@ -169,12 +169,12 @@ export function LeadsBoard(): ReactNode {
 
   function handleDragStart(id: string): void {
     setDraggedId(id);
-    setDragStatus(t("leads.dragPickedUp"));
+    setDragStatus(t('leads.dragPickedUp'));
   }
   function handleDragEnd(): void {
     setDraggedId(null);
     setDraggedToStageId(null);
-    setDragStatus("");
+    setDragStatus('');
   }
   function handleDrop(targetStageId: string): void {
     const item = draggedId ? findCachedLead(queryClient, draggedId) : undefined;
@@ -185,7 +185,7 @@ export function LeadsBoard(): ReactNode {
     requestMove(item, targetStageId);
     setDragStatus(
       t(
-        target?.kind === "LOST" ? "leads.dragDroppedLost" : "leads.dragDropped",
+        target?.kind === 'LOST' ? 'leads.dragDroppedLost' : 'leads.dragDropped',
       ),
     );
   }
@@ -194,7 +194,7 @@ export function LeadsBoard(): ReactNode {
     list.length > 1 ? (
       <div
         role="group"
-        aria-label={t("pipelines.switcher")}
+        aria-label={t('pipelines.switcher')}
         className="flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-line bg-surface p-1"
       >
         {list.map((pipeline) => (
@@ -206,14 +206,14 @@ export function LeadsBoard(): ReactNode {
             onClick={() => choose(pipeline)}
             className={`${toggleClass(pipeline.id === active?.id)} max-w-[14rem] truncate`}
           >
-            {pipeline.name ?? t("pipeline.defaultName")}
+            {pipeline.name ?? t('pipeline.defaultName')}
           </button>
         ))}
       </div>
     ) : null;
 
   const visibleColumns =
-    view === "board"
+    view === 'board'
       ? columns.filter(
           (stage) =>
             !isMobile || mobileStageId === null || stage.id === mobileStageId,
@@ -232,25 +232,25 @@ export function LeadsBoard(): ReactNode {
         {switcher}
         <div
           role="group"
-          aria-label={t("leads.views")}
+          aria-label={t('leads.views')}
           className="flex min-w-0 gap-1 rounded-xl border border-line bg-surface p-1"
           data-testid="leads-view-toggle"
         >
           <button
             type="button"
-            aria-pressed={view === "board"}
-            onClick={() => setView("board")}
-            className={toggleClass(view === "board")}
+            aria-pressed={view === 'board'}
+            onClick={() => setView('board')}
+            className={toggleClass(view === 'board')}
           >
-            {t("leads.view.board")}
+            {t('leads.view.board')}
           </button>
           <button
             type="button"
-            aria-pressed={view === "list"}
-            onClick={() => setView("list")}
-            className={toggleClass(view === "list")}
+            aria-pressed={view === 'list'}
+            onClick={() => setView('list')}
+            className={toggleClass(view === 'list')}
           >
-            {t("leads.view.list")}
+            {t('leads.view.list')}
           </button>
         </div>
         <FiltersMenu
@@ -267,26 +267,26 @@ export function LeadsBoard(): ReactNode {
             className="ml-auto min-w-0 max-w-full"
             onClick={() => {
               const qs = new URLSearchParams();
-              if (filters.tagId) qs.set("tagId", filters.tagId);
+              if (filters.tagId) qs.set('tagId', filters.tagId);
               const query = qs.toString();
               setExporting(true);
               void downloadCsv(
-                `/api/v1/exports/leads.csv${query ? `?${query}` : ""}`,
-                "leads.csv",
+                `/api/v1/exports/leads.csv${query ? `?${query}` : ''}`,
+                'leads.csv',
               )
-                .then(() => toast(t("toast.exportStarted")))
+                .then(() => toast(t('toast.exportStarted')))
                 .catch((e: unknown) => toast(t(errorKey(e))))
                 .finally(() => setExporting(false));
             }}
           >
-            {t("export.leads")}
+            {t('export.leads')}
           </Button>
         ) : null}
       </div>
       <FilterChips filters={filters} onChange={setFilters} />
       {board.isSuccess && columns.length > 0 && (
         <section
-          aria-label={t("leads.funnelTitle")}
+          aria-label={t('leads.funnelTitle')}
           className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-surface p-2"
         >
           <button
@@ -296,10 +296,10 @@ export function LeadsBoard(): ReactNode {
             onClick={() => setFunnelOpen(!showFunnel)}
             className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-surface-2"
           >
-            <span aria-hidden="true" className={showFunnel ? "" : "-rotate-90"}>
+            <span aria-hidden="true" className={showFunnel ? '' : '-rotate-90'}>
               ▾
             </span>
-            {t("leads.funnelTitle")}
+            {t('leads.funnelTitle')}
           </button>
           {showFunnel ? (
             <div className="flex flex-wrap items-end gap-2 px-2 pb-1">
@@ -310,14 +310,14 @@ export function LeadsBoard(): ReactNode {
                     value={fromDate}
                     onChange={(e) => setFromDate(e.target.value)}
                     className={`${fieldClass} min-w-0 flex-1 basis-36`}
-                    aria-label={t("leads.funnelFrom")}
+                    aria-label={t('leads.funnelFrom')}
                   />
                   <input
                     type="date"
                     value={toDate}
                     onChange={(e) => setToDate(e.target.value)}
                     className={`${fieldClass} min-w-0 flex-1 basis-36`}
-                    aria-label={t("leads.funnelTo")}
+                    aria-label={t('leads.funnelTo')}
                   />
                 </div>
               </div>
@@ -334,7 +334,7 @@ export function LeadsBoard(): ReactNode {
                       onClick={() =>
                         setMobileStageId(selected ? null : stage.id)
                       }
-                      className={`flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-xs ${selected ? "bg-primary-soft text-primary-fg" : ""}`}
+                      className={`flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-xs ${selected ? 'bg-primary-soft text-primary-fg' : ''}`}
                       data-testid="funnel-stage"
                       aria-pressed={selected}
                     >
@@ -353,7 +353,7 @@ export function LeadsBoard(): ReactNode {
       )}
       {board.isPending ? (
         <div role="status">
-          <span className="sr-only">{t("app.loading")}</span>
+          <span className="sr-only">{t('app.loading')}</span>
           <SkeletonRows rows={3} />
         </div>
       ) : null}
@@ -367,16 +367,16 @@ export function LeadsBoard(): ReactNode {
             {t(errorKey(board.error))}
           </p>
           <Button size="sm" onClick={() => void board.refetch()}>
-            {t("app.retry")}
+            {t('app.retry')}
           </Button>
         </div>
       ) : null}
       {board.isSuccess && columns.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line p-6 text-center text-sm text-muted">
-          {t("leads.empty")}
+          {t('leads.empty')}
         </p>
       ) : null}
-      {board.isSuccess && columns.length > 0 && view === "list" ? (
+      {board.isSuccess && columns.length > 0 && view === 'list' ? (
         <LeadsList
           pipelineId={active!.id}
           stages={columns}
@@ -384,13 +384,13 @@ export function LeadsBoard(): ReactNode {
           onOpen={openLead}
         />
       ) : null}
-      {board.isSuccess && columns.length > 0 && view === "board" ? (
+      {board.isSuccess && columns.length > 0 && view === 'board' ? (
         <div
-          aria-label={t("leads.columns")}
+          aria-label={t('leads.columns')}
           className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2"
         >
           {isMobile && mobileStageId === null ? (
-            <p className="sr-only">{t("leads.pickStage")}</p>
+            <p className="sr-only">{t('leads.pickStage')}</p>
           ) : null}
           {visibleColumns.map((stage) => (
             <LeadColumn
@@ -425,8 +425,8 @@ export function LeadsBoard(): ReactNode {
 
       <FormDialog
         open={lost !== null}
-        title={t("opportunity.lostReason")}
-        description={t("opportunity.lostReasonBody")}
+        title={t('opportunity.lostReason')}
+        description={t('opportunity.lostReasonBody')}
         testId="lead-lost-dialog"
         onClose={() => setLost(null)}
         onSubmit={() => {
@@ -438,23 +438,23 @@ export function LeadsBoard(): ReactNode {
         footer={
           <>
             <Button variant="secondary" onClick={() => setLost(null)}>
-              {t("app.cancel")}
+              {t('app.cancel')}
             </Button>
             <Button type="submit" variant="primary">
-              {t("app.save")}
+              {t('app.save')}
             </Button>
           </>
         }
       >
         <label className="flex flex-col gap-1 text-sm font-medium">
-          {t("opportunity.lostReason")}
+          {t('opportunity.lostReason')}
           <input
             value={lostReasonDraft}
             onChange={(e) => setLostReasonDraft(e.target.value)}
             maxLength={200}
             className={fieldClass}
             autoFocus
-            aria-label={t("opportunity.lostReason")}
+            aria-label={t('opportunity.lostReason')}
           />
         </label>
       </FormDialog>

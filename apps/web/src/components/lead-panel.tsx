@@ -1,43 +1,43 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { useEffect, useId, useRef, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
-import { channelName } from "@/lib/channel-names";
-import type { BoardStageView, LeadPipelineItem } from "@/lib/types";
-import { useShell } from "./app-shell";
-import { Avatar } from "./ui/avatar";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { Icon } from "./ui/icons";
-import { useToast } from "./ui/toast";
-import { currentStageId, stageLabel } from "./lead-board-utils";
-import { LeadOpportunity } from "./lead-opportunity";
-import { LeadCustomFieldsEditor, LeadTagsEditor } from "./lead-tags-fields";
-import { MoveToPipeline } from "./move-to-pipeline";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
+import { channelName } from '@/lib/channel-names';
+import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
+import { useShell } from './app-shell';
+import { Avatar } from './ui/avatar';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Icon } from './ui/icons';
+import { useToast } from './ui/toast';
+import { currentStageId, stageLabel } from './lead-board-utils';
+import { LeadOpportunity } from './lead-opportunity';
+import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
+import { MoveToPipeline } from './move-to-pipeline';
 
 const STEP_BASE =
-  "min-h-9 min-w-0 max-w-full rounded-lg border px-2.5 text-xs font-medium transition-colors";
+  'min-h-9 min-w-0 max-w-full rounded-lg border px-2.5 text-xs font-medium transition-colors';
 
 function stepClass(
-  kind: BoardStageView["kind"],
-  state: "current" | "passed" | "ahead",
+  kind: BoardStageView['kind'],
+  state: 'current' | 'passed' | 'ahead',
 ): string {
-  if (kind === "WON")
-    return state === "current"
-      ? "border-success-fg bg-success-soft text-success-fg ring-2 ring-success-fg"
-      : "border-line bg-surface text-success-fg hover:bg-success-soft";
-  if (kind === "LOST")
-    return state === "current"
-      ? "border-danger bg-danger-soft text-danger-fg ring-2 ring-danger"
-      : "border-line bg-surface text-danger-fg hover:bg-danger-soft";
-  if (state === "current")
-    return "border-primary bg-primary text-white ring-2 ring-primary";
-  if (state === "passed")
-    return "border-primary-soft bg-primary-soft text-primary-fg hover:border-primary";
-  return "border-line bg-surface text-muted hover:bg-surface-2 hover:text-fg";
+  if (kind === 'WON')
+    return state === 'current'
+      ? 'border-success-fg bg-success-soft text-success-fg ring-2 ring-success-fg'
+      : 'border-line bg-surface text-success-fg hover:bg-success-soft';
+  if (kind === 'LOST')
+    return state === 'current'
+      ? 'border-danger bg-danger-soft text-danger-fg ring-2 ring-danger'
+      : 'border-line bg-surface text-danger-fg hover:bg-danger-soft';
+  if (state === 'current')
+    return 'border-primary bg-primary text-white ring-2 ring-primary';
+  if (state === 'passed')
+    return 'border-primary-soft bg-primary-soft text-primary-fg hover:border-primary';
+  return 'border-line bg-surface text-muted hover:bg-surface-2 hover:text-fg';
 }
 
 /**
@@ -118,8 +118,8 @@ function PanelBody(props: {
   const { t } = useI18n();
   const { operator } = useShell();
   const { item, stages } = props;
-  const canEdit = ["OWNER", "ADMIN", "OPERATOR"].includes(operator.role);
-  const name = item.contact.name ?? t("list.unnamed");
+  const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
+  const name = item.contact.name ?? t('list.unnamed');
   const stageId = currentStageId(item, stages);
   const currentIndex = stages.findIndex((s) => s.id === stageId);
 
@@ -147,7 +147,7 @@ function PanelBody(props: {
             variant="ghost"
             icon="x"
             data-testid="lead-panel-close"
-            aria-label={t("leads.panelClose")}
+            aria-label={t('leads.panelClose')}
             onClick={props.onClose}
           />
         </div>
@@ -157,11 +157,11 @@ function PanelBody(props: {
           className="inline-flex min-h-9 w-fit items-center gap-1.5 rounded-lg text-sm font-medium text-primary-fg hover:underline"
         >
           <Icon name="message" />
-          {t("leads.openConversation")}
+          {t('leads.openConversation')}
         </Link>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <nav aria-label={t("leads.stageProgress")}>
+        <nav aria-label={t('leads.stageProgress')}>
           <ol
             data-testid="lead-panel-stages"
             className="flex min-w-0 flex-wrap gap-1.5"
@@ -169,19 +169,19 @@ function PanelBody(props: {
             {stages.map((stage, index) => {
               const state =
                 stage.id === stageId
-                  ? "current"
+                  ? 'current'
                   : index < currentIndex
-                    ? "passed"
-                    : "ahead";
+                    ? 'passed'
+                    : 'ahead';
               return (
                 <li key={stage.id} className="flex min-w-0 max-w-full">
                   <button
                     type="button"
                     data-testid={`lead-panel-stage-${stage.code ?? stage.id}`}
-                    aria-current={state === "current" ? "step" : undefined}
+                    aria-current={state === 'current' ? 'step' : undefined}
                     disabled={!canEdit}
                     onClick={() => {
-                      if (state !== "current")
+                      if (state !== 'current')
                         props.onRequestMove(item, stage.id);
                     }}
                     className={`${STEP_BASE} ${stepClass(stage.kind, state)} disabled:cursor-default`}
@@ -201,7 +201,7 @@ function PanelBody(props: {
             data-testid="lead-panel-lost-reason"
             className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           >
-            {t("leads.lostBecause", { reason: item.lostReason })}
+            {t('leads.lostBecause', { reason: item.lostReason })}
           </p>
         ) : null}
         <LeadOpportunity leadId={item.id} item={item} />
@@ -237,52 +237,52 @@ function AiBlock(props: {
       : undefined;
 
   const refresh = (): void => {
-    void qc.invalidateQueries({ queryKey: ["leads"] });
-    void qc.invalidateQueries({ queryKey: ["board"] });
+    void qc.invalidateQueries({ queryKey: ['leads'] });
+    void qc.invalidateQueries({ queryKey: ['board'] });
   };
   const post = (action: string) =>
-    api(`/api/v1/leads/${item.id}/${action}`, { method: "POST" });
+    api(`/api/v1/leads/${item.id}/${action}`, { method: 'POST' });
   const accept = useMutation({
-    mutationFn: () => post("stage-suggestion/accept"),
+    mutationFn: () => post('stage-suggestion/accept'),
     onSettled: refresh,
     onError: (e) => toast(t(errorKey(e))),
   });
   const dismiss = useMutation({
-    mutationFn: () => post("stage-suggestion/dismiss"),
+    mutationFn: () => post('stage-suggestion/dismiss'),
     onSettled: refresh,
     onError: (e) => toast(t(errorKey(e))),
   });
   const handBack = useMutation({
-    mutationFn: () => post("hand-back-to-ai"),
+    mutationFn: () => post('hand-back-to-ai'),
     onSettled: refresh,
     onError: (e) => toast(t(errorKey(e))),
   });
 
   const reasons = item.suggestedReasonCodes.map((code) => {
     const label = t(`leads.reason.${code}`);
-    return label === `leads.reason.${code}` ? t("leads.reason.unknown") : label;
+    return label === `leads.reason.${code}` ? t('leads.reason.unknown') : label;
   });
 
   return (
     <section
       data-testid="lead-panel-ai"
-      aria-label={t("leads.aiBlock")}
+      aria-label={t('leads.aiBlock')}
       className="flex flex-col gap-2 rounded-xl border border-line bg-canvas p-3 text-sm"
     >
       <p className="flex flex-wrap items-center gap-2">
-        <Badge tone={item.stageSetBy === "AGENT" ? "accent" : "neutral"}>
-          {item.stageSetBy === "AGENT"
-            ? t("leads.stageByAI")
-            : t("leads.stageByOperator")}
+        <Badge tone={item.stageSetBy === 'AGENT' ? 'accent' : 'neutral'}>
+          {item.stageSetBy === 'AGENT'
+            ? t('leads.stageByAI')
+            : t('leads.stageByOperator')}
         </Badge>
       </p>
       {suggested ? (
         <div className="flex flex-col gap-2">
           <p data-testid="lead-panel-suggestion" className="font-medium">
-            {t("leads.aiSuggestsChip", { stage: stageLabel(suggested, t) })}
+            {t('leads.aiSuggestsChip', { stage: stageLabel(suggested, t) })}
           </p>
           {reasons.length > 0 ? (
-            <p className="text-xs text-muted">{reasons.join(", ")}</p>
+            <p className="text-xs text-muted">{reasons.join(', ')}</p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -292,7 +292,7 @@ function AiBlock(props: {
               data-testid="lead-accept-suggestion"
               onClick={() => accept.mutate()}
             >
-              {t("leads.acceptSuggestion")}
+              {t('leads.acceptSuggestion')}
             </Button>
             <Button
               size="sm"
@@ -301,12 +301,12 @@ function AiBlock(props: {
               data-testid="lead-dismiss-suggestion"
               onClick={() => dismiss.mutate()}
             >
-              {t("leads.dismissSuggestion")}
+              {t('leads.dismissSuggestion')}
             </Button>
           </div>
         </div>
       ) : null}
-      {item.stageSetBy === "OPERATOR" ? (
+      {item.stageSetBy === 'OPERATOR' ? (
         <div>
           <Button
             size="sm"
@@ -315,7 +315,7 @@ function AiBlock(props: {
             data-testid="lead-hand-back-to-ai"
             onClick={() => handBack.mutate()}
           >
-            {t("leads.handBackToAi")}
+            {t('leads.handBackToAi')}
           </Button>
         </div>
       ) : null}

@@ -1,34 +1,34 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api } from "@/lib/api";
-import type { Tag } from "@/lib/types";
-import { useShell } from "./app-shell";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { fieldClass } from "./ui/fields";
-import { FormDialog } from "./ui/form-dialog";
-import { Icon } from "./ui/icons";
-import { NO_FILTERS, type LeadFilters } from "./lead-board-utils";
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api } from '@/lib/api';
+import type { Tag } from '@/lib/types';
+import { useShell } from './app-shell';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { fieldClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
+import { Icon } from './ui/icons';
+import { NO_FILTERS, type LeadFilters } from './lead-board-utils';
 
 const SOURCE_DEBOUNCE_MS = 300;
 
 function useFilterOptions() {
   const { operator } = useShell();
-  const manager = operator.role === "OWNER" || operator.role === "ADMIN";
+  const manager = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const team = useQuery({
-    queryKey: ["team"],
+    queryKey: ['team'],
     queryFn: () =>
       api<{
         operators: { id: string; displayName: string; isActive: boolean }[];
-      }>("/api/v1/team"),
+      }>('/api/v1/team'),
     enabled: manager,
   });
   const tags = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => api<{ items: Tag[] }>("/api/v1/tags"),
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
   });
   return {
     manager,
@@ -64,19 +64,19 @@ function FilterFields(props: {
 
   const update = (patch: Partial<LeadFilters>): void =>
     onChange({ ...filters, ...patch });
-  const labelClass = "flex min-w-0 flex-col gap-1 text-sm font-medium";
+  const labelClass = 'flex min-w-0 flex-col gap-1 text-sm font-medium';
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {options.manager ? (
         <label className={labelClass}>
-          {t("leads.filterOwner")}
+          {t('leads.filterOwner')}
           <select
             value={filters.ownerId}
             onChange={(e) => update({ ownerId: e.target.value })}
             className={fieldClass}
           >
-            <option value="">{t("leads.anyOwner")}</option>
+            <option value="">{t('leads.anyOwner')}</option>
             {options.operators
               .filter((o) => o.isActive)
               .map((o) => (
@@ -88,7 +88,7 @@ function FilterFields(props: {
         </label>
       ) : null}
       <label className={labelClass}>
-        {t("leads.filterSource")}
+        {t('leads.filterSource')}
         <input
           value={source}
           maxLength={60}
@@ -98,7 +98,7 @@ function FilterFields(props: {
       </label>
       <div className="flex min-w-0 flex-wrap gap-2">
         <label className={`${labelClass} flex-1 basis-32`}>
-          {t("leads.filterCloseAfter")}
+          {t('leads.filterCloseAfter')}
           <input
             type="date"
             value={filters.closeAfter}
@@ -107,7 +107,7 @@ function FilterFields(props: {
           />
         </label>
         <label className={`${labelClass} flex-1 basis-32`}>
-          {t("leads.filterCloseBefore")}
+          {t('leads.filterCloseBefore')}
           <input
             type="date"
             value={filters.closeBefore}
@@ -117,14 +117,14 @@ function FilterFields(props: {
         </label>
       </div>
       <label className={labelClass}>
-        {t("people.filterByTag")}
+        {t('people.filterByTag')}
         <select
           data-testid="leads-tag-filter"
           value={filters.tagId}
           onChange={(e) => update({ tagId: e.target.value })}
           className={fieldClass}
         >
-          <option value="">{t("people.allTags")}</option>
+          <option value="">{t('people.allTags')}</option>
           {options.tags.map((tag) => (
             <option key={tag.id} value={tag.id}>
               {tag.name}
@@ -154,8 +154,8 @@ export function FiltersMenu(props: {
     const onDown = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
   }, [open, props.isMobile]);
 
   const clear = (): void => props.onChange(NO_FILTERS);
@@ -166,7 +166,7 @@ export function FiltersMenu(props: {
       data-testid="leads-filters"
       className="relative min-w-0"
       onKeyDown={(event) => {
-        if (event.key === "Escape" && open && !props.isMobile) {
+        if (event.key === 'Escape' && open && !props.isMobile) {
           event.stopPropagation();
           setOpen(false);
           buttonRef.current?.focus();
@@ -183,11 +183,11 @@ export function FiltersMenu(props: {
         className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-sm font-medium hover:bg-surface-2"
       >
         <Icon name="sliders" />
-        {t("leads.filters")}
+        {t('leads.filters')}
         {count > 0 ? (
           <Badge tone="accent" data-testid="leads-filters-count">
             {count}
-            <span className="sr-only"> {t("leads.filtersActive")}</span>
+            <span className="sr-only"> {t('leads.filtersActive')}</span>
           </Badge>
         ) : null}
       </button>
@@ -195,7 +195,7 @@ export function FiltersMenu(props: {
         <div
           id={panelId}
           role="group"
-          aria-label={t("leads.filters")}
+          aria-label={t('leads.filters')}
           className="absolute left-0 top-full z-30 mt-1 flex w-[min(92vw,22rem)] flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-pop"
         >
           <FilterFields filters={props.filters} onChange={props.onChange} />
@@ -206,7 +206,7 @@ export function FiltersMenu(props: {
               disabled={count === 0}
               onClick={clear}
             >
-              {t("leads.clearAll")}
+              {t('leads.clearAll')}
             </Button>
             <Button
               size="sm"
@@ -216,7 +216,7 @@ export function FiltersMenu(props: {
                 buttonRef.current?.focus();
               }}
             >
-              {t("leads.filtersDone")}
+              {t('leads.filtersDone')}
             </Button>
           </div>
         </div>
@@ -224,17 +224,17 @@ export function FiltersMenu(props: {
       {props.isMobile ? (
         <FormDialog
           open={open}
-          title={t("leads.filters")}
+          title={t('leads.filters')}
           testId="leads-filters-dialog"
           onClose={() => setOpen(false)}
           onSubmit={() => setOpen(false)}
           footer={
             <>
               <Button variant="ghost" disabled={count === 0} onClick={clear}>
-                {t("leads.clearAll")}
+                {t('leads.clearAll')}
               </Button>
               <Button type="submit" variant="primary">
-                {t("leads.filtersDone")}
+                {t('leads.filtersDone')}
               </Button>
             </>
           }
@@ -259,31 +259,31 @@ export function FilterChips(props: {
   const chips: Array<{ key: keyof LeadFilters; label: string }> = [];
   if (filters.ownerId)
     chips.push({
-      key: "ownerId",
-      label: `${t("leads.filterOwner")}: ${
+      key: 'ownerId',
+      label: `${t('leads.filterOwner')}: ${
         options.operators.find((o) => o.id === filters.ownerId)?.displayName ??
         filters.ownerId
       }`,
     });
   if (filters.source)
     chips.push({
-      key: "source",
-      label: `${t("leads.filterSource")}: ${filters.source}`,
+      key: 'source',
+      label: `${t('leads.filterSource')}: ${filters.source}`,
     });
   if (filters.closeAfter)
     chips.push({
-      key: "closeAfter",
-      label: `${t("leads.filterCloseAfter")}: ${filters.closeAfter}`,
+      key: 'closeAfter',
+      label: `${t('leads.filterCloseAfter')}: ${filters.closeAfter}`,
     });
   if (filters.closeBefore)
     chips.push({
-      key: "closeBefore",
-      label: `${t("leads.filterCloseBefore")}: ${filters.closeBefore}`,
+      key: 'closeBefore',
+      label: `${t('leads.filterCloseBefore')}: ${filters.closeBefore}`,
     });
   if (filters.tagId)
     chips.push({
-      key: "tagId",
-      label: `${t("people.filterByTag")}: ${
+      key: 'tagId',
+      label: `${t('people.filterByTag')}: ${
         options.tags.find((tag) => tag.id === filters.tagId)?.name ??
         filters.tagId
       }`,
@@ -292,7 +292,7 @@ export function FilterChips(props: {
   return (
     <ul
       data-testid="leads-filter-chips"
-      aria-label={t("leads.activeFilters")}
+      aria-label={t('leads.activeFilters')}
       className="flex min-w-0 flex-wrap items-center gap-1.5"
     >
       {chips.map((chip) => (
@@ -300,8 +300,8 @@ export function FilterChips(props: {
           <button
             type="button"
             data-testid={`leads-filter-chip-${chip.key}`}
-            aria-label={t("leads.removeFilter", { filter: chip.label })}
-            onClick={() => props.onChange({ ...filters, [chip.key]: "" })}
+            aria-label={t('leads.removeFilter', { filter: chip.label })}
+            onClick={() => props.onChange({ ...filters, [chip.key]: '' })}
             className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-full bg-primary-soft px-3 text-xs font-medium text-primary-fg hover:bg-surface-2"
           >
             <span className="min-w-0 truncate">{chip.label}</span>
@@ -316,7 +316,7 @@ export function FilterChips(props: {
           data-testid="leads-clear-all"
           onClick={() => props.onChange(NO_FILTERS)}
         >
-          {t("leads.clearAll")}
+          {t('leads.clearAll')}
         </Button>
       </li>
     </ul>

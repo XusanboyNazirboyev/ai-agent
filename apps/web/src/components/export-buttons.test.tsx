@@ -144,6 +144,9 @@ describe.each(PAGES)('%s export button', (kind, testId, page) => {
     setupApi();
     vi.mocked(downloadCsv).mockResolvedValue('x.csv');
     renderIn(page());
+    // The leads tag filter lives in the Filters popover.
+    if (kind === 'leads')
+      fireEvent.click(await screen.findByTestId('leads-filters-button'));
     const select = await screen.findByTestId(
       kind === 'people' ? 'people-tag-filter' : 'leads-tag-filter',
     );

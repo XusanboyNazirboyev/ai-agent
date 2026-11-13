@@ -1,31 +1,31 @@
-"use client";
+'use client';
 
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useId, useState, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
-import { formatAmount } from "@/lib/currencies";
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { useId, useState, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
+import { formatAmount } from '@/lib/currencies';
 import type {
   BoardStageView,
   LeadPipelineItem,
   LeadPipelinePage,
-} from "@/lib/types";
-import { Button } from "./ui/button";
-import { Icon } from "./ui/icons";
-import { SkeletonRows } from "./ui/skeleton";
-import { LeadCard } from "./lead-card";
-import { filterParams, stageLabel, type LeadFilters } from "./lead-board-utils";
+} from '@/lib/types';
+import { Button } from './ui/button';
+import { Icon } from './ui/icons';
+import { SkeletonRows } from './ui/skeleton';
+import { LeadCard } from './lead-card';
+import { filterParams, stageLabel, type LeadFilters } from './lead-board-utils';
 
-const ACCENT: Record<BoardStageView["kind"], string> = {
-  OPEN: "border-t-primary",
-  WON: "border-t-success-fg",
-  LOST: "border-t-danger",
+const ACCENT: Record<BoardStageView['kind'], string> = {
+  OPEN: 'border-t-primary',
+  WON: 'border-t-success-fg',
+  LOST: 'border-t-danger',
 };
 
 /** Count and one total per currency, as decimal strings (never summed here). */
 export function StageTotals(props: { stage: BoardStageView }): ReactNode {
   const { t } = useI18n();
-  const locale = t("locale.uz-Latn") === "uz-Latn" ? "uz-Latn" : undefined;
+  const locale = t('locale.uz-Latn') === 'uz-Latn' ? 'uz-Latn' : undefined;
   return (
     <>
       {props.stage.totals.map((total) => (
@@ -61,19 +61,19 @@ export function LeadColumn(props: {
   const { t } = useI18n();
   const listId = useId();
   const { stage } = props;
-  const terminal = stage.kind !== "OPEN";
+  const terminal = stage.kind !== 'OPEN';
   const name = stageLabel(stage, t);
   const query = useInfiniteQuery({
-    queryKey: ["leads", "stage", stage.id, props.pipelineId, props.filters],
+    queryKey: ['leads', 'stage', stage.id, props.pipelineId, props.filters],
     enabled: !props.collapsed,
-    initialPageParam: "",
+    initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
         pipelineId: props.pipelineId,
         stageId: stage.id,
-        limit: "25",
+        limit: '25',
       });
-      if (pageParam) params.set("cursor", pageParam);
+      if (pageParam) params.set('cursor', pageParam);
       filterParams(props.filters, params);
       return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
     },
@@ -88,7 +88,7 @@ export function LeadColumn(props: {
     <section
       aria-label={name}
       data-testid={`lead-column-${stage.code ?? stage.id}`}
-      data-collapsed={props.collapsed ? "true" : "false"}
+      data-collapsed={props.collapsed ? 'true' : 'false'}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -104,9 +104,9 @@ export function LeadColumn(props: {
       }}
       className={`flex shrink-0 flex-col self-start rounded-2xl border border-t-[3px] border-line bg-surface shadow-card ${ACCENT[stage.kind]} ${
         props.collapsed
-          ? "w-[min(85vw,14rem)] md:w-56"
-          : "w-[min(85vw,21rem)] md:w-80"
-      } ${dragOver ? "ring-2 ring-primary" : ""} ${isDraggingInto ? "bg-primary-soft" : ""}`}
+          ? 'w-[min(85vw,14rem)] md:w-56'
+          : 'w-[min(85vw,21rem)] md:w-80'
+      } ${dragOver ? 'ring-2 ring-primary' : ''} ${isDraggingInto ? 'bg-primary-soft' : ''}`}
     >
       <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -125,13 +125,13 @@ export function LeadColumn(props: {
               data-testid="lead-column-toggle"
               aria-expanded={!props.collapsed}
               aria-controls={listId}
-              aria-label={t("leads.toggleColumn", { stage: name })}
+              aria-label={t('leads.toggleColumn', { stage: name })}
               onClick={props.onToggleCollapsed}
               className="grid min-h-9 min-w-9 place-items-center rounded-lg text-muted hover:bg-surface-2"
             >
               <span
                 aria-hidden="true"
-                className={props.collapsed ? "-rotate-90" : ""}
+                className={props.collapsed ? '-rotate-90' : ''}
               >
                 ▾
               </span>
@@ -146,11 +146,11 @@ export function LeadColumn(props: {
       </header>
       <ul
         id={listId}
-        className={`min-h-0 flex-col gap-2 p-2 ${props.collapsed ? "hidden" : "flex"}`}
+        className={`min-h-0 flex-col gap-2 p-2 ${props.collapsed ? 'hidden' : 'flex'}`}
       >
         {query.isPending && !props.collapsed ? (
           <li role="status">
-            <span className="sr-only">{t("app.loading")}</span>
+            <span className="sr-only">{t('app.loading')}</span>
             <SkeletonRows rows={2} />
           </li>
         ) : null}
@@ -164,13 +164,13 @@ export function LeadColumn(props: {
               {t(errorKey(query.error))}
             </p>
             <Button size="sm" onClick={() => void query.refetch()}>
-              {t("app.retry")}
+              {t('app.retry')}
             </Button>
           </li>
         ) : null}
         {query.isSuccess && items.length === 0 ? (
           <li className="px-3 py-6 text-center text-sm text-muted">
-            {t("leads.empty")}
+            {t('leads.empty')}
           </li>
         ) : null}
         {items.map((item) => (
@@ -194,7 +194,7 @@ export function LeadColumn(props: {
               loading={query.isFetchingNextPage}
               onClick={() => void query.fetchNextPage()}
             >
-              {query.isFetchingNextPage ? t("app.loading") : t("list.loadMore")}
+              {query.isFetchingNextPage ? t('app.loading') : t('list.loadMore')}
             </Button>
           </li>
         ) : null}

@@ -4,12 +4,12 @@ import {
   useQueryClient,
   type InfiniteData,
   type QueryClient,
-} from "@tanstack/react-query";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
-import type { LeadPipelinePage } from "@/lib/types";
-import { useToast } from "./ui/toast";
-import { findCachedLead } from "./lead-board-utils";
+} from '@tanstack/react-query';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
+import type { LeadPipelinePage } from '@/lib/types';
+import { useToast } from './ui/toast';
+import { findCachedLead } from './lead-board-utils';
 
 export interface MoveInput {
   leadId: string;
@@ -28,16 +28,16 @@ function applyOptimistic(qc: QueryClient, input: MoveInput): void {
   const moved = {
     ...lead,
     pipelineStageId: input.toStageId,
-    stageSetBy: "OPERATOR" as const,
+    stageSetBy: 'OPERATOR' as const,
     suggestedStageId: null,
     suggestedReasonCodes: [],
     updatedAt: new Date().toISOString(),
   };
   for (const [key, data] of qc.getQueriesData<LeadsData>({
-    queryKey: ["leads"],
+    queryKey: ['leads'],
   })) {
     if (!data) continue;
-    if (key[1] === "stage") {
+    if (key[1] === 'stage') {
       if (key[2] === input.fromStageId) {
         qc.setQueryData<LeadsData>(key, {
           ...data,
@@ -54,7 +54,7 @@ function applyOptimistic(qc: QueryClient, input: MoveInput): void {
           ),
         });
       }
-    } else if (key[1] === "list") {
+    } else if (key[1] === 'list') {
       qc.setQueryData<LeadsData>(key, {
         ...data,
         pages: data.pages.map((page) => ({
@@ -81,16 +81,16 @@ export function useLeadMove(): UseMutationResult<
   return useMutation({
     mutationFn: (input: MoveInput) =>
       api(`/api/v1/leads/${input.leadId}/stage`, {
-        method: "PATCH",
+        method: 'PATCH',
         body:
           input.lostReason !== undefined
             ? { stageId: input.toStageId, lostReason: input.lostReason }
             : { stageId: input.toStageId },
       }),
     onMutate: async (input) => {
-      await qc.cancelQueries({ queryKey: ["leads"] });
+      await qc.cancelQueries({ queryKey: ['leads'] });
       const previous: Snapshot = qc.getQueriesData<LeadsData>({
-        queryKey: ["leads"],
+        queryKey: ['leads'],
       });
       applyOptimistic(qc, input);
       return { previous };
@@ -102,8 +102,8 @@ export function useLeadMove(): UseMutationResult<
       toast(t(errorKey(error)));
     },
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: ["leads"] });
-      void qc.invalidateQueries({ queryKey: ["board"] });
+      void qc.invalidateQueries({ queryKey: ['leads'] });
+      void qc.invalidateQueries({ queryKey: ['board'] });
     },
   });
 }

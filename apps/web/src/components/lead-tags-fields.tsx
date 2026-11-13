@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
 import type {
   CustomFieldEntry,
   CustomFieldType,
@@ -11,15 +11,15 @@ import type {
   Role,
   Tag,
   TagRef,
-} from "@/lib/types";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { fieldClass } from "./ui/fields";
-import { Icon } from "./ui/icons";
-import { useToast } from "./ui/toast";
+} from '@/lib/types';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { fieldClass } from './ui/fields';
+import { Icon } from './ui/icons';
+import { useToast } from './ui/toast';
 
 function canEdit(role: Role): boolean {
-  return role === "OWNER" || role === "ADMIN" || role === "OPERATOR";
+  return role === 'OWNER' || role === 'ADMIN' || role === 'OPERATOR';
 }
 
 export function LeadTagsEditor(props: {
@@ -36,18 +36,18 @@ export function LeadTagsEditor(props: {
   const [open, setOpen] = useState(false);
 
   const allTags = useQuery({
-    queryKey: ["tags"],
-    queryFn: () => api<{ items: Tag[] }>("/api/v1/tags"),
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
     enabled: open && editable,
   });
   const save = useMutation({
     mutationFn: (tagIds: string[]) =>
-      api(`/api/v1/leads/${leadId}/tags`, { method: "PUT", body: { tagIds } }),
+      api(`/api/v1/leads/${leadId}/tags`, { method: 'PUT', body: { tagIds } }),
     onSuccess: () => {
-      toast(t("toast.tagsSaved"));
-      void qc.invalidateQueries({ queryKey: ["conversation"] });
-      void qc.invalidateQueries({ queryKey: ["leads"] });
-      void qc.invalidateQueries({ queryKey: ["person"] });
+      toast(t('toast.tagsSaved'));
+      void qc.invalidateQueries({ queryKey: ['conversation'] });
+      void qc.invalidateQueries({ queryKey: ['leads'] });
+      void qc.invalidateQueries({ queryKey: ['person'] });
     },
   });
   const available = (allTags.data?.items ?? []).filter(
@@ -65,10 +65,10 @@ export function LeadTagsEditor(props: {
 
   return (
     <div className="flex flex-col gap-2" data-testid="lead-tags">
-      <span className="text-xs font-medium text-muted">{t("leads.tags")}</span>
+      <span className="text-xs font-medium text-muted">{t('leads.tags')}</span>
       <div className="flex flex-wrap items-center gap-2">
         {tags.length === 0 ? (
-          <span className="text-xs text-muted">{t("leads.noTags")}</span>
+          <span className="text-xs text-muted">{t('leads.noTags')}</span>
         ) : null}
         {tags.map((tag) => (
           <span
@@ -80,7 +80,7 @@ export function LeadTagsEditor(props: {
             {editable ? (
               <button
                 type="button"
-                aria-label={t("leads.removeTag", { name: tag.name })}
+                aria-label={t('leads.removeTag', { name: tag.name })}
                 data-testid="lead-tag-remove"
                 disabled={save.isPending}
                 onClick={() => remove(tag)}
@@ -97,13 +97,13 @@ export function LeadTagsEditor(props: {
           {open ? (
             <>
               <select
-                aria-label={t("leads.addTag")}
+                aria-label={t('leads.addTag')}
                 data-testid="lead-tag-select"
                 defaultValue=""
                 onChange={(e) => add(e.target.value)}
                 className={`${fieldClass} max-w-xs`}
               >
-                <option value="">{t("leads.addTag")}</option>
+                <option value="">{t('leads.addTag')}</option>
                 {available.map((tag) => (
                   <option key={tag.id} value={tag.id}>
                     {tag.name}
@@ -111,7 +111,7 @@ export function LeadTagsEditor(props: {
                 ))}
               </select>
               <Button size="sm" onClick={() => setOpen(false)}>
-                {t("confirm.cancel")}
+                {t('confirm.cancel')}
               </Button>
             </>
           ) : (
@@ -122,7 +122,7 @@ export function LeadTagsEditor(props: {
               data-testid="lead-tag-add"
               disabled={save.isPending}
             >
-              {t("leads.addTag")}
+              {t('leads.addTag')}
             </Button>
           )}
         </div>
@@ -149,16 +149,16 @@ export function LeadCustomFieldsEditor(props: {
     return (
       <div data-testid="lead-custom-fields" className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted">
-          {t("leads.customFields")}
+          {t('leads.customFields')}
         </span>
-        <span className="text-xs text-muted">{t("leads.noCustomFields")}</span>
+        <span className="text-xs text-muted">{t('leads.noCustomFields')}</span>
       </div>
     );
   }
   return (
     <div data-testid="lead-custom-fields" className="flex flex-col gap-2">
       <span className="text-xs font-medium text-muted">
-        {t("leads.customFields")}
+        {t('leads.customFields')}
       </span>
       <ul className="flex flex-col gap-2">
         {fields.map((field) => (
@@ -191,14 +191,14 @@ function LeadFieldRow(props: {
   const save = useMutation({
     mutationFn: (next: CustomFieldValue) =>
       api(`/api/v1/leads/${leadId}/custom-fields`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: { values: { [field.key]: next } },
       }),
     onSuccess: () => {
       setTouched(false);
-      toast(t("toast.fieldSaved"));
-      void qc.invalidateQueries({ queryKey: ["conversation"] });
-      void qc.invalidateQueries({ queryKey: ["leads"] });
+      toast(t('toast.fieldSaved'));
+      void qc.invalidateQueries({ queryKey: ['conversation'] });
+      void qc.invalidateQueries({ queryKey: ['leads'] });
     },
   });
 
@@ -230,7 +230,7 @@ function LeadFieldRow(props: {
             disabled={save.isPending}
             data-testid="lead-field-save"
           >
-            {t("leads.fieldSave")}
+            {t('leads.fieldSave')}
           </Button>
         ) : null}
       </div>
@@ -251,18 +251,18 @@ function FieldEditor(props: {
   onChange: (value: string) => void;
 }): ReactNode {
   const { type, value, disabled, label, onChange } = props;
-  if (type === "BOOLEAN")
+  if (type === 'BOOLEAN')
     return (
       <input
         type="checkbox"
         aria-label={label}
-        checked={value === "true"}
+        checked={value === 'true'}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked ? "true" : "false")}
+        onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
         className="h-5 w-5 accent-primary-fg"
       />
     );
-  if (type === "NUMBER")
+  if (type === 'NUMBER')
     return (
       <input
         type="number"
@@ -273,7 +273,7 @@ function FieldEditor(props: {
         className={fieldClass}
       />
     );
-  if (type === "DATE")
+  if (type === 'DATE')
     return (
       <input
         type="date"
@@ -297,14 +297,14 @@ function FieldEditor(props: {
 }
 function toDraft(type: CustomFieldType, value: CustomFieldValue): string {
   if (value === null || value === undefined)
-    return type === "BOOLEAN" ? "false" : "";
-  if (type === "BOOLEAN") return value ? "true" : "false";
+    return type === 'BOOLEAN' ? 'false' : '';
+  if (type === 'BOOLEAN') return value ? 'true' : 'false';
   return String(value);
 }
 function fromDraft(type: CustomFieldType, draft: string): CustomFieldValue {
-  if (type === "BOOLEAN") return draft === "true";
-  if (draft === "") return null;
-  if (type === "NUMBER") {
+  if (type === 'BOOLEAN') return draft === 'true';
+  if (draft === '') return null;
+  if (type === 'NUMBER') {
     const n = Number(draft);
     return Number.isFinite(n) ? n : null;
   }

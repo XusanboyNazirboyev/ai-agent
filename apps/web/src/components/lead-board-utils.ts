@@ -2,20 +2,20 @@ import {
   useQueryClient,
   type InfiniteData,
   type QueryClient,
-} from "@tanstack/react-query";
-import { useSyncExternalStore } from "react";
+} from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
 import type {
   BoardStageView,
   LeadPipelineItem,
   LeadPipelinePage,
-} from "@/lib/types";
+} from '@/lib/types';
 
 /** Age chip thresholds (days since the last activity). One place on purpose. */
 export const AGE_WARN_DAYS = 3;
 export const AGE_DANGER_DAYS = 7;
 const DAY_MS = 86_400_000;
 
-export type AgeTone = "neutral" | "warning" | "danger";
+export type AgeTone = 'neutral' | 'warning' | 'danger';
 
 export function ageDays(updatedAt: string, now: number = Date.now()): number {
   const ts = Date.parse(updatedAt);
@@ -24,16 +24,16 @@ export function ageDays(updatedAt: string, now: number = Date.now()): number {
 }
 
 export function ageTone(days: number): AgeTone {
-  if (days >= AGE_DANGER_DAYS) return "danger";
-  if (days >= AGE_WARN_DAYS) return "warning";
-  return "neutral";
+  if (days >= AGE_DANGER_DAYS) return 'danger';
+  if (days >= AGE_WARN_DAYS) return 'warning';
+  return 'neutral';
 }
 
 export function stageLabel(
   stage: { code: string | null; name: string | null },
   t: (key: string) => string,
 ): string {
-  return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : "");
+  return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
 }
 
 /** The stage a lead sits in; a lead without a stage shows in the first column. */
@@ -41,7 +41,7 @@ export function currentStageId(
   item: LeadPipelineItem,
   stages: BoardStageView[],
 ): string {
-  return item.pipelineStageId ?? stages[0]?.id ?? "";
+  return item.pipelineStageId ?? stages[0]?.id ?? '';
 }
 
 export interface LeadFilters {
@@ -53,11 +53,11 @@ export interface LeadFilters {
 }
 
 export const NO_FILTERS: LeadFilters = {
-  ownerId: "",
-  source: "",
-  closeBefore: "",
-  closeAfter: "",
-  tagId: "",
+  ownerId: '',
+  source: '',
+  closeBefore: '',
+  closeAfter: '',
+  tagId: '',
 };
 
 /** Query params of `GET /leads`, named exactly as the API contract. */
@@ -65,11 +65,11 @@ export function filterParams(
   filters: LeadFilters,
   params: URLSearchParams,
 ): void {
-  if (filters.ownerId) params.set("ownerOperatorId", filters.ownerId);
-  if (filters.source) params.set("source", filters.source);
-  if (filters.closeBefore) params.set("closeBefore", filters.closeBefore);
-  if (filters.closeAfter) params.set("closeAfter", filters.closeAfter);
-  if (filters.tagId) params.set("tagId", filters.tagId);
+  if (filters.ownerId) params.set('ownerOperatorId', filters.ownerId);
+  if (filters.source) params.set('source', filters.source);
+  if (filters.closeBefore) params.set('closeBefore', filters.closeBefore);
+  if (filters.closeAfter) params.set('closeAfter', filters.closeAfter);
+  if (filters.tagId) params.set('tagId', filters.tagId);
 }
 
 type LeadsData = InfiniteData<LeadPipelinePage>;
@@ -80,7 +80,7 @@ export function findCachedLead(
   id: string,
 ): LeadPipelineItem | undefined {
   for (const [, data] of qc.getQueriesData<LeadsData>({
-    queryKey: ["leads"],
+    queryKey: ['leads'],
   })) {
     for (const page of data?.pages ?? []) {
       const found = page.items.find((item) => item.id === id);
@@ -104,13 +104,13 @@ export function useCachedLead(
   return cached ?? fallback;
 }
 
-const COLLAPSE_PREFIX = "agentcore.leads.collapsed.";
+const COLLAPSE_PREFIX = 'agentcore.leads.collapsed.';
 
 export function readCollapsed(userId: string): Record<string, boolean> {
   try {
     const raw = window.localStorage.getItem(COLLAPSE_PREFIX + userId);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object"
+    return parsed && typeof parsed === 'object'
       ? (parsed as Record<string, boolean>)
       : {};
   } catch {
