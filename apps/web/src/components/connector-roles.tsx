@@ -77,7 +77,7 @@ function ConnectorRoleRow(props: {
       data-testid={`connector-role-${props.role}`}
       className="flex min-w-0 flex-wrap items-start gap-3 rounded-2xl border border-line bg-surface p-4 sm:p-5"
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
         <span className="font-semibold">{t(label)}</span>
         <span className="text-xs text-muted break-words">{t(desc)}</span>
       </div>
