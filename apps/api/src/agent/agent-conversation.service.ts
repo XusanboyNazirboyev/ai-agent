@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ConversationSlotsSchema } from '@agentcore/shared';
+import { ConversationSlotsSchema, type DomainPack } from '@agentcore/shared';
 import type { AppEnvironment } from '../config/environment.js';
 import {
   DEFAULT_STUCK_WINDOW_MINUTES,
@@ -279,7 +279,7 @@ export class AgentConversationService implements OnModuleInit {
         take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
         select: { direction: true, text: true },
       }),
-      this.connectorFor(tenantId),
+      this.connectorFor(tenantId, pack),
       this.usage.conversationSpendNano(tenantId, conversationId),
       this.usage.tenantMonthSpendNano(tenantId),
       this.usage.conversationTokens(tenantId, conversationId),
@@ -613,8 +613,50 @@ export class AgentConversationService implements OnModuleInit {
   }
 
   /** The connector bound to the catalog role, or the only capable one (ADR 059). */
-  private connectorFor(tenantId: string): Promise<CrmConnector | undefined> {
-    return this.selector.select(tenantId, 'CATALOG');
+  private async connectorFor(
+    tenantId: string,
+    pack: DomainPack,
+  ): Promise<CrmConnector | undefined> {
+    const connector = await this.selector.select(tenantId, 'CATALOG');
+    if (!connector || !pack.tools.includes('search_catalog'))
+      await this.logCatalogUnavailable(tenantId, pack);
+    return connector;
+  }
+
+  /**
+   * ADR 060: once per turn when no catalog tool will exist. Ids and a reason
+   * code only; never customer text.
+   */
+  private async logCatalogUnavailable(
+    tenantId: string,
+    pack: DomainPack,
+  ): Promise<void> {
+    let reason:
+      'NO_CONNECTOR' | 'AMBIGUOUS' | 'UNAVAILABLE' | 'PACK_HAS_NO_CATALOG' =
+      'NO_CONNECTOR';
+    if (!pack.tools.includes('search_catalog')) {
+      reason = 'PACK_HAS_NO_CATALOG';
+    } else {
+      try {
+        const resolution = await this.selector.resolve(tenantId, 'CATALOG');
+        if (resolution.kind === 'UNAVAILABLE') reason = 'UNAVAILABLE';
+        else if (
+          resolution.kind === 'UNBOUND' &&
+          resolution.candidates.length > 1
+        )
+          reason = 'AMBIGUOUS';
+      } catch {
+        // The reason stays NO_CONNECTOR; the log must never fail a turn.
+      }
+    }
+    this.logger.warn(
+      JSON.stringify({
+        event: 'agent.catalog_unavailable',
+        tenant: tenantId,
+        pack: `${pack.key}@${pack.version}`,
+        reason,
+      }),
+    );
   }
 }
 
