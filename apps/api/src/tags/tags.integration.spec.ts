@@ -1,4 +1,5 @@
 import { ManualLeadService } from '../leads/manual-lead.service.js';
+import { LeadArchiveService } from '../leads/lead-archive.service.js';
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
@@ -67,6 +68,7 @@ const leadsC = new LeadPipelineController(
   tagsService,
   fieldsService,
   new ManualLeadService(prisma),
+  new LeadArchiveService(prisma),
 );
 const read = new InboxReadService(prisma);
 

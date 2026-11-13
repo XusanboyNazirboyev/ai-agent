@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -17,6 +18,10 @@ import { PrismaService } from '../persistence/prisma.service.js';
 import { ensureDefaultPipeline } from '../leads/lead-stage.util.js';
 import { moveLeadToStage } from '../leads/lead-stage-move.js';
 import { parseManualLeadBody } from '../leads/manual-lead-rules.js';
+import {
+  LeadArchiveService,
+  leadArchived,
+} from '../leads/lead-archive.service.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
 import {
   conflict,
@@ -72,6 +77,8 @@ const ListQuery = z.object({
   tagId: z.string().uuid().optional(),
   fieldKey: z.string().max(64).optional(),
   fieldValue: z.string().max(600).optional(),
+  /** ADR 062: `true` lists the archive (OWNER, ADMIN); default hides it. */
+  archived: z.enum(['true', 'false']).optional(),
 });
 const StageKind = z.enum(['OPEN', 'WON', 'LOST']);
 const StageBody = z
@@ -128,6 +135,8 @@ export interface OpportunityView {
 
 interface LeadPipelineItem {
   id: string;
+  /** ADR 062: null for an active lead. */
+  archivedAt: Date | null;
   pipelineId: string;
   pipelineStageId: string | null;
   ownerOperatorId: string | null;
@@ -178,6 +187,7 @@ const LEAD_ITEM_SELECT = {
   summary: true,
   createdAt: true,
   updatedAt: true,
+  archivedAt: true,
   customFields: true,
   contact: { select: { name: true, phone: true } },
   conversation: {
@@ -201,6 +211,7 @@ export class LeadPipelineController {
     private readonly tags: TagsService,
     private readonly fields: CustomFieldsService,
     private readonly manualLeads: ManualLeadService,
+    private readonly archiveService: LeadArchiveService,
   ) {}
 
   /** Replaces the tag set of a lead (ADR 053). */
@@ -212,6 +223,7 @@ export class LeadPipelineController {
   ): Promise<{ tags: TagView[] }> {
     const principal = operating(request);
     const tagIds = parseTagIds(body);
+    await this.assertActive(principal.tenantId, parseId(id));
     return this.tags.setTags(
       principal.tenantId,
       principal.operatorId,
@@ -230,6 +242,7 @@ export class LeadPipelineController {
   ): Promise<{ customFields: FieldValueView[] }> {
     const principal = operating(request);
     const values = parseValues(body);
+    await this.assertActive(principal.tenantId, parseId(id));
     return this.fields.patchValues(
       principal.tenantId,
       principal.operatorId,
@@ -252,6 +265,7 @@ export class LeadPipelineController {
     if (!parsed.ok)
       throw parsed.code === 'INVALID_BODY' ? invalidBody() : invalidValue();
     const patch = parsed.patch;
+    await this.assertActive(who.tenantId, leadId);
     return this.prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findFirst({
         where: { tenantId: who.tenantId, id: leadId },
@@ -576,6 +590,41 @@ export class LeadPipelineController {
     });
   }
 
+  /** Archives a lead (ADR 062): OWNER, ADMIN. Reversible, idempotent. */
+  @Post(':id/archive')
+  @HttpCode(204)
+  async archive(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<void> {
+    await this.archiveService.archive(this.requireManager(request), leadId);
+  }
+
+  /** Brings an archived lead back (ADR 062): OWNER, ADMIN. */
+  @Post(':id/restore')
+  @HttpCode(204)
+  async restore(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<void> {
+    await this.archiveService.restore(this.requireManager(request), leadId);
+  }
+
+  /** Deletes an ARCHIVED lead for good (ADR 062): OWNER only. */
+  @Delete(':id')
+  @HttpCode(204)
+  async deleteForGood(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<void> {
+    const who = request.principal!;
+    if (who.role !== 'OWNER') throw forbidden();
+    await this.archiveService.deleteForGood(
+      { tenantId: who.tenantId, operatorId: who.operatorId },
+      leadId,
+    );
+  }
+
   /** Adds a lead by hand (ADR 061): OWNER, ADMIN, OPERATOR. */
   @Post()
   async createManually(
@@ -618,8 +667,11 @@ export class LeadPipelineController {
       tagId,
       fieldKey,
       fieldValue,
+      archived,
     } = parsed.data;
     const tenantId = request.principal!.tenantId;
+    const wantsArchive = archived === 'true';
+    if (wantsArchive) this.requireManager(request);
     if ((fieldKey === undefined) !== (fieldValue === undefined))
       throw invalidQuery();
     // ADR 057: the default pipeline unless a pipeline or a stage is named.
@@ -650,6 +702,7 @@ export class LeadPipelineController {
     const rows = await this.prisma.lead.findMany({
       where: {
         tenantId,
+        archivedAt: wantsArchive ? { not: null } : null,
         ...(pipelineId ? { pipelineId } : {}),
         ...(stageId ? { pipelineStageId: stageId } : {}),
         ...(ownerOperatorId ? { ownerOperatorId } : {}),
@@ -748,6 +801,7 @@ export class LeadPipelineController {
     if (who.role === 'VIEWER') throw forbidden();
     const parsed = MoveBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
+    await this.assertActive(who.tenantId, leadId);
     return this.prisma.$transaction(async (tx) => {
       const moved = await moveLeadToStage(tx, {
         tenantId: who.tenantId,
@@ -796,6 +850,7 @@ export class LeadPipelineController {
   }> {
     const who = request.principal!;
     if (who.role === 'VIEWER') throw forbidden();
+    await this.assertActive(who.tenantId, leadId);
     return this.prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findFirst({
         where: { tenantId: who.tenantId, id: leadId },
@@ -827,6 +882,7 @@ export class LeadPipelineController {
   ): Promise<{ id: string; suggestedStageId: null }> {
     const who = request.principal!;
     if (who.role === 'VIEWER') throw forbidden();
+    await this.assertActive(who.tenantId, leadId);
     const updated = await this.prisma.lead.updateMany({
       where: { tenantId: who.tenantId, id: leadId },
       data: { suggestedStageId: null, suggestedReasonCodes: [] },
@@ -843,12 +899,23 @@ export class LeadPipelineController {
   ): Promise<{ id: string; stageSetBy: 'AGENT' }> {
     const who = request.principal!;
     if (who.role === 'VIEWER') throw forbidden();
+    await this.assertActive(who.tenantId, leadId);
     const updated = await this.prisma.lead.updateMany({
       where: { tenantId: who.tenantId, id: leadId },
       data: { stageSetBy: 'AGENT' },
     });
     if (updated.count === 0) throw notFound();
     return { id: leadId, stageSetBy: 'AGENT' };
+  }
+
+  /** ADR 062 decision 4: an archived lead is frozen for operators. */
+  private async assertActive(tenantId: string, leadId: string): Promise<void> {
+    const lead = await this.prisma.lead.findFirst({
+      where: { tenantId, id: leadId },
+      select: { archivedAt: true },
+    });
+    if (!lead) throw notFound();
+    if (lead.archivedAt) throw leadArchived();
   }
 
   private requireManager(request: InboxRequest): {

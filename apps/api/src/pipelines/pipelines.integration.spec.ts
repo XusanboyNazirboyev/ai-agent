@@ -1,4 +1,5 @@
 import { ManualLeadService } from '../leads/manual-lead.service.js';
+import { LeadArchiveService } from '../leads/lead-archive.service.js';
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
@@ -35,6 +36,7 @@ const leadsApi = new LeadPipelineController(
   new TagsService(prisma),
   new CustomFieldsService(prisma),
   new ManualLeadService(prisma),
+  new LeadArchiveService(prisma),
 );
 const board = new LeadsController(prisma);
 const team = new TeamController(prisma, new OperatorInviteService(prisma));

@@ -56,7 +56,9 @@ export const conflict = (
     | 'STAGE_HAS_LEADS'
     | 'STAGE_IS_DEFAULT'
     | 'STAGE_LAST_OPEN'
-    | 'LEAD_STAGE_LIMIT',
+    | 'LEAD_STAGE_LIMIT'
+    | 'LEAD_ARCHIVED'
+    | 'LEAD_NOT_ARCHIVED',
   message: string,
   extra: Record<string, number> = {},
 ): ConflictException =>

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
+import { LeadArchiveService } from '../leads/lead-archive.service.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
@@ -32,6 +33,7 @@ const leadsApi = new LeadPipelineController(
   new TagsService(prisma),
   new CustomFieldsService(prisma),
   new ManualLeadService(prisma),
+  new LeadArchiveService(prisma),
 );
 const pipelines = new PipelinesController(prisma);
 const inbox = new InboxReadService(prisma);

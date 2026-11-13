@@ -926,6 +926,8 @@ model Lead {
   idempotencyKey  String       @map("idempotency_key") @db.VarChar(200)
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// ADR 062: set = archived (hidden everywhere, reversible); deleted for good from there.
+  archivedAt      DateTime?    @map("archived_at") @db.Timestamptz(6)
   tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact         Contact      @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: Restrict)
   conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
@@ -944,6 +946,7 @@ model Lead {
   @@index([tenantId, crmSyncStatus, updatedAt])
   @@index([tenantId, contactId])
   @@index([tenantId, conversationId])
+  @@index([tenantId, archivedAt])
   @@map("leads")
 }
 

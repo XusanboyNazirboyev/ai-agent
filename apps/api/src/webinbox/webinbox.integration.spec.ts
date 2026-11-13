@@ -1,4 +1,5 @@
 import { ManualLeadService } from '../leads/manual-lead.service.js';
+import { LeadArchiveService } from '../leads/lead-archive.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
 import { config as loadEnv } from 'dotenv';
@@ -1964,6 +1965,7 @@ describe('knowledge documents', () => {
       new TagsService(prisma),
       new CustomFieldsService(prisma),
       new ManualLeadService(prisma),
+      new LeadArchiveService(prisma),
     );
 
     function as(w: World, role: InboxPrincipal['role']): InboxRequest {
