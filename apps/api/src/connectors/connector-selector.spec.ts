@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { TenantConnector } from '../generated/prisma/client.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { ConnectorSelector } from './connector-selector.js';
@@ -53,7 +53,7 @@ function connector(caps: Partial<ConnectorCapabilities>): CrmConnector {
 
 interface Setup {
   selector: ConnectorSelector;
-  warn: ReturnType<typeof vi.spyOn>;
+  warn: MockInstance;
 }
 
 function setup(options: {
@@ -88,7 +88,7 @@ function setup(options: {
 }
 
 const events = (warn: Setup['warn']): string[] =>
-  warn.mock.calls.map(
+  (warn.mock.calls as unknown[][]).map(
     (call) => (JSON.parse(call[0] as string) as { event: string }).event,
   );
 
