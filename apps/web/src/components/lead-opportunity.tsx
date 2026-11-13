@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
 import {
   CURRENCIES,
   formatAmount,
@@ -192,7 +193,7 @@ export function LeadOpportunity(props: {
             {t('opportunity.unassigned')}
           </span>
         )}
-        {amountText !== '—' ? (
+        {LEAD_AMOUNT_ENABLED && amountText !== '—' ? (
           <span data-testid="lead-amount-summary">{amountText}</span>
         ) : null}
         {props.item.expectedCloseDate ? (
@@ -204,48 +205,50 @@ export function LeadOpportunity(props: {
       {showReadonly ? (
         <div className="grid grid-cols-1 gap-3">
           {ownerSelect}
-          <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
-            <span>{t('opportunity.amount')}</span>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <input
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                disabled={!canEdit || isViewer || save.isPending}
-                className={`${fieldClass} min-w-0 flex-1`}
-                aria-label={t('opportunity.amount')}
-                data-testid="opportunity-amount"
-              />
-              <select
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                disabled={!canEdit || isViewer || save.isPending}
-                className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-                aria-label={t('opportunity.currency')}
-                data-testid="opportunity-currency"
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-              {canEdit && !isViewer ? (
-                <Button
-                  size="sm"
-                  onClick={saveAmount}
-                  disabled={save.isPending}
-                  data-testid="opportunity-save-amount"
+          {LEAD_AMOUNT_ENABLED ? (
+            <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
+              <span>{t('opportunity.amount')}</span>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <input
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  disabled={!canEdit || isViewer || save.isPending}
+                  className={`${fieldClass} min-w-0 flex-1`}
+                  aria-label={t('opportunity.amount')}
+                  data-testid="opportunity-amount"
+                />
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  disabled={!canEdit || isViewer || save.isPending}
+                  className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+                  aria-label={t('opportunity.currency')}
+                  data-testid="opportunity-currency"
                 >
-                  {t('app.save')}
-                </Button>
+                  {CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                {canEdit && !isViewer ? (
+                  <Button
+                    size="sm"
+                    onClick={saveAmount}
+                    disabled={save.isPending}
+                    data-testid="opportunity-save-amount"
+                  >
+                    {t('app.save')}
+                  </Button>
+                ) : null}
+              </div>
+              {amountError ? (
+                <p role="alert" className="text-xs text-danger-fg">
+                  {amountError}
+                </p>
               ) : null}
             </div>
-            {amountError ? (
-              <p role="alert" className="text-xs text-danger-fg">
-                {amountError}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
           <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
             <span>{t('opportunity.source')}</span>
             <div className="flex min-w-0 flex-wrap items-center gap-2">

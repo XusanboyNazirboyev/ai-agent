@@ -5,6 +5,7 @@ import { useId, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { formatAmount } from '@/lib/currencies';
+import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
 import type {
   BoardStageView,
   LeadPipelineItem,
@@ -143,7 +144,7 @@ export function LeadColumn(props: {
             </button>
           ) : null}
         </div>
-        {stage.totals.length > 0 ? (
+        {LEAD_AMOUNT_ENABLED && stage.totals.length > 0 ? (
           <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-0.5">
             <StageTotals stage={stage} />
           </div>

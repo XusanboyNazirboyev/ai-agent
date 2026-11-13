@@ -127,14 +127,10 @@ describe('LeadCard', () => {
     expect(props.onOpen).toHaveBeenCalledTimes(2);
   });
 
-  it('shows the amount from the decimal string, nothing when null', () => {
+  it('shows no amount while the product hides it (owner decision 2026-11-13)', () => {
     renderCard(makeLead({ amount: '1234567.89', currency: 'USD' }));
-    expect(screen.getByTestId('lead-card-amount').textContent).toBe(
-      formatAmount('1234567.89', 'USD'),
-    );
-    cleanup();
-    renderCard(makeLead({ amount: null, currency: null }));
     expect(screen.queryByTestId('lead-card-amount')).toBeNull();
+    expect(screen.queryByText(formatAmount('1234567.89', 'USD'))).toBeNull();
   });
 
   it('shows the channel and the owner as a labelled avatar', () => {

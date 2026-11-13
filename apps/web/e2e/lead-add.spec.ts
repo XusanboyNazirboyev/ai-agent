@@ -21,7 +21,8 @@ test('an operator adds a lead from the toolbar and from a column', async ({
   await expect(dialog.getByTestId('lead-add-submit')).toBeDisabled();
   await dialog.getByTestId('lead-add-name').fill(first);
   await dialog.getByTestId('lead-add-phone').fill('+998 90 555 44 33');
-  await dialog.getByTestId('lead-add-amount').fill('1500.50');
+  // The amount is hidden in the product (owner decision): no field to fill.
+  await expect(dialog.getByTestId('lead-add-amount')).toHaveCount(0);
   await dialog.getByTestId('lead-add-note').fill('Came to the office');
   await dialog.getByTestId('lead-add-submit').click();
   await expect(dialog).toBeHidden();

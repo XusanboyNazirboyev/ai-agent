@@ -17,7 +17,6 @@ import {
   vi,
 } from 'vitest';
 import { api } from '@/lib/api';
-import { formatAmount } from '@/lib/currencies';
 import { STAGES, makeLead } from '@/test-fixtures/leads';
 import type { LeadPipelineItem } from '@/lib/types';
 import { LeadsBoard } from './leads-board';
@@ -159,15 +158,11 @@ const patchCalls = () =>
     );
 
 describe('LeadsBoard columns', () => {
-  it('shows count and one total per currency, never summed', async () => {
+  it('shows the count and no amount totals (the amount is hidden)', async () => {
     mount();
     const col = await column('NEW');
     expect(within(col).getByTestId('lead-count').textContent).toBe('1');
-    const totals = within(col).getAllByTestId('lead-column-total');
-    expect(totals.map((t) => t.textContent)).toEqual([
-      formatAmount('150000.00', 'UZS'),
-      formatAmount('0.30', 'USD'),
-    ]);
+    expect(within(col).queryAllByTestId('lead-column-total')).toHaveLength(0);
   });
 
   it('marks the top accent by stage kind', async () => {
@@ -456,9 +451,7 @@ describe('LeadsBoard filters and views', () => {
     expect(within(rows[0]).getByTestId('lead-list-stage').textContent).toBe(
       'New',
     );
-    expect(within(rows[0]).getByTestId('lead-list-amount').textContent).toBe(
-      formatAmount('150000.00', 'UZS'),
-    );
+    expect(within(rows[0]).queryByTestId('lead-list-amount')).toBeNull();
     fireEvent.click(within(rows[1]).getByTestId('lead-list-open'));
     expect(
       within(screen.getByTestId('lead-panel')).getByRole('heading', {

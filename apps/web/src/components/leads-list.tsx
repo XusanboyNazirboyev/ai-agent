@@ -5,6 +5,7 @@ import { useRef, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { formatAmount } from '@/lib/currencies';
+import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
 import type {
   BoardStageView,
   LeadPipelineItem,
@@ -150,12 +151,14 @@ function ListRow(props: {
           {stageLabel(stage, t)}
         </Badge>
       ) : null}
-      <span
-        className="min-w-0 text-sm font-medium"
-        data-testid="lead-list-amount"
-      >
-        {item.amount ? formatAmount(item.amount, item.currency, locale) : ''}
-      </span>
+      {LEAD_AMOUNT_ENABLED ? (
+        <span
+          className="min-w-0 text-sm font-medium"
+          data-testid="lead-list-amount"
+        >
+          {item.amount ? formatAmount(item.amount, item.currency, locale) : ''}
+        </span>
+      ) : null}
       {item.owner ? (
         <span
           role="img"

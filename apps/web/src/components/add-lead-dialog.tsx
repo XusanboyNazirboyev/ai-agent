@@ -11,6 +11,7 @@ import {
   rememberLastCurrency,
 } from '@/lib/currencies';
 import type { BoardStageView, LeadPipelineItem, TeamMember } from '@/lib/types';
+import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
 import { useShell } from './app-shell';
 import { stageLabel } from './lead-board-utils';
 import { Button } from './ui/button';
@@ -66,9 +67,10 @@ export function AddLeadDialog(props: {
   // stage as soon as the stages arrive, or the form could never be submitted.
   const firstOpenId = openStages[0]?.id ?? '';
   useEffect(() => {
-    if (props.open && stageId === '' && firstOpenId !== '')
-      setStageId(firstOpenId);
-  }, [props.open, stageId, firstOpenId]);
+    // Functional update: a stage chosen by the reset effect above must win.
+    if (props.open && firstOpenId !== '')
+      setStageId((current) => (current === '' ? firstOpenId : current));
+  }, [props.open, firstOpenId]);
 
   const team = useQuery({
     queryKey: ['team'],
@@ -77,7 +79,7 @@ export function AddLeadDialog(props: {
   });
   const operators = (team.data?.operators ?? []).filter((o) => o.isActive);
 
-  const amountText = amount.trim();
+  const amountText = LEAD_AMOUNT_ENABLED ? amount.trim() : '';
   const amountOk = amountText === '' || parseAmount(amountText) !== null;
   const canSubmit = name.trim() !== '' && stageId !== '' && amountOk;
 
@@ -173,35 +175,37 @@ export function AddLeadDialog(props: {
             ))}
           </select>
         </label>
-        <div className="flex min-w-0 flex-wrap items-end gap-2">
-          <label className="flex min-w-0 flex-1 basis-32 flex-col gap-1 text-sm font-medium">
-            {t('opportunity.amount')}
-            <input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
-              maxLength={15}
-              aria-invalid={!amountOk}
-              className={fieldClass}
-              data-testid="lead-add-amount"
-            />
-          </label>
-          <label className="flex min-w-0 basis-24 flex-col gap-1 text-sm font-medium">
-            {t('opportunity.currency')}
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={fieldClass}
-              data-testid="lead-add-currency"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        {LEAD_AMOUNT_ENABLED ? (
+          <div className="flex min-w-0 flex-wrap items-end gap-2">
+            <label className="flex min-w-0 flex-1 basis-32 flex-col gap-1 text-sm font-medium">
+              {t('opportunity.amount')}
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                inputMode="decimal"
+                maxLength={15}
+                aria-invalid={!amountOk}
+                className={fieldClass}
+                data-testid="lead-add-amount"
+              />
+            </label>
+            <label className="flex min-w-0 basis-24 flex-col gap-1 text-sm font-medium">
+              {t('opportunity.currency')}
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className={fieldClass}
+                data-testid="lead-add-currency"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
         <label className="flex flex-col gap-1 text-sm font-medium">
           {t('opportunity.source')}
           <input

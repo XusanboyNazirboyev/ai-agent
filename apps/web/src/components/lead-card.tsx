@@ -4,6 +4,7 @@ import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { channelName } from '@/lib/channel-names';
 import { formatAmount } from '@/lib/currencies';
+import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
 import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
@@ -185,7 +186,7 @@ export function LeadCard(props: {
           ) : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-          {item.amount ? (
+          {LEAD_AMOUNT_ENABLED && item.amount ? (
             <span
               data-testid="lead-card-amount"
               className="min-w-0 font-semibold text-fg"
