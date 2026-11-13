@@ -396,7 +396,7 @@ function PipelineCard(props: {
           aria-controls={bodyId}
           data-testid="pipeline-toggle"
           onClick={() => setOpen((v) => !v)}
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left hover:bg-surface-2"
+          className="flex min-h-11 min-w-0 flex-1 basis-48 items-center gap-2 rounded-lg text-left hover:bg-surface-2"
         >
           <Icon
             name={open ? 'chevronDown' : 'chevronRight'}
