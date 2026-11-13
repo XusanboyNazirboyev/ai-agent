@@ -137,7 +137,7 @@ export function LeadOpportunity(props: {
           value={ownerId}
           onChange={(e) => changeOwner(e.target.value)}
           disabled={save.isPending}
-          className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+          className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
           aria-label={t('opportunity.owner')}
         >
           <option value="">{t('opportunity.unassigned')}</option>
@@ -151,7 +151,7 @@ export function LeadOpportunity(props: {
     ) : (
       <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
         <span>{t('opportunity.owner')}</span>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-sm text-fg">
             {ownerName ?? t('opportunity.unassigned')}
           </span>
@@ -198,11 +198,11 @@ export function LeadOpportunity(props: {
         ) : null}
       </div>
       {showReadonly ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3">
           {ownerSelect}
           <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
             <span>{t('opportunity.amount')}</span>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
@@ -215,7 +215,7 @@ export function LeadOpportunity(props: {
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
                 disabled={!canEdit || isViewer || save.isPending}
-                className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+                className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
                 aria-label={t('opportunity.currency')}
                 data-testid="opportunity-currency"
               >
@@ -244,7 +244,7 @@ export function LeadOpportunity(props: {
           </div>
           <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
             <span>{t('opportunity.source')}</span>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
@@ -268,7 +268,7 @@ export function LeadOpportunity(props: {
           </div>
           <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
             <span>{t('opportunity.closeDate')}</span>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
                 type="date"
                 value={closeDate}
@@ -293,7 +293,7 @@ export function LeadOpportunity(props: {
           {lost ? (
             <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted sm:col-span-2">
               <span>{t('opportunity.lostReason')}</span>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <input
                   value={lostReason}
                   readOnly

@@ -335,19 +335,19 @@ export function LeadsBoard(): ReactNode {
         <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
           <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm text-muted">
             <label className="sr-only">{t('leads.funnelRange')}</label>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 flex-wrap gap-2">
               <input
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className={fieldClass}
+                className={`${fieldClass} min-w-0 flex-1 basis-36`}
                 aria-label={t('leads.funnelFrom')}
               />
               <input
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
-                className={fieldClass}
+                className={`${fieldClass} min-w-0 flex-1 basis-36`}
                 aria-label={t('leads.funnelTo')}
               />
             </div>
