@@ -1177,5 +1177,7 @@
   "connectorRoles.save": "Роль сохранена.",
   "errors.CONNECTOR_NOT_ACTIVE": "Коннектор не активен.",
   "errors.CONNECTOR_UNAVAILABLE": "Коннектор недоступен.",
-  "errors.CONNECTOR_CAPABILITY_MISSING": "Коннектор не предоставляет то, что нужно этой роли."
+  "errors.CONNECTOR_CAPABILITY_MISSING": "Коннектор не предоставляет то, что нужно этой роли.",
+  "leads.aiSuggestionChip": "Предложение ИИ",
+  "leads.movedTo": "Перенесён в «{stage}»"
 }

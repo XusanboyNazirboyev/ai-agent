@@ -1,7 +1,7 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useId, useState, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { formatAmount } from '@/lib/currencies';
@@ -54,9 +54,9 @@ export function LeadColumn(props: {
   draggedToStageId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
-  onDragOverStage: (stageId: string) => void;
-  onDragLeaveStage: () => void;
+  onDragOver: (stageId: string | null) => void;
   onDrop: (targetStageId: string) => void;
+  onSwipe: (item: LeadPipelineItem, direction: 'next' | 'prev') => void;
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
   onAnnounce: (message: string) => void;
@@ -83,7 +83,6 @@ export function LeadColumn(props: {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const [dragOver, setDragOver] = useState(false);
   const isDraggingInto =
     props.draggedId !== null && props.draggedToStageId === stage.id;
 
@@ -92,26 +91,14 @@ export function LeadColumn(props: {
       aria-label={name}
       data-testid={`lead-column-${stage.code ?? stage.id}`}
       data-collapsed={props.collapsed ? 'true' : 'false'}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-        props.onDragOverStage(stage.id);
-      }}
-      onDragLeave={() => {
-        setDragOver(false);
-        props.onDragLeaveStage();
-      }}
-      onDrop={() => {
-        setDragOver(false);
-        props.onDrop(stage.id);
-      }}
+      data-stage-drop={stage.id}
       className={`flex shrink-0 flex-col self-start rounded-2xl border border-t-[3px] border-line bg-surface shadow-card ${ACCENT[stage.kind]} ${
         props.single
           ? 'w-full'
           : props.collapsed
             ? 'w-[min(85vw,14rem)] md:w-56'
             : 'w-[min(85vw,21rem)] md:w-80'
-      } ${dragOver ? 'ring-2 ring-primary' : ''} ${isDraggingInto ? 'bg-primary-soft' : ''}`}
+      } ${isDraggingInto ? 'bg-primary-soft ring-2 ring-primary' : ''}`}
     >
       <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -188,6 +175,10 @@ export function LeadColumn(props: {
             draggedToStageId={props.draggedToStageId}
             onDragStart={props.onDragStart}
             onDragEnd={props.onDragEnd}
+            onDragOver={props.onDragOver}
+            onDrop={props.onDrop}
+            swipe={!!props.single}
+            onSwipe={props.onSwipe}
             onOpen={props.onOpen}
             onRequestMove={props.onRequestMove}
             onAnnounce={props.onAnnounce}

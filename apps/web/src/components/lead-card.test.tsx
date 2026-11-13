@@ -47,6 +47,10 @@ function renderCard(
     onOpen: vi.fn(),
     onRequestMove: vi.fn(),
     onAnnounce: vi.fn(),
+    onDragOver: vi.fn(),
+    onDrop: vi.fn(),
+    swipe: false,
+    onSwipe: vi.fn(),
     ...over,
   };
   render(
@@ -57,8 +61,34 @@ function renderCard(
   return props;
 }
 
+/** jsdom has no PointerEvent: a mouse event carrying the pointer fields. */
+function pointer(
+  el: Element,
+  type: 'pointerDown' | 'pointerMove' | 'pointerUp',
+  init: {
+    pointerId: number;
+    pointerType: string;
+    clientX: number;
+    clientY: number;
+    button?: number;
+  },
+): void {
+  const event = new MouseEvent(type.toLowerCase(), {
+    bubbles: true,
+    cancelable: true,
+    clientX: init.clientX,
+    clientY: init.clientY,
+    button: init.button ?? 0,
+  });
+  Object.defineProperty(event, 'pointerId', { value: init.pointerId });
+  Object.defineProperty(event, 'pointerType', { value: init.pointerType });
+  act(() => {
+    el.dispatchEvent(event);
+  });
+}
+
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
   vi.setSystemTime(NOW);
   state.role = 'OPERATOR';
 });
@@ -159,12 +189,23 @@ describe('LeadCard', () => {
     expect(screen.queryByTestId('lead-card-age')).toBeNull();
   });
 
-  it('shows one "AI suggests" chip that opens the panel', () => {
+  it('shows one generic "AI suggestion" chip, without a stage name, that opens the panel', () => {
     const props = renderCard(makeLead({ suggestedStageId: 'stage-qual' }));
     const chip = screen.getByTestId('lead-card-stage-suggested');
-    expect(chip.textContent).toBe('leads.aiSuggestsChip|Qualified');
+    expect(chip.textContent).toBe('leads.aiSuggestionChip');
     fireEvent.click(chip);
     expect(props.onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('never shows a stage name or stage control on the card', () => {
+    renderCard(
+      makeLead({ suggestedStageId: 'stage-qual', stageSetBy: 'AGENT' }),
+    );
+    const visible = screen.getByTestId('lead-card').textContent ?? '';
+    for (const stage of STAGES) expect(visible).not.toContain(stage.name!);
+    expect(
+      within(screen.getByTestId('lead-card')).queryByRole('combobox'),
+    ).toBeNull();
   });
 
   it('shows no chip when the suggestion is the current stage', () => {
@@ -196,21 +237,197 @@ describe('LeadCard', () => {
     expect(handle).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('a VIEWER gets no drag handle and a non-draggable card', () => {
+  it('a VIEWER gets no drag handle and cannot drag with a pointer', () => {
     state.role = 'VIEWER';
-    renderCard(makeLead());
+    const props = renderCard(makeLead());
     expect(screen.queryByTestId('lead-card-handle')).toBeNull();
-    expect(screen.getByTestId('lead-card')).toHaveAttribute(
-      'draggable',
-      'false',
-    );
+    const card = screen.getByTestId('lead-card');
+    card.setPointerCapture = vi.fn();
+    pointer(card, 'pointerDown', {
+      pointerId: 9,
+      pointerType: 'mouse',
+      clientX: 0,
+      clientY: 0,
+    });
+    pointer(card, 'pointerMove', {
+      pointerId: 9,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 0,
+    });
+    pointer(card, 'pointerUp', {
+      pointerId: 9,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 0,
+    });
+    expect(props.onDragStart).not.toHaveBeenCalled();
+    expect(props.onDrop).not.toHaveBeenCalled();
   });
 
-  it('pointer drag still reports the lead id', () => {
+  it('a mouse drag past the slop reports start, hover and drop on the column under it', () => {
     const props = renderCard(makeLead());
-    act(() => {
-      fireEvent.dragStart(screen.getByTestId('lead-card'));
+    const card = screen.getByTestId('lead-card');
+    const column = document.createElement('section');
+    column.dataset.stageDrop = 'stage-qual';
+    document.body.appendChild(column);
+    Object.defineProperty(document, 'elementsFromPoint', {
+      configurable: true,
+      value: () => [column],
+    });
+    card.setPointerCapture = vi.fn();
+    pointer(card, 'pointerDown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    });
+    pointer(card, 'pointerMove', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 12,
+      clientY: 10,
+    });
+    expect(props.onDragStart).not.toHaveBeenCalled();
+    pointer(card, 'pointerMove', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 30,
     });
     expect(props.onDragStart).toHaveBeenCalledWith('lead-1');
+    expect(props.onDragOver).toHaveBeenLastCalledWith('stage-qual');
+    expect(card.style.transform).toBe('translate(190px, 20px)');
+    pointer(card, 'pointerUp', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 30,
+    });
+    expect(props.onDrop).toHaveBeenCalledWith('stage-qual');
+    expect(props.onDragEnd).toHaveBeenCalled();
+    // The click that ends a drag does not open the panel.
+    fireEvent.click(card);
+    expect(props.onOpen).not.toHaveBeenCalled();
+    column.remove();
+    Reflect.deleteProperty(document, 'elementsFromPoint');
+  });
+
+  it('a plain click still opens the panel (no drag below the slop)', () => {
+    const props = renderCard(makeLead());
+    const card = screen.getByTestId('lead-card');
+    pointer(card, 'pointerDown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    });
+    pointer(card, 'pointerUp', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 10,
+      clientY: 10,
+    });
+    fireEvent.click(card);
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(props.onDragStart).not.toHaveBeenCalled();
+  });
+
+  it('swipe mode: a long drag to the right asks to move next, a short one snaps back', () => {
+    const props = renderCard(makeLead(), 'stage-qual', { swipe: true });
+    const card = screen.getByTestId('lead-card');
+    card.setPointerCapture = vi.fn();
+    card.getBoundingClientRect = () => ({ width: 300 }) as DOMRect;
+    pointer(card, 'pointerDown', {
+      pointerId: 2,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    pointer(card, 'pointerMove', {
+      pointerId: 2,
+      pointerType: 'mouse',
+      clientX: 50,
+      clientY: 40,
+    });
+    expect(card.style.transform).toBe('translate(50px, 0px)');
+    pointer(card, 'pointerUp', {
+      pointerId: 2,
+      pointerType: 'mouse',
+      clientX: 50,
+      clientY: 40,
+    });
+    expect(props.onSwipe).not.toHaveBeenCalled();
+    expect(card.style.transform).toBe('');
+    pointer(card, 'pointerDown', {
+      pointerId: 3,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    pointer(card, 'pointerMove', {
+      pointerId: 3,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 0,
+    });
+    pointer(card, 'pointerUp', {
+      pointerId: 3,
+      pointerType: 'mouse',
+      clientX: 200,
+      clientY: 0,
+    });
+    expect(props.onSwipe).toHaveBeenCalledWith(props.item, 'next');
+  });
+
+  it('a touch that moves before the long press is a scroll, not a drag', () => {
+    vi.useFakeTimers();
+    const props = renderCard(makeLead());
+    const card = screen.getByTestId('lead-card');
+    pointer(card, 'pointerDown', {
+      pointerId: 4,
+      pointerType: 'touch',
+      clientX: 0,
+      clientY: 0,
+    });
+    pointer(card, 'pointerMove', {
+      pointerId: 4,
+      pointerType: 'touch',
+      clientX: 0,
+      clientY: 60,
+    });
+    vi.advanceTimersByTime(400);
+    expect(props.onDragStart).not.toHaveBeenCalled();
+  });
+
+  it('a touch held in place starts the drag after the long press', () => {
+    vi.useFakeTimers();
+    const props = renderCard(makeLead());
+    const card = screen.getByTestId('lead-card');
+    card.setPointerCapture = vi.fn();
+    pointer(card, 'pointerDown', {
+      pointerId: 5,
+      pointerType: 'touch',
+      clientX: 0,
+      clientY: 0,
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(props.onDragStart).toHaveBeenCalledWith('lead-1');
+  });
+
+  it('the handle is the only element with touch-action none', () => {
+    renderCard(makeLead());
+    expect(screen.getByTestId('lead-card-handle').className).toContain(
+      'touch-none',
+    );
+    expect(screen.getByTestId('lead-card').className).not.toContain(
+      'touch-none',
+    );
   });
 });

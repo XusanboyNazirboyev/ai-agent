@@ -182,11 +182,30 @@ export function LeadsBoard(): ReactNode {
     setDraggedToStageId(null);
     if (!item) return;
     const target = columns.find((s) => s.id === targetStageId);
+    if (currentStageId(item, columns) === targetStageId) return;
     requestMove(item, targetStageId);
     setDragStatus(
       t(
         target?.kind === 'LOST' ? 'leads.dragDroppedLost' : 'leads.dragDropped',
       ),
+    );
+  }
+
+  /** Mobile swipe: the next stage to the right, the previous to the left. */
+  function handleSwipe(
+    item: LeadPipelineItem,
+    direction: 'next' | 'prev',
+  ): void {
+    const index = columns.findIndex(
+      (s) => s.id === currentStageId(item, columns),
+    );
+    const target = columns[index + (direction === 'next' ? 1 : -1)];
+    if (!target) return;
+    requestMove(item, target.id);
+    setDragStatus(
+      target.kind === 'LOST'
+        ? t('leads.dragDroppedLost')
+        : t('leads.movedTo', { stage: stageLabel(target, t) }),
     );
   }
 
@@ -402,6 +421,7 @@ export function LeadsBoard(): ReactNode {
       {board.isSuccess && columns.length > 0 && view === 'board' ? (
         <div
           aria-label={t('leads.columns')}
+          data-testid="leads-board-scroller"
           className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2"
         >
           {visibleColumns.map((stage) => (
@@ -418,8 +438,8 @@ export function LeadsBoard(): ReactNode {
               draggedToStageId={draggedToStageId}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
-              onDragOverStage={(id) => setDraggedToStageId(id)}
-              onDragLeaveStage={() => setDraggedToStageId(null)}
+              onDragOver={setDraggedToStageId}
+              onSwipe={handleSwipe}
               onDrop={handleDrop}
               onOpen={openLead}
               onRequestMove={requestMove}

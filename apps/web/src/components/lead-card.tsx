@@ -8,6 +8,7 @@ import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
+import { useCardDrag } from './use-card-drag';
 import {
   ageDays,
   ageTone,
@@ -29,6 +30,11 @@ export function LeadCard(props: {
   draggedToStageId: string | null;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
+  onDragOver: (stageId: string | null) => void;
+  onDrop: (stageId: string) => void;
+  /** One column at a time (mobile): swipe the card to the next/previous stage. */
+  swipe: boolean;
+  onSwipe: (item: LeadPipelineItem, direction: 'next' | 'prev') => void;
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   /** Move (or, for a LOST stage, ask for the reason) from the keyboard path. */
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
@@ -48,7 +54,18 @@ export function LeadCard(props: {
     null,
   );
   const [keyboardStatus, setKeyboardStatus] = useState('');
-  const pickedUp = isDragging || keyboardDragging;
+  const drag = useCardDrag({
+    enabled: canEdit,
+    swipe: props.swipe,
+    index: props.stages.findIndex((s) => s.id === stageId),
+    count: props.stages.length,
+    onStart: () => props.onDragStart(item.id),
+    onOver: props.onDragOver,
+    onDropOn: props.onDrop,
+    onSwipe: (direction) => props.onSwipe(item, direction),
+    onEnd: props.onDragEnd,
+  });
+  const pickedUp = isDragging || keyboardDragging || drag.dragging;
   const name = item.contact.name ?? t('list.unnamed');
   const terminal = props.stage.kind !== 'OPEN';
 
@@ -113,14 +130,14 @@ export function LeadCard(props: {
       <article
         data-testid="lead-card"
         data-state={pickedUp ? 'picked-up' : 'idle'}
-        draggable={canEdit}
-        onDragStart={() => props.onDragStart(item.id)}
-        onDragEnd={props.onDragEnd}
+        style={drag.style}
+        {...drag.handlers}
         onClick={(event) => {
+          if (drag.consumeClick()) return;
           if ((event.target as HTMLElement).closest('button, a')) return;
           props.onOpen(item, openRef.current);
         }}
-        className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-2.5 transition-colors hover:border-primary ${
+        className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-2.5 hover:border-primary ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
           pickedUp
             ? 'border-primary bg-primary-soft ring-1 ring-primary'
             : isDraggedHere
@@ -153,7 +170,7 @@ export function LeadCard(props: {
                   cancelKeyboardDrag();
                   setKeyboardStatus('');
                 }}
-                className="grid min-h-9 min-w-9 cursor-grab place-items-center rounded-md text-muted hover:bg-surface-2"
+                className="grid min-h-9 min-w-9 cursor-grab touch-none place-items-center rounded-md text-muted hover:bg-surface-2"
               >
                 <span aria-hidden="true">⠿</span>
               </button>
@@ -235,9 +252,7 @@ export function LeadCard(props: {
             onClick={() => props.onOpen(item, openRef.current)}
             className="inline-flex min-h-9 min-w-0 max-w-full items-center rounded-full bg-warning-soft px-2.5 text-left text-xs font-medium text-warning-fg"
           >
-            <span className="truncate">
-              {t('leads.aiSuggestsChip', { stage: stageLabel(suggested, t) })}
-            </span>
+            <span className="truncate">{t('leads.aiSuggestionChip')}</span>
           </button>
         ) : null}
       </article>

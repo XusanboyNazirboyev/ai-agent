@@ -1177,5 +1177,7 @@
   "connectorRoles.save": "Role saved.",
   "errors.CONNECTOR_NOT_ACTIVE": "The connector is not active.",
   "errors.CONNECTOR_UNAVAILABLE": "The connector is not usable.",
-  "errors.CONNECTOR_CAPABILITY_MISSING": "The connector does not offer what this role needs."
+  "errors.CONNECTOR_CAPABILITY_MISSING": "The connector does not offer what this role needs.",
+  "leads.aiSuggestionChip": "AI suggestion",
+  "leads.movedTo": "Moved to {stage}"
 }

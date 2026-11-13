@@ -1177,5 +1177,7 @@
   "connectorRoles.save": "Rol saqlandi.",
   "errors.CONNECTOR_NOT_ACTIVE": "Connector faol emas.",
   "errors.CONNECTOR_UNAVAILABLE": "Connector foydalanish uchun mavjud emas.",
-  "errors.CONNECTOR_CAPABILITY_MISSING": "Connector ushbu rolga kerak bo‘lgan imkoniyatni takhmil qilmaydi."
+  "errors.CONNECTOR_CAPABILITY_MISSING": "Connector ushbu rolga kerak bo‘lgan imkoniyatni takhmil qilmaydi.",
+  "leads.aiSuggestionChip": "AI taklifi",
+  "leads.movedTo": "«{stage}» bosqichiga o‘tkazildi"
 }
