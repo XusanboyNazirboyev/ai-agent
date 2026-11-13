@@ -453,7 +453,7 @@ export function LeadsBoard(): ReactNode {
         <div
           aria-label={t('leads.columns')}
           data-testid="leads-board-scroller"
-          className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2"
+          className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2 md:max-h-[calc(100dvh-14rem)]"
         >
           {visibleColumns.map((stage) => (
             <LeadColumn

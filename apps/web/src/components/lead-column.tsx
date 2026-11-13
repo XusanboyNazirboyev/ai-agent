@@ -101,9 +101,9 @@ export function LeadColumn(props: {
           : props.collapsed
             ? 'w-[min(85vw,14rem)] md:w-56'
             : 'w-[min(85vw,21rem)] md:w-80'
-      } ${isDraggingInto ? 'bg-primary-soft ring-2 ring-primary' : ''}`}
+      } md:flex-1 md:min-h-0 ${isDraggingInto ? 'bg-primary-soft ring-2 ring-primary' : ''}`}
     >
-      <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5">
+      <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5 md:sticky md:top-0 md:z-20 bg-surface/90">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
             {name}
@@ -152,7 +152,7 @@ export function LeadColumn(props: {
       </header>
       <ul
         id={listId}
-        className={`min-h-0 flex-col gap-2 p-2 ${props.collapsed ? 'hidden' : 'flex'}`}
+        className={`min-h-0 flex-col gap-2 p-2 ${props.collapsed ? 'hidden' : 'flex'} md:overflow-y-auto md:flex-1`}
       >
         {query.isPending && !props.collapsed ? (
           <li role="status">
