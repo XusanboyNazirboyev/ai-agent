@@ -22,6 +22,7 @@
     "db:generate": "prisma generate --schema prisma/schema.prisma",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "prisma db seed --schema prisma/schema.prisma",
+    "backfill:connector-roles": "tsx scripts/backfill-connector-roles.ts",
     "telegram:account": "tsx scripts/dev-telegram-account.ts",
     "channel:test-account": "tsx scripts/channel-test-account.ts",
     "telegram:proxy": "tsx scripts/telegram-dev-proxy.ts",

@@ -94,6 +94,22 @@ async function ensurePipelinesRlsMigration(): Promise<void> {
   );
 }
 
+async function ensureConnectorRolesRlsMigration(): Promise<void> {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'prisma/migrations/20261123090000_tenant_connector_roles/migration.sql',
+    ),
+    'utf8',
+  );
+  // Only the RLS part is re-applied (idempotent: DROP POLICY IF EXISTS).
+  await db.$executeRawUnsafe(
+    sql.slice(
+      sql.indexOf('ALTER TABLE "tenant_connector_roles" ENABLE ROW LEVEL'),
+    ),
+  );
+}
+
 /**
  * Policies exist, RLS is on, and a foreign tenant sees no row of `table`
  * while the owning tenant does (same probe as persons, ADR 050).
@@ -473,6 +489,35 @@ describe('P0.7 RLS groundwork (ADR 050)', () => {
       tenantB.id,
       async (tx) =>
         (await tx.pipeline.findMany({ where: { id: pipeline.id } })).length,
+    );
+  });
+
+  it('isolates tenant_connector_roles (ADR 059) per tenant under RLS', async () => {
+    await ensureConnectorRolesRlsMigration();
+    const tenantA = await createTenant();
+    const tenantB = await createTenant();
+    const connector = await db.tenantConnector.create({
+      data: {
+        tenantId: tenantA.id,
+        connectorKey: 'mock',
+        status: 'ACTIVE',
+        config: { sourceSystem: 'mock-education' },
+      },
+    });
+    await db.tenantConnectorRole.create({
+      data: {
+        tenantId: tenantA.id,
+        role: 'CATALOG',
+        tenantConnectorId: connector.id,
+      },
+    });
+    await expectTenantIsolation(
+      'tenant_connector_roles',
+      tenantA.id,
+      tenantB.id,
+      async (tx) =>
+        (await tx.tenantConnectorRole.findMany({ where: { role: 'CATALOG' } }))
+          .length,
     );
   });
 });

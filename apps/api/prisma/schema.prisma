@@ -243,6 +243,7 @@ model Tenant {
 
   connectors      TenantConnector[]
   catalogSyncRuns CatalogSyncRun[]
+  connectorRoles TenantConnectorRole[]
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
   internalNotes         InternalNote[]
@@ -311,11 +312,35 @@ model TenantConnector {
   tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   syncRuns      CatalogSyncRun[]
   secrets       ConnectorSecret[]
+  roles         TenantConnectorRole[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, connectorKey])
   @@index([tenantId, status])
   @@map("tenant_connectors")
+}
+
+/// What a connector is used for (ADR 059).
+enum ConnectorRole {
+  CATALOG
+  LEAD_SINK
+  ACTIONS
+}
+
+/// Binds one connector to one role of a tenant (ADR 059). The primary key
+/// allows at most one connector per role; deleting the connector unbinds it.
+model TenantConnectorRole {
+  tenantId          String          @map("tenant_id") @db.Uuid
+  role              ConnectorRole
+  tenantConnectorId String          @map("tenant_connector_id") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connector         TenantConnector @relation(fields: [tenantId, tenantConnectorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, role])
+  @@index([tenantId, tenantConnectorId])
+  @@map("tenant_connector_roles")
 }
 
 /// One catalog synchronisation attempt for a tenant connector. A partial

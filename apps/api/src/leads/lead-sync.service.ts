@@ -11,6 +11,7 @@ import {
   afterFailure,
   beforeAttempt,
 } from '../connectors/operations/write-policy.js';
+import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 
@@ -58,34 +59,18 @@ const errorCodeOf = (error: unknown): string =>
 export class LeadSyncService {
   private readonly logger = new Logger(LeadSyncService.name);
   private readonly operations: ConnectorOperations;
+  private readonly selector: ConnectorSelector;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly loader: TenantConnectorLoader,
   ) {
     this.operations = new ConnectorOperations(prisma);
+    this.selector = new ConnectorSelector(prisma, loader);
   }
 
-  private async connectorFor(
-    tenantId: string,
-  ): Promise<CrmConnector | undefined> {
-    const rows = await this.prisma.tenantConnector.findMany({
-      where: { tenantId, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-    });
-    for (const row of rows) {
-      try {
-        const connector = await this.loader.create(row);
-        if (
-          connector.capabilities.createLead &&
-          typeof connector.createLead === 'function'
-        )
-          return connector;
-      } catch {
-        // An unusable connector config is skipped, like in the agent.
-      }
-    }
-    return undefined;
+  private connectorFor(tenantId: string): Promise<CrmConnector | undefined> {
+    return this.selector.select(tenantId, 'LEAD_SINK', 'createLead');
   }
 
   private ref(tenantId: string, leadId: string): OperationRef {

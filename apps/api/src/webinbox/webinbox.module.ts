@@ -7,6 +7,8 @@ import {
   BITRIX24_CONNECT_TRANSPORT,
   ConnectorsController,
 } from './connectors.controller.js';
+import { ConnectorsModule } from '../connectors/connectors.module.js';
+import { ConnectorRolesController } from './connector-roles.controller.js';
 import { KnowledgeModule } from '../knowledge/knowledge.module.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
@@ -60,6 +62,7 @@ import { ExportLock } from '../exports/export-lock.js';
 @Module({
   imports: [
     PersistenceModule,
+    ConnectorsModule,
     KnowledgeModule,
     SecretsModule,
     AccessModule,
@@ -81,6 +84,7 @@ import { ExportLock } from '../exports/export-lock.js';
     TagsController,
     CustomFieldsController,
     ConnectorsController,
+    ConnectorRolesController,
     LeadsController,
     AnalyticsController,
     LeadPipelineController,
