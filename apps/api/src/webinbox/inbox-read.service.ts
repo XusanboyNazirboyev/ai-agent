@@ -228,8 +228,12 @@ export class InboxReadService {
         )`);
       }
       if (options.q) {
-        const nameQuery = `%${options.q.slice(0, 80)}%`;
-        const phoneQuery = `%${options.q.slice(0, 40)}%`;
+        // LIKE wildcards in the search text are literals, as with Prisma's
+        // `contains`.
+        const like = (text: string): string =>
+          `%${text.replace(/[\\%_]/g, '\\$&')}%`;
+        const nameQuery = like(options.q.slice(0, 80));
+        const phoneQuery = like(options.q.slice(0, 40));
         filters.push(Prisma.sql`(
           ct.name ILIKE ${nameQuery}
           OR ct.phone LIKE ${phoneQuery}
@@ -248,7 +252,10 @@ export class InboxReadService {
         WITH waiting_candidates AS (
           SELECT
             c.id,
-            COALESCE(MIN(h.opened_at), c.updated_at) AS "sortAt"
+            -- Milliseconds: the cursor round-trips through a JS Date, which
+            -- cannot hold PostgreSQL's microseconds (a sub-millisecond tail
+            -- would make the last row of a page reappear on the next one).
+            date_trunc('milliseconds', COALESCE(MIN(h.opened_at), c.updated_at)) AS "sortAt"
           FROM conversations c
           LEFT JOIN handovers h
             ON h.tenant_id = c.tenant_id
@@ -262,12 +269,14 @@ export class InboxReadService {
         )
         SELECT id, "sortAt"
         FROM waiting_candidates
-        ${cursor
-          ? Prisma.sql`WHERE (
+        ${
+          cursor
+            ? Prisma.sql`WHERE (
               "sortAt" > ${new Date(cursor.t)}
               OR ("sortAt" = ${new Date(cursor.t)} AND id::text > ${cursor.id})
             )`
-          : Prisma.empty}
+            : Prisma.empty
+        }
         ORDER BY "sortAt" ASC, id::text ASC
         LIMIT ${limit + 1}
       `);
@@ -303,19 +312,21 @@ export class InboxReadService {
       const items = page.flatMap((candidate) => {
         const row = byId.get(candidate.id);
         if (!row) return [];
-        return [{
-          id: row.id,
-          state: row.state,
-          contactName: row.contact.name,
-          language: row.language,
-          leadScore: row.leads[0]?.score ?? null,
-          leadStatus: row.leads[0]?.status ?? null,
-          leadScoreSetByOperator: row.leads[0]?.scoreSetByOperator ?? false,
-          assignedOperatorId: row.assignedOperatorId,
-          waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
-          slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
-          updatedAt: row.updatedAt.toISOString(),
-        }];
+        return [
+          {
+            id: row.id,
+            state: row.state,
+            contactName: row.contact.name,
+            language: row.language,
+            leadScore: row.leads[0]?.score ?? null,
+            leadStatus: row.leads[0]?.status ?? null,
+            leadScoreSetByOperator: row.leads[0]?.scoreSetByOperator ?? false,
+            assignedOperatorId: row.assignedOperatorId,
+            waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
+            slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
+            updatedAt: row.updatedAt.toISOString(),
+          },
+        ];
       });
       const last = page.at(-1);
       return {
