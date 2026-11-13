@@ -74,6 +74,8 @@ beforeAll(() => {
 let leads: LeadPipelineItem[];
 let pipelinesBody: unknown;
 let failMove: boolean;
+/** After a refused move the refetch never answers: only the rollback can restore the card. */
+let freezeLists = false;
 
 function setupApi(): void {
   vi.mocked(api).mockImplementation((path: string, options?: unknown) => {
@@ -83,6 +85,7 @@ function setupApi(): void {
     if (path.startsWith('/api/v1/pipelines/pipe-1/board'))
       return Promise.resolve({ stages: STAGES });
     if (path.startsWith('/api/v1/leads?')) {
+      if (freezeLists) return new Promise(() => {});
       const q = new URL(path, 'http://x').searchParams;
       const stageId = q.get('stageId');
       const items = leads.filter(
@@ -102,7 +105,10 @@ function setupApi(): void {
       });
     const move = path.match(/^\/api\/v1\/leads\/([^/]+)\/stage$/);
     if (move && opts?.method === 'PATCH') {
-      if (failMove) return Promise.reject(new Error('nope'));
+      if (failMove) {
+        freezeLists = true;
+        return Promise.reject(new Error('nope'));
+      }
       leads = leads.map((l) =>
         l.id === move[1] ? { ...l, pipelineStageId: opts.body!.stageId } : l,
       );
@@ -132,6 +138,7 @@ beforeEach(() => {
   });
   leads = [makeLead()];
   failMove = false;
+  freezeLists = false;
   pipelinesBody = {
     items: [{ id: 'pipe-1', name: null, position: 0, isDefault: true }],
   };
