@@ -602,6 +602,7 @@ function LeadCard(props: {
   const { t, formatDateTime } = useI18n();
   const { timeZone, operator } = useShell();
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
+  const canAct = operator.role !== 'VIEWER';
   const isDragging = props.draggedId === props.item.id;
   const isDraggedHere = props.draggedToStageId === props.currentStageId;
   // Optimistic stage selection while move is in flight/refetching.
@@ -609,6 +610,25 @@ function LeadCard(props: {
   // Keyboard drag state: Space picks up, arrows move target, Space drops, Escape cancels.
   const [keyboardDragging, setKeyboardDragging] = useState(false);
   const [keyboardTargetStage, setKeyboardTargetStage] = useState<string | null>(null);
+
+  const acceptSuggestion = useMutation({
+    mutationFn: () =>
+      api(`/api/v1/leads/${props.item.id}/stage-suggestion/accept`, {
+        method: 'POST',
+      }),
+  });
+  const dismissSuggestion = useMutation({
+    mutationFn: () =>
+      api(`/api/v1/leads/${props.item.id}/stage-suggestion/dismiss`, {
+        method: 'POST',
+      }),
+  });
+  const handBackToAi = useMutation({
+    mutationFn: () =>
+      api(`/api/v1/leads/${props.item.id}/hand-back-to-ai`, {
+        method: 'POST',
+      }),
+  });
 
   useEffect(() => {
     if (stageChoice && props.currentStageId === stageChoice) {
@@ -684,6 +704,19 @@ function LeadCard(props: {
               {props.item.score ? (
                 <Badge tone={SCORE_TONE[props.item.score]} dot>
                   {t(`score.${props.item.score}`)}
+                </Badge>
+              ) : null}
+              {props.item.stageSetBy === 'AGENT' ? (
+                <Badge tone="neutral" data-testid="lead-card-stage-by-ai">
+                  {t('leads.stageByAI')}
+                </Badge>
+              ) : null}
+              {props.item.suggestedStageId ? (
+                <Badge
+                  tone="warning"
+                  data-testid="lead-card-stage-suggested"
+                >
+                  {t('leads.stageSuggested')}
                 </Badge>
               ) : null}
               <Badge tone={STATE_TONE[props.item.conversation.state]} dot>
@@ -769,6 +802,44 @@ function LeadCard(props: {
               ))}
             </select>
           </label>
+        ) : null}
+        {canAct ? (
+          <div className="flex flex-wrap items-center gap-1 text-xs">
+            {props.item.suggestedStageId &&
+            props.item.suggestedStageId !== props.currentStageId ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => acceptSuggestion.mutate()}
+                  disabled={acceptSuggestion.isPending}
+                  data-testid="lead-accept-suggestion"
+                >
+                  {t('leads.acceptSuggestion')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => dismissSuggestion.mutate()}
+                  disabled={dismissSuggestion.isPending}
+                  data-testid="lead-dismiss-suggestion"
+                >
+                  {t('leads.dismissSuggestion')}
+                </Button>
+              </>
+            ) : null}
+            {props.item.stageSetBy === 'OPERATOR' && canEdit ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handBackToAi.mutate()}
+                disabled={handBackToAi.isPending}
+                data-testid="lead-hand-back-to-ai"
+              >
+                {t('leads.handBackToAi')}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
       </article>
