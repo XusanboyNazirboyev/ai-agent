@@ -20,7 +20,6 @@ import type {
   LeadPipelinePage,
   LeadScore,
   LeadStage,
-  LeadStatus,
   PipelineView,
   Tag,
 } from '@/lib/types';
@@ -87,7 +86,7 @@ export function LeadsBoard(): ReactNode {
     }
     const def = list.find((p) => p.isDefault);
     setActiveId((def ?? list[0]).id);
-  }, [list, urlPipeline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [list, urlPipeline]);
 
   const active = list.find((p) => p.id === activeId) ?? list[0];
   const stages = useQuery({
@@ -102,8 +101,7 @@ export function LeadsBoard(): ReactNode {
   const [closeBefore, setCloseBefore] = useState('');
   const [closeAfter, setCloseAfter] = useState('');
   const [tagId, setTagId] = useState('');
-  const [score, setScore] = useState('');
-  const filters: LeadFilters = { ownerId, source, closeBefore, closeAfter, tagId, score };
+  const filters: LeadFilters = { ownerId, source, closeBefore, closeAfter, tagId };
 
   function choose(next: PipelineView): void {
     setActiveId(next.id);
@@ -187,7 +185,6 @@ export function LeadsBoard(): ReactNode {
           setCloseBefore(next.closeBefore);
           setCloseAfter(next.closeAfter);
           setTagId(next.tagId);
-          setScore(next.score);
         }}
         onClear={() => {
           setOwnerId('');
@@ -195,7 +192,6 @@ export function LeadsBoard(): ReactNode {
           setCloseBefore('');
           setCloseAfter('');
           setTagId('');
-          setScore('');
         }}
       />
       {stages.isPending ? (
@@ -268,7 +264,6 @@ function LeadColumn(props: {
       if (props.filters.closeAfter)
         params.set('closeAfter', props.filters.closeAfter);
       if (props.filters.tagId) params.set('tagId', props.filters.tagId);
-      if (props.filters.score) params.set('score', props.filters.score);
       return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -355,83 +350,42 @@ function LeadCard(props: {
   const { timeZone, operator } = useShell();
   const queryClient = useQueryClient();
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
-  // Optimistic selections: keep the user's choice visible while a mutation is
-  // in flight or before the invalidated query refetch reflects it, so a
-  // background refetch cannot snap the controlled select back to stale data.
+  // Optimistic stage selection while move is in flight/refetching.
   const [stageChoice, setStageChoice] = useState<string | null>(null);
-  const [scoreChoice, setScoreChoice] = useState<LeadScore | null>(null);
-  const [statusChoice, setStatusChoice] = useState<LeadStatus | null>(null);
 
   useEffect(() => {
     if (stageChoice && props.currentStageId === stageChoice) {
       setStageChoice(null);
     }
   }, [props.currentStageId, stageChoice]);
-  useEffect(() => {
-    if (scoreChoice && props.item.score === scoreChoice) {
-      setScoreChoice(null);
-    }
-  }, [props.item.score, scoreChoice]);
-  useEffect(() => {
-    if (statusChoice && props.item.status === statusChoice) {
-      setStatusChoice(null);
-    }
-  }, [props.item.status, statusChoice]);
 
-  // Operator-set score and status (ADR 037) stay next to the funnel stage.
   const [lostDialog, setLostDialog] = useState(false);
   const [lostReasonDraft, setLostReasonDraft] = useState('');
-  const setField = useMutation({
-    mutationFn: (input: {
-      field: 'score' | 'status';
-      value: string;
-      lostReason?: string;
-    }) =>
-      api(
-        `/api/v1/leads/conversations/${props.item.conversation.id}/${input.field}`,
-        {
-          method: 'PUT',
-          body:
-            input.field === 'score'
-              ? { score: input.value === 'AUTO' ? null : input.value }
-              : input.lostReason !== undefined
-                ? { status: input.value, lostReason: input.lostReason }
-                : { status: input.value },
-        },
-      ),
-    onSettled: (_data, _error, input) => {
-      // The optimistic choice ends once the refetch has the server's answer,
-      // so a change made by another operator in the meantime is not hidden.
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['leads'] }),
-        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
-      ]).finally(() => {
-        if (input.field === 'score') setScoreChoice(null);
-        else setStatusChoice(null);
-      });
-    },
-    onError: (_error, input) => {
-      if (input.field === 'score') setScoreChoice(null);
-      if (input.field === 'status') setStatusChoice(null);
-    },
-  });
+  const [lostStageId, setLostStageId] = useState<string | null>(null);
   const move = useMutation({
-    mutationFn: (stageId: string) =>
+    mutationFn: (input: { stageId: string; lostReason?: string }) =>
       api(`/api/v1/leads/${props.item.id}/stage`, {
         method: 'PATCH',
-        body: { stageId },
+        body:
+          input.lostReason !== undefined
+            ? { stageId: input.stageId, lostReason: input.lostReason }
+            : { stageId: input.stageId },
       }),
     onSettled: () => {
       void queryClient
         .invalidateQueries({ queryKey: ['leads'] })
-        .finally(() => setStageChoice(null));
+        .finally(() => {
+          setStageChoice(null);
+          setLostStageId(null);
+        });
     },
-    onError: () => setStageChoice(null),
+    onError: () => {
+      setStageChoice(null);
+      setLostStageId(null);
+    },
   });
   const name = props.item.contact.name ?? t('list.unnamed');
   const stageValue = stageChoice ?? props.currentStageId;
-  const scoreValue = scoreChoice ?? props.item.score;
-  const statusValue = statusChoice ?? props.item.status;
 
   return (
     <li>
@@ -452,9 +406,11 @@ function LeadCard(props: {
               </span>
             ) : null}
             <span className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={SCORE_TONE[scoreValue]} dot>
-                {t(`score.${scoreValue}`)}
-              </Badge>
+              {props.item.score ? (
+                <Badge tone={SCORE_TONE[props.item.score]} dot>
+                  {t(`score.${props.item.score}`)}
+                </Badge>
+              ) : null}
               <Badge tone={STATE_TONE[props.item.conversation.state]} dot>
                 {OWNER_ICON[props.item.conversation.state] ? (
                   <span aria-hidden="true" data-testid="lead-card-owner">
@@ -509,12 +465,7 @@ function LeadCard(props: {
           </span>
         </Link>
         {canEdit ? (
-          <LeadOpportunity
-            leadId={props.item.id}
-            item={props.item}
-            stages={props.stages}
-            pipelineId={props.pipelineId}
-          />
+          <LeadOpportunity leadId={props.item.id} item={props.item} />
         ) : null}
         {canEdit ? (
           <label className="flex flex-col gap-1 text-xs text-muted">
@@ -526,8 +477,15 @@ function LeadCard(props: {
               disabled={move.isPending}
               onChange={(event) => {
                 const value = event.target.value;
+                const target = props.stages.find((s) => s.id === value);
                 setStageChoice(value);
-                move.mutate(value);
+                if (target?.kind === 'LOST') {
+                  setLostStageId(value);
+                  setLostReasonDraft('');
+                  setLostDialog(true);
+                  return;
+                }
+                move.mutate({ stageId: value });
               }}
               className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
             >
@@ -539,75 +497,6 @@ function LeadCard(props: {
             </select>
           </label>
         ) : null}
-        {canEdit ? (
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
-              {t('leads.view.score')}
-              <select
-                aria-label={t('leads.view.score')}
-                data-testid="lead-card-score"
-                value={scoreValue}
-                disabled={setField.isPending}
-                onChange={(event) => {
-                  const value = event.target.value as LeadScore;
-                  setScoreChoice(value);
-                  setField.mutate({ field: 'score', value });
-                }}
-                className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-              >
-                {(
-                  [
-                    'HOT',
-                    'WARM',
-                    'COLD',
-                  ] as const satisfies readonly LeadScore[]
-                ).map((score) => (
-                  <option key={score} value={score}>
-                    {t(`score.${score}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
-              {t('leads.view.status')}
-              <select
-                aria-label={t('leads.view.status')}
-                data-testid="lead-card-status"
-                value={statusValue}
-                disabled={setField.isPending}
-                onChange={(event) => {
-                  const value = event.target.value as LeadStatus;
-                  if (value === 'LOST' && statusValue !== 'LOST') {
-                    setLostReasonDraft('');
-                    setLostDialog(true);
-                    return;
-                  }
-                  setStatusChoice(value);
-                  setField.mutate({ field: 'status', value });
-                }}
-                className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-              >
-                {(
-                  [
-                    'NEW',
-                    'IN_PROGRESS',
-                    'WON',
-                    'LOST',
-                  ] as const satisfies readonly LeadStatus[]
-                ).map((status) => (
-                  <option key={status} value={status}>
-                    {t(`leadStatus.${status}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
-        {setField.isError ? (
-          <p role="alert" className="text-sm text-danger-fg">
-            {t(errorKey(setField.error))}
-          </p>
-        ) : null}
         {move.isError ? (
           <p role="alert" className="text-sm text-danger-fg">
             {t(errorKey(move.error))}
@@ -618,26 +507,32 @@ function LeadCard(props: {
           title={t('opportunity.lostReason')}
           description={t('opportunity.lostReasonBody')}
           testId="lead-lost-dialog"
-          onClose={() => setLostDialog(false)}
+          onClose={() => {
+            setLostDialog(false);
+            setLostStageId(null);
+            setStageChoice(null);
+          }}
           onSubmit={() => {
             const reason = lostReasonDraft.trim();
-            if (!reason) return;
-            setStatusChoice('LOST');
-            setField.mutate(
-              { field: 'status', value: 'LOST', lostReason: reason },
+            if (!reason || !lostStageId) return;
+            move.mutate(
+              { stageId: lostStageId, lostReason: reason },
               { onSuccess: () => setLostDialog(false) },
             );
           }}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setLostDialog(false)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setLostDialog(false);
+                  setLostStageId(null);
+                  setStageChoice(null);
+                }}
+              >
                 {t('app.cancel')}
               </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={setField.isPending}
-              >
+              <Button type="submit" variant="primary" loading={move.isPending}>
                 {t('app.save')}
               </Button>
             </>
@@ -666,7 +561,6 @@ interface LeadFilters {
   closeBefore: string;
   closeAfter: string;
   tagId: string;
-  score: string;
 }
 
 /** ADR 057: the API filters the leads list, so the web only sends filters. */

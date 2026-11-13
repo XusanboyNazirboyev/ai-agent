@@ -15,12 +15,9 @@ import type { LeadPipelineItem, TeamMember } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
-import { FormDialog } from './ui/form-dialog';
-import { Select } from './ui/select';
 import { useToast } from './ui/toast';
 
 const MAX_SOURCE = 60;
-const MAX_LOST_REASON = 200;
 
 function initials(name: string | null | undefined): string {
   if (!name) return '?';
@@ -63,8 +60,6 @@ export function LeadOpportunity(props: {
     props.item.expectedCloseDate ?? '',
   );
   const [lostReason, setLostReason] = useState(props.item.lostReason ?? '');
-  const [lostOpen, setLostOpen] = useState(false);
-  const [lostDraft, setLostDraft] = useState('');
 
   useEffect(() => {
     setOwnerId(props.item.ownerOperatorId ?? '');
@@ -133,6 +128,7 @@ export function LeadOpportunity(props: {
   const lost = props.item.status === 'LOST';
   const ownerName = props.item.owner?.displayName ?? null;
   const amountText = formatAmount(props.item.amount, props.item.currency);
+  const showReadonly = canEdit || isViewer;
   const ownerSelect =
     isManager && !isViewer ? (
       <label className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
@@ -201,7 +197,7 @@ export function LeadOpportunity(props: {
           </span>
         ) : null}
       </div>
-      {canEdit || isViewer ? (
+      {showReadonly ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {ownerSelect}
           <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
@@ -300,25 +296,12 @@ export function LeadOpportunity(props: {
               <div className="flex items-center gap-2">
                 <input
                   value={lostReason}
-                  onChange={(e) => setLostReason(e.target.value)}
-                  disabled={!canEdit || isViewer || save.isPending}
-                  maxLength={MAX_LOST_REASON}
+                  readOnly
+                  disabled
                   className={`${fieldClass} min-w-0 flex-1`}
                   aria-label={t('opportunity.lostReason')}
                   data-testid="opportunity-lost-reason"
                 />
-                {canEdit && !isViewer ? (
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      save.mutate({ lostReason: lostReason.trim() || null })
-                    }
-                    disabled={save.isPending}
-                    data-testid="opportunity-save-lost"
-                  >
-                    {t('app.save')}
-                  </Button>
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -329,44 +312,6 @@ export function LeadOpportunity(props: {
           {t(errorKey(save.error))}
         </p>
       ) : null}
-      <FormDialog
-        open={lostOpen}
-        title={t('opportunity.lostReason')}
-        description={t('opportunity.lostReasonBody')}
-        testId="lost-reason-dialog"
-        onClose={() => setLostOpen(false)}
-        onSubmit={() => {
-          const value = lostDraft.trim();
-          if (value === '') return;
-          setLostReason(value);
-          save.mutate(
-            { lostReason: value },
-            { onSuccess: () => setLostOpen(false) },
-          );
-        }}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setLostOpen(false)}>
-              {t('app.cancel')}
-            </Button>
-            <Button type="submit" variant="primary" loading={save.isPending}>
-              {t('app.save')}
-            </Button>
-          </>
-        }
-      >
-        <label className="flex flex-col gap-1 text-sm font-medium">
-          {t('opportunity.lostReason')}
-          <input
-            value={lostDraft}
-            onChange={(e) => setLostDraft(e.target.value)}
-            maxLength={MAX_LOST_REASON}
-            className={fieldClass}
-            autoFocus
-            aria-label={t('opportunity.lostReason')}
-          />
-        </label>
-      </FormDialog>
     </div>
   );
 }

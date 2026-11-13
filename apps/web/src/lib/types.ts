@@ -77,6 +77,10 @@ export interface LeadPipelineItem {
   source: string | null;
   expectedCloseDate: string | null;
   lostReason: string | null;
+  /** ADR 058: who set the stage; AGENT means AI may move it (unless opted out). */
+  stageSetBy: 'AGENT' | 'OPERATOR';
+  suggestedStageId: string | null;
+  suggestedReasonCodes: string[];
   score: LeadScore;
   status: LeadStatus;
   summary: string;

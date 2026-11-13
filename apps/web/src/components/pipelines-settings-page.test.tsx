@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import { PipelinesSettingsPage } from './pipelines-settings-page';
@@ -47,7 +47,8 @@ const stages = [
 
 function setup(overrides: Record<string, unknown> = {}) {
   const mocked = vi.mocked(api);
-  mocked.mockImplementation((path: string, opts?: any) => {
+  mocked.mockImplementation(
+    (path: string, opts?: { method?: string; body?: Record<string, unknown> }) => {
     if (path === '/api/v1/pipelines' && !opts)
       return Promise.resolve({ items: [pipeline] });
     if (path.startsWith('/api/v1/leads/stages'))
