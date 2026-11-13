@@ -208,60 +208,97 @@ test.describe('leads, settings and status pages', () => {
   }
 });
 
+/** Puts the shared fixture lead back into the NEW stage (the keyboard-drag test moves it). */
+async function restoreLeadToNew(
+  page: Page,
+  conversationId: string,
+): Promise<void> {
+  await page.evaluate(async (id) => {
+    const csrf = /(?:^|; )ac_csrf=([^;]+)/u.exec(document.cookie)?.[1] ?? '';
+    const stages = (await (await fetch('/api/v1/leads/stages')).json()) as
+      | { id: string; code: string | null }[]
+      | { items: { id: string; code: string | null }[] };
+    const list = Array.isArray(stages) ? stages : stages.items;
+    const first = list.find((stage) => stage.code === 'NEW');
+    const listed = (await (await fetch('/api/v1/leads?limit=50')).json()) as {
+      items: { id: string; conversation: { id: string } }[];
+    };
+    const lead = listed.items.find((item) => item.conversation.id === id);
+    if (first && lead)
+      await fetch(`/api/v1/leads/${lead.id}/stage`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': decodeURIComponent(csrf),
+        },
+        body: JSON.stringify({ stageId: first.id }),
+      });
+  }, conversationId);
+}
+
 test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
   browser,
 }) => {
   const f = fixtures();
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
-  await page.goto('/leads?view=funnel');
-  await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
-  const card = page.getByTestId('lead-card').first();
-  await expect(card).toBeVisible();
-  const handle = card.getByTestId('lead-card-handle');
-  const live = card.getByTestId('lead-card-live');
-  const patches: string[] = [];
-  page.on('request', (request) => {
-    if (
-      request.method() === 'PATCH' &&
-      /\/leads\/[^/]+\/stage$/u.test(request.url())
-    )
-      patches.push(request.url());
-  });
-  await handle.focus();
-  // Space picks the card up.
-  await page.keyboard.press(' ');
-  await expect(handle).toHaveAttribute('aria-pressed', 'true');
-  await expect(card).toHaveAttribute('data-state', 'picked-up');
-  await expect(card).toHaveClass(/bg-primary-soft/);
-  await expect(live).toHaveText('Picked up');
-  // ArrowRight moves the drop target across columns.
-  await page.keyboard.press('ArrowRight');
-  await expect(live).toHaveText(/^Target: /u);
-  expect(patches).toEqual([]);
-  // Space drops on the targeted column.
-  const patch = page.waitForRequest(
-    (request) =>
-      request.method() === 'PATCH' &&
-      /\/leads\/[^/]+\/stage$/u.test(request.url()),
-  );
-  await page.keyboard.press(' ');
-  await patch;
-  // The card moves column at once, so the drop is announced on the board.
-  await expect(page.getByTestId('leads-live')).toHaveText('Moved');
-  // Escape cancels an in-progress keyboard drag without a request.
-  const before = patches.length;
-  const target = page.getByTestId('lead-card-handle').first();
-  await target.focus();
-  await page.keyboard.press(' ');
-  await expect(target).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
-  await expect(target).toHaveAttribute('aria-pressed', 'false');
-  await expect(
-    page.getByTestId('lead-card-live').filter({ hasText: 'Cancelled' }),
-  ).toHaveCount(1);
-  await page.waitForTimeout(200);
-  expect(patches.length).toBe(before);
-  await context.close();
+  const conversationId = f.a.conversations[0]!.id;
+  await restoreLeadToNew(page, conversationId);
+  try {
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+    const card = page
+      .getByTestId('lead-column-NEW')
+      .getByTestId('lead-card')
+      .first();
+    await expect(card).toBeVisible();
+    const handle = card.getByTestId('lead-card-handle');
+    const live = card.getByTestId('lead-card-live');
+    const patches: string[] = [];
+    page.on('request', (request) => {
+      if (
+        request.method() === 'PATCH' &&
+        /\/leads\/[^/]+\/stage$/u.test(request.url())
+      )
+        patches.push(request.url());
+    });
+    await handle.focus();
+    // Space picks the card up.
+    await page.keyboard.press(' ');
+    await expect(handle).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).toHaveAttribute('data-state', 'picked-up');
+    await expect(card).toHaveClass(/bg-primary-soft/);
+    await expect(live).toHaveText('Picked up');
+    // ArrowRight moves the drop target across columns.
+    await page.keyboard.press('ArrowRight');
+    await expect(live).toHaveText(/^Target: /u);
+    expect(patches).toEqual([]);
+    // Space drops on the targeted column.
+    const patch = page.waitForRequest(
+      (request) =>
+        request.method() === 'PATCH' &&
+        /\/leads\/[^/]+\/stage$/u.test(request.url()),
+    );
+    await page.keyboard.press(' ');
+    await patch;
+    // The card moves column at once, so the drop is announced on the board.
+    await expect(page.getByTestId('leads-live')).toHaveText('Moved');
+    // Escape cancels an in-progress keyboard drag without a request.
+    const before = patches.length;
+    const target = page.getByTestId('lead-card-handle').first();
+    await target.focus();
+    await page.keyboard.press(' ');
+    await expect(target).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
+    await expect(target).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      page.getByTestId('lead-card-live').filter({ hasText: 'Cancelled' }),
+    ).toHaveCount(1);
+    await page.waitForTimeout(200);
+    expect(patches.length).toBe(before);
+  } finally {
+    await restoreLeadToNew(page, conversationId);
+    await context.close();
+  }
 });
 
 test('the theme choice in settings is applied and remembered', async ({
