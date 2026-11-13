@@ -62,6 +62,14 @@ export function AddLeadDialog(props: {
     // openStages derives from props.stages; the form resets only on opening.
   }, [props.open, props.stageId]);
 
+  // The board may still be loading when the dialog opens: take the first open
+  // stage as soon as the stages arrive, or the form could never be submitted.
+  const firstOpenId = openStages[0]?.id ?? '';
+  useEffect(() => {
+    if (props.open && stageId === '' && firstOpenId !== '')
+      setStageId(firstOpenId);
+  }, [props.open, stageId, firstOpenId]);
+
   const team = useQuery({
     queryKey: ['team'],
     queryFn: () => api<{ operators: TeamMember[] }>('/api/v1/team'),
