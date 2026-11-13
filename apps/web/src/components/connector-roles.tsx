@@ -56,9 +56,6 @@ function ConnectorRoleRow(props: {
   const activeConnectors = props.connectors.filter(
     (c) => c.status === 'ACTIVE',
   );
-  const boundConnector = props.connectors.find(
-    (c) => c.id === props.item.tenantConnectorId,
-  );
   const [error, setError] = useState<string | undefined>();
 
   const bind = useMutation({
@@ -91,29 +88,24 @@ function ConnectorRoleRow(props: {
         >
           {t(`connectorRoles.status.${props.item.status}`)}
         </Badge>
-        <label className="flex min-w-0 flex-col gap-1 text-sm font-medium sr-only">
-          {t('connectorRoles.activeConnectors')}
-          <Select
-            aria-label={t('connectorRoles.activeConnectors')}
-            data-testid={`connector-role-select-${props.role}`}
-            value={
-              props.item.tenantConnectorId ?? boundConnector?.connectorKey ?? ''
-            }
-            onChange={(event) => {
-              const value = event.target.value;
-              bind.mutate(value === '' ? null : value);
-            }}
-            disabled={bind.isPending}
-            className="min-w-0 max-w-xs"
-          >
-            <option value="">{t('connectorRoles.notChosen')}</option>
-            {activeConnectors.map((connector) => (
-              <option key={connector.id} value={connector.id}>
-                {connector.connectorKey}
-              </option>
-            ))}
-          </Select>
-        </label>
+        <Select
+          aria-label={`${t(label)}: ${t('connectorRoles.activeConnectors')}`}
+          data-testid={`connector-role-select-${props.role}`}
+          value={props.item.tenantConnectorId ?? ''}
+          onChange={(event) => {
+            const value = event.target.value;
+            bind.mutate(value === '' ? null : value);
+          }}
+          disabled={bind.isPending}
+          className="min-w-0 max-w-xs"
+        >
+          <option value="">{t('connectorRoles.notChosen')}</option>
+          {activeConnectors.map((connector) => (
+            <option key={connector.id} value={connector.id}>
+              {connector.connectorKey}
+            </option>
+          ))}
+        </Select>
         {error ? (
           <p
             role="alert"

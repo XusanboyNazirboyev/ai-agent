@@ -186,6 +186,16 @@ describe('ConnectorRoles', () => {
     ).toHaveTextContent('connectorRoles.status.AMBIGUOUS');
   });
 
+  it('keeps the selects visible: they are not inside a screen-reader-only wrapper', async () => {
+    mockRolesApi();
+    renderRoles();
+    for (const role of ['CATALOG', 'LEAD_SINK', 'ACTIONS']) {
+      const select = await screen.findByTestId(`connector-role-select-${role}`);
+      expect(select.closest('.sr-only')).toBeNull();
+      expect(select).toHaveAttribute('aria-label');
+    }
+  });
+
   it('shows only ACTIVE connectors in the select', async () => {
     mockRolesApi();
     renderRoles();
