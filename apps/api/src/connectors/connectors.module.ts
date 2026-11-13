@@ -2,6 +2,7 @@ import { Logger, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
+import { ConnectorSelector } from './connector-selector.js';
 import { OutboundUrlPolicy } from './generic-rest/ssrf-protection.js';
 import type { SecretResolver } from './interfaces/secret-resolver.js';
 import { ConnectorRegistry } from './registry/connector-registry.js';
@@ -59,6 +60,7 @@ export function createConnectorRegistry(
   providers: [
     CatalogSyncStore,
     TenantConnectorLoader,
+    ConnectorSelector,
     CatalogSyncService,
     CatalogSyncQueueRuntime,
     {
@@ -83,6 +85,7 @@ export function createConnectorRegistry(
     CatalogSyncQueueRuntime,
     CatalogSyncStore,
     TenantConnectorLoader,
+    ConnectorSelector,
   ],
 })
 export class ConnectorsModule implements OnModuleDestroy {
