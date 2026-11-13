@@ -27,9 +27,10 @@ test('the column header stays visible while a long column scrolls', async ({
   });
   await page.reload();
   const column = page.getByTestId('lead-column-NEW');
-  await expect(column.getByTestId('lead-card')).toHaveCount(14, {
-    timeout: 15_000,
-  });
+  // The fixture tenant may hold a lead of its own: at least the 14 added here.
+  await expect
+    .poll(() => column.getByTestId('lead-card').count(), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(14);
 
   // The board is bounded in height, so a long column really scrolls.
   const scroller = page.getByTestId('leads-board-scroller');
