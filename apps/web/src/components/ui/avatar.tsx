@@ -28,13 +28,17 @@ function toneFor(seed: string): string {
 /** Decorative: the person's name is always shown as text next to it. */
 export function Avatar(props: {
   name: string | null | undefined;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 }): ReactNode {
   return (
     <span
       aria-hidden="true"
       className={`grid shrink-0 place-items-center rounded-full font-semibold ${
-        props.size === 'sm' ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'
+        props.size === 'xs'
+          ? 'h-6 w-6 text-[10px]'
+          : props.size === 'sm'
+            ? 'h-8 w-8 text-xs'
+            : 'h-10 w-10 text-sm'
       } ${toneFor(props.name ?? '')}`}
     >
       {initials(props.name)}

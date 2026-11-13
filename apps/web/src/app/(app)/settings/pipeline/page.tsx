@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { LeadStagesSettingsPage } from '@/components/lead-stages-settings-page';
+import { PipelinesSettingsPage } from '@/components/pipelines-settings-page';
 
 export default function PipelineSettings(): ReactNode {
-  return <LeadStagesSettingsPage />;
+  return <PipelinesSettingsPage />;
 }

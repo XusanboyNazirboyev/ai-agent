@@ -29,6 +29,10 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   api: vi.fn(),
 }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('@/components/ui/toast', () => ({ useToast: () => state.toast }));
 vi.mock('@/lib/export-csv', () => ({ downloadCsv: vi.fn() }));
 
@@ -38,6 +42,22 @@ function setupApi(): void {
   vi.mocked(api).mockImplementation((path: string) => {
     if (path === '/api/v1/tags') return Promise.resolve(tags);
     if (path === '/api/v1/leads/stages') return Promise.resolve([]);
+    if (path === '/api/v1/pipelines')
+      return Promise.resolve({
+        items: [
+          {
+            id: 'p1',
+            name: null,
+            position: 0,
+            isDefault: true,
+            aiStaging: 'OFF',
+            stageCount: 0,
+            leadCount: 0,
+          },
+        ],
+      });
+    if (path.startsWith('/api/v1/pipelines/') && path.includes('/board'))
+      return Promise.resolve({ stages: [] });
     return Promise.resolve({ items: [], nextCursor: null });
   });
 }
@@ -124,6 +144,9 @@ describe.each(PAGES)('%s export button', (kind, testId, page) => {
     setupApi();
     vi.mocked(downloadCsv).mockResolvedValue('x.csv');
     renderIn(page());
+    // The leads tag filter lives in the Filters popover.
+    if (kind === 'leads')
+      fireEvent.click(await screen.findByTestId('leads-filters-button'));
     const select = await screen.findByTestId(
       kind === 'people' ? 'people-tag-filter' : 'leads-tag-filter',
     );

@@ -136,6 +136,9 @@ test.describe('no overflow in the signed-in pages', () => {
         document.documentElement.style.letterSpacing = '0.07em';
       });
       expect(await findOverflow(page), 'leads').toEqual([]);
+      await page.getByTestId('lead-card-open').first().click();
+      await expect(page.getByTestId('lead-panel')).toBeVisible();
+      expect(await findOverflow(page), 'lead panel').toEqual([]);
       await context.close();
     });
   }

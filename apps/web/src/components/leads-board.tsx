@@ -1,113 +1,277 @@
 'use client';
 
-import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
-import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { downloadCsv } from '@/lib/export-csv';
 import { useToast } from '@/components/ui/toast';
-import { channelName } from '@/lib/channel-names';
 import type {
-  ConversationState,
+  BoardStageView,
   LeadPipelineItem,
-  LeadPipelinePage,
-  LeadScore,
-  LeadStage,
-  LeadStatus,
-  Tag,
+  PipelineView,
 } from '@/lib/types';
 import { useShell } from './app-shell';
-import { Avatar } from './ui/avatar';
-import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
+import {
+  NO_FILTERS,
+  currentStageId,
+  findCachedLead,
+  readCollapsed,
+  stageLabel,
+  useCachedLead,
+  writeCollapsed,
+  type LeadFilters,
+} from './lead-board-utils';
+import { LeadColumn } from './lead-column';
+import { useLeadMove } from './lead-move';
+import { LeadPanel } from './lead-panel';
+import { FilterChips, FiltersMenu } from './leads-filters';
+import { LeadsList } from './leads-list';
 
-const STATE_TONE: Record<ConversationState, Tone> = {
-  BOT_ACTIVE: 'neutral',
-  WAITING_OPERATOR: 'warning',
-  OPERATOR_ACTIVE: 'accent',
-  CLOSED: 'neutral',
-};
-/** Who answers the customer now (bot or a person); none once closed. */
-const OWNER_ICON: Record<ConversationState, string> = {
-  BOT_ACTIVE: '🤖',
-  WAITING_OPERATOR: '👤',
-  OPERATOR_ACTIVE: '👤',
-  CLOSED: '',
-};
-const SCORE_TONE: Record<LeadScore, Tone> = {
-  HOT: 'danger',
-  WARM: 'warning',
-  COLD: 'neutral',
-};
+const MOBILE_BREAKPOINT = 768;
 
-function stageName(stage: LeadStage, t: (key: string) => string): string {
-  return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return isMobile;
 }
 
-/** Tenant-configured funnel stages; lead score remains a separate attribute. */
+function toggleClass(selected: boolean): string {
+  return `min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
+    selected
+      ? 'bg-primary text-white'
+      : 'text-muted hover:bg-surface-2 hover:text-fg'
+  }`;
+}
+
+/** The sales funnel: a Kanban to scan and move leads (ADR 058, UX standard).
+ * Editing happens in the lead panel; the board has no inline controls. */
 export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
+  const router = useRouter();
+  const params = useSearchParams();
   const { operator } = useShell();
+  const queryClient = useQueryClient();
   const toast = useToast();
-  const [tagId, setTagId] = useState('');
+  const isMobile = useIsMobile();
   const [exporting, setExporting] = useState(false);
   const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
-  const stages = useQuery({
-    queryKey: ['lead-stages'],
-    queryFn: () => api<LeadStage[]>('/api/v1/leads/stages'),
+
+  const pipelines = useQuery({
+    queryKey: ['pipelines'],
+    queryFn: () => api<{ items: PipelineView[] }>('/api/v1/pipelines'),
   });
-  const tags = useQuery({
-    queryKey: ['tags'],
-    queryFn: () => api<{ items: Tag[] }>('/api/v1/tags'),
+  const list = pipelines.data?.items ?? [];
+  const urlPipeline = params.get('pipeline');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (list.length === 0) return;
+    const valid = list.find((p) => p.id === urlPipeline);
+    if (valid) {
+      setActiveId(valid.id);
+      return;
+    }
+    const def = list.find((p) => p.isDefault);
+    setActiveId((def ?? list[0]).id);
+  }, [list, urlPipeline]);
+
+  const [filters, setFilters] = useState<LeadFilters>(NO_FILTERS);
+  const fromDate = filters.createdFrom;
+  const toDate = filters.createdTo;
+
+  const active = list.find((p) => p.id === activeId) ?? list[0];
+  const board = useQuery({
+    queryKey: ['board', active?.id, fromDate, toDate],
+    enabled: !!active,
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (fromDate) qs.set('from', fromDate);
+      if (toDate) qs.set('to', toDate);
+      return api<{ stages: BoardStageView[] }>(
+        `/api/v1/pipelines/${active!.id}/board?${qs.toString()}`,
+      );
+    },
   });
-  const rows = stages.data ?? [];
+  const columns = board.data?.stages ?? [];
+
+  const [view, setView] = useState<'board' | 'list'>('board');
+  const [mobileStageId, setMobileStageId] = useState<string | null>(null);
+  const [funnelOpen, setFunnelOpen] = useState<boolean | null>(null);
+  const showFunnel = funnelOpen ?? !isMobile;
+
+  // WON and LOST columns collapse; the choice is remembered per user.
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setCollapsedMap(readCollapsed(operator.id));
+  }, [operator.id]);
+  function isCollapsed(stage: BoardStageView): boolean {
+    if (stage.kind === 'OPEN') return false;
+    return !isMobile && (collapsedMap[stage.id] ?? false);
+  }
+  function toggleCollapsed(stage: BoardStageView): void {
+    const next = { ...collapsedMap, [stage.id]: !isCollapsed(stage) };
+    setCollapsedMap(next);
+    writeCollapsed(operator.id, next);
+  }
+
+  // Drag-and-drop state. `draggedId` is the lead being moved;
+  // `draggedToStageId` is the column the drop would target.
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [draggedToStageId, setDraggedToStageId] = useState<string | null>(null);
+  const [dragStatus, setDragStatus] = useState('');
+
+  // Moving into a LOST stage asks for the reason first.
+  const [lost, setLost] = useState<{
+    leadId: string;
+    fromStageId: string;
+    toStageId: string;
+  } | null>(null);
+  const [lostReasonDraft, setLostReasonDraft] = useState('');
+  const move = useLeadMove();
+
+  function requestMove(item: LeadPipelineItem, toStageId: string): void {
+    const from = currentStageId(item, columns);
+    if (from === toStageId) return;
+    const target = columns.find((s) => s.id === toStageId);
+    if (target?.kind === 'LOST') {
+      setLostReasonDraft('');
+      setLost({ leadId: item.id, fromStageId: from, toStageId });
+      return;
+    }
+    move.mutate({ leadId: item.id, fromStageId: from, toStageId });
+  }
+
+  // The lead panel: the live copy of the lead comes from the query cache.
+  const [openItem, setOpenItem] = useState<LeadPipelineItem | null>(null);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
+  const liveItem = useCachedLead(openItem?.id ?? null, openItem);
+  function openLead(item: LeadPipelineItem, from: HTMLElement | null): void {
+    setOpener(from);
+    setOpenItem(item);
+  }
+
+  function choose(next: PipelineView): void {
+    setActiveId(next.id);
+    router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
+  }
+
+  function handleDragStart(id: string): void {
+    setDraggedId(id);
+    setDragStatus(t('leads.dragPickedUp'));
+  }
+  function handleDragEnd(): void {
+    setDraggedId(null);
+    setDraggedToStageId(null);
+    setDragStatus('');
+  }
+  function handleDrop(targetStageId: string): void {
+    const item = draggedId ? findCachedLead(queryClient, draggedId) : undefined;
+    setDraggedId(null);
+    setDraggedToStageId(null);
+    if (!item) return;
+    const target = columns.find((s) => s.id === targetStageId);
+    requestMove(item, targetStageId);
+    setDragStatus(
+      t(
+        target?.kind === 'LOST' ? 'leads.dragDroppedLost' : 'leads.dragDropped',
+      ),
+    );
+  }
+
+  const switcher =
+    list.length > 1 ? (
+      <div
+        role="group"
+        aria-label={t('pipelines.switcher')}
+        className="flex min-w-0 flex-wrap items-center gap-1 rounded-xl border border-line bg-surface p-1"
+      >
+        {list.map((pipeline) => (
+          <button
+            key={pipeline.id}
+            type="button"
+            aria-pressed={pipeline.id === active?.id}
+            disabled={pipeline.id === active?.id}
+            onClick={() => choose(pipeline)}
+            className={`${toggleClass(pipeline.id === active?.id)} max-w-[14rem] truncate`}
+          >
+            {pipeline.name ?? t('pipeline.defaultName')}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  // Below md the board shows one stage at a time, picked from the tab bar.
+  const selectedStageId =
+    columns.find((s) => s.id === mobileStageId)?.id ?? columns[0]?.id ?? null;
+  const visibleColumns =
+    view === 'board' && isMobile
+      ? columns.filter((stage) => stage.id === selectedStageId)
+      : columns;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-      <div className="flex flex-wrap items-end gap-2">
-        <p className="min-w-0 flex-1 basis-56 text-sm text-muted">
-          {t('leads.funnelIntro')}
-        </p>
-        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm sm:max-w-xs">
-          <span className="sr-only">{t('people.filterByTag')}</span>
-          <select
-            aria-label={t('people.filterByTag')}
-            data-testid="leads-tag-filter"
-            value={tagId}
-            onChange={(e) => setTagId(e.target.value)}
-            className={fieldClass}
+      <div aria-live="polite" data-testid="leads-live" className="sr-only">
+        {dragStatus}
+      </div>
+      <div
+        data-testid="leads-toolbar"
+        className="flex min-w-0 flex-wrap items-center gap-2"
+      >
+        {switcher}
+        <div
+          role="group"
+          aria-label={t('leads.views')}
+          className="flex min-w-0 gap-1 rounded-xl border border-line bg-surface p-1"
+          data-testid="leads-view-toggle"
+        >
+          <button
+            type="button"
+            aria-pressed={view === 'board'}
+            onClick={() => setView('board')}
+            className={toggleClass(view === 'board')}
           >
-            <option value="">{t('people.allTags')}</option>
-            {(tags.data?.items ?? []).map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            {t('leads.view.board')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === 'list'}
+            onClick={() => setView('list')}
+            className={toggleClass(view === 'list')}
+          >
+            {t('leads.view.table')}
+          </button>
+        </div>
+        <FiltersMenu
+          filters={filters}
+          onChange={setFilters}
+          isMobile={isMobile}
+        />
         {canExport ? (
           <Button
             size="sm"
             variant="secondary"
             loading={exporting}
             data-testid="leads-export"
-            className="min-w-0 max-w-full"
+            className="ml-auto min-w-0 max-w-full"
             onClick={() => {
-              const params = new URLSearchParams();
-              if (tagId) params.set('tagId', tagId);
-              const qs = params.toString();
+              const qs = new URLSearchParams();
+              if (filters.tagId) qs.set('tagId', filters.tagId);
+              const query = qs.toString();
               setExporting(true);
               void downloadCsv(
-                `/api/v1/exports/leads.csv${qs ? `?${qs}` : ''}`,
+                `/api/v1/exports/leads.csv${query ? `?${query}` : ''}`,
                 'leads.csv',
               )
                 .then(() => toast(t('toast.exportStarted')))
@@ -119,364 +283,195 @@ export function LeadsBoard(): ReactNode {
           </Button>
         ) : null}
       </div>
-      {stages.isPending ? (
+      <FilterChips filters={filters} onChange={setFilters} />
+      {board.isSuccess && columns.length > 0 && (
+        <section
+          aria-label={t('leads.funnelTitle')}
+          className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-surface p-2"
+        >
+          <button
+            type="button"
+            data-testid="funnel-toggle"
+            aria-expanded={showFunnel}
+            onClick={() => setFunnelOpen(!showFunnel)}
+            className="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold hover:bg-surface-2"
+          >
+            <span aria-hidden="true" className={showFunnel ? '' : '-rotate-90'}>
+              ▾
+            </span>
+            {t('leads.funnelTitle')}
+          </button>
+          {showFunnel ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1 px-2 pb-1">
+              <div className="flex min-w-0 flex-wrap gap-1">
+                {columns.map((stage) => {
+                  const total = columns.reduce((sum, s) => sum + s.count, 0);
+                  const share =
+                    total === 0 ? 0 : Math.round((stage.count / total) * 100);
+                  const selected = mobileStageId === stage.id;
+                  return (
+                    <button
+                      type="button"
+                      key={stage.id}
+                      onClick={() =>
+                        setMobileStageId(selected ? null : stage.id)
+                      }
+                      className={`flex min-w-0 items-baseline gap-1.5 rounded-lg px-2 py-1 text-xs ${selected ? 'bg-primary-soft text-primary-fg' : 'bg-surface-2'}`}
+                      data-testid="funnel-stage"
+                      aria-pressed={selected}
+                    >
+                      <span className="truncate" title={stageLabel(stage, t)}>
+                        {stageLabel(stage, t)}
+                      </span>
+                      <span className="font-semibold">{stage.count}</span>
+                      <span className="text-muted">{share}%</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      )}
+      {board.isPending ? (
         <div role="status">
           <span className="sr-only">{t('app.loading')}</span>
           <SkeletonRows rows={3} />
         </div>
       ) : null}
-      {stages.isError ? (
+      {board.isError ? (
         <div className="flex flex-col items-start gap-3">
           <p
             role="alert"
             className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           >
             <Icon name="alert" />
-            {t(errorKey(stages.error))}
+            {t(errorKey(board.error))}
           </p>
-          <Button size="sm" onClick={() => void stages.refetch()}>
+          <Button size="sm" onClick={() => void board.refetch()}>
             {t('app.retry')}
           </Button>
         </div>
       ) : null}
-      {stages.isSuccess && rows.length === 0 ? (
+      {board.isSuccess && columns.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line p-6 text-center text-sm text-muted">
           {t('leads.empty')}
         </p>
       ) : null}
-      {stages.isSuccess && rows.length > 0 ? (
+      {board.isSuccess && columns.length > 0 && view === 'list' ? (
+        <LeadsList
+          pipelineId={active!.id}
+          stages={columns}
+          filters={filters}
+          onOpen={openLead}
+        />
+      ) : null}
+      {board.isSuccess && columns.length > 0 && view === 'board' && isMobile ? (
+        <div
+          role="group"
+          aria-label={t('leads.stageTabs')}
+          data-testid="leads-stage-tabs"
+          className="flex min-w-0 gap-1 overflow-x-auto pb-1"
+        >
+          {columns.map((stage) => {
+            const selected = stage.id === selectedStageId;
+            const tone =
+              stage.kind === 'WON'
+                ? 'bg-success-soft text-success-fg'
+                : stage.kind === 'LOST'
+                  ? 'bg-danger-soft text-danger-fg'
+                  : 'bg-surface text-fg';
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                data-testid="leads-stage-tab"
+                aria-pressed={selected}
+                onClick={() => setMobileStageId(stage.id)}
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium ${tone} ${selected ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
+              >
+                {stageLabel(stage, t)}
+                <span className="rounded-full bg-surface-2 px-1.5 text-xs text-muted">
+                  {stage.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {board.isSuccess && columns.length > 0 && view === 'board' ? (
         <div
           aria-label={t('leads.columns')}
-          className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
+          className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2"
         >
-          {rows.map((stage) => (
+          {visibleColumns.map((stage) => (
             <LeadColumn
               key={stage.id}
               stage={stage}
-              stages={rows}
-              tagId={tagId}
+              pipelineId={active!.id}
+              stages={columns}
+              filters={filters}
+              collapsed={isCollapsed(stage)}
+              single={isMobile}
+              onToggleCollapsed={() => toggleCollapsed(stage)}
+              draggedId={draggedId}
+              draggedToStageId={draggedToStageId}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOverStage={(id) => setDraggedToStageId(id)}
+              onDragLeaveStage={() => setDraggedToStageId(null)}
+              onDrop={handleDrop}
+              onOpen={openLead}
+              onRequestMove={requestMove}
+              onAnnounce={setDragStatus}
             />
           ))}
         </div>
       ) : null}
-    </div>
-  );
-}
 
-function LeadColumn(props: {
-  stage: LeadStage;
-  stages: LeadStage[];
-  tagId: string;
-}): ReactNode {
-  const { t } = useI18n();
-  const query = useInfiniteQuery({
-    queryKey: ['leads', props.stage.id, props.tagId],
-    initialPageParam: '',
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({
-        stageId: props.stage.id,
-        limit: '25',
-      });
-      if (pageParam) params.set('cursor', pageParam);
-      if (props.tagId) params.set('tagId', props.tagId);
-      return api<LeadPipelinePage>(`/api/v1/leads?${params.toString()}`);
-    },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  });
-  const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const count = query.hasNextPage ? `${items.length}+` : String(items.length);
-  const name = stageName(props.stage, t);
+      <LeadPanel
+        item={openItem ? liveItem : null}
+        stages={columns}
+        opener={opener}
+        onClose={() => setOpenItem(null)}
+        onRequestMove={requestMove}
+      />
 
-  return (
-    <section
-      aria-label={name}
-      data-testid={`lead-column-${props.stage.code ?? props.stage.id}`}
-      className="flex w-[min(85vw,21rem)] min-w-[min(85vw,21rem)] shrink-0 flex-col rounded-2xl border border-line bg-surface shadow-card md:w-80 md:min-w-80"
-    >
-      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
-        <h2 className="min-w-0 truncate font-semibold">{name}</h2>
-        {query.isSuccess ? (
-          <span
-            data-testid="lead-count"
-            className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted"
-          >
-            {count}
-          </span>
-        ) : null}
-      </header>
-      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
-        {query.isPending ? (
-          <li role="status">
-            <span className="sr-only">{t('app.loading')}</span>
-            <SkeletonRows rows={3} />
-          </li>
-        ) : null}
-        {query.isError ? (
-          <li className="flex flex-col items-start gap-3">
-            <p
-              role="alert"
-              className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
-            >
-              <Icon name="alert" />
-              {t(errorKey(query.error))}
-            </p>
-            <Button size="sm" onClick={() => void query.refetch()}>
-              {t('app.retry')}
+      <FormDialog
+        open={lost !== null}
+        title={t('opportunity.lostReason')}
+        description={t('opportunity.lostReasonBody')}
+        testId="lead-lost-dialog"
+        onClose={() => setLost(null)}
+        onSubmit={() => {
+          const reason = lostReasonDraft.trim();
+          if (!reason || !lost) return;
+          move.mutate({ ...lost, lostReason: reason });
+          setLost(null);
+        }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setLost(null)}>
+              {t('app.cancel')}
             </Button>
-          </li>
-        ) : null}
-        {query.isSuccess && items.length === 0 ? (
-          <li className="px-3 py-8 text-center text-sm text-muted">
-            {t('leads.empty')}
-          </li>
-        ) : null}
-        {items.map((item) => (
-          <LeadCard
-            key={item.id}
-            item={item}
-            currentStageId={props.stage.id}
-            stages={props.stages}
-          />
-        ))}
-        {query.hasNextPage ? (
-          <li>
-            <Button
-              className="w-full"
-              loading={query.isFetchingNextPage}
-              onClick={() => void query.fetchNextPage()}
-            >
-              {query.isFetchingNextPage ? t('app.loading') : t('list.loadMore')}
+            <Button type="submit" variant="primary">
+              {t('app.save')}
             </Button>
-          </li>
-        ) : null}
-      </ul>
-    </section>
-  );
-}
-
-function LeadCard(props: {
-  item: LeadPipelineItem;
-  currentStageId: string;
-  stages: LeadStage[];
-}): ReactNode {
-  const { t, formatDateTime } = useI18n();
-  const { timeZone, operator } = useShell();
-  const queryClient = useQueryClient();
-  const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
-  // Optimistic selections: keep the user's choice visible while a mutation is
-  // in flight or before the invalidated query refetch reflects it, so a
-  // background refetch cannot snap the controlled select back to stale data.
-  const [stageChoice, setStageChoice] = useState<string | null>(null);
-  const [scoreChoice, setScoreChoice] = useState<LeadScore | null>(null);
-  const [statusChoice, setStatusChoice] = useState<LeadStatus | null>(null);
-
-  useEffect(() => {
-    if (stageChoice && props.currentStageId === stageChoice) {
-      setStageChoice(null);
-    }
-  }, [props.currentStageId, stageChoice]);
-  useEffect(() => {
-    if (scoreChoice && props.item.score === scoreChoice) {
-      setScoreChoice(null);
-    }
-  }, [props.item.score, scoreChoice]);
-  useEffect(() => {
-    if (statusChoice && props.item.status === statusChoice) {
-      setStatusChoice(null);
-    }
-  }, [props.item.status, statusChoice]);
-
-  // Operator-set score and status (ADR 037) stay next to the funnel stage.
-  const setField = useMutation({
-    mutationFn: (input: { field: 'score' | 'status'; value: string }) =>
-      api(
-        `/api/v1/leads/conversations/${props.item.conversation.id}/${input.field}`,
-        {
-          method: 'PUT',
-          body:
-            input.field === 'score'
-              ? { score: input.value === 'AUTO' ? null : input.value }
-              : { status: input.value },
-        },
-      ),
-    onSettled: (_data, _error, input) => {
-      // The optimistic choice ends once the refetch has the server's answer,
-      // so a change made by another operator in the meantime is not hidden.
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['leads'] }),
-        queryClient.invalidateQueries({ queryKey: ['conversations'] }),
-      ]).finally(() => {
-        if (input.field === 'score') setScoreChoice(null);
-        else setStatusChoice(null);
-      });
-    },
-    onError: (_error, input) => {
-      if (input.field === 'score') setScoreChoice(null);
-      if (input.field === 'status') setStatusChoice(null);
-    },
-  });
-  const move = useMutation({
-    mutationFn: (stageId: string) =>
-      api(`/api/v1/leads/${props.item.id}/stage`, {
-        method: 'PATCH',
-        body: { stageId },
-      }),
-    onSettled: () => {
-      void queryClient
-        .invalidateQueries({ queryKey: ['leads'] })
-        .finally(() => setStageChoice(null));
-    },
-    onError: () => setStageChoice(null),
-  });
-  const name = props.item.contact.name ?? t('list.unnamed');
-  const stageValue = stageChoice ?? props.currentStageId;
-  const scoreValue = scoreChoice ?? props.item.score;
-  const statusValue = statusChoice ?? props.item.status;
-
-  return (
-    <li>
-      <article
-        data-testid="lead-card"
-        className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-canvas p-3"
+          </>
+        }
       >
-        <Link
-          href={`/inbox?scope=all&c=${props.item.conversation.id}`}
-          className="flex min-w-0 items-start gap-3 hover:text-primary-fg"
-        >
-          <Avatar name={name} />
-          <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="truncate font-medium">{name}</span>
-            {props.item.contact.phone ? (
-              <span className="truncate text-sm text-muted">
-                {props.item.contact.phone}
-              </span>
-            ) : null}
-            <span className="flex flex-wrap items-center gap-1.5">
-              <Badge tone={SCORE_TONE[scoreValue]} dot>
-                {t(`score.${scoreValue}`)}
-              </Badge>
-              <Badge tone={STATE_TONE[props.item.conversation.state]} dot>
-                {OWNER_ICON[props.item.conversation.state] ? (
-                  <span aria-hidden="true" data-testid="lead-card-owner">
-                    {OWNER_ICON[props.item.conversation.state]}
-                  </span>
-                ) : null}
-                {t(`state.${props.item.conversation.state}`)}
-              </Badge>
-              <Badge tone="neutral">
-                <span data-testid="lead-card-channel">
-                  {channelName(props.item.conversation.channelType)}
-                </span>
-              </Badge>
-              {(props.item.tags ?? []).map((tag) => (
-                <Badge key={tag.id} data-testid="lead-card-tag">
-                  {tag.name}
-                </Badge>
-              ))}
-            </span>
-            <span className="text-xs text-muted">
-              {t('leads.updated', {
-                date: formatDateTime(props.item.updatedAt, timeZone),
-              })}
-            </span>
-          </span>
-        </Link>
-        {canEdit ? (
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            {t('leads.moveToStage')}
-            <select
-              aria-label={t('leads.moveToStage')}
-              data-testid="lead-card-stage"
-              value={stageValue}
-              disabled={move.isPending}
-              onChange={(event) => {
-                const value = event.target.value;
-                setStageChoice(value);
-                move.mutate(value);
-              }}
-              className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-            >
-              {props.stages.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stageName(stage, t)}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {canEdit ? (
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
-              {t('leads.view.score')}
-              <select
-                aria-label={t('leads.view.score')}
-                data-testid="lead-card-score"
-                value={scoreValue}
-                disabled={setField.isPending}
-                onChange={(event) => {
-                  const value = event.target.value as LeadScore;
-                  setScoreChoice(value);
-                  setField.mutate({ field: 'score', value });
-                }}
-                className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-              >
-                {(
-                  [
-                    'HOT',
-                    'WARM',
-                    'COLD',
-                  ] as const satisfies readonly LeadScore[]
-                ).map((score) => (
-                  <option key={score} value={score}>
-                    {t(`score.${score}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
-              {t('leads.view.status')}
-              <select
-                aria-label={t('leads.view.status')}
-                data-testid="lead-card-status"
-                value={statusValue}
-                disabled={setField.isPending}
-                onChange={(event) => {
-                  const value = event.target.value as LeadStatus;
-                  setStatusChoice(value);
-                  setField.mutate({
-                    field: 'status',
-                    value,
-                  });
-                }}
-                className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
-              >
-                {(
-                  [
-                    'NEW',
-                    'IN_PROGRESS',
-                    'WON',
-                    'LOST',
-                  ] as const satisfies readonly LeadStatus[]
-                ).map((status) => (
-                  <option key={status} value={status}>
-                    {t(`leadStatus.${status}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
-        {setField.isError ? (
-          <p role="alert" className="text-sm text-danger-fg">
-            {t(errorKey(setField.error))}
-          </p>
-        ) : null}
-        {move.isError ? (
-          <p role="alert" className="text-sm text-danger-fg">
-            {t(errorKey(move.error))}
-          </p>
-        ) : null}
-      </article>
-    </li>
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          {t('opportunity.lostReason')}
+          <input
+            value={lostReasonDraft}
+            onChange={(e) => setLostReasonDraft(e.target.value)}
+            maxLength={200}
+            className={fieldClass}
+            autoFocus
+            aria-label={t('opportunity.lostReason')}
+          />
+        </label>
+      </FormDialog>
+    </div>
   );
 }

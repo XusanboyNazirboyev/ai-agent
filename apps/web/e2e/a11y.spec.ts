@@ -208,6 +208,62 @@ test.describe('leads, settings and status pages', () => {
   }
 });
 
+test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  await page.goto('/leads?view=funnel');
+  await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+  const card = page.getByTestId('lead-card').first();
+  await expect(card).toBeVisible();
+  const handle = card.getByTestId('lead-card-handle');
+  const live = card.getByTestId('lead-card-live');
+  const patches: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'PATCH' &&
+      /\/leads\/[^/]+\/stage$/u.test(request.url())
+    )
+      patches.push(request.url());
+  });
+  await handle.focus();
+  // Space picks the card up.
+  await page.keyboard.press(' ');
+  await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  await expect(card).toHaveAttribute('data-state', 'picked-up');
+  await expect(card).toHaveClass(/bg-primary-soft/);
+  await expect(live).toHaveText('Picked up');
+  // ArrowRight moves the drop target across columns.
+  await page.keyboard.press('ArrowRight');
+  await expect(live).toHaveText(/^Target: /u);
+  expect(patches).toEqual([]);
+  // Space drops on the targeted column.
+  const patch = page.waitForRequest(
+    (request) =>
+      request.method() === 'PATCH' &&
+      /\/leads\/[^/]+\/stage$/u.test(request.url()),
+  );
+  await page.keyboard.press(' ');
+  await patch;
+  // The card moves column at once, so the drop is announced on the board.
+  await expect(page.getByTestId('leads-live')).toHaveText('Moved');
+  // Escape cancels an in-progress keyboard drag without a request.
+  const before = patches.length;
+  const target = page.getByTestId('lead-card-handle').first();
+  await target.focus();
+  await page.keyboard.press(' ');
+  await expect(target).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+  await expect(target).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByTestId('lead-card-live').filter({ hasText: 'Cancelled' }),
+  ).toHaveCount(1);
+  await page.waitForTimeout(200);
+  expect(patches.length).toBe(before);
+  await context.close();
+});
+
 test('the theme choice in settings is applied and remembered', async ({
   browser,
 }) => {
@@ -774,4 +830,114 @@ test.describe('mobile 320px overflow: contacts and fields (P1.1/P1.5)', () => {
       await context.close();
     });
   }
+});
+
+test.describe('pipelines (P1.3)', () => {
+  test('pipelines settings page has no violations and dialogs are keyboard accessible', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/settings/pipeline');
+    await expect(page.getByTestId('pipelines-list')).toBeVisible();
+    await audit(page, 'pipelines settings');
+
+    await page.getByTestId('pipeline-create').click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await audit(page, 'pipeline create dialog');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId('pipeline-create')).toBeFocused();
+    await context.close();
+  });
+
+  test('leads board with pipeline switcher has no violations', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
+    await audit(page, 'leads board with pipeline');
+    await context.close();
+  });
+  test('lead panel: no violations, focus trapped, Escape returns focus', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    const card = page
+      .getByTestId('lead-card')
+      .filter({ hasText: f.a.conversations[0]!.contactName });
+    const opener = card.getByTestId('lead-card-open');
+    await opener.focus();
+    await page.keyboard.press('Enter');
+    const panel = page.getByTestId('lead-panel');
+    await expect(panel).toBeVisible();
+    await expect(
+      panel.getByRole('heading', { name: f.a.conversations[0]!.contactName }),
+    ).toBeVisible();
+    await audit(page, 'lead panel');
+    // Tabbing never reaches the page behind the modal panel (past the last
+    // control the browser may hand focus to its own chrome: body).
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press('Tab');
+      const where = await page.evaluate(() => {
+        const active = document.activeElement;
+        if (!active || active === document.body) return 'chrome';
+        return document
+          .querySelector('[data-testid="lead-panel"]')
+          ?.contains(active)
+          ? 'panel'
+          : 'page';
+      });
+      expect(where, `focus reached the page on Tab ${i + 1}`).not.toBe('page');
+    }
+    await page.evaluate(() =>
+      (
+        document.querySelector(
+          '[data-testid="lead-panel-close"]',
+        ) as HTMLElement
+      ).focus(),
+    );
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(opener).toBeFocused();
+    await context.close();
+  });
+
+  test('leads toolbar: filters popover has no violations and Escape returns focus', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+    const button = page.getByTestId('leads-filters-button');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      page.getByRole('group', { name: /filters|Фильтры|Filtrlar/i }),
+    ).toBeVisible();
+    await audit(page, 'leads filters popover');
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).toBeFocused();
+    await context.close();
+  });
 });
