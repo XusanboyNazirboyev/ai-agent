@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { useI18n } from '@/i18n';
-import { api, errorKey } from '@/lib/api';
-import type { LeadStage } from '@/lib/types';
-import { useShell } from './app-shell';
-import { SettingsSubPage } from './settings-section-nav';
-import { Button } from './ui/button';
-import { fieldClass } from './ui/fields';
-import { Icon } from './ui/icons';
-import { SkeletonRows } from './ui/skeleton';
-import { useToast } from './ui/toast';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
+import { api, errorKey } from "@/lib/api";
+import type { LeadStage } from "@/lib/types";
+import { useShell } from "./app-shell";
+import { SettingsSubPage } from "./settings-section-nav";
+import { Button } from "./ui/button";
+import { fieldClass } from "./ui/fields";
+import { Icon } from "./ui/icons";
+import { SkeletonRows } from "./ui/skeleton";
+import { useToast } from "./ui/toast";
 
 function labelFor(
   stage: LeadStage,
   translate: (key: string) => string,
 ): string {
   return (
-    stage.name ?? (stage.code ? translate(`leads.stage.${stage.code}`) : '')
+    stage.name ?? (stage.code ? translate(`leads.stage.${stage.code}`) : "")
   );
 }
 
@@ -27,12 +27,12 @@ export function LeadStagesSettingsPage(): ReactNode {
   const { operator } = useShell();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const [newName, setNewName] = useState('');
+  const [newName, setNewName] = useState("");
   const [names, setNames] = useState<Record<string, string>>({});
-  const canEdit = operator.role === 'OWNER' || operator.role === 'ADMIN';
+  const canEdit = operator.role === "OWNER" || operator.role === "ADMIN";
   const query = useQuery({
-    queryKey: ['lead-stages'],
-    queryFn: () => api<LeadStage[]>('/api/v1/leads/stages'),
+    queryKey: ["lead-stages"],
+    queryFn: () => api<LeadStage[]>("/api/v1/leads/stages"),
   });
 
   useEffect(() => {
@@ -45,29 +45,29 @@ export function LeadStagesSettingsPage(): ReactNode {
   }, [query.data, t]);
 
   const refresh = (): void => {
-    void queryClient.invalidateQueries({ queryKey: ['lead-stages'] });
-    void queryClient.invalidateQueries({ queryKey: ['leads'] });
+    void queryClient.invalidateQueries({ queryKey: ["lead-stages"] });
+    void queryClient.invalidateQueries({ queryKey: ["leads"] });
   };
   const create = useMutation({
     mutationFn: (name: string) =>
-      api<LeadStage>('/api/v1/leads/stages', {
-        method: 'POST',
+      api<LeadStage>("/api/v1/leads/stages", {
+        method: "POST",
         body: { name },
       }),
     onSuccess: () => {
-      setNewName('');
-      toast(t('toast.leadStageAdded'));
+      setNewName("");
+      toast(t("toast.leadStageAdded"));
       refresh();
     },
   });
   const rename = useMutation({
     mutationFn: (input: { id: string; name: string }) =>
       api<LeadStage>(`/api/v1/leads/stages/${input.id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: { name: input.name },
       }),
     onSuccess: () => {
-      toast(t('toast.leadStageSaved'));
+      toast(t("toast.leadStageSaved"));
       refresh();
     },
   });
@@ -84,18 +84,18 @@ export function LeadStagesSettingsPage(): ReactNode {
       <div
         role="region"
         tabIndex={0}
-        aria-label={t('settings.section.pipeline')}
+        aria-label={t("settings.section.pipeline")}
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-3 sm:p-6">
           <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">{t('leadStages.title')}</h2>
-            <p className="text-sm text-muted">{t('leadStages.intro')}</p>
+            <h2 className="text-lg font-semibold">{t("leadStages.title")}</h2>
+            <p className="text-sm text-muted">{t("leadStages.intro")}</p>
           </div>
           {!canEdit ? (
             <p className="flex items-start gap-2 rounded-xl bg-surface-2 p-3 text-sm text-muted">
               <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />
-              {t('settings.readOnly')}
+              {t("settings.readOnly")}
             </p>
           ) : null}
           {failure ? (
@@ -109,7 +109,7 @@ export function LeadStagesSettingsPage(): ReactNode {
           ) : null}
           {query.isPending ? (
             <div role="status">
-              <span className="sr-only">{t('app.loading')}</span>
+              <span className="sr-only">{t("app.loading")}</span>
               <SkeletonRows rows={4} />
             </div>
           ) : null}
@@ -119,7 +119,7 @@ export function LeadStagesSettingsPage(): ReactNode {
                 {t(errorKey(query.error))}
               </p>
               <Button size="sm" onClick={() => void query.refetch()}>
-                {t('app.retry')}
+                {t("app.retry")}
               </Button>
             </div>
           ) : null}
@@ -134,7 +134,7 @@ export function LeadStagesSettingsPage(): ReactNode {
                     className="flex min-w-0 flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3 shadow-card sm:p-4"
                   >
                     <label className="flex min-w-0 flex-1 basis-52 flex-col gap-1 text-sm font-medium">
-                      {t('leadStages.stageName')}
+                      {t("leadStages.stageName")}
                       <input
                         value={value}
                         maxLength={80}
@@ -163,7 +163,7 @@ export function LeadStagesSettingsPage(): ReactNode {
                         rename.mutate({ id: stage.id, name: value.trim() })
                       }
                     >
-                      {t('app.save')}
+                      {t("app.save")}
                     </Button>
                   </li>
                 );
@@ -176,7 +176,7 @@ export function LeadStagesSettingsPage(): ReactNode {
               className="flex min-w-0 flex-wrap items-end gap-2 rounded-2xl border border-dashed border-line p-3 sm:p-4"
             >
               <label className="flex min-w-0 flex-1 basis-52 flex-col gap-1 text-sm font-medium">
-                {t('leadStages.newStage')}
+                {t("leadStages.newStage")}
                 <input
                   value={newName}
                   maxLength={80}
@@ -191,7 +191,7 @@ export function LeadStagesSettingsPage(): ReactNode {
                 loading={create.isPending}
                 disabled={!newName.trim() || create.isPending}
               >
-                {t('leadStages.add')}
+                {t("leadStages.add")}
               </Button>
             </form>
           ) : null}
