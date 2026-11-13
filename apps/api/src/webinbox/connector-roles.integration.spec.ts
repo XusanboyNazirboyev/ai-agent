@@ -385,10 +385,16 @@ describe('selection against the database (ADR 059)', () => {
     );
     const connectorFor = (
       agent as unknown as {
-        connectorFor(tenantId: string): Promise<CrmConnector | undefined>;
+        connectorFor(
+          tenantId: string,
+          pack: { tools: readonly string[] },
+        ): Promise<CrmConnector | undefined>;
       }
     ).connectorFor.bind(agent);
-    expect((await connectorFor(t.tenantId))?.connectorKey).toBe('generic-rest');
+    expect(
+      (await connectorFor(t.tenantId, { tools: ['search_catalog'] }))
+        ?.connectorKey,
+    ).toBe('generic-rest');
   });
 });
 
