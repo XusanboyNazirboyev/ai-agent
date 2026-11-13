@@ -293,7 +293,11 @@ function PipelineCard(props: {
     mutationFn: (input: { name: string; kind: 'OPEN' | 'WON' | 'LOST' }) =>
       api<LeadStage>('/api/v1/leads/stages', {
         method: 'POST',
-        body: { name: input.name, pipelineId: props.pipeline.id, kind: input.kind },
+        body: {
+          name: input.name,
+          pipelineId: props.pipeline.id,
+          kind: input.kind,
+        },
       }),
     onSuccess: () => {
       setStageName('');
@@ -303,7 +307,11 @@ function PipelineCard(props: {
     },
   });
   const renameStage = useMutation({
-    mutationFn: (input: { id: string; name: string; kind?: 'OPEN' | 'WON' | 'LOST' }) =>
+    mutationFn: (input: {
+      id: string;
+      name: string;
+      kind?: 'OPEN' | 'WON' | 'LOST';
+    }) =>
       api<LeadStage>(`/api/v1/leads/stages/${input.id}`, {
         method: 'PATCH',
         body: {
@@ -426,7 +434,9 @@ function PipelineCard(props: {
             data-testid="pipeline-ai-staging"
             value={props.pipeline.aiStaging ?? 'OFF'}
             onChange={(e) =>
-              updateAiStaging.mutate(e.target.value as 'OFF' | 'SUGGEST' | 'AUTO')
+              updateAiStaging.mutate(
+                e.target.value as 'OFF' | 'SUGGEST' | 'AUTO',
+              )
             }
             className={fieldClass}
             disabled={updateAiStaging.isPending}

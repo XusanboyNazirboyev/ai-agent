@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  act,
   cleanup,
   fireEvent,
   render,
@@ -40,20 +39,36 @@ vi.mock('@/lib/api', () => ({
   errorKey: () => 'error',
 }));
 
-vi.mock('@/components/ui/toast', () => ({
-  useToast: () => vi.fn(),
-}));
-
 vi.mock('@/lib/export-csv', () => ({
   downloadCsv: vi.fn(),
 }));
 
-const stages = [
-  { id: 'stage-new', code: 'NEW', name: 'New', position: 0, pipelineId: 'pipe-1' },
-  { id: 'stage-won', code: 'WON', name: 'Won', position: 1, pipelineId: 'pipe-1' },
-];
+const board = {
+  stages: [
+    {
+      id: 'stage-new',
+      code: 'NEW',
+      name: 'New',
+      position: 0,
+      pipelineId: 'pipe-1',
+      kind: 'OPEN',
+      count: 1,
+      totals: [{ currency: 'UZS', amount: '150000.00' }],
+    },
+    {
+      id: 'stage-won',
+      code: 'WON',
+      name: 'Won',
+      position: 1,
+      pipelineId: 'pipe-1',
+      kind: 'WON',
+      count: 0,
+      totals: [],
+    },
+  ],
+};
 
-const leadPage = {
+const leads = {
   items: [
     {
       id: 'lead-1',
@@ -61,11 +76,14 @@ const leadPage = {
       pipelineStageId: 'stage-new',
       ownerOperatorId: null,
       owner: null,
-      amount: null,
-      currency: null,
+      amount: '150000.00',
+      currency: 'UZS',
       source: null,
       expectedCloseDate: null,
       lostReason: null,
+      stageSetBy: 'OPERATOR',
+      suggestedStageId: null,
+      suggestedReasonCodes: [],
       score: 'HOT',
       status: 'NEW',
       summary: '',
@@ -89,36 +107,23 @@ function setupApi(): void {
   mockedApi.mockImplementation((path: string) => {
     if (path === '/api/v1/pipelines')
       return Promise.resolve({
-        items: [
-          {
-            id: 'pipe-1',
-            name: null,
-            position: 0,
-            isDefault: true,
-            stageCount: 2,
-            leadCount: 1,
-          },
-        ],
+        items: [{ id: 'pipe-1', name: null, position: 0, isDefault: true }],
       });
-    if (path.startsWith('/api/v1/leads/stages'))
-      return Promise.resolve(stages);
-    if (path.startsWith('/api/v1/leads?')) return Promise.resolve(leadPage);
-    if (path === '/api/v1/team')
-      return Promise.resolve({ operators: [], invites: [], limits: { maxOperators: null, seatsUsed: 0 } });
+    if (path.startsWith('/api/v1/pipelines/pipe-1/board'))
+      return Promise.resolve(board);
+    if (path.startsWith('/api/v1/leads?')) return Promise.resolve(leads);
     if (path === '/api/v1/tags') return Promise.resolve({ items: [] });
-    return new Promise(() => {
-      // Keep mutations pending so optimistic select values can be asserted.
-    });
+    return new Promise(() => {});
   });
 }
 
-describe('LeadsBoard lead card controls', () => {
+describe('LeadsBoard', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it('keeps optimistic score/status/stage values while mutations are pending', async () => {
+  it('renders board columns with counts and per-currency totals', async () => {
     setupApi();
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -129,38 +134,56 @@ describe('LeadsBoard lead card controls', () => {
       </QueryClientProvider>,
     );
 
-    const card = await screen.findByTestId('lead-card');
-    const score = within(card).getByTestId('lead-card-score');
-    const status = within(card).getByTestId('lead-card-status');
-    const stage = within(card).getByTestId('lead-card-stage');
+    await screen.findByTestId('lead-column-NEW');
+    await screen.findByTestId('lead-column-WON');
+    const counts = await screen.findAllByTestId('lead-count');
+    expect(counts).toHaveLength(2);
+    expect(await screen.findByTestId('lead-column-total')).toBeInTheDocument();
+  });
 
-    expect(score).toHaveValue('HOT');
-    expect(status).toHaveValue('NEW');
-    expect(stage).toHaveValue('stage-new');
-
-    await act(async () => {
-      fireEvent.change(score, { target: { value: 'WARM' } });
-      fireEvent.change(status, { target: { value: 'WON' } });
-      fireEvent.change(stage, { target: { value: 'stage-won' } });
+  it('stage select calls PATCH /leads/:id/stage', async () => {
+    setupApi();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
     });
+    render(
+      <QueryClientProvider client={client}>
+        <LeadsBoard />
+      </QueryClientProvider>,
+    );
+
+    const cards = await screen.findAllByTestId('lead-card');
+    const stage = within(cards[0]).getByTestId('lead-card-stage');
+    fireEvent.change(stage, { target: { value: 'stage-won' } });
 
     await waitFor(() => {
-      expect(score).toHaveValue('WARM');
-      expect(status).toHaveValue('WON');
-      expect(stage).toHaveValue('stage-won');
+      expect(api).toHaveBeenCalledWith(
+        '/api/v1/leads/lead-1/stage',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: { stageId: 'stage-won' },
+        }),
+      );
     });
+  });
 
-    expect(api).toHaveBeenCalledWith(
-      '/api/v1/leads/conversations/conv-1/score',
-      expect.objectContaining({ method: 'PUT' }),
+  it('does not call deprecated score/status routes', async () => {
+    setupApi();
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <LeadsBoard />
+      </QueryClientProvider>,
     );
-    expect(api).toHaveBeenCalledWith(
-      '/api/v1/leads/conversations/conv-1/status',
+
+    await screen.findByTestId('lead-card');
+    expect(screen.queryByTestId('lead-card-score')).toBeNull();
+    expect(screen.queryByTestId('lead-card-status')).toBeNull();
+    expect(api).not.toHaveBeenCalledWith(
+      expect.stringContaining('/conversations/'),
       expect.objectContaining({ method: 'PUT' }),
-    );
-    expect(api).toHaveBeenCalledWith(
-      '/api/v1/leads/lead-1/stage',
-      expect.objectContaining({ method: 'PATCH' }),
     );
   });
 });

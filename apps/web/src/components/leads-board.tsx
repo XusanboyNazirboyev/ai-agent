@@ -53,7 +53,10 @@ const SCORE_TONE: Record<LeadScore, Tone> = {
   COLD: 'neutral',
 };
 
-function stageName(stage: { code: string | null; name: string | null }, t: (key: string) => string): string {
+function stageName(
+  stage: { code: string | null; name: string | null },
+  t: (key: string) => string,
+): string {
   return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
 }
 
@@ -112,7 +115,13 @@ export function LeadsBoard(): ReactNode {
   const [closeBefore, setCloseBefore] = useState('');
   const [closeAfter, setCloseAfter] = useState('');
   const [tagId, setTagId] = useState('');
-  const filters: LeadFilters = { ownerId, source, closeBefore, closeAfter, tagId };
+  const filters: LeadFilters = {
+    ownerId,
+    source,
+    closeBefore,
+    closeAfter,
+    tagId,
+  };
 
   // Drag-and-drop / keyboard move state. `draggedId` is the lead being moved;
   // `draggedToStageId` is the column the drop would target.
@@ -124,7 +133,8 @@ export function LeadsBoard(): ReactNode {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const onResize = () => setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
+    const onResize = () =>
+      setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -134,7 +144,9 @@ export function LeadsBoard(): ReactNode {
   const [lostDialog, setLostDialog] = useState(false);
   const [lostReasonDraft, setLostReasonDraft] = useState('');
   const [lostLeadId, setLostLeadId] = useState<string | null>(null);
-  const [lostTargetStageId, setLostTargetStageId] = useState<string | null>(null);
+  const [lostTargetStageId, setLostTargetStageId] = useState<string | null>(
+    null,
+  );
 
   const move = useMutation({
     mutationFn: (input: {
@@ -150,12 +162,14 @@ export function LeadsBoard(): ReactNode {
             : { stageId: input.stageId },
       }),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['leads'] }).finally(() => {
-        setLostDialog(false);
-        setLostLeadId(null);
-        setLostTargetStageId(null);
-        setLostReasonDraft('');
-      });
+      void queryClient
+        .invalidateQueries({ queryKey: ['leads'] })
+        .finally(() => {
+          setLostDialog(false);
+          setLostLeadId(null);
+          setLostTargetStageId(null);
+          setLostReasonDraft('');
+        });
     },
     onError: () => {
       setLostDialog(false);
@@ -280,7 +294,9 @@ export function LeadsBoard(): ReactNode {
           aria-pressed={view === 'board'}
           onClick={() => setView('board')}
           className={`min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
-            view === 'board' ? 'bg-primary text-white' : 'text-muted hover:bg-surface-2 hover:text-fg'
+            view === 'board'
+              ? 'bg-primary text-white'
+              : 'text-muted hover:bg-surface-2 hover:text-fg'
           }`}
         >
           {t('leads.view.funnel')}
@@ -290,7 +306,9 @@ export function LeadsBoard(): ReactNode {
           aria-pressed={view === 'list'}
           onClick={() => setView('list')}
           className={`min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
-            view === 'list' ? 'bg-primary text-white' : 'text-muted hover:bg-surface-2 hover:text-fg'
+            view === 'list'
+              ? 'bg-primary text-white'
+              : 'text-muted hover:bg-surface-2 hover:text-fg'
           }`}
         >
           {t('leads.view.list')}
@@ -337,7 +355,8 @@ export function LeadsBoard(): ReactNode {
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
             {columns.map((stage) => {
               const total = columns.reduce((sum, s) => sum + s.count, 0);
-              const share = total === 0 ? 0 : Math.round((stage.count / total) * 100);
+              const share =
+                total === 0 ? 0 : Math.round((stage.count / total) * 100);
               const selected = mobileStageId === stage.id;
               return (
                 <div
@@ -394,7 +413,9 @@ export function LeadsBoard(): ReactNode {
               view === 'board'
                 ? rows.filter(
                     (stage) =>
-                      !isMobile || mobileStageId === null || stage.id === mobileStageId,
+                      !isMobile ||
+                      mobileStageId === null ||
+                      stage.id === mobileStageId,
                   )
                 : rows;
             return (
@@ -421,7 +442,9 @@ export function LeadsBoard(): ReactNode {
                     onDragOverStage={(id) => setDraggedToStageId(id)}
                     onDragLeaveStage={() => setDraggedToStageId(null)}
                     onDrop={handleDrop}
-                    onMove={(leadId, stageId) => move.mutate({ leadId, stageId })}
+                    onMove={(leadId, stageId) =>
+                      move.mutate({ leadId, stageId })
+                    }
                     onLostStage={(leadId, stageId) => {
                       setLostLeadId(leadId);
                       setLostTargetStageId(stageId);
@@ -538,7 +561,8 @@ function LeadColumn(props: {
     LOST: 'danger',
   };
   const [dragOver, setDragOver] = useState(false);
-  const isDraggingInto = props.draggedId !== null && props.draggedToStageId === props.stage.id;
+  const isDraggingInto =
+    props.draggedId !== null && props.draggedToStageId === props.stage.id;
 
   return (
     <section
@@ -630,7 +654,9 @@ function LeadColumn(props: {
             onDragStart={props.onDragStart}
             onDragEnd={props.onDragEnd}
             onMove={(leadId, stageId) => props.onMove(leadId, stageId)}
-            onLostStage={(leadId, stageId) => props.onLostStage(leadId, stageId)}
+            onLostStage={(leadId, stageId) =>
+              props.onLostStage(leadId, stageId)
+            }
           />
         ))}
         {query.hasNextPage ? (
@@ -671,7 +697,9 @@ function LeadCard(props: {
   const [stageChoice, setStageChoice] = useState<string | null>(null);
   // Keyboard drag state: Space picks up, arrows move target, Space drops, Escape cancels.
   const [keyboardDragging, setKeyboardDragging] = useState(false);
-  const [keyboardTargetStage, setKeyboardTargetStage] = useState<string | null>(null);
+  const [keyboardTargetStage, setKeyboardTargetStage] = useState<string | null>(
+    null,
+  );
 
   const acceptSuggestion = useMutation({
     mutationFn: () =>
@@ -730,7 +758,13 @@ function LeadCard(props: {
       const idx = props.stages.findIndex(
         (s) => s.id === (keyboardTargetStage ?? props.currentStageId),
       );
-      const next = idx === -1 ? 0 : Math.min(Math.max(idx + (e.key === 'ArrowRight' ? 1 : -1), 0), props.stages.length - 1);
+      const next =
+        idx === -1
+          ? 0
+          : Math.min(
+              Math.max(idx + (e.key === 'ArrowRight' ? 1 : -1), 0),
+              props.stages.length - 1,
+            );
       setKeyboardTargetStage(props.stages[next].id);
     }
   }
@@ -774,10 +808,7 @@ function LeadCard(props: {
                 </Badge>
               ) : null}
               {props.item.suggestedStageId ? (
-                <Badge
-                  tone="warning"
-                  data-testid="lead-card-stage-suggested"
-                >
+                <Badge tone="warning" data-testid="lead-card-stage-suggested">
                   {t('leads.stageSuggested')}
                 </Badge>
               ) : null}
@@ -903,7 +934,6 @@ function LeadCard(props: {
             ) : null}
           </div>
         ) : null}
-
       </article>
     </li>
   );
