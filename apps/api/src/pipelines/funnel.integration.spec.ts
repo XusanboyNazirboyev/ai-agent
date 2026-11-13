@@ -263,6 +263,36 @@ describe('defaults and migration (ADR 058)', () => {
     });
   });
 
+  it('the backfill marks leads outside the first stage as operator-staged, once, and leaves the rest', async () => {
+    const w = await world();
+    const { pipelineId } = await db.$transaction(async (tx) => {
+      await ensureLeadStages(tx, w.tenantId);
+      return tx.pipeline
+        .findFirstOrThrow({
+          where: { tenantId: w.tenantId, isDefault: true },
+          select: { id: true },
+        })
+        .then((p) => ({ pipelineId: p.id }));
+    });
+    const first = await seedLead(w, pipelineId, 'NEW');
+    const moved = await seedLead(w, pipelineId, 'QUALIFIED');
+    const sql = readFileSync(
+      resolve(
+        process.cwd(),
+        'prisma/migrations/20261122100000_funnel_backfill_operator_staged/migration.sql',
+      ),
+      'utf8',
+    );
+    await db.$executeRawUnsafe(sql);
+    await db.$executeRawUnsafe(sql); // idempotent
+    expect(
+      await db.lead.findFirstOrThrow({ where: { id: first.id } }),
+    ).toMatchObject({ stageSetBy: 'AGENT', stageSetAt: null });
+    expect(
+      await db.lead.findFirstOrThrow({ where: { id: moved.id } }),
+    ).toMatchObject({ stageSetBy: 'OPERATOR' });
+  });
+
   it('the migration is additive: no data statements', () => {
     const sql = readFileSync(
       resolve(
