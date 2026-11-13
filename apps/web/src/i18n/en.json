@@ -1179,5 +1179,17 @@
   "errors.CONNECTOR_UNAVAILABLE": "The connector is not usable.",
   "errors.CONNECTOR_CAPABILITY_MISSING": "The connector does not offer what this role needs.",
   "leads.aiSuggestionChip": "AI suggestion",
-  "leads.movedTo": "Moved to {stage}"
+  "leads.movedTo": "Moved to {stage}",
+  "leads.add": "Add lead",
+  "leads.addToStage": "Add a lead to {stage}",
+  "leads.add.title": "Add a lead",
+  "leads.add.description": "For a phone call, a visit or a referral. The lead appears in the stage you choose.",
+  "leads.add.name": "Name",
+  "leads.add.phone": "Phone",
+  "leads.add.stage": "Stage",
+  "leads.add.note": "Note",
+  "leads.add.sourcePlaceholder": "Manual",
+  "leads.add.submit": "Add lead",
+  "toast.leadAdded": "Lead added.",
+  "errors.STAGE_NOT_OPEN": "A lead cannot be added to a closed stage."
 }

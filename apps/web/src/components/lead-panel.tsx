@@ -152,14 +152,16 @@ function PanelBody(props: {
             onClick={props.onClose}
           />
         </div>
-        <Link
-          href={`/inbox?scope=all&c=${item.conversation.id}`}
-          data-testid="lead-panel-conversation"
-          className="inline-flex min-h-9 w-fit items-center gap-1.5 rounded-lg text-sm font-medium text-primary-fg hover:underline"
-        >
-          <Icon name="message" />
-          {t('leads.openConversation')}
-        </Link>
+        {item.conversation.channelType !== 'manual' ? (
+          <Link
+            href={`/inbox?scope=all&c=${item.conversation.id}`}
+            data-testid="lead-panel-conversation"
+            className="inline-flex min-h-9 w-fit items-center gap-1.5 rounded-lg text-sm font-medium text-primary-fg hover:underline"
+          >
+            <Icon name="message" />
+            {t('leads.openConversation')}
+          </Link>
+        ) : null}
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <nav aria-labelledby={stageHeadingId} className="flex flex-col gap-2">

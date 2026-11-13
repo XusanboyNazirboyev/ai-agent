@@ -1,21 +1,21 @@
-import { z } from "zod";
-import { extractPhone } from "./phone.js";
+import { z } from 'zod';
+import { extractPhone } from './phone.js';
 import {
   amountCurrencyPaired,
   isAmount,
   isCurrency,
   MAX_SOURCE,
-} from "../pipelines/pipeline-rules.js";
+} from '../pipelines/pipeline-rules.js';
 
 /**
  * Pure rules of a lead added by hand (ADR 061). No database access.
  */
 
 /** `channel_type` of the per-tenant internal channel account. */
-export const MANUAL_CHANNEL_TYPE = "manual";
+export const MANUAL_CHANNEL_TYPE = 'manual';
 export const MAX_MANUAL_NAME = 200;
 export const MAX_MANUAL_NOTE = 1000;
-export const MANUAL_DEFAULT_SOURCE = "manual";
+export const MANUAL_DEFAULT_SOURCE = 'manual';
 
 /** True for the internal channel type that is never a real channel. */
 export function isManualChannelType(channelType: string): boolean {
@@ -72,7 +72,7 @@ export interface ManualLeadInput {
 
 export type ManualLeadParse =
   | { ok: true; input: ManualLeadInput }
-  | { ok: false; code: "INVALID_BODY" | "INVALID_VALUE" };
+  | { ok: false; code: 'INVALID_BODY' | 'INVALID_VALUE' };
 
 /**
  * Shape and value checks that need no database: strict body, normalised
@@ -81,20 +81,20 @@ export type ManualLeadParse =
  */
 export function parseManualLeadBody(body: unknown): ManualLeadParse {
   const parsed = ManualLeadBody.safeParse(body);
-  if (!parsed.success) return { ok: false, code: "INVALID_BODY" };
+  if (!parsed.success) return { ok: false, code: 'INVALID_BODY' };
   const raw = parsed.data;
   let phone: string | undefined;
-  if (raw.phone !== undefined && raw.phone.trim() !== "") {
+  if (raw.phone !== undefined && raw.phone.trim() !== '') {
     phone = extractPhone(raw.phone);
-    if (phone === undefined) return { ok: false, code: "INVALID_VALUE" };
+    if (phone === undefined) return { ok: false, code: 'INVALID_VALUE' };
   }
   if (!amountCurrencyPaired(raw.amount, raw.currency))
-    return { ok: false, code: "INVALID_VALUE" };
+    return { ok: false, code: 'INVALID_VALUE' };
   if (
     raw.amount !== undefined &&
     (!isAmount(raw.amount) || !isCurrency(raw.currency))
   )
-    return { ok: false, code: "INVALID_VALUE" };
+    return { ok: false, code: 'INVALID_VALUE' };
   return {
     ok: true,
     input: {
@@ -105,9 +105,9 @@ export function parseManualLeadBody(body: unknown): ManualLeadParse {
       amount: raw.amount,
       currency: raw.currency,
       source:
-        raw.source && raw.source !== "" ? raw.source : MANUAL_DEFAULT_SOURCE,
+        raw.source && raw.source !== '' ? raw.source : MANUAL_DEFAULT_SOURCE,
       ownerOperatorId: raw.ownerOperatorId,
-      note: raw.note ?? "",
+      note: raw.note ?? '',
       tagIds: [...new Set(raw.tagIds ?? [])],
     },
   };
@@ -115,12 +115,12 @@ export function parseManualLeadBody(body: unknown): ManualLeadParse {
 
 export type StageChoice =
   | { ok: true; stageId: string; pipelineId: string }
-  | { ok: false; code: "NOT_FOUND" | "INVALID_VALUE" | "STAGE_NOT_OPEN" };
+  | { ok: false; code: 'NOT_FOUND' | 'INVALID_VALUE' | 'STAGE_NOT_OPEN' };
 
 export interface StageRow {
   readonly id: string;
   readonly pipelineId: string;
-  readonly kind: "OPEN" | "WON" | "LOST";
+  readonly kind: 'OPEN' | 'WON' | 'LOST';
 }
 
 /**
@@ -133,9 +133,9 @@ export function chooseStage(
   stage: StageRow | null,
   requestedPipelineId: string | undefined,
 ): StageChoice {
-  if (!stage) return { ok: false, code: "NOT_FOUND" };
+  if (!stage) return { ok: false, code: 'NOT_FOUND' };
   if (requestedPipelineId && requestedPipelineId !== stage.pipelineId)
-    return { ok: false, code: "INVALID_VALUE" };
-  if (stage.kind !== "OPEN") return { ok: false, code: "STAGE_NOT_OPEN" };
+    return { ok: false, code: 'INVALID_VALUE' };
+  if (stage.kind !== 'OPEN') return { ok: false, code: 'STAGE_NOT_OPEN' };
   return { ok: true, stageId: stage.id, pipelineId: stage.pipelineId };
 }

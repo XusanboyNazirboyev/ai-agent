@@ -1179,5 +1179,17 @@
   "errors.CONNECTOR_UNAVAILABLE": "Connector foydalanish uchun mavjud emas.",
   "errors.CONNECTOR_CAPABILITY_MISSING": "Connector ushbu rolga kerak bo‘lgan imkoniyatni takhmil qilmaydi.",
   "leads.aiSuggestionChip": "AI taklifi",
-  "leads.movedTo": "«{stage}» bosqichiga o‘tkazildi"
+  "leads.movedTo": "«{stage}» bosqichiga o‘tkazildi",
+  "leads.add": "Lid qo'shish",
+  "leads.addToStage": "«{stage}» bosqichiga lid qo'shish",
+  "leads.add.title": "Lid qo'shish",
+  "leads.add.description": "Telefon qo'ng'irog'i, tashrif yoki tavsiya uchun. Lid tanlangan bosqichda paydo bo'ladi.",
+  "leads.add.name": "Ism",
+  "leads.add.phone": "Telefon",
+  "leads.add.stage": "Bosqich",
+  "leads.add.note": "Izoh",
+  "leads.add.sourcePlaceholder": "Qo'lda",
+  "leads.add.submit": "Lid qo'shish",
+  "toast.leadAdded": "Lid qo'shildi.",
+  "errors.STAGE_NOT_OPEN": "Yopiq bosqichga lid qo'shib bo'lmaydi."
 }

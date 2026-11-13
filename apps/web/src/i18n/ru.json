@@ -1179,5 +1179,17 @@
   "errors.CONNECTOR_UNAVAILABLE": "Коннектор недоступен.",
   "errors.CONNECTOR_CAPABILITY_MISSING": "Коннектор не предоставляет то, что нужно этой роли.",
   "leads.aiSuggestionChip": "Предложение ИИ",
-  "leads.movedTo": "Перенесён в «{stage}»"
+  "leads.movedTo": "Перенесён в «{stage}»",
+  "leads.add": "Добавить лид",
+  "leads.addToStage": "Добавить лид в этап «{stage}»",
+  "leads.add.title": "Добавить лид",
+  "leads.add.description": "Для звонка, визита или рекомендации. Лид появится в выбранном этапе.",
+  "leads.add.name": "Имя",
+  "leads.add.phone": "Телефон",
+  "leads.add.stage": "Этап",
+  "leads.add.note": "Заметка",
+  "leads.add.sourcePlaceholder": "Вручную",
+  "leads.add.submit": "Добавить лид",
+  "toast.leadAdded": "Лид добавлен.",
+  "errors.STAGE_NOT_OPEN": "Нельзя добавить лид в закрытый этап."
 }

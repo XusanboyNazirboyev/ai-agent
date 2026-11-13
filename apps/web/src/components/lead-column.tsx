@@ -60,6 +60,8 @@ export function LeadColumn(props: {
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
   onAnnounce: (message: string) => void;
+  /** Opens the add-lead dialog on this stage (open stages, editors only). */
+  onAdd?: (stageId: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const listId = useId();
@@ -111,6 +113,17 @@ export function LeadColumn(props: {
           >
             {stage.count}
           </span>
+          {props.onAdd && !terminal ? (
+            <button
+              type="button"
+              data-testid="lead-column-add"
+              aria-label={t('leads.addToStage', { stage: name })}
+              onClick={() => props.onAdd?.(stage.id)}
+              className="grid min-h-9 min-w-9 place-items-center rounded-lg text-muted hover:bg-surface-2"
+            >
+              <Icon name="plus" className="h-4 w-4" />
+            </button>
+          ) : null}
           {terminal && !props.single ? (
             <button
               type="button"

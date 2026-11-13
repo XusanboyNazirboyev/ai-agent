@@ -28,6 +28,7 @@ import {
   writeCollapsed,
   type LeadFilters,
 } from './lead-board-utils';
+import { AddLeadDialog } from './add-lead-dialog';
 import { LeadColumn } from './lead-column';
 import { useLeadMove } from './lead-move';
 import { LeadPanel } from './lead-panel';
@@ -67,6 +68,9 @@ export function LeadsBoard(): ReactNode {
   const isMobile = useIsMobile();
   const [exporting, setExporting] = useState(false);
   const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
+  const canAdd = operator.role !== 'VIEWER';
+  // The add-lead dialog: open flag and the stage to preselect (column "+").
+  const [adding, setAdding] = useState<{ stageId: string | null } | null>(null);
 
   const pipelines = useQuery({
     queryKey: ['pipelines'],
@@ -277,13 +281,25 @@ export function LeadsBoard(): ReactNode {
           onChange={setFilters}
           isMobile={isMobile}
         />
+        {canAdd ? (
+          <Button
+            size="sm"
+            variant="primary"
+            icon="plus"
+            data-testid="lead-add"
+            className="ml-auto min-w-0 max-w-full"
+            onClick={() => setAdding({ stageId: null })}
+          >
+            {t('leads.add')}
+          </Button>
+        ) : null}
         {canExport ? (
           <Button
             size="sm"
             variant="secondary"
             loading={exporting}
             data-testid="leads-export"
-            className="ml-auto min-w-0 max-w-full"
+            className={`min-w-0 max-w-full ${canAdd ? '' : 'ml-auto'}`}
             onClick={() => {
               const qs = new URLSearchParams();
               if (filters.tagId) qs.set('tagId', filters.tagId);
@@ -444,6 +460,7 @@ export function LeadsBoard(): ReactNode {
               onOpen={openLead}
               onRequestMove={requestMove}
               onAnnounce={setDragStatus}
+              onAdd={canAdd ? (id) => setAdding({ stageId: id }) : undefined}
             />
           ))}
         </div>
@@ -456,6 +473,17 @@ export function LeadsBoard(): ReactNode {
         onClose={() => setOpenItem(null)}
         onRequestMove={requestMove}
       />
+
+      {/* Mounted only while open, so its fields are not on the page otherwise. */}
+      {active && adding ? (
+        <AddLeadDialog
+          open
+          pipelineId={active.id}
+          stages={columns}
+          stageId={adding?.stageId ?? mobileStageId}
+          onClose={() => setAdding(null)}
+        />
+      ) : null}
 
       <FormDialog
         open={lost !== null}

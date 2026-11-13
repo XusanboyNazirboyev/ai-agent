@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
-import { api, errorKey } from "@/lib/api";
-import type { LeadStage, PipelineView, Role } from "@/lib/types";
-import { useShell } from "./app-shell";
-import { SettingsSubPage } from "./settings-section-nav";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { ConfirmDialog } from "./ui/confirm-dialog";
-import { fieldClass } from "./ui/fields";
-import { FormDialog } from "./ui/form-dialog";
-import { Icon } from "./ui/icons";
-import { SkeletonRows } from "./ui/skeleton";
-import { useToast } from "./ui/toast";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { useI18n } from '@/i18n';
+import { api, errorKey } from '@/lib/api';
+import type { LeadStage, PipelineView, Role } from '@/lib/types';
+import { useShell } from './app-shell';
+import { SettingsSubPage } from './settings-section-nav';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { ConfirmDialog } from './ui/confirm-dialog';
+import { fieldClass } from './ui/fields';
+import { FormDialog } from './ui/form-dialog';
+import { Icon } from './ui/icons';
+import { SkeletonRows } from './ui/skeleton';
+import { useToast } from './ui/toast';
 
 function canManage(role: Role): boolean {
-  return role === "OWNER" || role === "ADMIN";
+  return role === 'OWNER' || role === 'ADMIN';
 }
 
 function stageName(stage: LeadStage, t: (key: string) => string): string {
-  return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : "");
+  return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
 }
 
 export function PipelinesSettingsPage(): ReactNode {
@@ -31,63 +31,63 @@ export function PipelinesSettingsPage(): ReactNode {
   const qc = useQueryClient();
   const manage = canManage(operator.role);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createName, setCreateName] = useState("");
+  const [createName, setCreateName] = useState('');
   const [renameTarget, setRenameTarget] = useState<PipelineView | null>(null);
-  const [renameName, setRenameName] = useState("");
+  const [renameName, setRenameName] = useState('');
   const [defaultTarget, setDefaultTarget] = useState<PipelineView | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<PipelineView | null>(null);
 
   const pipelines = useQuery({
-    queryKey: ["pipelines"],
-    queryFn: () => api<{ items: PipelineView[] }>("/api/v1/pipelines"),
+    queryKey: ['pipelines'],
+    queryFn: () => api<{ items: PipelineView[] }>('/api/v1/pipelines'),
   });
 
   const invalidate = (): void => {
-    void qc.invalidateQueries({ queryKey: ["pipelines"] });
-    void qc.invalidateQueries({ queryKey: ["lead-stages"] });
-    void qc.invalidateQueries({ queryKey: ["leads"] });
+    void qc.invalidateQueries({ queryKey: ['pipelines'] });
+    void qc.invalidateQueries({ queryKey: ['lead-stages'] });
+    void qc.invalidateQueries({ queryKey: ['leads'] });
   };
 
   const create = useMutation({
     mutationFn: (name: string) =>
-      api<PipelineView>("/api/v1/pipelines", {
-        method: "POST",
+      api<PipelineView>('/api/v1/pipelines', {
+        method: 'POST',
         body: { name },
       }),
     onSuccess: () => {
       setCreateOpen(false);
-      setCreateName("");
-      toast(t("toast.pipelineCreated"));
+      setCreateName('');
+      toast(t('toast.pipelineCreated'));
       invalidate();
     },
   });
   const rename = useMutation({
     mutationFn: (input: { id: string; name: string }) =>
       api<PipelineView>(`/api/v1/pipelines/${input.id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: { name: input.name },
       }),
     onSuccess: () => {
       setRenameTarget(null);
-      toast(t("toast.pipelineRenamed"));
+      toast(t('toast.pipelineRenamed'));
       invalidate();
     },
   });
   const makeDefault = useMutation({
     mutationFn: (id: string) =>
-      api(`/api/v1/pipelines/${id}/make-default`, { method: "POST" }),
+      api(`/api/v1/pipelines/${id}/make-default`, { method: 'POST' }),
     onSuccess: () => {
       setDefaultTarget(null);
-      toast(t("toast.pipelineDefault"));
+      toast(t('toast.pipelineDefault'));
       invalidate();
     },
   });
   const archive = useMutation({
     mutationFn: (id: string) =>
-      api(`/api/v1/pipelines/${id}`, { method: "DELETE" }),
+      api(`/api/v1/pipelines/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       setArchiveTarget(null);
-      toast(t("toast.pipelineArchived"));
+      toast(t('toast.pipelineArchived'));
       invalidate();
     },
   });
@@ -101,14 +101,14 @@ export function PipelinesSettingsPage(): ReactNode {
       <div
         role="region"
         tabIndex={0}
-        aria-label={t("settings.section.pipeline")}
+        aria-label={t('settings.section.pipeline')}
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold">{t("leadStages.title")}</h2>
-              <p className="text-sm text-muted">{t("pipelines.intro")}</p>
+              <h2 className="text-lg font-semibold">{t('leadStages.title')}</h2>
+              <p className="text-sm text-muted">{t('pipelines.intro')}</p>
             </div>
             {manage ? (
               <Button
@@ -117,14 +117,14 @@ export function PipelinesSettingsPage(): ReactNode {
                 onClick={() => setCreateOpen(true)}
                 data-testid="pipeline-create"
               >
-                {t("pipelines.create")}
+                {t('pipelines.create')}
               </Button>
             ) : null}
           </div>
           {!manage ? (
             <p className="flex items-start gap-2 rounded-xl bg-surface-2 p-3 text-sm text-muted">
               <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />
-              {t("settings.readOnly")}
+              {t('settings.readOnly')}
             </p>
           ) : null}
           {err ? (
@@ -134,7 +134,7 @@ export function PipelinesSettingsPage(): ReactNode {
           ) : null}
           {pipelines.isPending ? (
             <div role="status">
-              <span className="sr-only">{t("app.loading")}</span>
+              <span className="sr-only">{t('app.loading')}</span>
               <SkeletonRows rows={3} />
             </div>
           ) : null}
@@ -144,7 +144,7 @@ export function PipelinesSettingsPage(): ReactNode {
                 {t(errorKey(pipelines.error))}
               </p>
               <Button size="sm" onClick={() => void pipelines.refetch()}>
-                {t("app.retry")}
+                {t('app.retry')}
               </Button>
             </div>
           ) : null}
@@ -158,7 +158,7 @@ export function PipelinesSettingsPage(): ReactNode {
                   manage={manage}
                   defaultOpen={list.length === 1}
                   onRename={() => {
-                    setRenameName(pipeline.name ?? "");
+                    setRenameName(pipeline.name ?? '');
                     setRenameTarget(pipeline);
                   }}
                   onDefault={() => setDefaultTarget(pipeline)}
@@ -172,7 +172,7 @@ export function PipelinesSettingsPage(): ReactNode {
 
       <FormDialog
         open={createOpen}
-        title={t("pipelines.create")}
+        title={t('pipelines.create')}
         testId="pipeline-create-dialog"
         onClose={() => setCreateOpen(false)}
         onSubmit={() => {
@@ -182,16 +182,16 @@ export function PipelinesSettingsPage(): ReactNode {
         footer={
           <>
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>
-              {t("app.cancel")}
+              {t('app.cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={create.isPending}>
-              {t("app.save")}
+              {t('app.save')}
             </Button>
           </>
         }
       >
         <label className="flex flex-col gap-1 text-sm font-medium">
-          {t("pipelines.newName")}
+          {t('pipelines.newName')}
           <input
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
@@ -204,7 +204,7 @@ export function PipelinesSettingsPage(): ReactNode {
 
       <FormDialog
         open={renameTarget !== null}
-        title={t("pipelines.renameTitle")}
+        title={t('pipelines.renameTitle')}
         testId="pipeline-rename-dialog"
         onClose={() => setRenameTarget(null)}
         onSubmit={() => {
@@ -215,16 +215,16 @@ export function PipelinesSettingsPage(): ReactNode {
         footer={
           <>
             <Button variant="secondary" onClick={() => setRenameTarget(null)}>
-              {t("app.cancel")}
+              {t('app.cancel')}
             </Button>
             <Button type="submit" variant="primary" loading={rename.isPending}>
-              {t("app.save")}
+              {t('app.save')}
             </Button>
           </>
         }
       >
         <label className="flex flex-col gap-1 text-sm font-medium">
-          {t("pipelines.newName")}
+          {t('pipelines.newName')}
           <input
             value={renameName}
             onChange={(e) => setRenameName(e.target.value)}
@@ -237,24 +237,24 @@ export function PipelinesSettingsPage(): ReactNode {
 
       <ConfirmDialog
         open={defaultTarget !== null}
-        title={t("pipelines.defaultTitle")}
-        body={t("pipelines.defaultBody", {
-          name: defaultTarget?.name ?? t("pipeline.defaultName"),
+        title={t('pipelines.defaultTitle')}
+        body={t('pipelines.defaultBody', {
+          name: defaultTarget?.name ?? t('pipeline.defaultName'),
         })}
-        confirmLabel={t("pipelines.makeDefault")}
-        cancelLabel={t("app.cancel")}
+        confirmLabel={t('pipelines.makeDefault')}
+        cancelLabel={t('app.cancel')}
         busy={makeDefault.isPending}
         onConfirm={() => defaultTarget && makeDefault.mutate(defaultTarget.id)}
         onCancel={() => !makeDefault.isPending && setDefaultTarget(null)}
       />
       <ConfirmDialog
         open={archiveTarget !== null}
-        title={t("pipelines.archiveTitle")}
-        body={t("pipelines.archiveBody", {
-          name: archiveTarget?.name ?? t("pipeline.defaultName"),
+        title={t('pipelines.archiveTitle')}
+        body={t('pipelines.archiveBody', {
+          name: archiveTarget?.name ?? t('pipeline.defaultName'),
         })}
-        confirmLabel={t("pipelines.archive")}
-        cancelLabel={t("app.cancel")}
+        confirmLabel={t('pipelines.archive')}
+        cancelLabel={t('app.cancel')}
         tone="danger"
         busy={archive.isPending}
         onConfirm={() => archiveTarget && archive.mutate(archiveTarget.id)}
@@ -276,28 +276,28 @@ function PipelineCard(props: {
   const { t } = useI18n();
   const qc = useQueryClient();
   const toast = useToast();
-  const [stageName, setStageName] = useState("");
-  const [createKind, setCreateKind] = useState<"OPEN" | "WON" | "LOST">("OPEN");
+  const [stageName, setStageName] = useState('');
+  const [createKind, setCreateKind] = useState<'OPEN' | 'WON' | 'LOST'>('OPEN');
   const [open, setOpen] = useState(props.defaultOpen);
   const bodyId = `pipeline-body-${props.pipeline.id}`;
 
   const stages = useQuery({
-    queryKey: ["lead-stages", props.pipeline.id],
+    queryKey: ['lead-stages', props.pipeline.id],
     queryFn: () =>
       api<LeadStage[]>(`/api/v1/leads/stages?pipelineId=${props.pipeline.id}`),
   });
   const list = stages.data ?? [];
 
   const invalidate = (): void => {
-    void qc.invalidateQueries({ queryKey: ["lead-stages", props.pipeline.id] });
-    void qc.invalidateQueries({ queryKey: ["pipelines"] });
-    void qc.invalidateQueries({ queryKey: ["leads"] });
+    void qc.invalidateQueries({ queryKey: ['lead-stages', props.pipeline.id] });
+    void qc.invalidateQueries({ queryKey: ['pipelines'] });
+    void qc.invalidateQueries({ queryKey: ['leads'] });
   };
 
   const createStage = useMutation({
-    mutationFn: (input: { name: string; kind: "OPEN" | "WON" | "LOST" }) =>
-      api<LeadStage>("/api/v1/leads/stages", {
-        method: "POST",
+    mutationFn: (input: { name: string; kind: 'OPEN' | 'WON' | 'LOST' }) =>
+      api<LeadStage>('/api/v1/leads/stages', {
+        method: 'POST',
         body: {
           name: input.name,
           pipelineId: props.pipeline.id,
@@ -305,9 +305,9 @@ function PipelineCard(props: {
         },
       }),
     onSuccess: () => {
-      setStageName("");
-      setCreateKind("OPEN");
-      toast(t("toast.stageCreated"));
+      setStageName('');
+      setCreateKind('OPEN');
+      toast(t('toast.stageCreated'));
       invalidate();
     },
   });
@@ -315,56 +315,56 @@ function PipelineCard(props: {
     mutationFn: (input: {
       id: string;
       name: string;
-      kind?: "OPEN" | "WON" | "LOST";
+      kind?: 'OPEN' | 'WON' | 'LOST';
     }) =>
       api<LeadStage>(`/api/v1/leads/stages/${input.id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.kind !== undefined ? { kind: input.kind } : {}),
         },
       }),
     onSuccess: () => {
-      toast(t("toast.stageRenamed"));
+      toast(t('toast.stageRenamed'));
       invalidate();
     },
   });
   const deleteStage = useMutation({
     mutationFn: (id: string) =>
-      api(`/api/v1/leads/stages/${id}`, { method: "DELETE" }),
+      api(`/api/v1/leads/stages/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast(t("toast.stageDeleted"));
+      toast(t('toast.stageDeleted'));
       invalidate();
     },
   });
   const reorder = useMutation({
     mutationFn: (stageIds: string[]) =>
       api(`/api/v1/pipelines/${props.pipeline.id}/stages/order`, {
-        method: "PUT",
+        method: 'PUT',
         body: { stageIds },
       }),
     onSuccess: () => {
-      toast(t("toast.stageReordered"));
+      toast(t('toast.stageReordered'));
       invalidate();
     },
   });
 
   const updateAiStaging = useMutation({
-    mutationFn: (aiStaging: "OFF" | "SUGGEST" | "AUTO") =>
+    mutationFn: (aiStaging: 'OFF' | 'SUGGEST' | 'AUTO') =>
       api<PipelineView>(`/api/v1/pipelines/${props.pipeline.id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: { aiStaging },
       }),
     onSuccess: () => {
-      toast(t("toast.aiStagingUpdated"));
+      toast(t('toast.aiStagingUpdated'));
       invalidate();
     },
   });
 
   const updateStageKind = useMutation({
-    mutationFn: (input: { id: string; kind: "OPEN" | "WON" | "LOST" }) =>
+    mutationFn: (input: { id: string; kind: 'OPEN' | 'WON' | 'LOST' }) =>
       api<LeadStage>(`/api/v1/leads/stages/${input.id}`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: { kind: input.kind },
       }),
     onSuccess: () => {
@@ -383,7 +383,7 @@ function PipelineCard(props: {
     reorder.mutate(next.map((s) => s.id));
   };
 
-  const name = props.pipeline.name ?? t("pipeline.defaultName");
+  const name = props.pipeline.name ?? t('pipeline.defaultName');
   return (
     <li
       className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4"
@@ -399,21 +399,21 @@ function PipelineCard(props: {
           className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left hover:bg-surface-2"
         >
           <Icon
-            name={open ? "chevronDown" : "chevronRight"}
+            name={open ? 'chevronDown' : 'chevronRight'}
             className="h-4 w-4 shrink-0 text-muted"
           />
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
               <h3 className="truncate font-semibold">{name}</h3>
               {props.pipeline.isDefault ? (
-                <Badge tone="neutral">{t("pipelines.defaultBadge")}</Badge>
+                <Badge tone="neutral">{t('pipelines.defaultBadge')}</Badge>
               ) : null}
             </span>
             <span className="block text-sm text-muted">
-              {t("pipelines.stagesCount", {
+              {t('pipelines.stagesCount', {
                 count: props.pipeline.stageCount,
-              })}{" "}
-              · {t("pipelines.leadsCount", { count: props.pipeline.leadCount })}
+              })}{' '}
+              · {t('pipelines.leadsCount', { count: props.pipeline.leadCount })}
             </span>
           </span>
         </button>
@@ -424,7 +424,7 @@ function PipelineCard(props: {
               onClick={props.onRename}
               data-testid="pipeline-rename"
             >
-              {t("pipelines.rename")}
+              {t('pipelines.rename')}
             </Button>
             {!props.pipeline.isDefault ? (
               <Button
@@ -432,7 +432,7 @@ function PipelineCard(props: {
                 onClick={props.onDefault}
                 data-testid="pipeline-make-default"
               >
-                {t("pipelines.makeDefault")}
+                {t('pipelines.makeDefault')}
               </Button>
             ) : null}
             <Button
@@ -441,7 +441,7 @@ function PipelineCard(props: {
               onClick={props.onArchive}
               data-testid="pipeline-archive"
             >
-              {t("pipelines.archive")}
+              {t('pipelines.archive')}
             </Button>
           </div>
         ) : null}
@@ -450,33 +450,33 @@ function PipelineCard(props: {
         <div id={bodyId} className="flex flex-col gap-3">
           {props.manage ? (
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted">
-              <span className="shrink-0">{t("pipelines.aiStaging")}:</span>
+              <span className="shrink-0">{t('pipelines.aiStaging')}:</span>
               <select
-                aria-label={t("pipelines.aiStaging")}
+                aria-label={t('pipelines.aiStaging')}
                 data-testid="pipeline-ai-staging"
-                value={props.pipeline.aiStaging ?? "OFF"}
+                value={props.pipeline.aiStaging ?? 'OFF'}
                 onChange={(e) =>
                   updateAiStaging.mutate(
-                    e.target.value as "OFF" | "SUGGEST" | "AUTO",
+                    e.target.value as 'OFF' | 'SUGGEST' | 'AUTO',
                   )
                 }
                 className={fieldClass}
                 disabled={updateAiStaging.isPending}
               >
-                <option value="OFF">{t("pipelines.aiStaging.off")}</option>
+                <option value="OFF">{t('pipelines.aiStaging.off')}</option>
                 <option value="SUGGEST">
-                  {t("pipelines.aiStaging.suggest")}
+                  {t('pipelines.aiStaging.suggest')}
                 </option>
-                <option value="AUTO">{t("pipelines.aiStaging.auto")}</option>
+                <option value="AUTO">{t('pipelines.aiStaging.auto')}</option>
               </select>
               <span className="truncate text-xs">
-                {t("pipelines.aiStagingHint")}
+                {t('pipelines.aiStagingHint')}
               </span>
             </div>
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <h4 className="text-sm font-medium">{t("pipelines.stages")}</h4>
+            <h4 className="text-sm font-medium">{t('pipelines.stages')}</h4>
             {stages.isPending ? <SkeletonRows rows={2} /> : null}
             {stages.isError ? (
               <p role="alert" className="text-sm text-danger-fg">
@@ -520,7 +520,7 @@ function PipelineCard(props: {
                 }}
               >
                 <label className="flex min-w-0 flex-1 basis-40 flex-col gap-1 text-sm font-medium">
-                  {t("pipelines.stageName")}
+                  {t('pipelines.stageName')}
                   <input
                     value={stageName}
                     onChange={(e) => setStageName(e.target.value)}
@@ -530,22 +530,22 @@ function PipelineCard(props: {
                   />
                 </label>
                 <label className="flex min-w-0 basis-32 flex-col gap-1 text-sm font-medium sr-only">
-                  {t("pipelines.stageKind")}
+                  {t('pipelines.stageKind')}
                   <select
-                    aria-label={t("pipelines.stageKind")}
+                    aria-label={t('pipelines.stageKind')}
                     value={createKind}
                     onChange={(e) =>
-                      setCreateKind(e.target.value as "OPEN" | "WON" | "LOST")
+                      setCreateKind(e.target.value as 'OPEN' | 'WON' | 'LOST')
                     }
                     className={fieldClass}
                     data-testid="stage-add-kind"
                   >
                     <option value="OPEN">
-                      {t("pipelines.stageKind.OPEN")}
+                      {t('pipelines.stageKind.OPEN')}
                     </option>
-                    <option value="WON">{t("pipelines.stageKind.WON")}</option>
+                    <option value="WON">{t('pipelines.stageKind.WON')}</option>
                     <option value="LOST">
-                      {t("pipelines.stageKind.LOST")}
+                      {t('pipelines.stageKind.LOST')}
                     </option>
                   </select>
                 </label>
@@ -557,7 +557,7 @@ function PipelineCard(props: {
                   disabled={!stageName.trim()}
                   data-testid="stage-add"
                 >
-                  {t("pipelines.stageAdd")}
+                  {t('pipelines.stageAdd')}
                 </Button>
               </form>
             ) : null}
@@ -575,15 +575,15 @@ function StageRow(props: {
   pipelineIsDefault: boolean;
   manage: boolean;
   onRename: (name: string) => void;
-  onRenameKind: (kind: "OPEN" | "WON" | "LOST") => void;
+  onRenameKind: (kind: 'OPEN' | 'WON' | 'LOST') => void;
   onDelete: () => void;
   onMove: (index: number, dir: -1 | 1) => void;
   busy: boolean;
 }): ReactNode {
   const { t } = useI18n();
   const [value, setValue] = useState(stageName(props.stage, t));
-  const [kind, setKind] = useState<"OPEN" | "WON" | "LOST">(
-    props.stage.kind ?? "OPEN",
+  const [kind, setKind] = useState<'OPEN' | 'WON' | 'LOST'>(
+    props.stage.kind ?? 'OPEN',
   );
   const codedDefault = props.stage.code !== null && props.pipelineIsDefault;
   return (
@@ -598,7 +598,7 @@ function StageRow(props: {
           maxLength={80}
           disabled={props.busy}
           className={`${fieldClass} min-w-0 flex-1 basis-40`}
-          aria-label={t("pipelines.stageName")}
+          aria-label={t('pipelines.stageName')}
         />
       ) : (
         <span className="min-w-0 flex-1 truncate">
@@ -616,30 +616,30 @@ function StageRow(props: {
             disabled={props.busy || !value.trim()}
             data-testid="stage-save"
           >
-            {t("app.save")}
+            {t('app.save')}
           </Button>
           <select
-            aria-label={t("pipelines.stageKind")}
+            aria-label={t('pipelines.stageKind')}
             data-testid="stage-kind"
             value={kind}
             onChange={(e) => {
-              const next = e.target.value as "OPEN" | "WON" | "LOST";
+              const next = e.target.value as 'OPEN' | 'WON' | 'LOST';
               setKind(next);
               props.onRenameKind(next);
             }}
             className={fieldClass}
             disabled={props.busy}
           >
-            <option value="OPEN">{t("pipelines.stageKind.OPEN")}</option>
-            <option value="WON">{t("pipelines.stageKind.WON")}</option>
-            <option value="LOST">{t("pipelines.stageKind.LOST")}</option>
+            <option value="OPEN">{t('pipelines.stageKind.OPEN')}</option>
+            <option value="WON">{t('pipelines.stageKind.WON')}</option>
+            <option value="LOST">{t('pipelines.stageKind.LOST')}</option>
           </select>
           <Button
             size="sm"
             variant="secondary"
             onClick={() => props.onMove(props.index, -1)}
             disabled={props.busy || props.index === 0}
-            aria-label={t("pipelines.stageUp")}
+            aria-label={t('pipelines.stageUp')}
             data-testid="stage-up"
           >
             ↑
@@ -649,7 +649,7 @@ function StageRow(props: {
             variant="secondary"
             onClick={() => props.onMove(props.index, 1)}
             disabled={props.busy || props.index === props.total - 1}
-            aria-label={t("pipelines.stageDown")}
+            aria-label={t('pipelines.stageDown')}
             data-testid="stage-down"
           >
             ↓
@@ -662,7 +662,7 @@ function StageRow(props: {
               disabled={props.busy}
               data-testid="stage-delete"
             >
-              {t("pipelines.stageDelete")}
+              {t('pipelines.stageDelete')}
             </Button>
           ) : null}
         </div>

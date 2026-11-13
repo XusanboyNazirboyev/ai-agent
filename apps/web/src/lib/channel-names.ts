@@ -9,6 +9,8 @@ const NAMES: Readonly<Record<string, string>> = {
   facebook: 'Messenger',
   whatsapp: 'WhatsApp',
   webchat: 'Web chat',
+  // ADR 061: the internal channel of a lead added by hand.
+  manual: 'Manual',
 };
 
 export function channelName(channelType: string): string {
