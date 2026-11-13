@@ -65,6 +65,7 @@ export function LeadsBoard(): ReactNode {
   const router = useRouter();
   const params = useSearchParams();
   const { operator } = useShell();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
   const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
@@ -113,11 +114,79 @@ export function LeadsBoard(): ReactNode {
   const [tagId, setTagId] = useState('');
   const filters: LeadFilters = { ownerId, source, closeBefore, closeAfter, tagId };
 
+  // Drag-and-drop / keyboard move state. `draggedId` is the lead being moved;
+  // `draggedToStageId` is the column the drop would target.
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [draggedToStageId, setDraggedToStageId] = useState<string | null>(null);
+  const [dragStatus, setDragStatus] = useState('');
+
+  // Lost-reason state shared by the stage select and drag-to-LOST.
+  const [lostDialog, setLostDialog] = useState(false);
+  const [lostReasonDraft, setLostReasonDraft] = useState('');
+  const [lostLeadId, setLostLeadId] = useState<string | null>(null);
+  const [lostTargetStageId, setLostTargetStageId] = useState<string | null>(null);
+
+  const move = useMutation({
+    mutationFn: (input: {
+      leadId: string;
+      stageId: string;
+      lostReason?: string;
+    }) =>
+      api(`/api/v1/leads/${input.leadId}/stage`, {
+        method: 'PATCH',
+        body:
+          input.lostReason !== undefined
+            ? { stageId: input.stageId, lostReason: input.lostReason }
+            : { stageId: input.stageId },
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['leads'] }).finally(() => {
+        setLostDialog(false);
+        setLostLeadId(null);
+        setLostTargetStageId(null);
+        setLostReasonDraft('');
+      });
+    },
+    onError: () => {
+      setLostDialog(false);
+      setLostLeadId(null);
+      setLostTargetStageId(null);
+      setLostReasonDraft('');
+    },
+  });
+
   function choose(next: PipelineView): void {
     setActiveId(next.id);
     router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
   }
 
+  function handleDragStart(id: string): void {
+    setDraggedId(id);
+    setDragStatus(t('leads.dragPickedUp'));
+  }
+  function handleDragEnd(): void {
+    setDraggedId(null);
+    setDraggedToStageId(null);
+    setDragStatus('');
+  }
+  function handleDrop(targetStageId: string): void {
+    if (!draggedId) return;
+    const target = columns.find((s) => s.id === targetStageId);
+    if (target?.kind === 'LOST') {
+      setDraggedToStageId(targetStageId);
+      setLostLeadId(draggedId);
+      setLostTargetStageId(targetStageId);
+      setLostReasonDraft('');
+      setLostDialog(true);
+      setDraggedId(null);
+      setDragStatus(t('leads.dragDroppedLost'));
+      return;
+    }
+    move.mutate({ leadId: draggedId, stageId: targetStageId });
+    setDraggedId(null);
+    setDraggedToStageId(null);
+    setDragStatus(t('leads.dragDropped'));
+  }
   const rows = columns;
   const switcher = (
     <div
@@ -146,6 +215,9 @@ export function LeadsBoard(): ReactNode {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+      <div aria-live="polite" className="sr-only">
+        {dragStatus}
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <p className="min-w-0 flex-1 basis-56 text-sm text-muted">
           {t('leads.funnelIntro')}
@@ -283,10 +355,76 @@ export function LeadsBoard(): ReactNode {
               pipelineId={active!.id}
               stages={rows}
               filters={filters}
+              draggedId={draggedId}
+              draggedToStageId={draggedToStageId}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOverStage={(id) => setDraggedToStageId(id)}
+              onDragLeaveStage={() => setDraggedToStageId(null)}
+              onDrop={handleDrop}
+              onMove={(leadId, stageId) => move.mutate({ leadId, stageId })}
+              onLostStage={(leadId, stageId) => {
+                setLostLeadId(leadId);
+                setLostTargetStageId(stageId);
+                setLostReasonDraft('');
+                setLostDialog(true);
+              }}
             />
           ))}
         </div>
       ) : null}
+
+      <FormDialog
+        open={lostDialog}
+        title={t('opportunity.lostReason')}
+        description={t('opportunity.lostReasonBody')}
+        testId="lead-lost-dialog"
+        onClose={() => {
+          setLostDialog(false);
+          setLostLeadId(null);
+          setLostTargetStageId(null);
+          setLostReasonDraft('');
+        }}
+        onSubmit={() => {
+          const reason = lostReasonDraft.trim();
+          if (!reason || !lostLeadId || !lostTargetStageId) return;
+          move.mutate({
+            leadId: lostLeadId,
+            stageId: lostTargetStageId,
+            lostReason: reason,
+          });
+        }}
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setLostDialog(false);
+                setLostLeadId(null);
+                setLostTargetStageId(null);
+                setLostReasonDraft('');
+              }}
+            >
+              {t('app.cancel')}
+            </Button>
+            <Button type="submit" variant="primary" loading={move.isPending}>
+              {t('app.save')}
+            </Button>
+          </>
+        }
+      >
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          {t('opportunity.lostReason')}
+          <input
+            value={lostReasonDraft}
+            onChange={(e) => setLostReasonDraft(e.target.value)}
+            maxLength={200}
+            className={fieldClass}
+            autoFocus
+            aria-label={t('opportunity.lostReason')}
+          />
+        </label>
+      </FormDialog>
     </div>
   );
 }
@@ -296,6 +434,15 @@ function LeadColumn(props: {
   pipelineId: string;
   stages: BoardStageView[];
   filters: LeadFilters;
+  draggedId: string | null;
+  draggedToStageId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onDragOverStage: (stageId: string) => void;
+  onDragLeaveStage: () => void;
+  onDrop: (targetStageId: string) => void;
+  onMove: (leadId: string, stageId: string) => void;
+  onLostStage: (leadId: string, stageId: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const query = useInfiniteQuery({
@@ -328,12 +475,27 @@ function LeadColumn(props: {
     WON: 'success',
     LOST: 'danger',
   };
+  const [dragOver, setDragOver] = useState(false);
+  const isDraggingInto = props.draggedId !== null && props.draggedToStageId === props.stage.id;
 
   return (
     <section
       aria-label={name}
       data-testid={`lead-column-${props.stage.code ?? props.stage.id}`}
-      className={`flex w-[min(85vw,21rem)] min-w-[min(85vw,21rem)] shrink-0 flex-col rounded-2xl border border-line bg-surface shadow-card md:w-80 md:min-w-80 ${terminal ? 'hidden md:flex' : ''} ${terminal ? `border-${columnTone[props.stage.kind as 'WON' | 'LOST']}` : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+        props.onDragOverStage(props.stage.id);
+      }}
+      onDragLeave={() => {
+        setDragOver(false);
+        props.onDragLeaveStage();
+      }}
+      onDrop={() => {
+        setDragOver(false);
+        props.onDrop(props.stage.id);
+      }}
+      className={`flex w-[min(85vw,21rem)] min-w-[min(85vw,21rem)] shrink-0 flex-col rounded-2xl border border-line bg-surface shadow-card md:w-80 md:min-w-80 ${terminal ? 'hidden md:flex' : ''} ${terminal ? `border-${columnTone[props.stage.kind as 'WON' | 'LOST']}` : ''} ${dragOver ? 'border-primary ring-2 ring-primary' : ''} ${isDraggingInto ? 'bg-primary-soft' : ''}`}
     >
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
@@ -401,6 +563,12 @@ function LeadColumn(props: {
             currentStageId={props.stage.id}
             stages={props.stages}
             pipelineId={props.pipelineId}
+            draggedId={props.draggedId}
+            draggedToStageId={props.draggedToStageId}
+            onDragStart={props.onDragStart}
+            onDragEnd={props.onDragEnd}
+            onMove={(leadId, stageId) => props.onMove(leadId, stageId)}
+            onLostStage={(leadId, stageId) => props.onLostStage(leadId, stageId)}
           />
         ))}
         {query.hasNextPage ? (
@@ -424,13 +592,23 @@ function LeadCard(props: {
   currentStageId: string;
   stages: BoardStageView[];
   pipelineId: string;
+  draggedId: string | null;
+  draggedToStageId: string | null;
+  onDragStart: (id: string) => void;
+  onDragEnd: () => void;
+  onMove: (leadId: string, stageId: string) => void;
+  onLostStage: (leadId: string, stageId: string) => void;
 }): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { timeZone, operator } = useShell();
-  const queryClient = useQueryClient();
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
+  const isDragging = props.draggedId === props.item.id;
+  const isDraggedHere = props.draggedToStageId === props.currentStageId;
   // Optimistic stage selection while move is in flight/refetching.
   const [stageChoice, setStageChoice] = useState<string | null>(null);
+  // Keyboard drag state: Space picks up, arrows move target, Space drops, Escape cancels.
+  const [keyboardDragging, setKeyboardDragging] = useState(false);
+  const [keyboardTargetStage, setKeyboardTargetStage] = useState<string | null>(null);
 
   useEffect(() => {
     if (stageChoice && props.currentStageId === stageChoice) {
@@ -438,31 +616,42 @@ function LeadCard(props: {
     }
   }, [props.currentStageId, stageChoice]);
 
-  const [lostDialog, setLostDialog] = useState(false);
-  const [lostReasonDraft, setLostReasonDraft] = useState('');
-  const [lostStageId, setLostStageId] = useState<string | null>(null);
-  const move = useMutation({
-    mutationFn: (input: { stageId: string; lostReason?: string }) =>
-      api(`/api/v1/leads/${props.item.id}/stage`, {
-        method: 'PATCH',
-        body:
-          input.lostReason !== undefined
-            ? { stageId: input.stageId, lostReason: input.lostReason }
-            : { stageId: input.stageId },
-      }),
-    onSettled: () => {
-      void queryClient
-        .invalidateQueries({ queryKey: ['leads'] })
-        .finally(() => {
-          setStageChoice(null);
-          setLostStageId(null);
-        });
-    },
-    onError: () => {
-      setStageChoice(null);
-      setLostStageId(null);
-    },
-  });
+  function handleKeyDown(e: React.KeyboardEvent): void {
+    if (!canEdit) return;
+    if (e.key === ' ') {
+      e.preventDefault();
+      if (!keyboardDragging) {
+        setKeyboardDragging(true);
+        setKeyboardTargetStage(props.currentStageId);
+      } else {
+        const target = keyboardTargetStage ?? props.currentStageId;
+        const stage = props.stages.find((s) => s.id === target);
+        if (stage?.kind === 'LOST') {
+          setKeyboardDragging(false);
+          props.onLostStage(props.item.id, target);
+        } else {
+          props.onMove(props.item.id, target);
+          setKeyboardDragging(false);
+          setKeyboardTargetStage(null);
+        }
+      }
+      return;
+    }
+    if (!keyboardDragging) return;
+    if (e.key === 'Escape') {
+      setKeyboardDragging(false);
+      setKeyboardTargetStage(null);
+      return;
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const idx = props.stages.findIndex(
+        (s) => s.id === (keyboardTargetStage ?? props.currentStageId),
+      );
+      const next = idx === -1 ? 0 : Math.min(Math.max(idx + (e.key === 'ArrowRight' ? 1 : -1), 0), props.stages.length - 1);
+      setKeyboardTargetStage(props.stages[next].id);
+    }
+  }
   const name = props.item.contact.name ?? t('list.unnamed');
   const stageValue = stageChoice ?? props.currentStageId;
 
@@ -470,7 +659,14 @@ function LeadCard(props: {
     <li>
       <article
         data-testid="lead-card"
-        className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-canvas p-3"
+        role="button"
+        aria-label={t('leads.cardAriaLabel', { name })}
+        tabIndex={canEdit ? 0 : -1}
+        draggable={canEdit}
+        onDragStart={() => props.onDragStart(props.item.id)}
+        onDragEnd={props.onDragEnd}
+        onKeyDown={handleKeyDown}
+        className={`flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 ${isDragging ? 'bg-primary-soft border-primary ring-1 ring-primary' : 'bg-canvas'} ${isDraggedHere ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
       >
         <Link
           href={`/inbox?scope=all&c=${props.item.conversation.id}`}
@@ -553,18 +749,16 @@ function LeadCard(props: {
               aria-label={t('leads.moveToStage')}
               data-testid="lead-card-stage"
               value={stageValue}
-              disabled={move.isPending}
+              disabled={false}
               onChange={(event) => {
                 const value = event.target.value;
                 const target = props.stages.find((s) => s.id === value);
                 setStageChoice(value);
                 if (target?.kind === 'LOST') {
-                  setLostStageId(value);
-                  setLostReasonDraft('');
-                  setLostDialog(true);
+                  props.onLostStage(props.item.id, value);
                   return;
                 }
-                move.mutate({ stageId: value });
+                props.onMove(props.item.id, value);
               }}
               className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
             >
@@ -576,59 +770,7 @@ function LeadCard(props: {
             </select>
           </label>
         ) : null}
-        {move.isError ? (
-          <p role="alert" className="text-sm text-danger-fg">
-            {t(errorKey(move.error))}
-          </p>
-        ) : null}
-        <FormDialog
-          open={lostDialog}
-          title={t('opportunity.lostReason')}
-          description={t('opportunity.lostReasonBody')}
-          testId="lead-lost-dialog"
-          onClose={() => {
-            setLostDialog(false);
-            setLostStageId(null);
-            setStageChoice(null);
-          }}
-          onSubmit={() => {
-            const reason = lostReasonDraft.trim();
-            if (!reason || !lostStageId) return;
-            move.mutate(
-              { stageId: lostStageId, lostReason: reason },
-              { onSuccess: () => setLostDialog(false) },
-            );
-          }}
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setLostDialog(false);
-                  setLostStageId(null);
-                  setStageChoice(null);
-                }}
-              >
-                {t('app.cancel')}
-              </Button>
-              <Button type="submit" variant="primary" loading={move.isPending}>
-                {t('app.save')}
-              </Button>
-            </>
-          }
-        >
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            {t('opportunity.lostReason')}
-            <input
-              value={lostReasonDraft}
-              onChange={(e) => setLostReasonDraft(e.target.value)}
-              maxLength={200}
-              className={fieldClass}
-              autoFocus
-              aria-label={t('opportunity.lostReason')}
-            />
-          </label>
-        </FormDialog>
+
       </article>
     </li>
   );
