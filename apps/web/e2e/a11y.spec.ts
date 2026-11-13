@@ -208,6 +208,35 @@ test.describe('leads, settings and status pages', () => {
   }
 });
 
+test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  await page.goto('/leads?view=funnel');
+  await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+  const card = page.getByTestId('lead-card').first();
+  await expect(card).toBeVisible();
+  await card.focus();
+  // Space picks the card up.
+  await page.keyboard.press(' ');
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(
+    /bg-primary-soft/,
+  );
+  // ArrowRight moves the drop target across columns.
+  await page.keyboard.press('ArrowRight');
+  // Space drops on the targeted column.
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(200);
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
+  // Escape cancels an in-progress keyboard drag.
+  await card.focus();
+  await page.keyboard.press(' ');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
+  await context.close();
+});
+
 test('the theme choice in settings is applied and remembered', async ({
   browser,
 }) => {

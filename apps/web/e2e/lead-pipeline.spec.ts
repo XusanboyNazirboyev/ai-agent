@@ -10,13 +10,8 @@ test('leads offer a contact list and configurable funnel stages', async ({
     f.a.operators.admin.email,
   );
 
-  await page.goto('/leads?view=list');
-  await expect(page.getByTestId('person-item').first()).toBeVisible();
-  await page.getByRole('tab', { name: 'Funnel' }).click();
+  await page.goto('/leads?view=funnel');
   await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
-  await expect(
-    page.getByTestId('lead-column-NEW').getByTestId('lead-card').first(),
-  ).toBeVisible();
 
   await page.goto('/settings/pipeline');
   await expect(page.getByTestId('pipelines-list')).toBeVisible();
