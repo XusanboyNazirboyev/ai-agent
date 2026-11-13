@@ -4,7 +4,10 @@ import type {
   KnowledgeSearch,
   KnowledgeSearchResult,
 } from '../core/knowledge/passage.js';
-import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
+import {
+  ScriptedLlmProvider,
+  type ScriptStep,
+} from '../core/llm/scripted-llm-provider.js';
 import { extraction, runTurn } from './testing/agent-harness.js';
 import { inventedFacts, successClaims } from './testing/eval-runner.js';
 import { KNOWLEDGE_ONLY_PACK } from './testing/knowledge-only-pack.js';
@@ -57,9 +60,7 @@ interface Scenario {
   readonly text: string;
   readonly intent: string;
   readonly knowledge: KnowledgeSearch;
-  readonly respond?: ConstructorParameters<
-    typeof ScriptedLlmProvider
-  >[0][number];
+  readonly respond?: ScriptStep;
   readonly outcome: 'ANSWERED' | 'HANDOVER';
   readonly handover?: string;
   readonly replyIncludes?: string[];
@@ -144,9 +145,7 @@ describe('knowledge-only pack, scripted evaluation (ADR 060)', () => {
   it.each(SCENARIOS.map((scenario) => [scenario.id, scenario] as const))(
     '%s',
     async (_id, scenario) => {
-      const steps: ConstructorParameters<typeof ScriptedLlmProvider>[0] = [
-        extraction({}, scenario.intent),
-      ];
+      const steps: ScriptStep[] = [extraction({}, scenario.intent)];
       if (scenario.respond) {
         steps.push(scenario.respond);
         if (scenario.respond.toolCalls) steps.push(answer);
