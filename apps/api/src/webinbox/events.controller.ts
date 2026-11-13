@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InboxEventRecordSchema } from '@agentcore/shared';
 import type { AppEnvironment } from '../config/environment.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 import { InboxEventBus } from './inbox-event-bus.js';
@@ -189,7 +190,21 @@ export class EventsController {
         if (gap) send(`event: resync\ndata: {}\n\n`);
         for (const event of events) {
           if (closed) break;
-          const { id, type, ...ids } = event;
+          const parsed = InboxEventRecordSchema.safeParse(event);
+          if (!parsed.success) {
+            // Unknown or malformed persisted events must not reach the
+            // browser. Advance the cursor and force a REST resync so one
+            // poison row cannot block every later event on this stream.
+            const invalidId = parseEventId(event.id);
+            if (invalidId !== undefined) {
+              send(`id: ${invalidId}\nevent: resync\ndata: {}\n\n`);
+              cursor = invalidId;
+            } else {
+              send('event: resync\ndata: {}\n\n');
+            }
+            continue;
+          }
+          const { id, type, ...ids } = parsed.data;
           send(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(ids)}\n\n`);
           cursor = BigInt(id);
         }

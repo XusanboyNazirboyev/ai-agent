@@ -1174,6 +1174,39 @@ describe('event stream resource accounting', () => {
     bus.onModuleDestroy();
   });
 
+  it('never sends an unknown or malformed persisted event: it resyncs, advances the cursor and keeps delivering', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const bus = new InboxEventBus(prisma);
+    const response = new FakeResponse();
+    await controllerWith(bus).stream(
+      { principal: s.principal } as never,
+      response as never,
+      undefined,
+      undefined,
+    );
+    const poison = await db.inboxEvent.create({
+      data: {
+        tenantId: w.tenantId,
+        type: 'conversation.deleted',
+        conversationId: w.conversationId,
+      },
+    });
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    await bus.tick();
+    await vi.waitFor(() =>
+      expect(response.frames.join('')).toContain('event: conversation.updated'),
+    );
+    const text = response.frames.join('');
+    expect(text).not.toContain('conversation.deleted');
+    expect(text).toContain(`id: ${poison.id}\nevent: resync\ndata: {}\n\n`);
+    response.emit('close');
+    bus.onModuleDestroy();
+  });
+
   it('closes streams after logout, expiry, idle expiry, or operator deactivation', async () => {
     for (const invalidation of [
       'logout',
