@@ -302,26 +302,24 @@ export function LeadsBoard(): ReactNode {
             {t('leads.funnelTitle')}
           </button>
           {showFunnel ? (
-            <div className="flex flex-wrap items-end gap-2 px-2 pb-1">
-              <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm text-muted">
-                <div className="flex min-w-0 flex-wrap gap-2">
-                  <input
-                    type="date"
-                    value={fromDate}
-                    onChange={(e) => setFromDate(e.target.value)}
-                    className={`${fieldClass} min-w-0 flex-1 basis-36`}
-                    aria-label={t('leads.funnelFrom')}
-                  />
-                  <input
-                    type="date"
-                    value={toDate}
-                    onChange={(e) => setToDate(e.target.value)}
-                    className={`${fieldClass} min-w-0 flex-1 basis-36`}
-                    aria-label={t('leads.funnelTo')}
-                  />
-                </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-2 pb-1">
+              <div className="flex min-w-0 flex-wrap gap-2">
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className={`${fieldClass} min-h-9 w-40! min-w-0 max-w-full`}
+                  aria-label={t('leads.funnelFrom')}
+                />
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className={`${fieldClass} min-h-9 w-40! min-w-0 max-w-full`}
+                  aria-label={t('leads.funnelTo')}
+                />
               </div>
-              <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+              <div className="flex min-w-0 flex-wrap gap-1">
                 {columns.map((stage) => {
                   const total = columns.reduce((sum, s) => sum + s.count, 0);
                   const share =
@@ -334,7 +332,7 @@ export function LeadsBoard(): ReactNode {
                       onClick={() =>
                         setMobileStageId(selected ? null : stage.id)
                       }
-                      className={`flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-xs ${selected ? 'bg-primary-soft text-primary-fg' : ''}`}
+                      className={`flex min-w-0 items-baseline gap-1.5 rounded-lg px-2 py-1 text-xs ${selected ? 'bg-primary-soft text-primary-fg' : 'bg-surface-2'}`}
                       data-testid="funnel-stage"
                       aria-pressed={selected}
                     >
