@@ -19,12 +19,16 @@ interface StreamResponse {
   write(chunk: string): boolean;
   end(): void;
   on(event: 'close', listener: () => void): void;
+  once(event: 'drain', listener: () => void): void;
+  off(event: 'drain', listener: () => void): void;
 }
 
 /** Safety net in case a bus signal is missed (the database stays the truth). */
 const FALLBACK_POLL_MS = 5000;
 const HEARTBEAT_MS = 15_000;
 const MAX_STREAMS_PER_OPERATOR = 5;
+/** Bound application-level buffering when an SSE client cannot keep up. */
+const MAX_PENDING_STREAM_BYTES = 256 * 1024;
 
 /** Opens streams per operator; a plain counter, one process (ADR 020). */
 const open = new Map<string, number>();
@@ -70,6 +74,10 @@ export class EventsController {
     // the stream is being set up must still release its slot, its bus
     // subscription and its timers (they are created only if still open).
     let closed = false;
+    let blocked = false;
+    let pendingBytes = 0;
+    const pendingFrames: string[] = [];
+    let drainListener: (() => void) | undefined;
     const subscription: { off?: () => void } = {};
     const timers: ReturnType<typeof setInterval>[] = [];
     let released = false;
@@ -78,6 +86,9 @@ export class EventsController {
       if (released) return;
       released = true;
       subscription.off?.();
+      if (drainListener) response.off('drain', drainListener);
+      pendingFrames.length = 0;
+      pendingBytes = 0;
       for (const timer of timers) clearInterval(timer);
       const left = (open.get(key) ?? 1) - 1;
       if (left <= 0) open.delete(key);
@@ -108,8 +119,59 @@ export class EventsController {
     let cursor = resume ?? (await this.events.latestId(principal.tenantId));
     if (closed) return;
     let busy = false;
+
+    const flushPending = (): void => {
+      if (closed || blocked) return;
+      while (pendingFrames.length > 0) {
+        const frame = pendingFrames.shift()!;
+        pendingBytes -= Buffer.byteLength(frame);
+        try {
+          if (!response.write(frame)) {
+            blocked = true;
+            const onDrain = (): void => {
+              drainListener = undefined;
+              blocked = false;
+              flushPending();
+            };
+            drainListener = onDrain;
+            response.once('drain', onDrain);
+            return;
+          }
+        } catch {
+          terminate();
+          return;
+        }
+      }
+    };
+
     const send = (frame: string): void => {
-      if (!closed) response.write(frame);
+      if (closed) return;
+      if (blocked || pendingFrames.length > 0) {
+        const bytes = Buffer.byteLength(frame);
+        if (pendingBytes + bytes > MAX_PENDING_STREAM_BYTES) {
+          // Disconnect a persistently slow consumer. Its Last-Event-ID lets it
+          // replay missed events from the durable database feed on reconnect.
+          terminate();
+          return;
+        }
+        pendingFrames.push(frame);
+        pendingBytes += bytes;
+        return;
+      }
+      try {
+        if (!response.write(frame)) {
+          blocked = true;
+          const onDrain = (): void => {
+            drainListener = undefined;
+            blocked = false;
+            flushPending();
+          };
+          drainListener = onDrain;
+          response.once('drain', onDrain);
+        }
+      } catch {
+        terminate();
+      }
     };
     send('retry: 3000\n\n');
 
