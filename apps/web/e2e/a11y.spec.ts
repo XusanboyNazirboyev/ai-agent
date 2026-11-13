@@ -285,9 +285,17 @@ test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
     // Escape cancels an in-progress keyboard drag without a request.
     const before = patches.length;
     const target = page.getByTestId('lead-card-handle').first();
-    await target.focus();
-    await page.keyboard.press(' ');
-    await expect(target).toHaveAttribute('aria-pressed', 'true');
+    // The board refetches right after the drop and can remount the card, which
+    // resets its pick-up state: press Space only while it is not picked up.
+    await expect(async () => {
+      if ((await target.getAttribute('aria-pressed')) !== 'true') {
+        await target.focus();
+        await page.keyboard.press(' ');
+      }
+      await expect(target).toHaveAttribute('aria-pressed', 'true', {
+        timeout: 500,
+      });
+    }).toPass({ timeout: 10_000 });
     await page.keyboard.press('Escape');
     await expect(target).toHaveAttribute('aria-pressed', 'false');
     await expect(
