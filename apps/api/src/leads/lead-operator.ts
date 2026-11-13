@@ -18,7 +18,8 @@ export async function latestLead(
 ): Promise<{ id: string; crmSyncStatus: string } | undefined> {
   return (
     (await tx.lead.findFirst({
-      where: { tenantId, conversationId },
+      // ADR 062: an archived lead is frozen (the conversation has "no lead").
+      where: { tenantId, conversationId, archivedAt: null },
       orderBy: { createdAt: 'desc' },
       select: { id: true, crmSyncStatus: true },
     })) ?? undefined

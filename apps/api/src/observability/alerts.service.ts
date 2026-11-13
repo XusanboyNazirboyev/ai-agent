@@ -96,6 +96,7 @@ export class AlertsService implements ScheduledScan {
     const count = await this.prisma.lead.count({
       where: {
         tenantId,
+        archivedAt: null,
         crmSyncStatus: 'FAILED',
         updatedAt: { gt: new Date(now.getTime() - HOUR_MS), lte: now },
       },

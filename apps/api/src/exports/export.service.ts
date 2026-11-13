@@ -233,6 +233,8 @@ export class ExportService {
   ): Prisma.LeadWhereInput {
     return {
       tenantId,
+      // ADR 062: archived leads are not exported.
+      archivedAt: null,
       contact: {
         deletedAt: null,
         OR: [

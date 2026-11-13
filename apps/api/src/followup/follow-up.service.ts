@@ -90,6 +90,7 @@ export class FollowUpService implements ScheduledScan {
                      WHERE s.tenant_id = c.tenant_id AND s.conversation_id = c.id)
              OR EXISTS (SELECT 1 FROM leads l
                         WHERE l.tenant_id = c.tenant_id AND l.conversation_id = c.id
+                          AND l.archived_at IS NULL
                           AND l.score IN ('HOT', 'WARM')))
       ORDER BY lm.created_at ASC
       LIMIT ${limit}
@@ -155,7 +156,12 @@ export class FollowUpService implements ScheduledScan {
         tx.followUp.count({ where: { tenantId, conversationId } }),
         tx.shownOffer.count({ where: { tenantId, conversationId } }),
         tx.lead.findFirst({
-          where: { tenantId, conversationId, score: { in: ['HOT', 'WARM'] } },
+          where: {
+            tenantId,
+            conversationId,
+            archivedAt: null,
+            score: { in: ['HOT', 'WARM'] },
+          },
           select: { id: true },
         }),
       ]);

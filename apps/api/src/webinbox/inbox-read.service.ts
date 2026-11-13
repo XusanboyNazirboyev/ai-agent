@@ -166,6 +166,7 @@ export class InboxReadService {
         ? {
             leads: {
               some: {
+                archivedAt: null,
                 ...(options.leadScore ? { score: options.leadScore } : {}),
                 ...(options.leadStatus ? { status: options.leadStatus } : {}),
               },
@@ -226,6 +227,7 @@ export class InboxReadService {
           FROM leads l
           WHERE l.tenant_id = c.tenant_id
             AND l.conversation_id = c.id
+            AND l.archived_at IS NULL
             ${options.leadScore ? Prisma.sql`AND l.score::text = ${options.leadScore}` : Prisma.empty}
             ${options.leadStatus ? Prisma.sql`AND l.status::text = ${options.leadStatus}` : Prisma.empty}
         )`);
@@ -294,6 +296,7 @@ export class InboxReadService {
             include: {
               contact: { select: { name: true } },
               leads: {
+                where: { archivedAt: null },
                 orderBy: { createdAt: 'desc' },
                 take: 1,
                 select: {
@@ -348,6 +351,7 @@ export class InboxReadService {
       include: {
         contact: { select: { name: true } },
         leads: {
+          where: { archivedAt: null },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: { score: true, status: true, scoreSetByOperator: true },
@@ -409,6 +413,7 @@ export class InboxReadService {
           },
         },
         leads: {
+          where: { archivedAt: null },
           orderBy: { createdAt: 'desc' },
           take: 1,
           select: {

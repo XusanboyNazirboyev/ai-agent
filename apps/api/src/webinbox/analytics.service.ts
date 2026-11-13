@@ -213,12 +213,14 @@ export class AnalyticsService {
         SELECT score::text AS score, count(*)::int AS count
         FROM leads
         WHERE tenant_id = ${tenantId}::uuid AND created_at >= ${start} AND created_at < ${end}
+          AND archived_at IS NULL
         GROUP BY 1`,
       q.$queryRaw<{ failed: number; pending: number }[]>`
         SELECT count(*) FILTER (WHERE crm_sync_status = 'FAILED')::int AS failed,
                count(*) FILTER (WHERE crm_sync_status = 'PENDING')::int AS pending
         FROM leads
-        WHERE tenant_id = ${tenantId}::uuid AND created_at >= ${start} AND created_at < ${end}`,
+        WHERE tenant_id = ${tenantId}::uuid AND created_at >= ${start} AND created_at < ${end}
+          AND archived_at IS NULL`,
       q.$queryRaw<
         {
           turns: number;

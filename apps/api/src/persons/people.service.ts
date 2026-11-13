@@ -357,7 +357,7 @@ export class PeopleService {
         },
       }),
       this.prisma.lead.findMany({
-        where: { tenantId, contactId: { in: contactIds } },
+        where: { tenantId, archivedAt: null, contactId: { in: contactIds } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         take: DETAIL_CAP,
         select: {
@@ -463,7 +463,7 @@ export class PeopleService {
       }),
       this.prisma.lead.groupBy({
         by: ['contactId'],
-        where: { tenantId, contactId: { in: contactIds } },
+        where: { tenantId, archivedAt: null, contactId: { in: contactIds } },
         _count: { _all: true },
       }),
     ]);

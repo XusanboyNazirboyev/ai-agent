@@ -115,7 +115,8 @@ async function view(db: Db, tenantId: string): Promise<PipelineView[]> {
     }),
     db.lead.groupBy({
       by: ['pipelineId'],
-      where: { tenantId },
+      // ADR 062: archived leads are not counted.
+      where: { tenantId, archivedAt: null },
       _count: { _all: true },
     }),
   ]);
@@ -195,6 +196,7 @@ export class PipelinesController {
           SUM("amount")::text AS total
         FROM "leads"
         WHERE "tenant_id" = ${tenantId}::uuid AND "pipeline_id" = ${id}::uuid
+          AND "archived_at" IS NULL
           AND "pipeline_stage_id" IS NOT NULL ${range}
         GROUP BY "pipeline_stage_id", "currency"
         ORDER BY "currency" ASC NULLS LAST`,

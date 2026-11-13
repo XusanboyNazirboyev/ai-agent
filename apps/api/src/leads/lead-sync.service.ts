@@ -91,7 +91,9 @@ export class LeadSyncService {
       where: { id: leadId, tenantId },
       include: { contact: { select: { name: true, phone: true } } },
     });
-    if (!lead || lead.crmSyncStatus === 'SYNCED') return 'SKIPPED';
+    // ADR 062: an archived lead is not sent; restoring it makes it eligible.
+    if (!lead || lead.archivedAt || lead.crmSyncStatus === 'SYNCED')
+      return 'SKIPPED';
     const ref = this.ref(tenantId, lead.id);
     const existing = await this.operations.find(ref);
     if (existing?.status === 'UNCERTAIN') return 'UNCERTAIN';
@@ -315,6 +317,7 @@ export class LeadSyncService {
   async scanDue(now: Date, limit = 25): Promise<number> {
     const due = await this.prisma.lead.findMany({
       where: {
+        archivedAt: null,
         crmSyncStatus: 'FAILED',
         attempts: { lt: MAX_LEAD_SYNC_ATTEMPTS },
         nextAttemptAt: { lte: now },

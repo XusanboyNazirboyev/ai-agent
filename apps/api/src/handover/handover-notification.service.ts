@@ -230,7 +230,7 @@ export class HandoverNotificationService {
         select: { slots: true },
       }),
       this.prisma.lead.findFirst({
-        where: { tenantId, conversationId },
+        where: { tenantId, conversationId, archivedAt: null },
         select: { score: true, reasonCodes: true },
       }),
       this.prisma.shownOffer.findMany({
@@ -292,6 +292,7 @@ export class HandoverNotificationService {
       this.prisma.lead.findMany({
         where: {
           tenantId,
+          archivedAt: null,
           status: 'NEW',
           score: { in: ['HOT', 'WARM'] },
           updatedAt: { gte: since },
