@@ -210,6 +210,8 @@ export function useCardDrag(props: {
         setTimeout(() => {
           suppress.current = false;
         }, 0);
+        // End first: the drop or swipe then sets the final announcement.
+        p.onEnd();
         if (p.swipe) {
           const dx = e.clientX - g.startX;
           const direction = swipeDecision({
@@ -225,7 +227,6 @@ export function useCardDrag(props: {
           const target = dropTargetAt(e.clientX, e.clientY);
           if (target) p.onDropOn(target);
         }
-        p.onEnd();
       }
       clear();
     },

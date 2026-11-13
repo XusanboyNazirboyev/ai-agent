@@ -224,3 +224,101 @@ test('a viewer sees the funnel and the panel but cannot change a lead', async ({
   for (const step of await steps.all()) await expect(step).toBeDisabled();
   await context.close();
 });
+
+test('a lead card is dragged to another column with the mouse', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  const { id: conversationId, contactName } = f.a.conversations[0]!;
+  let originalStageId: string | null = null;
+  try {
+    await page.goto('/leads?view=funnel');
+    originalStageId = await stageOf(page, conversationId);
+    const card = cardOf(page, contactName);
+    await expect(card).toBeVisible();
+    // No stage name anywhere on the card.
+    await expect(card).not.toContainText(
+      /contacted|qualified|proposal|won|lost/i,
+    );
+    const target = page.getByTestId('lead-column-CONTACTED');
+    const from = (await card.getByTestId('lead-card-handle').boundingBox())!;
+    const to = (await target.boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
+    await page.mouse.move(to.x + to.width / 2, to.y + 60, { steps: 8 });
+    await expect(target).toHaveClass(/ring-primary/);
+    await page.mouse.up();
+    await expect(
+      target.getByTestId('lead-card').filter({ hasText: contactName }),
+    ).toHaveCount(1);
+    await expect(page.getByTestId('lead-panel')).toBeHidden();
+  } finally {
+    await resetLead(page, conversationId, originalStageId);
+    await context.close();
+  }
+});
+
+test('on a phone a lead card is swiped to the next stage', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email, {
+    viewport: { width: 375, height: 800 },
+    hasTouch: true,
+  });
+  const { id: conversationId, contactName } = f.a.conversations[0]!;
+  let originalStageId: string | null = null;
+  try {
+    await page.goto('/leads?view=funnel');
+    originalStageId = await stageOf(page, conversationId);
+    const tabs = page.getByTestId('leads-stage-tabs');
+    await expect(tabs).toBeVisible();
+    await tabs.getByTestId('leads-stage-tab').first().click();
+    const card = cardOf(page, contactName);
+    await expect(card).toBeVisible();
+    // A short drag snaps back and keeps the card where it is.
+    const swipe = (dx: number): Promise<void> =>
+      card.evaluate((el, distance) => {
+        const fire = (type: string, x: number): void => {
+          const event = new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 7,
+            pointerType: 'touch',
+            isPrimary: true,
+            clientX: x,
+            clientY: 300,
+          });
+          const target =
+            type === 'pointerdown'
+              ? (el.querySelector('[data-testid="lead-card-handle"]') ?? el)
+              : el;
+          target.dispatchEvent(event);
+        };
+        fire('pointerdown', 100);
+        fire('pointermove', 100 + distance / 2);
+        fire('pointermove', 100 + distance);
+        fire('pointerup', 100 + distance);
+      }, dx);
+    await swipe(20);
+    await expect(card).toBeVisible();
+    // A long swipe to the right moves it to the next stage.
+    await swipe(250);
+    await expect(page.getByTestId('leads-live')).toHaveText(/Moved to/);
+    await expect(
+      page.getByTestId('lead-column-NEW').getByTestId('lead-card'),
+    ).toHaveCount(0);
+    await tabs.getByRole('button', { name: /Contacted/ }).click();
+    await expect(
+      page
+        .getByTestId('lead-column-CONTACTED')
+        .getByTestId('lead-card')
+        .filter({ hasText: contactName }),
+    ).toHaveCount(1);
+  } finally {
+    await resetLead(page, conversationId, originalStageId);
+    await context.close();
+  }
+});

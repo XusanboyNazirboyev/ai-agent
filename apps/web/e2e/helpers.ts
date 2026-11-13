@@ -110,6 +110,7 @@ export async function newSession(
   options: {
     viewport?: { width: number; height: number };
     colorScheme?: 'light' | 'dark';
+    hasTouch?: boolean;
   } = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
