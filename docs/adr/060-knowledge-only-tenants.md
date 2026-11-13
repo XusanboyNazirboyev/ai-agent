@@ -21,3 +21,16 @@ S1 (builder, reviewer verifies): shared pack validation + tests; `agent-turn.ts`
 
 ## Risks
 A knowledge turn answers from retrieved text: wrong passages are the main risk. Mitigations are in decisions 2-3 (facts with provenance only, handover when nothing is found, no commercial facts) and the eval set. The intent list used in decision 3 must come from the existing classifier output, not from keyword matching of the customer text (untrusted data).
+
+## S1 status (2026-11-13, branch `feat/knowledge-only-tenants`, awaiting reviewer verification)
+
+Built: decision 1 (`packages/shared/src/domain-pack.ts`); decisions 2-4 (`core/agent/agent-turn.ts`, `core/agent/tools.ts`: `ToolContext.connector` may be absent, then only `knowledge_search` can run); decision 5 log (`agent/agent-conversation.service.ts`, reasons `NO_CONNECTOR|AMBIGUOUS|UNAVAILABLE|PACK_HAS_NO_CATALOG`, no customer text); decision 6 (`agent/knowledge-only-eval.spec.ts`); test-only pack `agent/testing/knowledge-only-pack.ts`; unit tests `agent/knowledge-only-turns.spec.ts`. Intents that hand over come from the classifier output (`price`, `availability`, `booking_interest`).
+
+Behaviour of a knowledge turn: price/availability/booking_interest -> `NO_DATA` without searching; other intents search the knowledge base with the customer text; at least one knowledge fact above the pack score -> reply rendered through the normal pipeline; empty, below-score or failed search -> `NO_DATA`; regulated_info -> `LEGAL_UNVERIFIED` (unchanged); scheduling not offered.
+
+Deviations:
+- A pack with only `knowledge_search` no longer needs a search slot (the "at least one slot required for search" rule applies only to packs with `search_catalog`); otherwise a knowledge-only pack could not validate.
+- With no connector, tools are now built when the pack offers `knowledge_search` and a knowledge port exists. Scheduling is still passed only with a connector, and regulated questions still need a connector (kept as before; decision 7). A catalog pack that has `knowledge_search` and no usable catalog connector (education) now answers from knowledge instead of `NO_DATA` (decision 5).
+- The offline eval scenarios are a separate spec, not JSON cases in `eval/cases`: those cases, the coverage gate and the live runner are tied to the education and travel packs.
+- Not verified: the service log and the no-connector wiring through `AgentConversationService` (integration specs not run by the builder); no test covers scheduling-without-connector.
+
