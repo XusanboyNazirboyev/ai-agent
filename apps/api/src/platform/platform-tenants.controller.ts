@@ -11,40 +11,41 @@ import {
   Query,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { z } from 'zod';
-import { TenantAccessService } from '../access/tenant-access.service.js';
-import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
-import { DOMAIN_PACKS } from '../packs/registry.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+} from "@nestjs/common";
+import { MANUAL_CHANNEL_TYPE } from "../leads/manual-lead-rules.js";
+import { z } from "zod";
+import { TenantAccessService } from "../access/tenant-access.service.js";
+import { INITIAL_LOCALE_PACKS } from "../locales/locale-packs.js";
+import { DOMAIN_PACKS } from "../packs/registry.js";
+import { PrismaService } from "../persistence/prisma.service.js";
 import {
   InviteError,
   OperatorInviteService,
   type CreatedInvite,
   type PendingInvite,
-} from '../team/operator-invite.service.js';
-import { TEAM_ROLES, type TeamRole } from '../team/team-rules.js';
-import { inviteHttpError } from '../webinbox/team.controller.js';
-import { recordPlatformAudit } from './platform-audit.js';
+} from "../team/operator-invite.service.js";
+import { TEAM_ROLES, type TeamRole } from "../team/team-rules.js";
+import { inviteHttpError } from "../webinbox/team.controller.js";
+import { recordPlatformAudit } from "./platform-audit.js";
 import {
   conflict,
   isUniqueViolation,
   notFound,
   parseBody,
-} from './platform-http.js';
+} from "./platform-http.js";
 import {
   PlatformSessionGuard,
   type PlatformRequest,
-} from './platform-session.guard.js';
-import { addDays, monthStartUtc, nanoToUsd } from './subscription-math.js';
+} from "./platform-session.guard.js";
+import { addDays, monthStartUtc, nanoToUsd } from "./subscription-math.js";
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/u;
-const OPEN = ['TRIAL', 'ACTIVE', 'PAST_DUE'] as const;
+const OPEN = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
 const Role = z.enum(TEAM_ROLES as [TeamRole, ...TeamRole[]]);
 
 function isTimeZone(value: string): boolean {
   try {
-    new Intl.DateTimeFormat('en', { timeZone: value });
+    new Intl.DateTimeFormat("en", { timeZone: value });
     return true;
   } catch {
     return false;
@@ -70,7 +71,7 @@ const CreateTenant = z.object({
 const PatchTenant = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    status: z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED']).optional(),
+    status: z.enum(["ACTIVE", "SUSPENDED", "ARCHIVED"]).optional(),
     reason: z.string().trim().min(3).max(500),
   })
   .refine((body) => body.name !== undefined || body.status !== undefined);
@@ -82,7 +83,7 @@ const InviteBody = z.object({
 
 const ListQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  status: z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED']).optional(),
+  status: z.enum(["ACTIVE", "SUSPENDED", "ARCHIVED"]).optional(),
 });
 
 export interface TenantRow {
@@ -112,7 +113,7 @@ export interface TenantRow {
  * reads across tenants (rule 3 exception); nothing outside `src/platform`
  * imports it.
  */
-@Controller('api/v1/platform/tenants')
+@Controller("api/v1/platform/tenants")
 @UseGuards(PlatformSessionGuard)
 export class PlatformTenantsController {
   constructor(
@@ -130,13 +131,13 @@ export class PlatformTenantsController {
         ...(filter.q
           ? {
               OR: [
-                { name: { contains: filter.q, mode: 'insensitive' } },
-                { slug: { contains: filter.q, mode: 'insensitive' } },
+                { name: { contains: filter.q, mode: "insensitive" } },
+                { slug: { contains: filter.q, mode: "insensitive" } },
               ],
             }
           : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: 500,
       select: {
         id: true,
@@ -163,7 +164,7 @@ export class PlatformTenantsController {
   }
 
   /** What the "new customer" form may choose: Domain Packs and locales. */
-  @Get('options')
+  @Get("options")
   options(): { packs: string[]; locales: string[] } {
     return {
       packs: [...DOMAIN_PACKS.keys()],
@@ -171,8 +172,8 @@ export class PlatformTenantsController {
     };
   }
 
-  @Get(':id')
-  async detail(@Param('id', new ParseUUIDPipe()) id: string): Promise<unknown> {
+  @Get(":id")
+  async detail(@Param("id", new ParseUUIDPipe()) id: string): Promise<unknown> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
       select: {
@@ -196,7 +197,7 @@ export class PlatformTenantsController {
         this.access.check(id, now),
         this.prisma.operator.findMany({
           where: { tenantId: id },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: "asc" },
           take: 200,
           select: {
             id: true,
@@ -207,7 +208,7 @@ export class PlatformTenantsController {
           },
         }),
         this.prisma.channelAccount.findMany({
-          where: { tenantId: id },
+          where: { tenantId: id, channelType: { not: MANUAL_CHANNEL_TYPE } },
           select: { id: true, channelType: true, status: true },
           take: 50,
         }),
@@ -246,7 +247,7 @@ export class PlatformTenantsController {
     try {
       const result = await this.prisma.$transaction(async (tx) => {
         if (await tx.tenant.findUnique({ where: { slug: input.slug } }))
-          throw conflict('SLUG_TAKEN');
+          throw conflict("SLUG_TAKEN");
         const plan = input.planId
           ? await tx.subscriptionPlan.findFirst({
               where: { id: input.planId, isActive: true },
@@ -271,7 +272,7 @@ export class PlatformTenantsController {
             data: {
               tenantId: tenant.id,
               planId: plan.id,
-              status: trial ? 'TRIAL' : 'ACTIVE',
+              status: trial ? "TRIAL" : "ACTIVE",
               currentPeriodStart: now,
               currentPeriodEnd: addDays(
                 now,
@@ -281,9 +282,9 @@ export class PlatformTenantsController {
           });
           await recordPlatformAudit(tx, {
             actorAdminId: actor,
-            action: 'subscription.started',
+            action: "subscription.started",
             tenantId: tenant.id,
-            entityType: 'tenant_subscription',
+            entityType: "tenant_subscription",
             entityId: subscription.id,
             summary: { planCode: plan.code, status: subscription.status },
           });
@@ -292,7 +293,7 @@ export class PlatformTenantsController {
           {
             tenantId: tenant.id,
             email: input.ownerEmail,
-            role: 'OWNER',
+            role: "OWNER",
             createdByPlatformAdminId: actor,
           },
           now,
@@ -300,9 +301,9 @@ export class PlatformTenantsController {
         );
         await recordPlatformAudit(tx, {
           actorAdminId: actor,
-          action: 'tenant.created',
+          action: "tenant.created",
           tenantId: tenant.id,
-          entityType: 'tenant',
+          entityType: "tenant",
           entityId: tenant.id,
           summary: { slug: tenant.slug, pack: input.pack, inviteId: invite.id },
         });
@@ -317,15 +318,15 @@ export class PlatformTenantsController {
       };
     } catch (error) {
       if (error instanceof InviteError) throw inviteHttpError(error);
-      if (isUniqueViolation(error)) throw conflict('SLUG_TAKEN');
+      if (isUniqueViolation(error)) throw conflict("SLUG_TAKEN");
       throw error;
     }
   }
 
-  @Patch(':id')
+  @Patch(":id")
   async update(
     @Req() request: PlatformRequest,
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: unknown,
   ): Promise<{ id: string; name: string; status: string }> {
     const input = parseBody(PatchTenant, body);
@@ -345,16 +346,16 @@ export class PlatformTenantsController {
         select: { id: true, name: true, status: true },
       });
       // A suspended tenant is signed out everywhere, not only at next login.
-      if (tenant.status !== 'ACTIVE' && before.status === 'ACTIVE')
+      if (tenant.status !== "ACTIVE" && before.status === "ACTIVE")
         await tx.operatorSession.updateMany({
           where: { tenantId: id, revokedAt: null },
           data: { revokedAt: now },
         });
       await recordPlatformAudit(tx, {
         actorAdminId: request.platform!.adminId,
-        action: 'tenant.updated',
+        action: "tenant.updated",
         tenantId: id,
-        entityType: 'tenant',
+        entityType: "tenant",
         entityId: id,
         summary: {
           reason: input.reason,
@@ -370,18 +371,18 @@ export class PlatformTenantsController {
     return updated;
   }
 
-  @Get(':id/invites')
+  @Get(":id/invites")
   async listInvites(
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
   ): Promise<{ invites: PendingInvite[] }> {
     await this.requireTenant(id);
     return { invites: await this.invites.listPending(id) };
   }
 
-  @Post(':id/invites')
+  @Post(":id/invites")
   async invite(
     @Req() request: PlatformRequest,
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: unknown,
   ): Promise<CreatedInvite & { path: string }> {
     const input = parseBody(InviteBody, body);
@@ -399,28 +400,28 @@ export class PlatformTenantsController {
     }
     await recordPlatformAudit(this.prisma, {
       actorAdminId: request.platform!.adminId,
-      action: 'invite.created',
+      action: "invite.created",
       tenantId: id,
-      entityType: 'operator_invite',
+      entityType: "operator_invite",
       entityId: created.id,
       summary: { role: created.role },
     });
     return { ...created, path: `/invite/${created.token}` };
   }
 
-  @Delete(':id/invites/:inviteId')
+  @Delete(":id/invites/:inviteId")
   @HttpCode(204)
   async revokeInvite(
     @Req() request: PlatformRequest,
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Param('inviteId', new ParseUUIDPipe()) inviteId: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Param("inviteId", new ParseUUIDPipe()) inviteId: string,
   ): Promise<void> {
     if (!(await this.invites.revoke(id, inviteId))) throw notFound();
     await recordPlatformAudit(this.prisma, {
       actorAdminId: request.platform!.adminId,
-      action: 'invite.revoked',
+      action: "invite.revoked",
       tenantId: id,
-      entityType: 'operator_invite',
+      entityType: "operator_invite",
       entityId: inviteId,
     });
   }
@@ -435,14 +436,14 @@ export class PlatformTenantsController {
 
   private async currentSubscriptions(
     ids: readonly string[],
-  ): Promise<Map<string, NonNullable<TenantRow['subscription']>>> {
+  ): Promise<Map<string, NonNullable<TenantRow["subscription"]>>> {
     if (ids.length === 0) return new Map();
     const rows = await this.prisma.tenantSubscription.findMany({
       where: { tenantId: { in: [...ids] } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       include: { plan: { select: { code: true, name: true } } },
     });
-    const result = new Map<string, NonNullable<TenantRow['subscription']>>();
+    const result = new Map<string, NonNullable<TenantRow["subscription"]>>();
     // The open row wins; otherwise the newest one.
     const ordered = [
       ...rows.filter((row) => (OPEN as readonly string[]).includes(row.status)),
@@ -465,33 +466,33 @@ export class PlatformTenantsController {
   private async usage(
     ids: readonly string[],
     now: Date,
-  ): Promise<Map<string, TenantRow['usage']>> {
-    const result = new Map<string, TenantRow['usage']>();
+  ): Promise<Map<string, TenantRow["usage"]>> {
+    const result = new Map<string, TenantRow["usage"]>();
     if (ids.length === 0) return result;
     const since = monthStartUtc(now);
     const tenantIds = [...ids];
     const [conversations, messages, costs] = await Promise.all([
       this.prisma.conversation.groupBy({
-        by: ['tenantId'],
+        by: ["tenantId"],
         where: { tenantId: { in: tenantIds }, createdAt: { gte: since } },
         _count: { _all: true },
       }),
       this.prisma.message.groupBy({
-        by: ['tenantId'],
+        by: ["tenantId"],
         where: {
           tenantId: { in: tenantIds },
-          direction: 'INBOUND',
+          direction: "INBOUND",
           createdAt: { gte: since },
         },
         _count: { _all: true },
       }),
       this.prisma.llmUsageRecord.groupBy({
-        by: ['tenantId'],
+        by: ["tenantId"],
         where: { tenantId: { in: tenantIds }, createdAt: { gte: since } },
         _sum: { costNano: true },
       }),
     ]);
-    const entry = (id: string): TenantRow['usage'] => {
+    const entry = (id: string): TenantRow["usage"] => {
       let value = result.get(id);
       if (!value) {
         value = { conversations: 0, inboundMessages: 0, llmCostUsd: 0 };

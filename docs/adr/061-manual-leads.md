@@ -21,3 +21,17 @@ S1 API (builder; reviewer verifies): the route, the internal channel account and
 
 ## Risks
 The internal channel account must never be mistaken for a real one: every place that iterates channel accounts needs the exclusion (a missed place would show a phantom "manual" channel or try to poll it); the builder greps and lists each place it checked. The person-linking helper must be used, not re-implemented, or duplicates appear.
+
+## S1 status (2026-11-13, branch `feat/manual-leads`, API built and verified by the reviewing agent)
+
+Built: `POST /api/v1/leads` (`webinbox/lead-pipeline.controller.ts`, roles OWNER/ADMIN/OPERATOR, VIEWER 403, strict body, response = the `GET /leads` item shape); `leads/manual-lead.service.ts` (one transaction: internal channel account, contact linked to a person by phone key or a new person, CLOSED conversation, lead with `stage_set_by = OPERATOR`, tags, audit `lead.created_manually` with ids only); pure rules in `leads/manual-lead-rules.ts`; the list mapper of `GET /leads` is shared (`LEAD_ITEM_SELECT`, `toItems`).
+
+Deviations from the text above:
+- The internal account's `external_account_id` is `manual:<tenantId>` (not `manual`): `channel_accounts` is unique on `(channel_type, external_account_id)` across ALL tenants.
+- Phone "normalisation" is the existing `extractPhone` (digits, a leading `+` kept, 9 to 15 digits, nothing completed); the person link uses `phoneKey` (last 9 digits), so `+998 90 111 22 33` and `90 111 22 33` meet one person.
+- Places excluding `channel_type = 'manual'`: inbox list (every scope, `inbox-read.service.ts`), channels list and agent-mode PATCH (`channels.controller.ts`), platform tenant detail channels (`platform-tenants.controller.ts`). Checked and left alone because the account is `DISABLED`/`agent_mode OFF` and conversations are CLOSED: operator digest and alerts scans (need `ACTIVE` + `operator_chat_id`), follow-ups (Telegram only), agent startup check (one served account id), channel connect controllers (filter by their own type). No plan limit counts channel accounts.
+- CRM sync passes `summary` through unchanged; an empty summary was read, not run against a live Bitrix24.
+
+Tests: unit `manual-lead-rules.spec.ts` (8); integration `webinbox/manual-lead.integration.spec.ts` (12: defaults, one account per tenant, person dedup, validation, amount/owner/tags, owner and tag rejection, stage/pipeline rules, role matrix, list + board count + audit without personal data, inbox/channels exclusion, operator lock). Five mutations were killed (inbox filter, channels filter, `stage_set_by`, closed-stage rule, person link). Not covered: contact/person erasure and CSV export of a manual lead (no special cases in code, not exercised), CRM sync of an empty summary against a real connector.
+
+S2 web (the "Add lead" button and column "+" dialog; label "Manual", no "Open conversation" for `channelType = 'manual'`) is the next step.
