@@ -1029,5 +1029,22 @@
   "toast.fieldCreated": "Field created.",
   "toast.fieldUpdated": "Field updated.",
   "toast.fieldArchived": "Field archived.",
-  "toast.fieldSaved": "Field saved."
+  "toast.fieldSaved": "Field saved.",
+  "connectorRoles.title": "Connector roles",
+  "connectorRoles.role.CATALOG": "Catalog",
+  "connectorRoles.role.LEAD_SINK": "Lead sink",
+  "connectorRoles.role.ACTIONS": "Actions",
+  "connectorRoles.desc.CATALOG": "Answers about products, prices and availability",
+  "connectorRoles.desc.LEAD_SINK": "Where new leads are sent",
+  "connectorRoles.desc.ACTIONS": "Where write actions such as bookings go",
+  "connectorRoles.status.BOUND": "Bound",
+  "connectorRoles.status.UNBOUND": "Uses the only capable connector, if exactly one",
+  "connectorRoles.status.AMBIGUOUS": "Several connectors qualify: choose one, otherwise the agent will not use any",
+  "connectorRoles.status.UNAVAILABLE": "The chosen connector is not usable",
+  "connectorRoles.notChosen": "Not chosen",
+  "connectorRoles.activeConnectors": "Active connectors",
+  "connectorRoles.save": "Role saved.",
+  "errors.CONNECTOR_NOT_ACTIVE": "The connector is not active.",
+  "errors.CONNECTOR_UNAVAILABLE": "The connector is not usable.",
+  "errors.CONNECTOR_CAPABILITY_MISSING": "The connector does not offer what this role needs."
 }

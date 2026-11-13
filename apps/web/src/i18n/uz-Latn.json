@@ -1029,5 +1029,22 @@
   "toast.fieldCreated": "Maydon yaratildi.",
   "toast.fieldUpdated": "Maydon yangilandi.",
   "toast.fieldArchived": "Maydon arxivlandi.",
-  "toast.fieldSaved": "Maydon saqlandi."
+  "toast.fieldSaved": "Maydon saqlandi.",
+  "connectorRoles.title": "Connector rollari",
+  "connectorRoles.role.CATALOG": "Katalog",
+  "connectorRoles.role.LEAD_SINK": "Lead manba",
+  "connectorRoles.role.ACTIONS": "Amallar",
+  "connectorRoles.desc.CATALOG": "Mahsulotlar, narxlar va mavjudlik bo‘yicha javoblar",
+  "connectorRoles.desc.LEAD_SINK": "Yangi leadlar yuboriladigan joy",
+  "connectorRoles.desc.ACTIONS": "Bron qilish kabi yozish amallari bor joy",
+  "connectorRoles.status.BOUND": "Bog‘langan",
+  "connectorRoles.status.UNBOUND": "Faqat bitta qodir connector bor bo‘lsha, uni ishlatadi",
+  "connectorRoles.status.AMBIGUOUS": "Bir nechta connectorlar mos: birini tanlang, aks holda agent hech kimdan foydalanmaydi",
+  "connectorRoles.status.UNAVAILABLE": "Tanlangan connector foydalanish uchun mumkin emas",
+  "connectorRoles.notChosen": "Tanlanmagan",
+  "connectorRoles.activeConnectors": "Faol connectorlar",
+  "connectorRoles.save": "Rol saqlandi.",
+  "errors.CONNECTOR_NOT_ACTIVE": "Connector faol emas.",
+  "errors.CONNECTOR_UNAVAILABLE": "Connector foydalanish uchun mavjud emas.",
+  "errors.CONNECTOR_CAPABILITY_MISSING": "Connector ushbu rolga kerak bo‘lgan imkoniyatni takhmil qilmaydi."
 }
