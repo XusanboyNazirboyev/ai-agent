@@ -27,7 +27,9 @@ async function resetLead(
           body: JSON.stringify(body),
         });
       if (stageId) {
-        const listed = (await (await fetch('/api/v1/leads?limit=50')).json()) as {
+        const listed = (await (
+          await fetch('/api/v1/leads?limit=50')
+        ).json()) as {
           items: { id: string; conversation: { id: string } }[];
         };
         const lead = listed.items.find((item) => item.conversation.id === id);
@@ -45,9 +47,7 @@ const cardOf = (page: Page, conversationId: string): Locator =>
     has: page.locator(`a[href*="c=${conversationId}"]`),
   });
 
-test('an operator moves a lead between funnel stages', async ({
-  browser,
-}) => {
+test('an operator moves a lead between funnel stages', async ({ browser }) => {
   const f = fixtures();
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
   const { id: conversationId } = f.a.conversations[0]!;

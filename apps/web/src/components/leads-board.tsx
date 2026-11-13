@@ -1032,6 +1032,7 @@ function LeadsFilters(props: {
       <label className="flex min-w-0 flex-1 basis-40 flex-col gap-1 text-sm font-medium">
         <span className="sr-only">{t('people.filterByTag')}</span>
         <select
+          data-testid="leads-tag-filter"
           aria-label={t('people.filterByTag')}
           value={props.filters.tagId}
           onChange={(e) => update({ tagId: e.target.value })}
