@@ -449,7 +449,7 @@ describe('LeadsBoard filters and views', () => {
     ];
     mount();
     await screen.findAllByTestId('lead-card');
-    fireEvent.click(screen.getByRole('button', { name: 'leads.view.list' }));
+    fireEvent.click(screen.getByRole('button', { name: 'leads.view.table' }));
     const rows = await screen.findAllByTestId('lead-list-row');
     expect(rows).toHaveLength(2);
     expect(leadsCalls()).toContain('/api/v1/leads?pipelineId=pipe-1&limit=25');
@@ -486,5 +486,53 @@ describe('LeadsBoard filters and views', () => {
     state.role = 'ADMIN';
     mount();
     expect(await screen.findByTestId('leads-export')).toBeInTheDocument();
+  });
+});
+
+describe('LeadsBoard created range and mobile tabs', () => {
+  it('the creation range lives in Filters, goes to the board as from/to and has chips', async () => {
+    mount();
+    await screen.findByTestId('lead-card');
+    expect(screen.queryByTestId('funnel-toggle')).toBeInTheDocument();
+    // The funnel strip no longer holds date inputs.
+    expect(screen.queryByLabelText('leads.funnelFrom')).toBeNull();
+    fireEvent.click(screen.getByTestId('leads-filters-button'));
+    fireEvent.change(screen.getByLabelText('leads.createdFrom'), {
+      target: { value: '2026-11-01' },
+    });
+    fireEvent.change(screen.getByLabelText('leads.createdTo'), {
+      target: { value: '2026-11-30' },
+    });
+    await waitFor(() =>
+      expect(vi.mocked(api).mock.calls.map(([p]) => String(p))).toContain(
+        '/api/v1/pipelines/pipe-1/board?from=2026-11-01&to=2026-11-30',
+      ),
+    );
+    expect(
+      screen.getByTestId('leads-filter-chip-createdFrom'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('leads-filter-chip-createdTo'));
+    expect(screen.queryByTestId('leads-filter-chip-createdTo')).toBeNull();
+    expect(screen.getByTestId('leads-filters-count').textContent).toContain(
+      '1',
+    );
+  });
+
+  it('below md one column shows at a time, picked from the stage tab bar', async () => {
+    vi.stubGlobal('innerWidth', 375);
+    mount();
+    const tabs = await screen.findByTestId('leads-stage-tabs');
+    expect(within(tabs).getAllByTestId('leads-stage-tab')).toHaveLength(4);
+    expect(
+      document.querySelectorAll('section[data-testid^="lead-column-"]'),
+    ).toHaveLength(1);
+    expect(screen.getByTestId('lead-column-NEW')).toBeInTheDocument();
+    expect(screen.queryByTestId('lead-column-toggle')).toBeNull();
+    const won = within(tabs).getByText('Won').closest('button')!;
+    expect(won.className).toContain('bg-success-soft');
+    fireEvent.click(won);
+    expect(won).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('lead-column-WON')).toBeInTheDocument();
+    expect(screen.queryByTestId('lead-column-NEW')).toBeNull();
   });
 });

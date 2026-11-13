@@ -1141,7 +1141,7 @@
   "leads.ageLabel": "{days, plural, one {Oxirgi faollik # kun oldin} other {Oxirgi faollik # kun oldin}}",
   "leads.panelClose": "Lid panelini yopish",
   "leads.openConversation": "Suhbatni ochish",
-  "leads.stageProgress": "Voronka bosqichi",
+  "leads.stageProgress": "Bosqich",
   "leads.aiBlock": "AI bosqichlari",
   "leads.stageByOperator": "Bosqichni operator belgilagan",
   "leads.lostBecause": "Yo‘qotilish sababi: {reason}",
@@ -1155,5 +1155,10 @@
   "leads.reason.customer_replied": "mijoz javob berdi",
   "leads.reason.agent_asked_question": "yordamchi savol berdi",
   "leads.reason.lead_created": "yangi lid",
-  "leads.reason.unknown": "avtomatik qoida"
+  "leads.reason.unknown": "avtomatik qoida",
+  "leads.view.table": "Jadval",
+  "leads.createdFrom": "Yaratilgan sana (dan)",
+  "leads.createdTo": "Yaratilgan sana (gacha)",
+  "leads.moveToPipeline": "Boshqa voronkaga ko‘chirish",
+  "leads.stageTabs": "Voronka bosqichlari"
 }

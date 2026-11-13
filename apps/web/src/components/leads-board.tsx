@@ -87,9 +87,9 @@ export function LeadsBoard(): ReactNode {
     setActiveId((def ?? list[0]).id);
   }, [list, urlPipeline]);
 
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
   const [filters, setFilters] = useState<LeadFilters>(NO_FILTERS);
+  const fromDate = filters.createdFrom;
+  const toDate = filters.createdTo;
 
   const active = list.find((p) => p.id === activeId) ?? list[0];
   const board = useQuery({
@@ -118,7 +118,7 @@ export function LeadsBoard(): ReactNode {
   }, [operator.id]);
   function isCollapsed(stage: BoardStageView): boolean {
     if (stage.kind === 'OPEN') return false;
-    return collapsedMap[stage.id] ?? isMobile;
+    return !isMobile && (collapsedMap[stage.id] ?? false);
   }
   function toggleCollapsed(stage: BoardStageView): void {
     const next = { ...collapsedMap, [stage.id]: !isCollapsed(stage) };
@@ -212,12 +212,12 @@ export function LeadsBoard(): ReactNode {
       </div>
     ) : null;
 
+  // Below md the board shows one stage at a time, picked from the tab bar.
+  const selectedStageId =
+    columns.find((s) => s.id === mobileStageId)?.id ?? columns[0]?.id ?? null;
   const visibleColumns =
-    view === 'board'
-      ? columns.filter(
-          (stage) =>
-            !isMobile || mobileStageId === null || stage.id === mobileStageId,
-        )
+    view === 'board' && isMobile
+      ? columns.filter((stage) => stage.id === selectedStageId)
       : columns;
 
   return (
@@ -250,7 +250,7 @@ export function LeadsBoard(): ReactNode {
             onClick={() => setView('list')}
             className={toggleClass(view === 'list')}
           >
-            {t('leads.view.list')}
+            {t('leads.view.table')}
           </button>
         </div>
         <FiltersMenu
@@ -302,23 +302,7 @@ export function LeadsBoard(): ReactNode {
             {t('leads.funnelTitle')}
           </button>
           {showFunnel ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-2 pb-1">
-              <div className="flex min-w-0 flex-wrap gap-2">
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className={`${fieldClass} min-h-9 w-40! min-w-0 max-w-full`}
-                  aria-label={t('leads.funnelFrom')}
-                />
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className={`${fieldClass} min-h-9 w-40! min-w-0 max-w-full`}
-                  aria-label={t('leads.funnelTo')}
-                />
-              </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-1 px-2 pb-1">
               <div className="flex min-w-0 flex-wrap gap-1">
                 {columns.map((stage) => {
                   const total = columns.reduce((sum, s) => sum + s.count, 0);
@@ -382,14 +366,44 @@ export function LeadsBoard(): ReactNode {
           onOpen={openLead}
         />
       ) : null}
+      {board.isSuccess && columns.length > 0 && view === 'board' && isMobile ? (
+        <div
+          role="group"
+          aria-label={t('leads.stageTabs')}
+          data-testid="leads-stage-tabs"
+          className="flex min-w-0 gap-1 overflow-x-auto pb-1"
+        >
+          {columns.map((stage) => {
+            const selected = stage.id === selectedStageId;
+            const tone =
+              stage.kind === 'WON'
+                ? 'bg-success-soft text-success-fg'
+                : stage.kind === 'LOST'
+                  ? 'bg-danger-soft text-danger-fg'
+                  : 'bg-surface text-fg';
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                data-testid="leads-stage-tab"
+                aria-pressed={selected}
+                onClick={() => setMobileStageId(stage.id)}
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 text-sm font-medium ${tone} ${selected ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
+              >
+                {stageLabel(stage, t)}
+                <span className="rounded-full bg-surface-2 px-1.5 text-xs text-muted">
+                  {stage.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {board.isSuccess && columns.length > 0 && view === 'board' ? (
         <div
           aria-label={t('leads.columns')}
           className="relative flex min-h-0 min-w-0 max-w-full items-start gap-3 overflow-x-auto pb-2"
         >
-          {isMobile && mobileStageId === null ? (
-            <p className="sr-only">{t('leads.pickStage')}</p>
-          ) : null}
           {visibleColumns.map((stage) => (
             <LeadColumn
               key={stage.id}
@@ -398,6 +412,7 @@ export function LeadsBoard(): ReactNode {
               stages={columns}
               filters={filters}
               collapsed={isCollapsed(stage)}
+              single={isMobile}
               onToggleCollapsed={() => toggleCollapsed(stage)}
               draggedId={draggedId}
               draggedToStageId={draggedToStageId}

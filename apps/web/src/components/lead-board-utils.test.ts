@@ -44,10 +44,13 @@ describe('filterParams', () => {
         closeBefore: '2026-12-31',
         closeAfter: '2026-12-01',
         tagId: 'tag-1',
+        createdFrom: '2026-01-01',
+        createdTo: '2026-02-01',
       },
       params,
     );
     expect(params.toString()).toBe(
+      // The creation range belongs to the board endpoint, not to GET /leads.
       'ownerOperatorId=op-1&source=instagram&closeBefore=2026-12-31&closeAfter=2026-12-01&tagId=tag-1',
     );
     const none = new URLSearchParams();

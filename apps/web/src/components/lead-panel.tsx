@@ -122,6 +122,7 @@ function PanelBody(props: {
   const name = item.contact.name ?? t('list.unnamed');
   const stageId = currentStageId(item, stages);
   const currentIndex = stages.findIndex((s) => s.id === stageId);
+  const stageHeadingId = useId();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -161,7 +162,13 @@ function PanelBody(props: {
         </Link>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <nav aria-label={t('leads.stageProgress')}>
+        <nav aria-labelledby={stageHeadingId} className="flex flex-col gap-2">
+          <h3
+            id={stageHeadingId}
+            className="text-xs font-semibold uppercase tracking-wide text-muted"
+          >
+            {t('leads.stageProgress')}
+          </h3>
           <ol
             data-testid="lead-panel-stages"
             className="flex min-w-0 flex-wrap gap-1.5"
@@ -204,7 +211,15 @@ function PanelBody(props: {
             {t('leads.lostBecause', { reason: item.lostReason })}
           </p>
         ) : null}
-        <LeadOpportunity leadId={item.id} item={item} />
+        <section
+          aria-label={t('opportunity.title')}
+          className="flex flex-col gap-2"
+        >
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {t('opportunity.title')}
+          </h3>
+          <LeadOpportunity leadId={item.id} item={item} hideSummary />
+        </section>
         {canEdit ? <MoveToPipeline leadId={item.id} /> : null}
         <LeadTagsEditor
           leadId={item.id}

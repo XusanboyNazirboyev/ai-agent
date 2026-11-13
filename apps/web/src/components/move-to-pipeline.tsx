@@ -59,11 +59,11 @@ export function MoveToPipeline(props: { leadId: string }): ReactNode {
         }}
         data-testid="lead-move-pipeline"
       >
-        {t('leads.moveToStage')}
+        {t('leads.moveToPipeline')}
       </Button>
       <FormDialog
         open={open}
-        title={t('leads.moveToStage')}
+        title={t('leads.moveToPipeline')}
         testId="move-pipeline-dialog"
         onClose={() => setOpen(false)}
         onSubmit={() => {

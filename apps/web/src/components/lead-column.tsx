@@ -47,6 +47,8 @@ export function LeadColumn(props: {
   stages: BoardStageView[];
   filters: LeadFilters;
   collapsed: boolean;
+  /** Below md: one column at a time, full width, no collapse toggle. */
+  single?: boolean;
   onToggleCollapsed: () => void;
   draggedId: string | null;
   draggedToStageId: string | null;
@@ -104,9 +106,11 @@ export function LeadColumn(props: {
         props.onDrop(stage.id);
       }}
       className={`flex shrink-0 flex-col self-start rounded-2xl border border-t-[3px] border-line bg-surface shadow-card ${ACCENT[stage.kind]} ${
-        props.collapsed
-          ? 'w-[min(85vw,14rem)] md:w-56'
-          : 'w-[min(85vw,21rem)] md:w-80'
+        props.single
+          ? 'w-full'
+          : props.collapsed
+            ? 'w-[min(85vw,14rem)] md:w-56'
+            : 'w-[min(85vw,21rem)] md:w-80'
       } ${dragOver ? 'ring-2 ring-primary' : ''} ${isDraggingInto ? 'bg-primary-soft' : ''}`}
     >
       <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5">
@@ -120,7 +124,7 @@ export function LeadColumn(props: {
           >
             {stage.count}
           </span>
-          {terminal ? (
+          {terminal && !props.single ? (
             <button
               type="button"
               data-testid="lead-column-toggle"

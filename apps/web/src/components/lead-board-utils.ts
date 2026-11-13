@@ -50,6 +50,9 @@ export interface LeadFilters {
   closeBefore: string;
   closeAfter: string;
   tagId: string;
+  /** Funnel creation-date range: goes to the board endpoint as from/to. */
+  createdFrom: string;
+  createdTo: string;
 }
 
 export const NO_FILTERS: LeadFilters = {
@@ -58,6 +61,8 @@ export const NO_FILTERS: LeadFilters = {
   closeBefore: '',
   closeAfter: '',
   tagId: '',
+  createdFrom: '',
+  createdTo: '',
 };
 
 /** Query params of `GET /leads`, named exactly as the API contract. */

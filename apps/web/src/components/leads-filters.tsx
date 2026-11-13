@@ -116,6 +116,26 @@ function FilterFields(props: {
           />
         </label>
       </div>
+      <div className="flex min-w-0 flex-wrap gap-2">
+        <label className={`${labelClass} flex-1 basis-32`}>
+          {t('leads.createdFrom')}
+          <input
+            type="date"
+            value={filters.createdFrom}
+            onChange={(e) => update({ createdFrom: e.target.value })}
+            className={fieldClass}
+          />
+        </label>
+        <label className={`${labelClass} flex-1 basis-32`}>
+          {t('leads.createdTo')}
+          <input
+            type="date"
+            value={filters.createdTo}
+            onChange={(e) => update({ createdTo: e.target.value })}
+            className={fieldClass}
+          />
+        </label>
+      </div>
       <label className={labelClass}>
         {t('people.filterByTag')}
         <select
@@ -279,6 +299,16 @@ export function FilterChips(props: {
     chips.push({
       key: 'closeBefore',
       label: `${t('leads.filterCloseBefore')}: ${filters.closeBefore}`,
+    });
+  if (filters.createdFrom)
+    chips.push({
+      key: 'createdFrom',
+      label: `${t('leads.createdFrom')}: ${filters.createdFrom}`,
+    });
+  if (filters.createdTo)
+    chips.push({
+      key: 'createdTo',
+      label: `${t('leads.createdTo')}: ${filters.createdTo}`,
     });
   if (filters.tagId)
     chips.push({

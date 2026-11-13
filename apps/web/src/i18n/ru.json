@@ -1141,7 +1141,7 @@
   "leads.ageLabel": "{days, plural, one {Последняя активность # день назад} few {Последняя активность # дня назад} many {Последняя активность # дней назад} other {Последняя активность # дня назад}}",
   "leads.panelClose": "Закрыть панель лида",
   "leads.openConversation": "Открыть диалог",
-  "leads.stageProgress": "Этап воронки",
+  "leads.stageProgress": "Этап",
   "leads.aiBlock": "Этапы от ИИ",
   "leads.stageByOperator": "Этап выбрал оператор",
   "leads.lostBecause": "Причина потери: {reason}",
@@ -1155,5 +1155,10 @@
   "leads.reason.customer_replied": "клиент ответил",
   "leads.reason.agent_asked_question": "ассистент задал вопрос",
   "leads.reason.lead_created": "новый лид",
-  "leads.reason.unknown": "автоматическое правило"
+  "leads.reason.unknown": "автоматическое правило",
+  "leads.view.table": "Таблица",
+  "leads.createdFrom": "Создан с",
+  "leads.createdTo": "Создан по",
+  "leads.moveToPipeline": "Перенести в другую воронку",
+  "leads.stageTabs": "Этапы воронки"
 }

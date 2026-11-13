@@ -37,6 +37,8 @@ export function LeadOpportunity(props: {
   role?: string;
   canEdit?: boolean;
   onChange?: () => void;
+  /** The lead panel shows owner and amount in the fields below. */
+  hideSummary?: boolean;
 }): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();
@@ -172,7 +174,9 @@ export function LeadOpportunity(props: {
 
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="lead-opportunity">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <div
+        className={`flex flex-wrap items-center gap-2 text-xs text-muted ${props.hideSummary ? 'hidden' : ''}`}
+      >
         {ownerName ? (
           <span
             className="flex items-center gap-1.5"
