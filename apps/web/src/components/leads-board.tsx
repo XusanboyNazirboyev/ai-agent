@@ -15,11 +15,11 @@ import { downloadCsv } from '@/lib/export-csv';
 import { useToast } from '@/components/ui/toast';
 import { channelName } from '@/lib/channel-names';
 import type {
+  BoardStageView,
   ConversationState,
   LeadPipelineItem,
   LeadPipelinePage,
   LeadScore,
-  LeadStage,
   PipelineView,
   Tag,
 } from '@/lib/types';
@@ -53,7 +53,7 @@ const SCORE_TONE: Record<LeadScore, Tone> = {
   COLD: 'neutral',
 };
 
-function stageName(stage: LeadStage, t: (key: string) => string): string {
+function stageName(stage: { code: string | null; name: string | null }, t: (key: string) => string): string {
   return stage.name ?? (stage.code ? t(`leads.stage.${stage.code}`) : '');
 }
 
@@ -88,13 +88,23 @@ export function LeadsBoard(): ReactNode {
     setActiveId((def ?? list[0]).id);
   }, [list, urlPipeline]);
 
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
   const active = list.find((p) => p.id === activeId) ?? list[0];
-  const stages = useQuery({
-    queryKey: ['lead-stages', active?.id],
+  const board = useQuery({
+    queryKey: ['board', active?.id, fromDate, toDate],
     enabled: !!active,
-    queryFn: () =>
-      api<LeadStage[]>(`/api/v1/leads/stages?pipelineId=${active!.id}`),
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (fromDate) qs.set('from', fromDate);
+      if (toDate) qs.set('to', toDate);
+      return api<{ stages: BoardStageView[] }>(
+        `/api/v1/pipelines/${active!.id}/board?${qs.toString()}`,
+      );
+    },
   });
+  const columns = board.data?.stages ?? [];
 
   const [ownerId, setOwnerId] = useState('');
   const [source, setSource] = useState('');
@@ -108,7 +118,7 @@ export function LeadsBoard(): ReactNode {
     router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
   }
 
-  const rows = stages.data ?? [];
+  const rows = columns;
   const switcher = (
     <div
       role="group"
@@ -194,32 +204,74 @@ export function LeadsBoard(): ReactNode {
           setTagId('');
         }}
       />
-      {stages.isPending ? (
+      {board.isSuccess && columns.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-line bg-surface p-3">
+          <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm text-muted">
+            <label className="sr-only">{t('leads.funnelRange')}</label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className={fieldClass}
+                aria-label={t('leads.funnelFrom')}
+              />
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className={fieldClass}
+                aria-label={t('leads.funnelTo')}
+              />
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
+            {columns.map((stage) => {
+              const total = columns.reduce((sum, s) => sum + s.count, 0);
+              const share = total === 0 ? 0 : Math.round((stage.count / total) * 100);
+              return (
+                <div
+                  key={stage.id}
+                  className="flex flex-col items-center gap-1 text-xs"
+                  data-testid="funnel-stage"
+                >
+                  <span className="truncate" title={stageName(stage, t)}>
+                    {stageName(stage, t)}
+                  </span>
+                  <span className="font-semibold">{stage.count}</span>
+                  <span className="text-muted">{share}%</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {board.isPending ? (
         <div role="status">
           <span className="sr-only">{t('app.loading')}</span>
           <SkeletonRows rows={3} />
         </div>
       ) : null}
-      {stages.isError ? (
+      {board.isError ? (
         <div className="flex flex-col items-start gap-3">
           <p
             role="alert"
             className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           >
             <Icon name="alert" />
-            {t(errorKey(stages.error))}
+            {t(errorKey(board.error))}
           </p>
-          <Button size="sm" onClick={() => void stages.refetch()}>
+          <Button size="sm" onClick={() => void board.refetch()}>
             {t('app.retry')}
           </Button>
         </div>
       ) : null}
-      {stages.isSuccess && rows.length === 0 ? (
+      {board.isSuccess && rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line p-6 text-center text-sm text-muted">
           {t('leads.empty')}
         </p>
       ) : null}
-      {stages.isSuccess && rows.length > 0 ? (
+      {board.isSuccess && rows.length > 0 ? (
         <div
           aria-label={t('leads.columns')}
           className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
@@ -240,9 +292,9 @@ export function LeadsBoard(): ReactNode {
 }
 
 function LeadColumn(props: {
-  stage: LeadStage;
+  stage: BoardStageView;
   pipelineId: string;
-  stages: LeadStage[];
+  stages: BoardStageView[];
   filters: LeadFilters;
 }): ReactNode {
   const { t } = useI18n();
@@ -271,23 +323,50 @@ function LeadColumn(props: {
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const count = query.hasNextPage ? `${items.length}+` : String(items.length);
   const name = stageName(props.stage, t);
+  const terminal = props.stage.kind !== 'OPEN';
+  const columnTone: Record<'WON' | 'LOST', string> = {
+    WON: 'success',
+    LOST: 'danger',
+  };
 
   return (
     <section
       aria-label={name}
       data-testid={`lead-column-${props.stage.code ?? props.stage.id}`}
-      className="flex w-[min(85vw,21rem)] min-w-[min(85vw,21rem)] shrink-0 flex-col rounded-2xl border border-line bg-surface shadow-card md:w-80 md:min-w-80"
+      className={`flex w-[min(85vw,21rem)] min-w-[min(85vw,21rem)] shrink-0 flex-col rounded-2xl border border-line bg-surface shadow-card md:w-80 md:min-w-80 ${terminal ? 'hidden md:flex' : ''} ${terminal ? `border-${columnTone[props.stage.kind as 'WON' | 'LOST']}` : ''}`}
     >
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-3">
-        <h2 className="min-w-0 truncate font-semibold">{name}</h2>
-        {query.isSuccess ? (
-          <span
-            data-testid="lead-count"
-            className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted"
-          >
-            {count}
-          </span>
-        ) : null}
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="min-w-0 truncate font-semibold">{name}</h2>
+          {terminal ? (
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${columnTone[props.stage.kind as 'WON' | 'LOST'] === 'success' ? 'bg-success-soft text-success-fg' : 'bg-danger-soft text-danger-fg'}`}
+            >
+              {t(`leads.stage.${props.stage.code}`)}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          {query.isSuccess ? (
+            <>
+              <span
+                data-testid="lead-count"
+                className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-muted"
+              >
+                {count}
+              </span>
+              {props.stage.totals.map((total) => (
+                <div
+                  key={total.currency}
+                  className="text-xs text-muted leading-tight"
+                  data-testid="lead-column-total"
+                >
+                  {total.currency} {formatAmount(total.amount, total.currency)}
+                </div>
+              ))}
+            </>
+          ) : null}
+        </div>
       </header>
       <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
         {query.isPending ? (
@@ -343,7 +422,7 @@ function LeadColumn(props: {
 function LeadCard(props: {
   item: LeadPipelineItem;
   currentStageId: string;
-  stages: LeadStage[];
+  stages: BoardStageView[];
   pipelineId: string;
 }): ReactNode {
   const { t, formatDateTime } = useI18n();

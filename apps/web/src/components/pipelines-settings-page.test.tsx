@@ -48,29 +48,37 @@ const stages = [
 function setup(overrides: Record<string, unknown> = {}) {
   const mocked = vi.mocked(api);
   mocked.mockImplementation(
-    (path: string, opts?: { method?: string; body?: Record<string, unknown> }) => {
-    if (path === '/api/v1/pipelines' && !opts)
-      return Promise.resolve({ items: [pipeline] });
-    if (path.startsWith('/api/v1/leads/stages'))
-      return Promise.resolve(stages);
-    if (path === '/api/v1/pipelines' && opts?.method === 'POST')
-      return Promise.resolve({ ...pipeline, id: 'p2', name: opts.body.name });
-    if (path === '/api/v1/pipelines/p1' && opts?.method === 'PATCH')
-      return Promise.resolve({ ...pipeline, name: opts.body.name });
-    if (path === '/api/v1/pipelines/p1/make-default')
-      return Promise.resolve({ items: [pipeline] });
-    if (path === '/api/v1/pipelines/p1' && opts?.method === 'DELETE')
-      return Promise.resolve({ id: 'p1', archived: true });
-    if (path === '/api/v1/leads/stages' && opts?.method === 'POST')
-      return Promise.resolve({ id: 's3', code: null, name: opts.body.name, position: 2, pipelineId: 'p1' });
-    if (path === '/api/v1/leads/stages/s2' && opts?.method === 'PATCH')
-      return Promise.resolve({ ...stages[1], name: opts.body.name });
-    if (path === '/api/v1/leads/stages/s2' && opts?.method === 'DELETE')
-      return Promise.resolve({ id: 's2', deleted: true });
-    if (path === '/api/v1/pipelines/p1/stages/order')
-      return Promise.resolve(stages);
-    return Promise.resolve(overrides[path] ?? {});
-  });
+    ((path: string, opts?: { method?: string; body?: unknown }) => {
+      const body = opts?.body as Record<string, unknown> | undefined;
+      if (path === '/api/v1/pipelines' && !opts)
+        return Promise.resolve({ items: [pipeline] });
+      if (path.startsWith('/api/v1/leads/stages'))
+        return Promise.resolve(stages);
+      if (path === '/api/v1/pipelines' && opts?.method === 'POST')
+        return Promise.resolve({ ...pipeline, id: 'p2', name: String(body?.name ?? '') });
+      if (path === '/api/v1/pipelines/p1' && opts?.method === 'PATCH')
+        return Promise.resolve({ ...pipeline, name: String(body?.name ?? pipeline.name) });
+      if (path === '/api/v1/pipelines/p1/make-default')
+        return Promise.resolve({ items: [pipeline] });
+      if (path === '/api/v1/pipelines/p1' && opts?.method === 'DELETE')
+        return Promise.resolve({ id: 'p1', archived: true });
+      if (path === '/api/v1/leads/stages' && opts?.method === 'POST')
+        return Promise.resolve({
+          id: 's3',
+          code: null,
+          name: String(body?.name ?? ''),
+          position: 2,
+          pipelineId: 'p1',
+        });
+      if (path === '/api/v1/leads/stages/s2' && opts?.method === 'PATCH')
+        return Promise.resolve({ ...stages[1], name: String(body?.name ?? stages[1].name) });
+      if (path === '/api/v1/leads/stages/s2' && opts?.method === 'DELETE')
+        return Promise.resolve({ id: 's2', deleted: true });
+      if (path === '/api/v1/pipelines/p1/stages/order')
+        return Promise.resolve(stages);
+      return Promise.resolve(overrides[path] ?? {});
+    }) as unknown as Parameters<typeof mocked.mockImplementation>[0]
+  );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
