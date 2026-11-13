@@ -359,18 +359,20 @@ export function LeadsBoard(): ReactNode {
                 total === 0 ? 0 : Math.round((stage.count / total) * 100);
               const selected = mobileStageId === stage.id;
               return (
-                <div
+                <button
+                  type="button"
                   key={stage.id}
                   onClick={() => setMobileStageId(stage.id)}
-                  className={`flex flex-col items-center gap-1 text-xs cursor-pointer ${selected ? 'bg-primary-soft text-primary-fg' : ''}`}
+                  className={`flex min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-2 py-1 text-xs ${selected ? 'bg-primary-soft text-primary-fg' : ''}`}
                   data-testid="funnel-stage"
+                  aria-pressed={selected}
                 >
                   <span className="truncate" title={stageName(stage, t)}>
                     {stageName(stage, t)}
                   </span>
                   <span className="font-semibold">{stage.count}</span>
                   <span className="text-muted">{share}%</span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -616,7 +618,7 @@ function LeadColumn(props: {
           ) : null}
         </div>
       </header>
-      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
+      <ul className="flex min-h-0 flex-1 flex-col gap-2 p-3">
         {query.isPending ? (
           <li role="status">
             <span className="sr-only">{t('app.loading')}</span>
