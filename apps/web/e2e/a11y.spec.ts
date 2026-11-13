@@ -208,6 +208,35 @@ test.describe('leads, settings and status pages', () => {
   }
 });
 
+test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(browser, f.a.operators.op1.email);
+  await page.goto('/leads?view=funnel');
+  await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+  const card = page.getByTestId('lead-card').first();
+  await expect(card).toBeVisible();
+  await card.focus();
+  // Space picks the card up.
+  await page.keyboard.press(' ');
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(
+    /bg-primary-soft/,
+  );
+  // ArrowRight moves the drop target across columns.
+  await page.keyboard.press('ArrowRight');
+  // Space drops on the targeted column.
+  await page.keyboard.press(' ');
+  await page.waitForTimeout(200);
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
+  // Escape cancels an in-progress keyboard drag.
+  await card.focus();
+  await page.keyboard.press(' ');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
+  await context.close();
+});
+
 test('the theme choice in settings is applied and remembered', async ({
   browser,
 }) => {
@@ -774,4 +803,42 @@ test.describe('mobile 320px overflow: contacts and fields (P1.1/P1.5)', () => {
       await context.close();
     });
   }
+});
+
+test.describe('pipelines (P1.3)', () => {
+  test('pipelines settings page has no violations and dialogs are keyboard accessible', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.owner.email,
+    );
+    await page.goto('/settings/pipeline');
+    await expect(page.getByTestId('pipelines-list')).toBeVisible();
+    await audit(page, 'pipelines settings');
+
+    await page.getByTestId('pipeline-create').click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await audit(page, 'pipeline create dialog');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.getByTestId('pipeline-create')).toBeFocused();
+    await context.close();
+  });
+
+  test('leads board with pipeline switcher has no violations', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
+    await audit(page, 'leads board with pipeline');
+    await context.close();
+  });
 });
