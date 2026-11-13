@@ -1,25 +1,25 @@
-import { randomUUID } from "node:crypto";
-import { Injectable } from "@nestjs/common";
-import { Prisma } from "../generated/prisma/client.js";
-import { PrismaService } from "../persistence/prisma.service.js";
-import { PHONE_KEY_SQL, phoneKey } from "../persons/person-merge.js";
-import { upsertContactWithPerson } from "../persons/ensure-contact.js";
+import { randomUUID } from 'node:crypto';
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '../generated/prisma/client.js';
+import { PrismaService } from '../persistence/prisma.service.js';
+import { PHONE_KEY_SQL, phoneKey } from '../persons/person-merge.js';
+import { upsertContactWithPerson } from '../persons/ensure-contact.js';
 import {
   invalidValue,
   notFound,
   stageNotOpen,
   unknownOperator,
-} from "../pipelines/pipeline-errors.js";
-import { exceedsTagLimit } from "../tags/custom-field-values.js";
-import { conflict as tagConflict, unknownTag } from "../tags/tag-errors.js";
-import { ensureDefaultPipeline } from "./lead-stage.util.js";
+} from '../pipelines/pipeline-errors.js';
+import { exceedsTagLimit } from '../tags/custom-field-values.js';
+import { conflict as tagConflict, unknownTag } from '../tags/tag-errors.js';
+import { ensureDefaultPipeline } from './lead-stage.util.js';
 import {
   chooseStage,
   MANUAL_CHANNEL_TYPE,
   manualExternalAccountId,
   manualIdentifiers,
   type ManualLeadInput,
-} from "./manual-lead-rules.js";
+} from './manual-lead-rules.js';
 
 export interface ManualLeadActor {
   readonly tenantId: string;
@@ -62,8 +62,8 @@ export class ManualLeadService {
           tenantId,
           channelType: MANUAL_CHANNEL_TYPE,
           externalAccountId: manualExternalAccountId(tenantId),
-          status: "DISABLED",
-          agentMode: "OFF",
+          status: 'DISABLED',
+          agentMode: 'OFF',
         },
         update: {},
         select: { id: true, tenantId: true },
@@ -83,7 +83,7 @@ export class ManualLeadService {
           channelAccountId: account.id,
           contactId,
           providerChatId: ids.providerChatId,
-          state: "CLOSED",
+          state: 'CLOSED',
         },
         select: { id: true },
       });
@@ -101,9 +101,9 @@ export class ManualLeadService {
               : new Prisma.Decimal(input.amount),
           currency: input.currency ?? null,
           source: input.source,
-          stageSetBy: "OPERATOR",
+          stageSetBy: 'OPERATOR',
           stageSetAt: new Date(),
-          status: "NEW",
+          status: 'NEW',
           summary: input.note,
           idempotencyKey: ids.idempotencyKey,
         },
@@ -120,10 +120,10 @@ export class ManualLeadService {
       await tx.auditEvent.create({
         data: {
           tenantId,
-          actorType: "OPERATOR",
+          actorType: 'OPERATOR',
           actorId: operatorId,
-          action: "lead.created_manually",
-          entityType: "lead",
+          action: 'lead.created_manually',
+          entityType: 'lead',
           entityId: lead.id,
           // Ids only: never the name, phone or note.
           safeInputSummary: {
@@ -153,8 +153,8 @@ export class ManualLeadService {
       });
       const choice = chooseStage(stage, input.pipelineId);
       if (choice.ok) return choice;
-      if (choice.code === "NOT_FOUND") throw notFound();
-      if (choice.code === "STAGE_NOT_OPEN") throw stageNotOpen();
+      if (choice.code === 'NOT_FOUND') throw notFound();
+      if (choice.code === 'STAGE_NOT_OPEN') throw stageNotOpen();
       throw invalidValue();
     }
     let pipelineId = input.pipelineId;
@@ -168,8 +168,8 @@ export class ManualLeadService {
       if (!found) throw notFound();
     }
     const first = await tx.leadStage.findFirst({
-      where: { tenantId, pipelineId, archivedAt: null, kind: "OPEN" },
-      orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      where: { tenantId, pipelineId, archivedAt: null, kind: 'OPEN' },
+      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true },
     });
     if (!first) throw stageNotOpen();
@@ -200,7 +200,7 @@ export class ManualLeadService {
       where: { tenantId, id: { in: [...tagIds] }, archivedAt: null },
     });
     if (found !== tagIds.length) throw unknownTag();
-    if (exceedsTagLimit(tagIds.length)) throw tagConflict("TAG_LIMIT");
+    if (exceedsTagLimit(tagIds.length)) throw tagConflict('TAG_LIMIT');
   }
 
   /**
@@ -261,7 +261,7 @@ export class ManualLeadService {
        FROM contacts c
        JOIN persons p ON p.tenant_id = c.tenant_id AND p.id = c.person_id
        WHERE c.tenant_id = $1::uuid AND c.deleted_at IS NULL
-         AND c.phone IS NOT NULL AND ${PHONE_KEY_SQL("c.phone")} = $2
+         AND c.phone IS NOT NULL AND ${PHONE_KEY_SQL('c.phone')} = $2
          AND p.deleted_at IS NULL AND p.merged_into_id IS NULL
        ORDER BY p.created_at ASC, p.id ASC LIMIT 1`,
       tenantId,
