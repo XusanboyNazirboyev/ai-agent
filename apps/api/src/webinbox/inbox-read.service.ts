@@ -309,7 +309,8 @@ export class InboxReadService {
       await Promise.all([
         this.prisma.message.findMany({
           where: { tenantId: principal.tenantId, conversationId },
-          orderBy: { sequence: 'asc' },
+          // Fetch the newest page, then reverse it below for chronological display.
+          orderBy: { sequence: 'desc' },
           take: 500,
           select: {
             id: true,
@@ -373,6 +374,9 @@ export class InboxReadService {
           },
         }),
       ]);
+    // The database query selects the newest 500 messages. The UI timeline
+    // consumes them oldest-to-newest so scrolling and reply context stay stable.
+    messages.reverse();
     return {
       conversation: {
         id: conversation.id,
