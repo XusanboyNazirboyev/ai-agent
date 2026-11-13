@@ -9,6 +9,8 @@ export interface LeadStage {
   code: string | null;
   name: string | null;
   position: number;
+  /** ADR 058: OPEN stages are the funnel, WON/LOST are closed. */
+  kind: 'OPEN' | 'WON' | 'LOST';
   /** ADR 057: the pipeline this stage belongs to. */
   pipelineId: string;
 }
@@ -19,8 +21,32 @@ export interface PipelineView {
   name: string | null;
   position: number;
   isDefault: boolean;
+  /** ADR 058 decision 5: who may move leads along the funnel automatically. */
+  aiStaging: 'OFF' | 'SUGGEST' | 'AUTO';
   stageCount: number;
   leadCount: number;
+}
+
+/** ADR 058 decision 7: one board response, per stage count + totals. */
+export interface BoardStageView {
+  id: string;
+  code: string | null;
+  name: string | null;
+  kind: 'OPEN' | 'WON' | 'LOST';
+  position: number;
+  count: number;
+  /** One total per currency; decimal strings, never summed as JS numbers. */
+  totals: Array<{ currency: string; amount: string }>;
+}
+
+/** Body of `PATCH /api/v1/leads/:id/opportunity` (ADR 057). */
+export interface OpportunityPatch {
+  ownerOperatorId?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  source?: string | null;
+  expectedCloseDate?: string | null;
+  lostReason?: string | null;
 }
 
 /** Opportunity fields of a lead (ADR 057), as returned by the leads list. */

@@ -20,6 +20,23 @@ import {
 
 const DETAIL_CAP = 20;
 
+/** One person as the CSV export reads it (ADR 056). */
+export interface PersonExportRow {
+  id: string;
+  displayName: string | null;
+  phone: string | null;
+  /** Distinct channel types of the live contacts. */
+  channels: string[];
+  contactsCount: number;
+  conversationCount: number;
+  leadCount: number;
+  lastActivityAt: string | null;
+  marketingOptOut: boolean;
+  createdAt: string;
+  tags: string[];
+  customFields: Record<string, unknown>;
+}
+
 /** Persons that can be shown: live, not merged away, with a live contact. */
 function visiblePerson(tenantId: string): Prisma.PersonWhereInput {
   return {
@@ -39,6 +56,44 @@ function visiblePerson(tenantId: string): Prisma.PersonWhereInput {
 export class PeopleService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private listWhere(
+    tenantId: string,
+    params: {
+      q?: string;
+      cursor?: string;
+      tagId?: string;
+      field?: FieldFilter;
+    },
+  ): Prisma.PersonWhereInput {
+    const { q, cursor, tagId, field } = params;
+    return {
+      ...visiblePerson(tenantId),
+      ...(cursor ? { id: { lt: cursor } } : {}),
+      ...(tagId ? { tags: { some: { tenantId, tagId } } } : {}),
+      ...(field
+        ? { customFields: { path: [field.key], equals: field.value } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { displayName: { contains: q, mode: 'insensitive' } },
+              {
+                contacts: {
+                  some: {
+                    deletedAt: null,
+                    OR: [
+                      { name: { contains: q, mode: 'insensitive' } },
+                      { phone: { contains: q } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
   async list(
     tenantId: string,
     params: {
@@ -49,34 +104,9 @@ export class PeopleService {
       field?: FieldFilter;
     },
   ): Promise<{ items: PersonItem[]; nextCursor: string | null }> {
-    const { q, cursor, limit, tagId, field } = params;
+    const { limit } = params;
     const rows = await this.prisma.person.findMany({
-      where: {
-        ...visiblePerson(tenantId),
-        ...(cursor ? { id: { lt: cursor } } : {}),
-        ...(tagId ? { tags: { some: { tenantId, tagId } } } : {}),
-        ...(field
-          ? { customFields: { path: [field.key], equals: field.value } }
-          : {}),
-        ...(q
-          ? {
-              OR: [
-                { displayName: { contains: q, mode: 'insensitive' } },
-                {
-                  contacts: {
-                    some: {
-                      deletedAt: null,
-                      OR: [
-                        { name: { contains: q, mode: 'insensitive' } },
-                        { phone: { contains: q } },
-                      ],
-                    },
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
+      where: this.listWhere(tenantId, params),
       // Ids are time-ordered (uuid v7): newest first and a stable keyset.
       orderBy: { id: 'desc' },
       take: limit + 1,
@@ -109,6 +139,85 @@ export class PeopleService {
           tags.get(p.id),
         ),
       ),
+      nextCursor: rows.length > limit ? page[page.length - 1].id : null,
+    };
+  }
+
+  async count(
+    tenantId: string,
+    params: { q?: string; tagId?: string; field?: FieldFilter },
+  ): Promise<number> {
+    return this.prisma.person.count({
+      where: this.listWhere(tenantId, params),
+    });
+  }
+
+  /** Keyset-paged rows for CSV export (ADR 056). Reuses list filters/visibility. */
+  async listForExport(
+    tenantId: string,
+    params: {
+      q?: string;
+      cursor?: string;
+      limit: number;
+      tagId?: string;
+      field?: FieldFilter;
+    },
+  ): Promise<{ items: PersonExportRow[]; nextCursor: string | null }> {
+    const { limit } = params;
+    const rows = await this.prisma.person.findMany({
+      where: this.listWhere(tenantId, params),
+      orderBy: { id: 'desc' },
+      take: limit + 1,
+      select: {
+        id: true,
+        displayName: true,
+        createdAt: true,
+        customFields: true,
+        contacts: {
+          where: { deletedAt: null },
+          select: contactSelect,
+        },
+      },
+    });
+    const page = rows.slice(0, limit);
+    const contactIds = page.flatMap((p) => p.contacts.map((c) => c.id));
+    const [activity, tags] = await Promise.all([
+      this.activity(tenantId, contactIds),
+      tagsOfPersons(
+        this.prisma,
+        tenantId,
+        page.map((p) => p.id),
+      ),
+    ]);
+    return {
+      items: page.map((p) => {
+        const item = assemblePersonItem(
+          p,
+          p.contacts.map(toContactRow),
+          activity,
+          tags.get(p.id),
+        );
+        const raw =
+          p.customFields &&
+          typeof p.customFields === 'object' &&
+          !Array.isArray(p.customFields)
+            ? (p.customFields as Record<string, unknown>)
+            : {};
+        return {
+          id: item.id,
+          displayName: item.displayName,
+          phone: item.phone,
+          channels: [...new Set(item.channels.map((c) => c.channelType))],
+          contactsCount: item.channels.length,
+          conversationCount: item.conversationCount,
+          leadCount: item.leadCount,
+          lastActivityAt: item.lastActivityAt,
+          marketingOptOut: item.marketingOptOut,
+          createdAt: item.createdAt,
+          tags: item.tags.map((t) => t.name),
+          customFields: raw,
+        };
+      }),
       nextCursor: rows.length > limit ? page[page.length - 1].id : null,
     };
   }

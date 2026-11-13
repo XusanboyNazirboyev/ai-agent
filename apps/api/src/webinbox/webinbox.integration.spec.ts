@@ -1880,9 +1880,21 @@ describe('knowledge documents', () => {
       const stagesB = await controller.stages(as(b, 'ADMIN'));
       expect(stagesA.map((stage) => stage.code)).toEqual([
         'NEW',
-        'HOT',
-        'WARM',
-        'COLD',
+        'CONTACTED',
+        'QUALIFIED',
+        'PROPOSAL',
+        'NEGOTIATION',
+        'WON',
+        'LOST',
+      ]);
+      expect(stagesA.map((stage) => stage.kind)).toEqual([
+        'OPEN',
+        'OPEN',
+        'OPEN',
+        'OPEN',
+        'OPEN',
+        'WON',
+        'LOST',
       ]);
       expect(stagesA[0]?.id).not.toBe(stagesB[0]?.id);
 

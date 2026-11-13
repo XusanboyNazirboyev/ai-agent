@@ -8,10 +8,12 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { Prisma } from '../generated/prisma/client.js';
 import {
   ensureCodedStages,
   ensureDefaultPipeline,
@@ -21,10 +23,13 @@ import {
   conflict,
   forbidden,
   invalidBody,
+  invalidQuery,
   notFound,
 } from '../pipelines/pipeline-errors.js';
 import {
+  isCalendarDate,
   MAX_PIPELINES,
+  toDateOnly,
   validateStageOrder,
 } from '../pipelines/pipeline-rules.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
@@ -36,12 +41,36 @@ const PatchBody = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
     position: z.number().int().min(0).max(1000).optional(),
+    aiStaging: z.enum(['OFF', 'SUGGEST', 'AUTO']).optional(),
   })
   .strict()
-  .refine((body) => body.name !== undefined || body.position !== undefined);
+  .refine(
+    (body) =>
+      body.name !== undefined ||
+      body.position !== undefined ||
+      body.aiStaging !== undefined,
+  );
 const OrderBody = z
   .object({ stageIds: z.array(z.string().uuid()).max(100) })
   .strict();
+
+const BoardQuery = z
+  .object({
+    from: z.string().refine(isCalendarDate).optional(),
+    to: z.string().refine(isCalendarDate).optional(),
+  })
+  .strict();
+
+export interface BoardStageView {
+  id: string;
+  code: string | null;
+  name: string | null;
+  kind: 'OPEN' | 'WON' | 'LOST';
+  position: number;
+  count: number;
+  /** One total per currency; decimal strings (`0.30`), never JS numbers. */
+  totals: Array<{ currency: string; amount: string }>;
+}
 
 export interface PipelineView {
   id: string;
@@ -49,6 +78,8 @@ export interface PipelineView {
   name: string | null;
   position: number;
   isDefault: boolean;
+  /** ADR 058: who may move leads along the funnel automatically. */
+  aiStaging: 'OFF' | 'SUGGEST' | 'AUTO';
   stageCount: number;
   leadCount: number;
 }
@@ -59,6 +90,7 @@ interface StageView {
   name: string | null;
   position: number;
   pipelineId: string;
+  kind: 'OPEN' | 'WON' | 'LOST';
 }
 
 type Db = Pick<PrismaService, 'pipeline' | 'leadStage' | 'lead'>;
@@ -67,7 +99,13 @@ async function view(db: Db, tenantId: string): Promise<PipelineView[]> {
   const pipelines = await db.pipeline.findMany({
     where: { tenantId, archivedAt: null },
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true, name: true, position: true, isDefault: true },
+    select: {
+      id: true,
+      name: true,
+      position: true,
+      isDefault: true,
+      aiStaging: true,
+    },
   });
   const [stages, leads] = await Promise.all([
     db.leadStage.groupBy({
@@ -106,6 +144,77 @@ export class PipelinesController {
     return { items: await view(this.prisma, tenantId) };
   }
 
+  /**
+   * Kanban board data (ADR 058 decision 7): per stage the lead count and one
+   * decimal total per currency, computed in SQL (a constant number of queries).
+   * Leads without an amount are counted but add to no total. `from`/`to`
+   * (inclusive calendar days) filter on the lead's creation date.
+   */
+  @Get(':id/board')
+  async board(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: unknown = {},
+  ): Promise<{ stages: BoardStageView[] }> {
+    const parsed = BoardQuery.safeParse(query);
+    if (!parsed.success) throw invalidQuery();
+    const tenantId = request.principal!.tenantId;
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { tenantId, id, archivedAt: null },
+      select: { id: true },
+    });
+    if (!pipeline) throw notFound();
+    const { from, to } = parsed.data;
+    const range = Prisma.sql`${
+      from ? Prisma.sql`AND "created_at" >= ${toDateOnly(from)}` : Prisma.empty
+    } ${
+      to
+        ? Prisma.sql`AND "created_at" < ${new Date(toDateOnly(to).getTime() + 86_400_000)}`
+        : Prisma.empty
+    }`;
+    const [stages, rows] = await Promise.all([
+      this.prisma.leadStage.findMany({
+        where: { tenantId, pipelineId: id, archivedAt: null },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          kind: true,
+          position: true,
+        },
+      }),
+      this.prisma.$queryRaw<
+        Array<{
+          stage_id: string;
+          currency: string | null;
+          n: number;
+          total: string | null;
+        }>
+      >`SELECT "pipeline_stage_id" AS stage_id, "currency", COUNT(*)::int AS n,
+          SUM("amount")::text AS total
+        FROM "leads"
+        WHERE "tenant_id" = ${tenantId}::uuid AND "pipeline_id" = ${id}::uuid
+          AND "pipeline_stage_id" IS NOT NULL ${range}
+        GROUP BY "pipeline_stage_id", "currency"
+        ORDER BY "currency" ASC NULLS LAST`,
+    ]);
+    return {
+      stages: stages.map((stage) => {
+        const mine = rows.filter((row) => row.stage_id === stage.id);
+        return {
+          ...stage,
+          count: mine.reduce((sum, row) => sum + row.n, 0),
+          totals: mine.flatMap((row) =>
+            row.currency !== null && row.total !== null
+              ? [{ currency: row.currency.trim(), amount: row.total }]
+              : [],
+          ),
+        };
+      }),
+    };
+  }
+
   @Post()
   async create(
     @Req() request: InboxRequest,
@@ -128,6 +237,8 @@ export class PipelinesController {
           tenantId: who.tenantId,
           name: parsed.data.name,
           position: Math.max(...active.map((p) => p.position)) + 1,
+          // ADR 058: new pipelines start with AI staging on.
+          aiStaging: 'AUTO',
         },
         select: { id: true },
       });
@@ -153,6 +264,9 @@ export class PipelinesController {
           ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
           ...(parsed.data.position !== undefined
             ? { position: parsed.data.position }
+            : {}),
+          ...(parsed.data.aiStaging !== undefined
+            ? { aiStaging: parsed.data.aiStaging }
             : {}),
         },
       });
@@ -288,6 +402,7 @@ export class PipelinesController {
           name: true,
           position: true,
           pipelineId: true,
+          kind: true,
         },
       });
     });

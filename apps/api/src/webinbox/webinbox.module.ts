@@ -52,6 +52,9 @@ import { InboxEventsService } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { SessionGuard } from './session.guard.js';
 import { SessionService } from './session.service.js';
+import { ExportsController } from './exports.controller.js';
+import { ExportService } from '../exports/export.service.js';
+import { ExportLock } from '../exports/export-lock.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
 @Module({
@@ -85,6 +88,7 @@ import { SessionService } from './session.service.js';
     FacebookConnectController,
     TeamController,
     SubscriptionController,
+    ExportsController,
   ],
   providers: [
     PeopleService,
@@ -93,6 +97,8 @@ import { SessionService } from './session.service.js';
     PersonMergeService,
     PersonErasureService,
     AnalyticsService,
+    ExportService,
+    ExportLock,
     TelegramManagement,
     InstagramGraphClient,
     InstagramOAuthClient,

@@ -40,6 +40,14 @@ vi.mock('@/lib/api', () => ({
   errorKey: () => 'error',
 }));
 
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => vi.fn(),
+}));
+
+vi.mock('@/lib/export-csv', () => ({
+  downloadCsv: vi.fn(),
+}));
+
 const stages = [
   { id: 'stage-new', code: 'NEW', name: 'New', position: 0, pipelineId: 'pipe-1' },
   { id: 'stage-won', code: 'WON', name: 'Won', position: 1, pipelineId: 'pipe-1' },

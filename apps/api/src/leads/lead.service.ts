@@ -4,7 +4,12 @@ import { Prisma } from '../generated/prisma/client.js';
 import { DOMAIN_PACKS } from '../agent/agent-conversation.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { scoreLead, type LeadLevel } from '../core/leads/scoring.js';
+import {
+  proposeStage,
+  type StageRef,
+} from '../core/leads/staging/propose-stage.js';
 import { ensureDefaultPipeline } from './lead-stage.util.js';
+import { moveLeadToStage } from './lead-stage-move.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -247,6 +252,22 @@ export class LeadService {
         result.level,
         result.reasonCodes,
       );
+      await this.stage(tx, {
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        leadId: created.id,
+        pipelineId,
+        stageId: firstStageId,
+        stageSetBy: 'AGENT',
+        suggestedStageId: null,
+        pack: input.pack,
+        slotValues,
+        hasPhone: Boolean(conversation.contact.phone),
+        offerShown: shown.length > 0,
+        quoteShown,
+        openHandover: openHandover > 0,
+        created: true,
+      });
       return {
         leadId: created.id,
         level: result.level,
@@ -281,12 +302,125 @@ export class LeadService {
         result.reasonCodes,
       );
     }
+    await this.stage(tx, {
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      leadId: existing.id,
+      pipelineId: existing.pipelineId,
+      stageId: existing.pipelineStageId,
+      stageSetBy: existing.stageSetBy,
+      suggestedStageId: existing.suggestedStageId,
+      pack: input.pack,
+      slotValues,
+      hasPhone: Boolean(conversation.contact.phone),
+      offerShown: shown.length > 0,
+      quoteShown,
+      openHandover: openHandover > 0,
+      created: false,
+    });
     return {
       leadId: existing.id,
       level: result.level,
       created: false,
       changed,
     };
+  }
+
+  /**
+   * Agent staging after the scoring pass (ADR 058 decisions 3-6). Skipped when
+   * an operator set the stage or the pipeline's switch is OFF. AUTO moves the
+   * lead with actor AGENT; SUGGEST only stores the proposal.
+   *
+   * Signal to stage code (rule table in core/leads/staging/propose-stage.ts):
+   * created -> NEW; customerMessageCount >= 2 or agentAskedQuestion ->
+   * CONTACTED; requiredSlotsFilled (every slot required for search) and
+   * hasPhone -> QUALIFIED; offerShown/quoteShown -> PROPOSAL; openHandover
+   * (OPEN or TAKEN) -> NEGOTIATION. No amount is read.
+   */
+  private async stage(
+    tx: Tx,
+    input: {
+      tenantId: string;
+      conversationId: string;
+      leadId: string;
+      pipelineId: string;
+      stageId: string | null;
+      stageSetBy: 'AGENT' | 'OPERATOR';
+      suggestedStageId: string | null;
+      pack: DomainPack;
+      slotValues: Readonly<Record<string, string | number>>;
+      hasPhone: boolean;
+      offerShown: boolean;
+      quoteShown: boolean;
+      openHandover: boolean;
+      created: boolean;
+    },
+  ): Promise<void> {
+    if (input.stageSetBy === 'OPERATOR') return;
+    const { tenantId, conversationId } = input;
+    const pipeline = await tx.pipeline.findFirst({
+      where: { tenantId, id: input.pipelineId },
+      select: { aiStaging: true },
+    });
+    if (!pipeline || pipeline.aiStaging === 'OFF') return;
+    const [stages, customerMessageCount, question] = await Promise.all([
+      tx.leadStage.findMany({
+        where: { tenantId, pipelineId: input.pipelineId, archivedAt: null },
+        select: { id: true, code: true, position: true, kind: true },
+      }),
+      tx.message.count({
+        where: { tenantId, conversationId, authorType: 'CUSTOMER' },
+      }),
+      tx.message.findFirst({
+        where: {
+          tenantId,
+          conversationId,
+          authorType: 'BOT',
+          text: { contains: '?' },
+        },
+        select: { id: true },
+      }),
+    ]);
+    const refs: StageRef[] = stages;
+    const current = refs.find((stage) => stage.id === input.stageId) ?? null;
+    const proposal = proposeStage(
+      {
+        created: input.created,
+        customerMessageCount,
+        agentAskedQuestion: question !== null,
+        requiredSlotsFilled: input.pack.slots
+          .filter((slot) => slot.requiredFor.includes('search'))
+          .every((slot) => input.slotValues[slot.key] !== undefined),
+        hasPhone: input.hasPhone,
+        offerShown: input.offerShown,
+        quoteShown: input.quoteShown,
+        openHandover: input.openHandover,
+      },
+      refs,
+      current,
+    );
+    if (!proposal) return;
+    const target = refs.find(
+      (stage) => stage.kind === 'OPEN' && stage.code === proposal.code,
+    );
+    if (!target) return;
+    if (pipeline.aiStaging === 'AUTO') {
+      await moveLeadToStage(tx, {
+        tenantId,
+        leadId: input.leadId,
+        stageId: target.id,
+        actor: 'AGENT',
+        reasonCodes: proposal.reasonCodes,
+      });
+    } else if (input.suggestedStageId !== target.id) {
+      await tx.lead.updateMany({
+        where: { tenantId, id: input.leadId },
+        data: {
+          suggestedStageId: target.id,
+          suggestedReasonCodes: [...proposal.reasonCodes],
+        },
+      });
+    }
   }
 
   private async queueSync(

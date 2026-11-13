@@ -15,6 +15,7 @@ import {
 import { z } from 'zod';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { ensureDefaultPipeline } from '../leads/lead-stage.util.js';
+import { moveLeadToStage } from '../leads/lead-stage-move.js';
 import {
   conflict,
   forbidden,
@@ -28,6 +29,7 @@ import {
   checkLostReason,
   fromDateOnly,
   isCalendarDate,
+  MAX_LOST_REASON,
   MAX_STAGES_PER_PIPELINE,
   parseOpportunityPatch,
   toDateOnly,
@@ -69,19 +71,31 @@ const ListQuery = z.object({
   fieldKey: z.string().max(64).optional(),
   fieldValue: z.string().max(600).optional(),
 });
-const StageBody = z.object({ name: z.string().trim().min(1).max(80) });
+const StageKind = z.enum(['OPEN', 'WON', 'LOST']);
+const StageBody = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    kind: StageKind.optional(),
+  })
+  .refine((body) => body.name !== undefined || body.kind !== undefined);
 const CreateStageBody = z.object({
   name: z.string().trim().min(1).max(80),
   pipelineId: z.string().uuid().optional(),
+  kind: StageKind.optional(),
 });
 const StagesQuery = z.object({ pipelineId: z.string().uuid().optional() });
-const MoveBody = z.object({ stageId: z.string().uuid() });
+const MoveBody = z.object({
+  stageId: z.string().uuid(),
+  /** Required when the stage is a LOST stage (ADR 058). */
+  lostReason: z.string().trim().max(MAX_LOST_REASON).nullable().optional(),
+});
 const STAGE_SELECT = {
   id: true,
   code: true,
   name: true,
   position: true,
   pipelineId: true,
+  kind: true,
 } as const;
 
 interface LeadStageView {
@@ -91,6 +105,8 @@ interface LeadStageView {
   position: number;
   /** ADR 057 (additive). */
   pipelineId: string;
+  /** ADR 058 (additive): OPEN stages are the funnel, WON/LOST are closed. */
+  kind: 'OPEN' | 'WON' | 'LOST';
 }
 
 export interface OpportunityView {
@@ -119,6 +135,10 @@ interface LeadPipelineItem {
   source: string | null;
   expectedCloseDate: string | null;
   lostReason: string | null;
+  /** ADR 058 (additive). */
+  stageSetBy: 'AGENT' | 'OPERATOR';
+  suggestedStageId: string | null;
+  suggestedReasonCodes: string[];
   score: string;
   status: string;
   summary: string;
@@ -335,6 +355,7 @@ export class LeadPipelineController {
           tenantId: who.tenantId,
           pipelineId,
           name: parsed.data.name,
+          kind: parsed.data.kind ?? 'OPEN',
           position: (last?.position ?? -1) + 1,
         },
         select: STAGE_SELECT,
@@ -367,14 +388,44 @@ export class LeadPipelineController {
     const parsed = StageBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "tenants" WHERE "id" = ${who.tenantId}::uuid FOR UPDATE`;
       const stage = await tx.leadStage.findFirst({
         where: { tenantId: who.tenantId, id: stageId },
-        select: { id: true, code: true, position: true },
+        select: {
+          id: true,
+          code: true,
+          position: true,
+          kind: true,
+          pipelineId: true,
+        },
       });
       if (!stage) throw notFound();
+      const { name, kind } = parsed.data;
+      if (kind !== undefined && kind !== stage.kind) {
+        const leads = await tx.lead.count({
+          where: { tenantId: who.tenantId, pipelineStageId: stage.id },
+        });
+        if (leads > 0)
+          throw conflict(
+            'STAGE_HAS_LEADS',
+            'Move the leads out of this stage first',
+            { leadCount: leads },
+          );
+        if (
+          stage.kind === 'OPEN' &&
+          (await this.otherOpen(tx, who.tenantId, stage)) === 0
+        )
+          throw conflict(
+            'STAGE_LAST_OPEN',
+            'A pipeline needs at least one open stage',
+          );
+      }
       const updated = await tx.leadStage.update({
         where: { tenantId_id: { tenantId: who.tenantId, id: stageId } },
-        data: { name: parsed.data.name },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(kind !== undefined ? { kind } : {}),
+        },
         select: STAGE_SELECT,
       });
       await tx.auditEvent.create({
@@ -382,10 +433,14 @@ export class LeadPipelineController {
           tenantId: who.tenantId,
           actorType: 'OPERATOR',
           actorId: who.operatorId,
-          action: 'lead.stage.renamed',
+          action:
+            kind !== undefined ? 'lead.stage.updated' : 'lead.stage.renamed',
           entityType: 'lead_stage',
           entityId: stage.id,
-          safeInputSummary: { code: stage.code ?? 'CUSTOM' },
+          safeInputSummary: {
+            code: stage.code ?? 'CUSTOM',
+            ...(kind !== undefined ? { kind } : {}),
+          },
         },
       });
       return updated;
@@ -410,6 +465,8 @@ export class LeadPipelineController {
         select: {
           id: true,
           code: true,
+          kind: true,
+          position: true,
           pipelineId: true,
           pipeline: { select: { isDefault: true } },
         },
@@ -426,6 +483,19 @@ export class LeadPipelineController {
           'Move the leads out of this stage first',
           { leadCount: leads },
         );
+      if (
+        stage.kind === 'OPEN' &&
+        (await this.otherOpen(tx, who.tenantId, stage)) === 0
+      )
+        throw conflict(
+          'STAGE_LAST_OPEN',
+          'A pipeline needs at least one open stage',
+        );
+      // A pending AI suggestion of this stage is dropped with it.
+      await tx.lead.updateMany({
+        where: { tenantId: who.tenantId, suggestedStageId: stage.id },
+        data: { suggestedStageId: null, suggestedReasonCodes: [] },
+      });
       await tx.leadStage.deleteMany({
         where: { tenantId: who.tenantId, id: stage.id },
       });
@@ -530,6 +600,9 @@ export class LeadPipelineController {
         source: true,
         expectedCloseDate: true,
         lostReason: true,
+        stageSetBy: true,
+        suggestedStageId: true,
+        suggestedReasonCodes: true,
         score: true,
         status: true,
         summary: true,
@@ -602,61 +675,117 @@ export class LeadPipelineController {
     @Req() request: InboxRequest,
     @Param('id', ParseUUIDPipe) leadId: string,
     @Body() body: unknown,
-  ): Promise<{ id: string; pipelineStageId: string; pipelineId: string }> {
+  ): Promise<{
+    id: string;
+    pipelineStageId: string;
+    pipelineId: string;
+    status: string;
+  }> {
     const who = request.principal!;
     if (who.role === 'VIEWER') throw forbidden();
     const parsed = MoveBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
     return this.prisma.$transaction(async (tx) => {
-      const [lead, stage] = await Promise.all([
-        tx.lead.findFirst({
-          where: { tenantId: who.tenantId, id: leadId },
-          select: { id: true, pipelineId: true, pipelineStageId: true },
-        }),
-        tx.leadStage.findFirst({
-          where: {
-            tenantId: who.tenantId,
-            id: parsed.data.stageId,
-            archivedAt: null,
-            pipeline: { archivedAt: null },
-          },
-          select: { id: true, pipelineId: true },
-        }),
-      ]);
-      if (!lead || !stage) throw notFound();
-      if (lead.pipelineStageId !== stage.id) {
-        // Pipeline and stage change in one update (the composite FK keeps
-        // them consistent at the database level).
-        await tx.lead.update({
-          where: { tenantId_id: { tenantId: who.tenantId, id: leadId } },
-          data: { pipelineId: stage.pipelineId, pipelineStageId: stage.id },
-        });
-        await tx.auditEvent.create({
-          data: {
-            tenantId: who.tenantId,
-            actorType: 'OPERATOR',
-            actorId: who.operatorId,
-            action:
-              lead.pipelineId === stage.pipelineId
-                ? 'lead.stage.changed'
-                : 'lead.pipeline.changed',
-            entityType: 'lead',
-            entityId: lead.id,
-            safeInputSummary: {
-              fromStageId: lead.pipelineStageId ?? '',
-              toStageId: stage.id,
-              fromPipelineId: lead.pipelineId,
-              toPipelineId: stage.pipelineId,
-            },
-          },
-        });
-      }
+      const moved = await moveLeadToStage(tx, {
+        tenantId: who.tenantId,
+        leadId,
+        stageId: parsed.data.stageId,
+        actor: 'OPERATOR',
+        actorId: who.operatorId,
+        lostReason: parsed.data.lostReason,
+      });
       return {
-        id: lead.id,
-        pipelineStageId: stage.id,
-        pipelineId: stage.pipelineId,
+        id: moved.id,
+        pipelineStageId: moved.pipelineStageId,
+        pipelineId: moved.pipelineId,
+        status: moved.status,
       };
     });
+  }
+
+  /** Number of other active OPEN stages in the stage's pipeline. */
+  private otherOpen(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    stage: { id: string; pipelineId: string },
+  ): Promise<number> {
+    return tx.leadStage.count({
+      where: {
+        tenantId,
+        pipelineId: stage.pipelineId,
+        kind: 'OPEN',
+        archivedAt: null,
+        id: { not: stage.id },
+      },
+    });
+  }
+
+  /** Accepts the AI's stage suggestion: moves the lead as the operator (ADR 058). */
+  @Post(':id/stage-suggestion/accept')
+  async acceptSuggestion(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{
+    id: string;
+    pipelineStageId: string;
+    pipelineId: string;
+    status: string;
+  }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    return this.prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.findFirst({
+        where: { tenantId: who.tenantId, id: leadId },
+        select: { suggestedStageId: true, suggestedReasonCodes: true },
+      });
+      if (!lead) throw notFound();
+      if (!lead.suggestedStageId) throw notFound();
+      const moved = await moveLeadToStage(tx, {
+        tenantId: who.tenantId,
+        leadId,
+        stageId: lead.suggestedStageId,
+        actor: 'OPERATOR',
+        actorId: who.operatorId,
+        reasonCodes: lead.suggestedReasonCodes,
+      });
+      return {
+        id: moved.id,
+        pipelineStageId: moved.pipelineStageId,
+        pipelineId: moved.pipelineId,
+        status: moved.status,
+      };
+    });
+  }
+
+  @Post(':id/stage-suggestion/dismiss')
+  async dismissSuggestion(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{ id: string; suggestedStageId: null }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    const updated = await this.prisma.lead.updateMany({
+      where: { tenantId: who.tenantId, id: leadId },
+      data: { suggestedStageId: null, suggestedReasonCodes: [] },
+    });
+    if (updated.count === 0) throw notFound();
+    return { id: leadId, suggestedStageId: null };
+  }
+
+  /** "Let the AI sort this lead": lifts the operator lock (ADR 058 decision 4). */
+  @Post(':id/hand-back-to-ai')
+  async handBackToAi(
+    @Req() request: InboxRequest,
+    @Param('id', ParseUUIDPipe) leadId: string,
+  ): Promise<{ id: string; stageSetBy: 'AGENT' }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    const updated = await this.prisma.lead.updateMany({
+      where: { tenantId: who.tenantId, id: leadId },
+      data: { stageSetBy: 'AGENT' },
+    });
+    if (updated.count === 0) throw notFound();
+    return { id: leadId, stageSetBy: 'AGENT' };
   }
 
   private requireManager(request: InboxRequest): {

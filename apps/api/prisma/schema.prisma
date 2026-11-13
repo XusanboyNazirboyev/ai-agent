@@ -116,6 +116,23 @@ enum AvailabilityStatus {
   UNKNOWN
 }
 
+enum LeadStageKind {
+  OPEN
+  WON
+  LOST
+}
+
+enum LeadStageSetBy {
+  AGENT
+  OPERATOR
+}
+
+enum PipelineAiStaging {
+  OFF
+  SUGGEST
+  AUTO
+}
+
 enum LeadScore {
   HOT
   WARM
@@ -859,6 +876,12 @@ model Lead {
   source          String?      @db.VarChar(60)
   expectedCloseDate DateTime?  @map("expected_close_date") @db.Date
   lostReason      String?      @map("lost_reason") @db.VarChar(200)
+  /// ADR 058: who last set the stage; an OPERATOR lock stops agent staging.
+  stageSetBy      LeadStageSetBy @default(AGENT) @map("stage_set_by")
+  stageSetAt      DateTime?    @map("stage_set_at") @db.Timestamptz(6)
+  /// ADR 058 SUGGEST mode: the agent's proposal, never a fact.
+  suggestedStageId String?     @map("suggested_stage_id") @db.Uuid
+  suggestedReasonCodes String[] @default([]) @map("suggested_reason_codes")
   score           LeadScore    @default(COLD)
   /// Set by an operator: automatic rescoring keeps it until the operator
   /// returns the lead to automatic scoring.
@@ -883,6 +906,7 @@ model Lead {
   conversation    Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Restrict)
   pipeline        Pipeline     @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Restrict)
   pipelineStage   LeadStage?   @relation(fields: [tenantId, pipelineId, pipelineStageId], references: [tenantId, pipelineId, id], onDelete: Restrict)
+  suggestedStage  LeadStage?   @relation("LeadSuggestedStage", fields: [tenantId, suggestedStageId], references: [tenantId, id], onDelete: Restrict)
   owner           Operator?    @relation("LeadOwner", fields: [tenantId, ownerOperatorId], references: [tenantId, id], onDelete: Restrict)
   tags            LeadTag[]
 
@@ -909,6 +933,8 @@ model Pipeline {
   isDefault  Boolean   @default(false) @map("is_default")
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
+  /// ADR 058: OFF for existing pipelines; the application creates new ones as AUTO.
+  aiStaging  PipelineAiStaging @default(OFF) @map("ai_staging")
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   stages     LeadStage[]
   leads      Lead[]
@@ -926,12 +952,15 @@ model LeadStage {
   archivedAt DateTime? @map("archived_at") @db.Timestamptz(6)
   code      String?  @db.VarChar(40)
   name      String?  @db.VarChar(80)
+  /// ADR 058: OPEN stages are the funnel; WON and LOST are the closed columns.
+  kind      LeadStageKind @default(OPEN)
   position  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   pipeline  Pipeline @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Restrict)
   leads     Lead[]
+  suggestedFor Lead[] @relation("LeadSuggestedStage")
 
   @@unique([tenantId, id])
   @@unique([tenantId, pipelineId, id])

@@ -48,6 +48,7 @@ const OPERATING = new Set(['OWNER', 'ADMIN', 'OPERATOR']);
 export class LeadsController {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Deprecated (ADR 058 decision 9): the score is an AI signal; the web no longer edits it. */
   @Put(':conversationId/score')
   async score(
     @Req() request: InboxRequest,
@@ -70,6 +71,7 @@ export class LeadsController {
     return { score };
   }
 
+  /** Deprecated (ADR 058 decision 9): status derives from the stage; kept for API compatibility. */
   @Put(':conversationId/status')
   async status(
     @Req() request: InboxRequest,
@@ -91,7 +93,14 @@ export class LeadsController {
         leadStatus: status,
       },
       async (tx, tenantId, lead) =>
-        setOperatorLeadStatus(tx, tenantId, lead, status, lostReason),
+        setOperatorLeadStatus(
+          tx,
+          tenantId,
+          lead,
+          status,
+          lostReason,
+          request.principal!.operatorId,
+        ),
     );
     return { status };
   }

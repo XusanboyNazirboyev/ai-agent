@@ -11,6 +11,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { downloadCsv } from '@/lib/export-csv';
+import { useToast } from '@/components/ui/toast';
 import { channelName } from '@/lib/channel-names';
 import type {
   ConversationState,
@@ -63,9 +65,10 @@ export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
-  const qc = useQueryClient();
   const { operator } = useShell();
-  const canManage = operator.role === 'OWNER' || operator.role === 'ADMIN';
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+  const canExport = operator.role === 'OWNER' || operator.role === 'ADMIN';
 
   const pipelines = useQuery({
     queryKey: ['pipelines'],
@@ -151,6 +154,30 @@ export function LeadsBoard(): ReactNode {
             </p>
           )}
         </div>
+        {canExport ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={exporting}
+            data-testid="leads-export"
+            className="min-w-0 max-w-full"
+            onClick={() => {
+              const qs = new URLSearchParams();
+              if (tagId) qs.set('tagId', tagId);
+              const query = qs.toString();
+              setExporting(true);
+              void downloadCsv(
+                `/api/v1/exports/leads.csv${query ? `?${query}` : ''}`,
+                'leads.csv',
+              )
+                .then(() => toast(t('toast.exportStarted')))
+                .catch((e: unknown) => toast(t(errorKey(e))))
+                .finally(() => setExporting(false));
+            }}
+          >
+            {t('export.leads')}
+          </Button>
+        ) : null}
       </div>
       <LeadsFilters
         filters={filters}

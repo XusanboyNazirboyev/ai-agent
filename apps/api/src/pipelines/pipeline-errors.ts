@@ -55,6 +55,7 @@ export const conflict = (
     | 'PIPELINE_IS_DEFAULT'
     | 'STAGE_HAS_LEADS'
     | 'STAGE_IS_DEFAULT'
+    | 'STAGE_LAST_OPEN'
     | 'LEAD_STAGE_LIMIT',
   message: string,
   extra: Record<string, number> = {},

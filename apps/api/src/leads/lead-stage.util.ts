@@ -5,47 +5,56 @@ type Tx = Pick<
   'leadStage' | 'pipeline' | '$executeRaw'
 >;
 
+/**
+ * ADR 058 decision 2: the default funnel of a pipeline that has no stages yet.
+ * The labels are i18n keys of the coded names; tenants may rename, add or
+ * remove them (WON/LOST of the default pipeline stay protected).
+ */
 export const DEFAULT_LEAD_STAGES = [
-  { code: 'NEW', position: 0 },
-  { code: 'HOT', position: 1 },
-  { code: 'WARM', position: 2 },
-  { code: 'COLD', position: 3 },
+  { code: 'NEW', position: 0, kind: 'OPEN' },
+  { code: 'CONTACTED', position: 1, kind: 'OPEN' },
+  { code: 'QUALIFIED', position: 2, kind: 'OPEN' },
+  { code: 'PROPOSAL', position: 3, kind: 'OPEN' },
+  { code: 'NEGOTIATION', position: 4, kind: 'OPEN' },
+  { code: 'WON', position: 5, kind: 'WON' },
+  { code: 'LOST', position: 6, kind: 'LOST' },
 ] as const;
 
 /**
- * Makes sure a pipeline has the four coded stages (missing ones are appended
- * after the existing ones) and returns the id of its `NEW` stage.
+ * Creates the default funnel for a pipeline with no stages (existing
+ * pipelines are never touched: the old coded NEW/HOT/WARM/COLD stay valid) and
+ * returns the id of the pipeline's first stage (`NEW` when present).
  */
 export async function ensureCodedStages(
   tx: Pick<Tx, 'leadStage'>,
   tenantId: string,
   pipelineId: string,
 ): Promise<string> {
-  const existing = await tx.leadStage.findMany({
+  const existing = await tx.leadStage.count({
     where: { tenantId, pipelineId },
-    select: { id: true, code: true, position: true },
   });
-  const have = new Set(existing.map((stage) => stage.code));
-  const missing = DEFAULT_LEAD_STAGES.filter(({ code }) => !have.has(code));
-  if (missing.length > 0) {
-    const next =
-      existing.length === 0
-        ? 0
-        : Math.max(...existing.map((stage) => stage.position)) + 1;
+  if (existing === 0) {
     await tx.leadStage.createMany({
-      data: missing.map(({ code }, index) => ({
+      data: DEFAULT_LEAD_STAGES.map(({ code, position, kind }) => ({
         tenantId,
         pipelineId,
         code,
-        position: next + index,
+        position,
+        kind,
       })),
       skipDuplicates: true,
     });
   }
-  const first = await tx.leadStage.findFirst({
-    where: { tenantId, pipelineId, code: 'NEW' },
-    select: { id: true },
-  });
+  const first =
+    (await tx.leadStage.findFirst({
+      where: { tenantId, pipelineId, code: 'NEW' },
+      select: { id: true },
+    })) ??
+    (await tx.leadStage.findFirst({
+      where: { tenantId, pipelineId, archivedAt: null },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    }));
   if (!first) throw new Error('Default lead stage creation failed');
   return first.id;
 }
@@ -65,8 +74,8 @@ export async function ensureDefaultPipeline(
     });
   let pipeline = await find();
   if (!pipeline) {
-    await tx.$executeRaw`INSERT INTO "pipelines" ("id", "tenant_id", "name", "position", "is_default")
-      VALUES (gen_random_uuid(), ${tenantId}::uuid, NULL, 0, true)
+    await tx.$executeRaw`INSERT INTO "pipelines" ("id", "tenant_id", "name", "position", "is_default", "ai_staging")
+      VALUES (gen_random_uuid(), ${tenantId}::uuid, NULL, 0, true, 'AUTO')
       ON CONFLICT ("tenant_id") WHERE "is_default" AND "archived_at" IS NULL DO NOTHING`;
     pipeline = await find();
   }
