@@ -245,7 +245,12 @@ export const DomainPackSchema = z
         }
       }
     });
-    if (!pack.slots.some((slot) => slot.requiredFor.includes('search'))) {
+    // A knowledge-only pack (ADR 060) has no catalog to search, so it needs
+    // no search slot; a pack with search_catalog still does.
+    if (
+      pack.tools.includes('search_catalog') &&
+      !pack.slots.some((slot) => slot.requiredFor.includes('search'))
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['slots'],
@@ -302,11 +307,14 @@ export const DomainPackSchema = z
             message: `missing title for ${locale}`,
           });
     });
-    if (!pack.tools.includes('search_catalog')) {
+    if (
+      !pack.tools.includes('search_catalog') &&
+      !pack.tools.includes('knowledge_search')
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['tools'],
-        message: 'search_catalog is required',
+        message: 'a pack needs search_catalog or knowledge_search',
       });
     }
   });
