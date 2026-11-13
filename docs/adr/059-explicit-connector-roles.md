@@ -25,3 +25,14 @@ S1 API (builder; reviewer verifies): migration + schema (additive), `selectConne
 
 ## Risks
 Fail-closed ambiguity can silence the catalog for a tenant that has two search-capable connectors and no binding: mitigated by the backfill report before deploy and by the `AMBIGUOUS` status in the settings API. The agent's per-turn cost: one extra read of the binding row (indexed by the primary key) per selection, no new network calls.
+
+## S1 status (2026-11-13, branch `feat/connector-roles`, awaiting reviewer verification)
+Built: migration `20261123090000_tenant_connector_roles` + schema; `ConnectorSelector` (`apps/api/src/connectors/connector-selector.ts`, `select` and a log-free `resolve`) used by the agent (`CATALOG`), lead sync (`LEAD_SINK`, `createLead`) and actions (`ACTIONS`, the operation name); `GET`/`PUT /api/v1/connectors/roles` (`apps/api/src/webinbox/connector-roles.controller.ts`) with audit `connector.role.bound|unbound`; backfill (`connectors/connector-role-backfill.ts`, script `pnpm backfill:connector-roles`, dry run by default, `--apply`). Tests: unit selection matrix (11 cases, 10 mutations killed); integration spec `webinbox/connector-roles.integration.spec.ts` and an RLS case in `persistence/rls.integration.spec.ts` are written and typecheck, but were not run by the builder (shared DB).
+
+Deviations and choices:
+- `ConnectorSelector` is a class built inside the three services' constructors (`new ConnectorSelector(prisma, loader)`), so constructor signatures and the existing specs and modules are unchanged. It is also a provider exported by `ConnectorsModule`, which `WebinboxModule` now imports for the roles controller.
+- Extra 400 codes: `CONNECTOR_NOT_ACTIVE`, `CONNECTOR_UNAVAILABLE` (config does not load), besides `CONNECTOR_CAPABILITY_MISSING`. `PUT` returns the single updated item.
+- Binding `ACTIONS` requires at least one write capability (`createLead`, `updateLead`, `createBooking`); at runtime the operation asked for is checked. Status of `ACTIONS` uses `createLead` as the probe.
+- The `CATALOG` check keeps the old rule (flag only); write roles also require the method, as before.
+- A connector that fails to load is not a candidate for an unbound role (no ambiguity from broken rows).
+- Backfill reuses `ConnectorSelector.resolve`; it leaves bound roles alone (including UNAVAILABLE ones) and loads stored credentials only if `SECRETS_MASTER_KEY` is set in the environment.
