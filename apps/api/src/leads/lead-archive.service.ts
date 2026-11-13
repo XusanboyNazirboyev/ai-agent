@@ -12,6 +12,16 @@ export interface LeadArchiveActor {
   readonly operatorId: string;
 }
 
+interface ArchivableLead {
+  id: string;
+  contactId: string;
+  pipelineId: string;
+  pipelineStageId: string | null;
+  archivedAt: Date | null;
+  /** Added by hand (ADR 061): its contact is erased with it. */
+  manual: boolean;
+}
+
 /** Why a lead cannot be changed: it is archived (ADR 062 decision 4). */
 export const leadArchived = (): ReturnType<typeof conflict> =>
   conflict('LEAD_ARCHIVED', 'The lead is archived');
@@ -84,7 +94,11 @@ export class LeadArchiveService {
     });
   }
 
-  private async find(tx: Tx, tenantId: string, leadId: string) {
+  private async find(
+    tx: Tx,
+    tenantId: string,
+    leadId: string,
+  ): Promise<ArchivableLead> {
     const row = await tx.lead.findFirst({
       where: { tenantId, id: leadId },
       select: {
