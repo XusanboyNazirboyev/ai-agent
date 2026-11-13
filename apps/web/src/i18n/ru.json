@@ -1191,5 +1191,20 @@
   "leads.add.sourcePlaceholder": "Вручную",
   "leads.add.submit": "Добавить лид",
   "toast.leadAdded": "Лид добавлен.",
-  "errors.STAGE_NOT_OPEN": "Нельзя добавить лид в закрытый этап."
+  "errors.STAGE_NOT_OPEN": "Нельзя добавить лид в закрытый этап.",
+  "leads.archive": "В архив",
+  "leads.archive.title": "Отправить лид в архив?",
+  "leads.archive.body": "Лид исчезнет с доски, из списка и экспорта. Его можно вернуть из раздела «Архив».",
+  "leads.view.archive": "Архив",
+  "leads.archive.hint": "Архивные лиды скрыты везде. Верните лид, чтобы он снова появился; владелец может удалить его навсегда.",
+  "leads.archive.empty": "Архив пуст.",
+  "leads.restore": "Вернуть",
+  "leads.deleteForever": "Удалить навсегда",
+  "leads.deleteForever.title": "Удалить лид навсегда?",
+  "leads.deleteForever.body": "Это нельзя отменить. Лид удаляется из tezda; копия, уже отправленная в вашу CRM, остаётся там. Переписка с клиентом сохраняется.",
+  "toast.leadArchived": "Лид в архиве.",
+  "toast.leadRestored": "Лид возвращён.",
+  "toast.leadDeleted": "Лид удалён.",
+  "errors.LEAD_ARCHIVED": "Лид в архиве. Сначала верните его.",
+  "errors.LEAD_NOT_ARCHIVED": "Сначала отправьте лид в архив."
 }

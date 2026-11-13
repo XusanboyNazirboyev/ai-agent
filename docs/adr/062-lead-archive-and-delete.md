@@ -27,3 +27,15 @@ S1 API (migration, archive/restore/delete routes, every read excluded, 409 guard
 
 ## Risks
 A missed read site shows an archived lead somewhere (the S1 test list is built from a grep of every `lead` read, each marked checked or not applicable). Hard delete of a manual lead reuses the existing contact erasure (one audited code path) instead of deleting contact and person rows by hand.
+
+## S1/S2 status (2026-11-13, branch `feat/lead-archive`, built and verified by the reviewing agent)
+
+Built: migration `20261124090000_lead_archive` (`archived_at` + index); `leads/lead-archive.service.ts` (archive, restore, delete for good; audit `lead.archived|restored|deleted` with ids only); routes `POST /leads/:id/archive|restore`, `DELETE /leads/:id`, `GET /leads?archived=true` (OWNER, ADMIN; delete OWNER only); 409 `LEAD_ARCHIVED` / `LEAD_NOT_ARCHIVED`. Excluded from: lead list and board counts, pipeline lead counts, export, analytics, inbox lead badges and lead filters, person card leads and counts, follow-ups, handover and alert notifications, CRM sync (initial and retry), operator score/status routes (the conversation has "no lead"). Web: "Archive" in the lead panel (OWNER, ADMIN, with confirmation), an "Archive" view on the Leads page with Restore (OWNER, ADMIN) and Delete for good (OWNER, confirmation says it cannot be undone and that the CRM copy stays).
+
+Deviations and honest limits:
+- Frozen routes answer 409 `LEAD_ARCHIVED` for move, opportunity, tags, custom fields, hand-back, accept/dismiss suggestion. The agent's own scoring of the conversation still updates the hidden row (not changed).
+- Tag usage counts, the person-merge preview count and the data-retention check deliberately still count archived leads (a tag with archived leads must not look unused; a contact with an archived lead is not "without leads").
+- The raw-SQL branch of the inbox `waiting` scope with a lead score filter carries the filter but has no test; the Prisma branches are tested.
+- Hard delete of an agent-created lead keeps the conversation; a later customer message can create a new lead for it.
+
+Tests: integration `webinbox/lead-archive.integration.spec.ts` (9 cases; mutations killed for list filter, board SQL, pipeline counts, export, person card count, inbox filter, delete guard, manual-contact erasure, role check, move guard); e2e `lead-archive.spec.ts`. Related integration specs (27 files, 382 tests) and the lead e2e set (89) pass.

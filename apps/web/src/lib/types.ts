@@ -67,6 +67,8 @@ export interface OpportunityView {
 
 export interface LeadPipelineItem {
   id: string;
+  /** ADR 062: set for a lead in the archive, absent or null otherwise. */
+  archivedAt?: string | null;
   /** ADR 057 (additive). */
   pipelineId: string;
   pipelineStageId: string | null;

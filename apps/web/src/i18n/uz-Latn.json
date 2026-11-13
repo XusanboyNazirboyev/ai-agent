@@ -1191,5 +1191,20 @@
   "leads.add.sourcePlaceholder": "Qo'lda",
   "leads.add.submit": "Lid qo'shish",
   "toast.leadAdded": "Lid qo'shildi.",
-  "errors.STAGE_NOT_OPEN": "Yopiq bosqichga lid qo'shib bo'lmaydi."
+  "errors.STAGE_NOT_OPEN": "Yopiq bosqichga lid qo'shib bo'lmaydi.",
+  "leads.archive": "Arxivlash",
+  "leads.archive.title": "Lidni arxivlaysizmi?",
+  "leads.archive.body": "Lid taxtadan, ro'yxatdan va eksportdan yo'qoladi. Uni «Arxiv» bo'limidan qayta tiklash mumkin.",
+  "leads.view.archive": "Arxiv",
+  "leads.archive.hint": "Arxivlangan lidlar hamma joyda yashirin. Qaytarsangiz, yana paydo bo'ladi; egasi uni butunlay o'chira oladi.",
+  "leads.archive.empty": "Arxiv bo'sh.",
+  "leads.restore": "Qaytarish",
+  "leads.deleteForever": "Butunlay o'chirish",
+  "leads.deleteForever.title": "Lidni butunlay o'chirasizmi?",
+  "leads.deleteForever.body": "Buni qaytarib bo'lmaydi. Lid tizimdan o'chadi; CRM'ingizga allaqachon yuborilgan nusxasi o'sha yerda qoladi. Mijozning yozishmasi saqlanadi.",
+  "toast.leadArchived": "Lid arxivlandi.",
+  "toast.leadRestored": "Lid qaytarildi.",
+  "toast.leadDeleted": "Lid o'chirildi.",
+  "errors.LEAD_ARCHIVED": "Lid arxivda. Avval uni qaytaring.",
+  "errors.LEAD_NOT_ARCHIVED": "Avval lidni arxivlang."
 }

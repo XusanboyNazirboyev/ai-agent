@@ -1191,5 +1191,20 @@
   "leads.add.sourcePlaceholder": "Manual",
   "leads.add.submit": "Add lead",
   "toast.leadAdded": "Lead added.",
-  "errors.STAGE_NOT_OPEN": "A lead cannot be added to a closed stage."
+  "errors.STAGE_NOT_OPEN": "A lead cannot be added to a closed stage.",
+  "leads.archive": "Archive",
+  "leads.archive.title": "Archive this lead?",
+  "leads.archive.body": "The lead leaves the board, the list and the exports. You can restore it from the Archive view.",
+  "leads.view.archive": "Archive",
+  "leads.archive.hint": "Archived leads are hidden everywhere. Restore one to bring it back; an owner can delete it for good.",
+  "leads.archive.empty": "The archive is empty.",
+  "leads.restore": "Restore",
+  "leads.deleteForever": "Delete for good",
+  "leads.deleteForever.title": "Delete this lead for good?",
+  "leads.deleteForever.body": "This cannot be undone. The lead is removed from tezda; a copy already sent to your CRM stays there. The customer's conversation is kept.",
+  "toast.leadArchived": "Lead archived.",
+  "toast.leadRestored": "Lead restored.",
+  "toast.leadDeleted": "Lead deleted.",
+  "errors.LEAD_ARCHIVED": "This lead is archived. Restore it first.",
+  "errors.LEAD_NOT_ARCHIVED": "Archive the lead first."
 }

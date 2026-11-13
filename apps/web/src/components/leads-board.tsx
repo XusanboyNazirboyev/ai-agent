@@ -33,6 +33,7 @@ import { LeadColumn } from './lead-column';
 import { useLeadMove } from './lead-move';
 import { LeadPanel } from './lead-panel';
 import { FilterChips, FiltersMenu } from './leads-filters';
+import { LeadsArchive } from './leads-archive';
 import { LeadsList } from './leads-list';
 
 const MOBILE_BREAKPOINT = 768;
@@ -110,7 +111,7 @@ export function LeadsBoard(): ReactNode {
   });
   const columns = board.data?.stages ?? [];
 
-  const [view, setView] = useState<'board' | 'list'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'archive'>('board');
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
   const [funnelOpen, setFunnelOpen] = useState<boolean | null>(null);
   const showFunnel = funnelOpen ?? !isMobile;
@@ -275,6 +276,17 @@ export function LeadsBoard(): ReactNode {
           >
             {t('leads.view.table')}
           </button>
+          {canExport ? (
+            <button
+              type="button"
+              aria-pressed={view === 'archive'}
+              onClick={() => setView('archive')}
+              data-testid="leads-view-archive"
+              className={toggleClass(view === 'archive')}
+            >
+              {t('leads.view.archive')}
+            </button>
+          ) : null}
         </div>
         <FiltersMenu
           filters={filters}
@@ -392,6 +404,9 @@ export function LeadsBoard(): ReactNode {
         <p className="rounded-2xl border border-dashed border-line p-6 text-center text-sm text-muted">
           {t('leads.empty')}
         </p>
+      ) : null}
+      {view === 'archive' && canExport && active ? (
+        <LeadsArchive pipelineId={active.id} />
       ) : null}
       {board.isSuccess && columns.length > 0 && view === 'list' ? (
         <LeadsList

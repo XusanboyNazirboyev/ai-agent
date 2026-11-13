@@ -14,6 +14,7 @@ import { Button } from './ui/button';
 import { Icon } from './ui/icons';
 import { useToast } from './ui/toast';
 import { currentStageId, stageLabel } from './lead-board-utils';
+import { LeadArchiveButton } from './lead-archive-button';
 import { LeadOpportunity } from './lead-opportunity';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { MoveToPipeline } from './move-to-pipeline';
@@ -119,6 +120,7 @@ function PanelBody(props: {
   const { operator } = useShell();
   const { item, stages } = props;
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
+  const canArchive = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const name = item.contact.name ?? t('list.unnamed');
   const stageId = currentStageId(item, stages);
   const currentIndex = stages.findIndex((s) => s.id === stageId);
@@ -233,6 +235,9 @@ function PanelBody(props: {
           fields={item.customFields ?? []}
           role={operator.role}
         />
+        {canArchive ? (
+          <LeadArchiveButton leadId={item.id} onArchived={props.onClose} />
+        ) : null}
       </div>
     </div>
   );
