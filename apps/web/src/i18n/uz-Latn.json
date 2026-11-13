@@ -1119,5 +1119,10 @@
   "errors.STAGE_HAS_LEADS": "Avval bu bosqichdagi lidlarni boshqa joyga o‘tkazing.",
   "errors.STAGE_IS_DEFAULT": "Standart bosqichni o‘chirib bo‘lmaydi.",
   "errors.UNKNOWN_OPERATOR": "Mas’ul topilmadi.",
-  "errors.LOST_REASON_REQUIRED": "Lidni yo‘qotilgan deb belgilashda sabab ko‘rsatish shart."
+  "errors.LOST_REASON_REQUIRED": "Lidni yo‘qotilgan deb belgilashda sabab ko‘rsatish shart.",
+  "leads.handleRole": "Surish mumkin bo'lgan element",
+  "leads.moveHandle": "{name}ni ko'chirish",
+  "leads.moveHandleText": "Ko'chirish",
+  "leads.dragCancelled": "Bekor qilindi",
+  "leads.dragTarget": "Bosqich: {stage}"
 }

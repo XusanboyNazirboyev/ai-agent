@@ -217,23 +217,49 @@ test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
   await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
   const card = page.getByTestId('lead-card').first();
   await expect(card).toBeVisible();
-  await card.focus();
+  const handle = card.getByTestId('lead-card-handle');
+  const live = card.getByTestId('lead-card-live');
+  const patches: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'PATCH' &&
+      /\/leads\/[^/]+\/stage$/u.test(request.url())
+    )
+      patches.push(request.url());
+  });
+  await handle.focus();
   // Space picks the card up.
   await page.keyboard.press(' ');
-  await expect(page.getByTestId('lead-card').first()).toHaveClass(
-    /bg-primary-soft/,
-  );
+  await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  await expect(card).toHaveAttribute('data-state', 'picked-up');
+  await expect(card).toHaveClass(/bg-primary-soft/);
+  await expect(live).toHaveText('Picked up');
   // ArrowRight moves the drop target across columns.
   await page.keyboard.press('ArrowRight');
+  await expect(live).toHaveText(/^Target: /u);
+  expect(patches).toEqual([]);
   // Space drops on the targeted column.
+  const patch = page.waitForRequest(
+    (request) =>
+      request.method() === 'PATCH' &&
+      /\/leads\/[^/]+\/stage$/u.test(request.url()),
+  );
   await page.keyboard.press(' ');
-  await page.waitForTimeout(200);
-  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
-  // Escape cancels an in-progress keyboard drag.
-  await card.focus();
+  await patch;
+  await expect(live).toHaveText('Moved');
+  // Escape cancels an in-progress keyboard drag without a request.
+  const before = patches.length;
+  const target = page.getByTestId('lead-card-handle').first();
+  await target.focus();
   await page.keyboard.press(' ');
+  await expect(target).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('lead-card').first()).toHaveClass(/bg-canvas/);
+  await expect(target).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByTestId('lead-card-live').filter({ hasText: 'Cancelled' }),
+  ).toHaveCount(1);
+  await page.waitForTimeout(200);
+  expect(patches.length).toBe(before);
   await context.close();
 });
 

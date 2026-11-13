@@ -1119,5 +1119,10 @@
   "errors.STAGE_HAS_LEADS": "Move the leads out of this stage first.",
   "errors.STAGE_IS_DEFAULT": "A default stage cannot be deleted.",
   "errors.UNKNOWN_OPERATOR": "Owner not found.",
-  "errors.LOST_REASON_REQUIRED": "A reason is required when marking a lead as lost."
+  "errors.LOST_REASON_REQUIRED": "A reason is required when marking a lead as lost.",
+  "leads.handleRole": "Draggable item",
+  "leads.moveHandle": "Move {name}",
+  "leads.moveHandleText": "Move",
+  "leads.dragCancelled": "Cancelled",
+  "leads.dragTarget": "Target: {stage}"
 }

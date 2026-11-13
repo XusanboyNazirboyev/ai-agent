@@ -700,6 +700,8 @@ function LeadCard(props: {
   const [keyboardTargetStage, setKeyboardTargetStage] = useState<string | null>(
     null,
   );
+  const [keyboardStatus, setKeyboardStatus] = useState('');
+  const pickedUp = isDragging || keyboardDragging;
 
   const acceptSuggestion = useMutation({
     mutationFn: () =>
@@ -733,16 +735,19 @@ function LeadCard(props: {
       if (!keyboardDragging) {
         setKeyboardDragging(true);
         setKeyboardTargetStage(props.currentStageId);
+        setKeyboardStatus(t('leads.dragPickedUp'));
       } else {
         const target = keyboardTargetStage ?? props.currentStageId;
         const stage = props.stages.find((s) => s.id === target);
         if (stage?.kind === 'LOST') {
           setKeyboardDragging(false);
           props.onLostStage(props.item.id, target);
+          setKeyboardStatus(t('leads.dragDroppedLost'));
         } else {
           props.onMove(props.item.id, target);
           setKeyboardDragging(false);
           setKeyboardTargetStage(null);
+          setKeyboardStatus(t('leads.dragDropped'));
         }
       }
       return;
@@ -751,6 +756,7 @@ function LeadCard(props: {
     if (e.key === 'Escape') {
       setKeyboardDragging(false);
       setKeyboardTargetStage(null);
+      setKeyboardStatus(t('leads.dragCancelled'));
       return;
     }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -766,6 +772,9 @@ function LeadCard(props: {
               props.stages.length - 1,
             );
       setKeyboardTargetStage(props.stages[next].id);
+      setKeyboardStatus(
+        t('leads.dragTarget', { stage: stageName(props.stages[next], t) }),
+      );
     }
   }
   const name = props.item.contact.name ?? t('list.unnamed');
@@ -775,15 +784,40 @@ function LeadCard(props: {
     <li>
       <article
         data-testid="lead-card"
-        role="button"
         aria-label={t('leads.cardAriaLabel', { name })}
-        tabIndex={canEdit ? 0 : -1}
+        data-state={pickedUp ? 'picked-up' : 'idle'}
         draggable={canEdit}
         onDragStart={() => props.onDragStart(props.item.id)}
         onDragEnd={props.onDragEnd}
-        onKeyDown={handleKeyDown}
-        className={`flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 ${isDragging ? 'bg-primary-soft border-primary ring-1 ring-primary' : 'bg-canvas'} ${isDraggedHere ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
+        className={`flex min-w-0 flex-col gap-2 rounded-xl border border-line p-3 ${pickedUp ? 'bg-primary-soft border-primary ring-1 ring-primary' : 'bg-canvas'} ${isDraggedHere ? 'border-primary ring-2 ring-primary' : 'border-line'}`}
       >
+        {canEdit ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              data-testid="lead-card-handle"
+              aria-roledescription={t('leads.handleRole')}
+              aria-pressed={keyboardDragging}
+              aria-label={t('leads.moveHandle', { name })}
+              onKeyDown={handleKeyDown}
+              onBlur={() => {
+                setKeyboardDragging(false);
+                setKeyboardTargetStage(null);
+                setKeyboardStatus('');
+              }}
+              className="min-h-9 min-w-0 max-w-full rounded-lg border border-line bg-surface px-2 text-xs text-muted hover:bg-surface-2"
+            >
+              <span aria-hidden="true">⠿</span> {t('leads.moveHandleText')}
+            </button>
+            <span
+              aria-live="assertive"
+              data-testid="lead-card-live"
+              className="sr-only"
+            >
+              {keyboardStatus}
+            </span>
+          </div>
+        ) : null}
         <Link
           href={`/inbox?scope=all&c=${props.item.conversation.id}`}
           className="flex min-w-0 items-start gap-3 hover:text-primary-fg"

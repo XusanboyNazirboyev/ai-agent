@@ -1119,5 +1119,10 @@
   "errors.STAGE_HAS_LEADS": "Сначала переместите лиды из этого этапа.",
   "errors.STAGE_IS_DEFAULT": "Этап по умолчанию нельзя удалить.",
   "errors.UNKNOWN_OPERATOR": "Ответственный не найден.",
-  "errors.LOST_REASON_REQUIRED": "При переводе лида в «Проигран» нужно указать причину."
+  "errors.LOST_REASON_REQUIRED": "При переводе лида в «Проигран» нужно указать причину.",
+  "leads.handleRole": "Перетаскиваемый элемент",
+  "leads.moveHandle": "Переместить {name}",
+  "leads.moveHandleText": "Переместить",
+  "leads.dragCancelled": "Отменено",
+  "leads.dragTarget": "Этап: {stage}"
 }
