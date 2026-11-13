@@ -46,6 +46,7 @@ function renderCard(
     onDragEnd: vi.fn(),
     onOpen: vi.fn(),
     onRequestMove: vi.fn(),
+    onAnnounce: vi.fn(),
     ...over,
   };
   render(
@@ -183,6 +184,7 @@ describe('LeadCard', () => {
     );
     fireEvent.keyDown(handle, { key: ' ' });
     expect(props.onRequestMove).toHaveBeenCalledWith(props.item, 'stage-qual');
+    expect(props.onAnnounce).toHaveBeenCalledWith('leads.dragDropped');
   });
 
   it('Escape cancels a keyboard pick-up without moving', () => {

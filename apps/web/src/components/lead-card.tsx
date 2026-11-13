@@ -32,6 +32,8 @@ export function LeadCard(props: {
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   /** Move (or, for a LOST stage, ask for the reason) from the keyboard path. */
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
+  /** Announces a drop on the board's live region: the card may unmount. */
+  onAnnounce: (message: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();
@@ -69,9 +71,7 @@ export function LeadCard(props: {
       const lost = stages.find((s) => s.id === target)?.kind === 'LOST';
       cancelKeyboardDrag();
       props.onRequestMove(item, target);
-      setKeyboardStatus(
-        t(lost ? 'leads.dragDroppedLost' : 'leads.dragDropped'),
-      );
+      props.onAnnounce(t(lost ? 'leads.dragDroppedLost' : 'leads.dragDropped'));
       return;
     }
     if (!keyboardDragging) return;

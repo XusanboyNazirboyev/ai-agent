@@ -57,6 +57,7 @@ export function LeadColumn(props: {
   onDrop: (targetStageId: string) => void;
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
+  onAnnounce: (message: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const listId = useId();
@@ -185,6 +186,7 @@ export function LeadColumn(props: {
             onDragEnd={props.onDragEnd}
             onOpen={props.onOpen}
             onRequestMove={props.onRequestMove}
+            onAnnounce={props.onAnnounce}
           />
         ))}
         {query.hasNextPage ? (

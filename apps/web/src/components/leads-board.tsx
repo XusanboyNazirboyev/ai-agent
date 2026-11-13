@@ -222,7 +222,7 @@ export function LeadsBoard(): ReactNode {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-      <div aria-live="polite" className="sr-only">
+      <div aria-live="polite" data-testid="leads-live" className="sr-only">
         {dragStatus}
       </div>
       <div
@@ -410,6 +410,7 @@ export function LeadsBoard(): ReactNode {
               onDrop={handleDrop}
               onOpen={openLead}
               onRequestMove={requestMove}
+              onAnnounce={setDragStatus}
             />
           ))}
         </div>

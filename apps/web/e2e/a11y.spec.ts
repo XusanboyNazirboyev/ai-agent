@@ -246,7 +246,8 @@ test('keyboard: lead card move with Space/arrows and Escape cancels', async ({
   );
   await page.keyboard.press(' ');
   await patch;
-  await expect(live).toHaveText('Moved');
+  // The card moves column at once, so the drop is announced on the board.
+  await expect(page.getByTestId('leads-live')).toHaveText('Moved');
   // Escape cancels an in-progress keyboard drag without a request.
   const before = patches.length;
   const target = page.getByTestId('lead-card-handle').first();
@@ -865,6 +866,67 @@ test.describe('pipelines (P1.3)', () => {
     await page.goto('/leads?view=funnel');
     await expect(page.getByTestId('lead-column-NEW')).toBeAttached();
     await audit(page, 'leads board with pipeline');
+    await context.close();
+  });
+  test('lead panel: no violations, focus trapped, Escape returns focus', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    const card = page
+      .getByTestId('lead-card')
+      .filter({ hasText: f.a.conversations[0]!.contactName });
+    const opener = card.getByTestId('lead-card-open');
+    await opener.focus();
+    await page.keyboard.press('Enter');
+    const panel = page.getByTestId('lead-panel');
+    await expect(panel).toBeVisible();
+    await expect(
+      panel.getByRole('heading', { name: f.a.conversations[0]!.contactName }),
+    ).toBeVisible();
+    await audit(page, 'lead panel');
+    // Tabbing never leaves the modal panel.
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press('Tab');
+      const inside = await page.evaluate(
+        () =>
+          document
+            .querySelector('[data-testid="lead-panel"]')
+            ?.contains(document.activeElement) ?? false,
+      );
+      expect(inside, `focus escaped the panel on Tab ${i + 1}`).toBe(true);
+    }
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(opener).toBeFocused();
+    await context.close();
+  });
+
+  test('leads toolbar: filters popover has no violations and Escape returns focus', async ({
+    browser,
+  }) => {
+    const f = fixtures();
+    const { page, context } = await newSession(
+      browser,
+      f.a.operators.op1.email,
+    );
+    await page.goto('/leads?view=funnel');
+    await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
+    const button = page.getByTestId('leads-filters-button');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
+    await expect(
+      page.getByRole('group', { name: /filters|Фильтры|Filtrlar/i }),
+    ).toBeVisible();
+    await audit(page, 'leads filters popover');
+    await page.keyboard.press('Escape');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await expect(button).toBeFocused();
     await context.close();
   });
 });
