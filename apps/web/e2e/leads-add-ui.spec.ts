@@ -108,7 +108,8 @@ test('server error 400: inline alert visible, dialog stays open, name retained',
 
   await page.getByTestId('lead-add-submit').click();
 
-  const alert = page.getByRole('alert');
+  // Inside the dialog: the page may show other alerts (a toast) on CI.
+  const alert = dialog.getByRole('alert');
   await expect(alert).toBeVisible();
   await expect(dialog).toBeVisible();
   await expect(page.getByTestId('lead-add-name')).toHaveValue('Failed lead');
