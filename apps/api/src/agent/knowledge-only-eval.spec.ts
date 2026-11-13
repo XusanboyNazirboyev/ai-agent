@@ -148,7 +148,7 @@ describe('knowledge-only pack, scripted evaluation (ADR 060)', () => {
       const steps: ScriptStep[] = [extraction({}, scenario.intent)];
       if (scenario.respond) {
         steps.push(scenario.respond);
-        if (scenario.respond.toolCalls) steps.push(answer);
+        if ('toolCalls' in scenario.respond) steps.push(answer);
       }
       const provider = new ScriptedLlmProvider(steps);
       const { result } = await runTurn({
