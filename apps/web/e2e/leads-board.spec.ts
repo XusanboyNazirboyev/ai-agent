@@ -81,13 +81,18 @@ test('an operator sets score and status and moves a lead between funnel stages',
 
     // Move to a stage other than the current one, by its funnel column.
     const options = card.getByTestId('lead-card-stage').locator('option');
-    // Setting WON re-renders the card (the lead may move column): wait until
-    // the stage select lists more than the current stage again.
-    await expect.poll(() => options.count()).toBeGreaterThan(1);
-    const values = await options.evaluateAll((nodes) =>
-      nodes.map((node) => (node as HTMLOptionElement).value),
-    );
-    const target = values.find((value) => value !== newStageId)!;
+    // Setting WON re-renders the card (the lead may move column), so read the
+    // options inside the poll: an empty list mid-render just retries.
+    let target = '';
+    await expect
+      .poll(async () => {
+        const values = await options.evaluateAll((nodes) =>
+          nodes.map((node) => (node as HTMLOptionElement).value),
+        );
+        target = values.find((value) => value !== newStageId) ?? '';
+        return target;
+      })
+      .not.toBe('');
     await card.getByTestId('lead-card-stage').selectOption(target);
     await expect(card.getByTestId('lead-card-stage')).toHaveValue(target);
     const column = page.locator('[data-testid^="lead-column-"]', {
