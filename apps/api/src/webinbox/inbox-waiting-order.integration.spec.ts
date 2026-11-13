@@ -116,7 +116,10 @@ describe('inbox waiting queue ordering', () => {
     expect(new Set(combined.map((item) => item.id)).size).toBe(3);
   });
 
-  async function waitingTenant(count: number, namePrefix: string) {
+  async function waitingTenant(
+    count: number,
+    namePrefix: string,
+  ): Promise<{ principal: InboxPrincipal; ids: string[] }> {
     const suffix = randomUUID();
     const tenant = await db.tenant.create({
       data: {
