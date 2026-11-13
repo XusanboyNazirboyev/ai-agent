@@ -119,6 +119,16 @@ export function LeadsBoard(): ReactNode {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [draggedToStageId, setDraggedToStageId] = useState<string | null>(null);
   const [dragStatus, setDragStatus] = useState('');
+  const [view, setView] = useState<'board' | 'list'>('board');
+  const [mobileStageId, setMobileStageId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(typeof window !== 'undefined' && window.innerWidth < 768);
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // Lost-reason state shared by the stage select and drag-to-LOST.
   const [lostDialog, setLostDialog] = useState(false);
@@ -259,6 +269,33 @@ export function LeadsBoard(): ReactNode {
           </Button>
         ) : null}
       </div>
+      <div
+        role="group"
+        aria-label={t('leads.views')}
+        className="flex min-w-0 gap-1 rounded-xl border border-line bg-surface p-1"
+        data-testid="leads-view-toggle"
+      >
+        <button
+          type="button"
+          aria-pressed={view === 'board'}
+          onClick={() => setView('board')}
+          className={`min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
+            view === 'board' ? 'bg-primary text-white' : 'text-muted hover:bg-surface-2 hover:text-fg'
+          }`}
+        >
+          {t('leads.view.funnel')}
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === 'list'}
+          onClick={() => setView('list')}
+          className={`min-h-9 rounded-lg px-3 text-sm font-medium transition-colors ${
+            view === 'list' ? 'bg-primary text-white' : 'text-muted hover:bg-surface-2 hover:text-fg'
+          }`}
+        >
+          {t('leads.view.list')}
+        </button>
+      </div>
       <LeadsFilters
         filters={filters}
         onChange={(next) => {
@@ -301,10 +338,12 @@ export function LeadsBoard(): ReactNode {
             {columns.map((stage) => {
               const total = columns.reduce((sum, s) => sum + s.count, 0);
               const share = total === 0 ? 0 : Math.round((stage.count / total) * 100);
+              const selected = mobileStageId === stage.id;
               return (
                 <div
                   key={stage.id}
-                  className="flex flex-col items-center gap-1 text-xs"
+                  onClick={() => setMobileStageId(stage.id)}
+                  className={`flex flex-col items-center gap-1 text-xs cursor-pointer ${selected ? 'bg-primary-soft text-primary-fg' : ''}`}
                   data-testid="funnel-stage"
                 >
                   <span className="truncate" title={stageName(stage, t)}>
@@ -346,31 +385,54 @@ export function LeadsBoard(): ReactNode {
       {board.isSuccess && rows.length > 0 ? (
         <div
           aria-label={t('leads.columns')}
-          className="relative flex min-h-0 min-w-0 max-w-full flex-1 items-stretch gap-3 overflow-x-auto pb-2"
+          className={`relative flex min-h-0 min-w-0 max-w-full items-stretch gap-3 pb-2 ${
+            view === 'board' ? 'flex overflow-x-auto' : 'flex-col'
+          }`}
         >
-          {rows.map((stage) => (
-            <LeadColumn
-              key={stage.id}
-              stage={stage}
-              pipelineId={active!.id}
-              stages={rows}
-              filters={filters}
-              draggedId={draggedId}
-              draggedToStageId={draggedToStageId}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOverStage={(id) => setDraggedToStageId(id)}
-              onDragLeaveStage={() => setDraggedToStageId(null)}
-              onDrop={handleDrop}
-              onMove={(leadId, stageId) => move.mutate({ leadId, stageId })}
-              onLostStage={(leadId, stageId) => {
-                setLostLeadId(leadId);
-                setLostTargetStageId(stageId);
-                setLostReasonDraft('');
-                setLostDialog(true);
-              }}
-            />
-          ))}
+          {(() => {
+            const visible =
+              view === 'board'
+                ? rows.filter(
+                    (stage) =>
+                      !isMobile || mobileStageId === null || stage.id === mobileStageId,
+                  )
+                : rows;
+            return (
+              <>
+                {view === 'board' &&
+                isMobile &&
+                columns.length > 0 &&
+                mobileStageId === null ? (
+                  <p className="text-xs text-muted px-3">
+                    {t('leads.pickStage')}
+                  </p>
+                ) : null}
+                {visible.map((stage) => (
+                  <LeadColumn
+                    key={stage.id}
+                    stage={stage}
+                    pipelineId={active!.id}
+                    stages={rows}
+                    filters={filters}
+                    draggedId={draggedId}
+                    draggedToStageId={draggedToStageId}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDragOverStage={(id) => setDraggedToStageId(id)}
+                    onDragLeaveStage={() => setDraggedToStageId(null)}
+                    onDrop={handleDrop}
+                    onMove={(leadId, stageId) => move.mutate({ leadId, stageId })}
+                    onLostStage={(leadId, stageId) => {
+                      setLostLeadId(leadId);
+                      setLostTargetStageId(stageId);
+                      setLostReasonDraft('');
+                      setLostDialog(true);
+                    }}
+                  />
+                ))}
+              </>
+            );
+          })()}
         </div>
       ) : null}
 
