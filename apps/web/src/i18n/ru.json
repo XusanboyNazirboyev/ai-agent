@@ -1160,5 +1160,22 @@
   "leads.createdFrom": "Создан с",
   "leads.createdTo": "Создан по",
   "leads.moveToPipeline": "Перенести в другую воронку",
-  "leads.stageTabs": "Этапы воронки"
+  "leads.stageTabs": "Этапы воронки",
+  "connectorRoles.title": "Роли коннекторов",
+  "connectorRoles.role.CATALOG": "Каталог",
+  "connectorRoles.role.LEAD_SINK": "Источник лидов",
+  "connectorRoles.role.ACTIONS": "Действия",
+  "connectorRoles.desc.CATALOG": "Ответы о товарах, ценах и наличии",
+  "connectorRoles.desc.LEAD_SINK": "Куда отправляются новые лиды",
+  "connectorRoles.desc.ACTIONS": "Куда записываются действия вроде бронирований",
+  "connectorRoles.status.BOUND": "Привязан",
+  "connectorRoles.status.UNBOUND": "Используется единственный подходящий коннектор, если он один",
+  "connectorRoles.status.AMBIGUOUS": "Несколько коннекторов подходят: выберите один, иначе агент не будет никого использовать",
+  "connectorRoles.status.UNAVAILABLE": "Выбранный коннектор недоступен",
+  "connectorRoles.notChosen": "Не выбран",
+  "connectorRoles.activeConnectors": "Активные коннекторы",
+  "connectorRoles.save": "Роль сохранена.",
+  "errors.CONNECTOR_NOT_ACTIVE": "Коннектор не активен.",
+  "errors.CONNECTOR_UNAVAILABLE": "Коннектор недоступен.",
+  "errors.CONNECTOR_CAPABILITY_MISSING": "Коннектор не предоставляет то, что нужно этой роли."
 }
