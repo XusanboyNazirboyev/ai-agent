@@ -11,11 +11,13 @@ import {
   Query,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { z } from 'zod';
-import { PrismaService } from '../persistence/prisma.service.js';
-import { ensureDefaultPipeline } from '../leads/lead-stage.util.js';
-import { moveLeadToStage } from '../leads/lead-stage-move.js';
+} from "@nestjs/common";
+import { z } from "zod";
+import { PrismaService } from "../persistence/prisma.service.js";
+import { ensureDefaultPipeline } from "../leads/lead-stage.util.js";
+import { moveLeadToStage } from "../leads/lead-stage-move.js";
+import { parseManualLeadBody } from "../leads/manual-lead-rules.js";
+import { ManualLeadService } from "../leads/manual-lead.service.js";
 import {
   conflict,
   forbidden,
@@ -24,7 +26,7 @@ import {
   invalidValue,
   notFound,
   unknownOperator,
-} from '../pipelines/pipeline-errors.js';
+} from "../pipelines/pipeline-errors.js";
 import {
   checkLostReason,
   fromDateOnly,
@@ -33,30 +35,30 @@ import {
   MAX_STAGES_PER_PIPELINE,
   parseOpportunityPatch,
   toDateOnly,
-} from '../pipelines/pipeline-rules.js';
-import { Prisma } from '../generated/prisma/client.js';
+} from "../pipelines/pipeline-rules.js";
+import { Prisma } from "../generated/prisma/client.js";
 import {
   describeFields,
   type FieldValue,
-} from '../tags/custom-field-values.js';
+} from "../tags/custom-field-values.js";
 import {
   CustomFieldsService,
   type FieldValueView,
-} from '../tags/custom-fields.service.js';
-import { parseFieldFilter } from '../tags/field-filter.js';
+} from "../tags/custom-fields.service.js";
+import { parseFieldFilter } from "../tags/field-filter.js";
 import {
   activeFieldDefs,
   tagsOfLeads,
   type TagView,
-} from '../tags/tag-reads.js';
-import { TagsService } from '../tags/tags.service.js';
-import { SessionGuard, type InboxRequest } from './session.guard.js';
+} from "../tags/tag-reads.js";
+import { TagsService } from "../tags/tags.service.js";
+import { SessionGuard, type InboxRequest } from "./session.guard.js";
 import {
   operating,
   parseId,
   parseTagIds,
   parseValues,
-} from './tag-assignment.js';
+} from "./tag-assignment.js";
 
 const ListQuery = z.object({
   stageId: z.string().uuid().optional(),
@@ -71,7 +73,7 @@ const ListQuery = z.object({
   fieldKey: z.string().max(64).optional(),
   fieldValue: z.string().max(600).optional(),
 });
-const StageKind = z.enum(['OPEN', 'WON', 'LOST']);
+const StageKind = z.enum(["OPEN", "WON", "LOST"]);
 const StageBody = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
@@ -106,7 +108,7 @@ interface LeadStageView {
   /** ADR 057 (additive). */
   pipelineId: string;
   /** ADR 058 (additive): OPEN stages are the funnel, WON/LOST are closed. */
-  kind: 'OPEN' | 'WON' | 'LOST';
+  kind: "OPEN" | "WON" | "LOST";
 }
 
 export interface OpportunityView {
@@ -136,7 +138,7 @@ interface LeadPipelineItem {
   expectedCloseDate: string | null;
   lostReason: string | null;
   /** ADR 058 (additive). */
-  stageSetBy: 'AGENT' | 'OPERATOR';
+  stageSetBy: "AGENT" | "OPERATOR";
   suggestedStageId: string | null;
   suggestedReasonCodes: string[];
   score: string;
@@ -157,20 +159,55 @@ interface LeadPipelineItem {
   }>;
 }
 
-@Controller('api/v1/leads')
+/** Columns the list and a freshly created lead are read with. */
+const LEAD_ITEM_SELECT = {
+  id: true,
+  pipelineId: true,
+  pipelineStageId: true,
+  ownerOperatorId: true,
+  amount: true,
+  currency: true,
+  source: true,
+  expectedCloseDate: true,
+  lostReason: true,
+  stageSetBy: true,
+  suggestedStageId: true,
+  suggestedReasonCodes: true,
+  score: true,
+  status: true,
+  summary: true,
+  createdAt: true,
+  updatedAt: true,
+  customFields: true,
+  contact: { select: { name: true, phone: true } },
+  conversation: {
+    select: {
+      id: true,
+      state: true,
+      channelAccount: { select: { channelType: true } },
+    },
+  },
+} satisfies Prisma.LeadSelect;
+
+type LeadItemRow = Prisma.LeadGetPayload<{
+  select: typeof LEAD_ITEM_SELECT;
+}>;
+
+@Controller("api/v1/leads")
 @UseGuards(SessionGuard)
 export class LeadPipelineController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tags: TagsService,
     private readonly fields: CustomFieldsService,
+    private readonly manualLeads: ManualLeadService,
   ) {}
 
   /** Replaces the tag set of a lead (ADR 053). */
-  @Put(':id/tags')
+  @Put(":id/tags")
   async setTags(
     @Req() request: InboxRequest,
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: unknown,
   ): Promise<{ tags: TagView[] }> {
     const principal = operating(request);
@@ -178,17 +215,17 @@ export class LeadPipelineController {
     return this.tags.setTags(
       principal.tenantId,
       principal.operatorId,
-      'lead',
+      "lead",
       parseId(id),
       tagIds,
     );
   }
 
   /** Merges custom field values into a lead (ADR 053). */
-  @Patch(':id/custom-fields')
+  @Patch(":id/custom-fields")
   async setCustomFields(
     @Req() request: InboxRequest,
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() body: unknown,
   ): Promise<{ customFields: FieldValueView[] }> {
     const principal = operating(request);
@@ -196,24 +233,24 @@ export class LeadPipelineController {
     return this.fields.patchValues(
       principal.tenantId,
       principal.operatorId,
-      'lead',
+      "lead",
       parseId(id),
       values,
     );
   }
 
   /** Opportunity fields of a lead (ADR 057): OWNER, ADMIN, OPERATOR. */
-  @Patch(':id/opportunity')
+  @Patch(":id/opportunity")
   async opportunity(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
+    @Param("id", ParseUUIDPipe) leadId: string,
     @Body() body: unknown,
   ): Promise<OpportunityView> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw forbidden();
+    if (who.role === "VIEWER") throw forbidden();
     const parsed = parseOpportunityPatch(body);
     if (!parsed.ok)
-      throw parsed.code === 'INVALID_BODY' ? invalidBody() : invalidValue();
+      throw parsed.code === "INVALID_BODY" ? invalidBody() : invalidValue();
     const patch = parsed.patch;
     return this.prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findFirst({
@@ -223,7 +260,7 @@ export class LeadPipelineController {
       if (!lead) throw notFound();
       if (patch.lostReason !== undefined) {
         const violation = checkLostReason(lead.status, patch.lostReason);
-        if (lead.status !== 'LOST' || violation === 'REQUIRED')
+        if (lead.status !== "LOST" || violation === "REQUIRED")
           throw invalidValue();
       }
       if (patch.ownerOperatorId) {
@@ -257,13 +294,13 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
-          action: 'lead.opportunity.updated',
-          entityType: 'lead',
+          action: "lead.opportunity.updated",
+          entityType: "lead",
           entityId: leadId,
           // Field names only: amounts are never written to the audit log.
-          safeInputSummary: { fields: Object.keys(patch).sort().join(',') },
+          safeInputSummary: { fields: Object.keys(patch).sort().join(",") },
         },
       });
       const updated = await tx.lead.findFirstOrThrow({
@@ -291,7 +328,7 @@ export class LeadPipelineController {
     });
   }
 
-  @Get('stages')
+  @Get("stages")
   async stages(
     @Req() request: InboxRequest,
     @Query() query: unknown = {},
@@ -312,12 +349,12 @@ export class LeadPipelineController {
     }
     return this.prisma.leadStage.findMany({
       where: { tenantId, pipelineId, archivedAt: null },
-      orderBy: [{ position: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: STAGE_SELECT,
     });
   }
 
-  @Post('stages')
+  @Post("stages")
   async createStage(
     @Req() request: InboxRequest,
     @Body() body: unknown,
@@ -342,22 +379,22 @@ export class LeadPipelineController {
       });
       if (count >= MAX_STAGES_PER_PIPELINE)
         throw conflict(
-          'LEAD_STAGE_LIMIT',
-          'Maximum number of lead stages reached',
+          "LEAD_STAGE_LIMIT",
+          "Maximum number of lead stages reached",
         );
       const last = await tx.leadStage.findFirst({
         where: { tenantId: who.tenantId, pipelineId },
-        orderBy: { position: 'desc' },
+        orderBy: { position: "desc" },
         select: { position: true },
       });
-      const kind = parsed.data.kind ?? 'OPEN';
+      const kind = parsed.data.kind ?? "OPEN";
       let position = (last?.position ?? -1) + 1;
-      if (kind === 'OPEN') {
+      if (kind === "OPEN") {
         // A new open stage goes before the closed (WON/LOST) columns, which
         // stay last, as in a CRM funnel.
         const firstClosed = await tx.leadStage.findFirst({
-          where: { tenantId: who.tenantId, pipelineId, kind: { not: 'OPEN' } },
-          orderBy: { position: 'asc' },
+          where: { tenantId: who.tenantId, pipelineId, kind: { not: "OPEN" } },
+          orderBy: { position: "asc" },
           select: { position: true },
         });
         if (firstClosed) {
@@ -385,10 +422,10 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
-          action: 'lead.stage.created',
-          entityType: 'lead_stage',
+          action: "lead.stage.created",
+          entityType: "lead_stage",
           entityId: stage.id,
           safeInputSummary: {
             position: String(stage.position),
@@ -400,10 +437,10 @@ export class LeadPipelineController {
     });
   }
 
-  @Patch('stages/:id')
+  @Patch("stages/:id")
   async renameStage(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) stageId: string,
+    @Param("id", ParseUUIDPipe) stageId: string,
     @Body() body: unknown,
   ): Promise<LeadStageView> {
     const who = this.requireManager(request);
@@ -429,17 +466,17 @@ export class LeadPipelineController {
         });
         if (leads > 0)
           throw conflict(
-            'STAGE_HAS_LEADS',
-            'Move the leads out of this stage first',
+            "STAGE_HAS_LEADS",
+            "Move the leads out of this stage first",
             { leadCount: leads },
           );
         if (
-          stage.kind === 'OPEN' &&
+          stage.kind === "OPEN" &&
           (await this.otherOpen(tx, who.tenantId, stage)) === 0
         )
           throw conflict(
-            'STAGE_LAST_OPEN',
-            'A pipeline needs at least one open stage',
+            "STAGE_LAST_OPEN",
+            "A pipeline needs at least one open stage",
           );
       }
       const updated = await tx.leadStage.update({
@@ -453,14 +490,14 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
           action:
-            kind !== undefined ? 'lead.stage.updated' : 'lead.stage.renamed',
-          entityType: 'lead_stage',
+            kind !== undefined ? "lead.stage.updated" : "lead.stage.renamed",
+          entityType: "lead_stage",
           entityId: stage.id,
           safeInputSummary: {
-            code: stage.code ?? 'CUSTOM',
+            code: stage.code ?? "CUSTOM",
             ...(kind !== undefined ? { kind } : {}),
           },
         },
@@ -474,10 +511,10 @@ export class LeadPipelineController {
    * pipeline are required by the agent; a stage that holds leads is refused
    * (the operator moves them first).
    */
-  @Delete('stages/:id')
+  @Delete("stages/:id")
   async deleteStage(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) stageId: string,
+    @Param("id", ParseUUIDPipe) stageId: string,
   ): Promise<{ id: string; deleted: true }> {
     const who = this.requireManager(request);
     return this.prisma.$transaction(async (tx) => {
@@ -495,23 +532,23 @@ export class LeadPipelineController {
       });
       if (!stage) throw notFound();
       if (stage.code !== null && stage.pipeline.isDefault)
-        throw conflict('STAGE_IS_DEFAULT', 'A default stage cannot be deleted');
+        throw conflict("STAGE_IS_DEFAULT", "A default stage cannot be deleted");
       const leads = await tx.lead.count({
         where: { tenantId: who.tenantId, pipelineStageId: stage.id },
       });
       if (leads > 0)
         throw conflict(
-          'STAGE_HAS_LEADS',
-          'Move the leads out of this stage first',
+          "STAGE_HAS_LEADS",
+          "Move the leads out of this stage first",
           { leadCount: leads },
         );
       if (
-        stage.kind === 'OPEN' &&
+        stage.kind === "OPEN" &&
         (await this.otherOpen(tx, who.tenantId, stage)) === 0
       )
         throw conflict(
-          'STAGE_LAST_OPEN',
-          'A pipeline needs at least one open stage',
+          "STAGE_LAST_OPEN",
+          "A pipeline needs at least one open stage",
         );
       // A pending AI suggestion of this stage is dropped with it.
       await tx.lead.updateMany({
@@ -524,19 +561,42 @@ export class LeadPipelineController {
       await tx.auditEvent.create({
         data: {
           tenantId: who.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: who.operatorId,
-          action: 'lead.stage.deleted',
-          entityType: 'lead_stage',
+          action: "lead.stage.deleted",
+          entityType: "lead_stage",
           entityId: stage.id,
           safeInputSummary: {
             pipelineId: stage.pipelineId,
-            code: stage.code ?? 'CUSTOM',
+            code: stage.code ?? "CUSTOM",
           },
         },
       });
       return { id: stage.id, deleted: true as const };
     });
+  }
+
+  /** Adds a lead by hand (ADR 061): OWNER, ADMIN, OPERATOR. */
+  @Post()
+  async createManually(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<LeadPipelineItem> {
+    const who = request.principal!;
+    if (who.role === "VIEWER") throw forbidden();
+    const parsed = parseManualLeadBody(body);
+    if (!parsed.ok)
+      throw parsed.code === "INVALID_BODY" ? invalidBody() : invalidValue();
+    const { leadId } = await this.manualLeads.create(
+      { tenantId: who.tenantId, operatorId: who.operatorId },
+      parsed.input,
+    );
+    const row = await this.prisma.lead.findFirstOrThrow({
+      where: { tenantId: who.tenantId, id: leadId },
+      select: LEAD_ITEM_SELECT,
+    });
+    const [item] = await this.toItems(who.tenantId, [row]);
+    return item;
   }
 
   @Get()
@@ -582,7 +642,7 @@ export class LeadPipelineController {
         ? await parseFieldFilter(
             this.prisma,
             tenantId,
-            'LEAD',
+            "LEAD",
             fieldKey,
             fieldValue,
           )
@@ -593,7 +653,7 @@ export class LeadPipelineController {
         ...(pipelineId ? { pipelineId } : {}),
         ...(stageId ? { pipelineStageId: stageId } : {}),
         ...(ownerOperatorId ? { ownerOperatorId } : {}),
-        ...(source ? { source: { equals: source, mode: 'insensitive' } } : {}),
+        ...(source ? { source: { equals: source, mode: "insensitive" } } : {}),
         ...(closeBefore || closeAfter
           ? {
               expectedCloseDate: {
@@ -607,41 +667,26 @@ export class LeadPipelineController {
           ? { customFields: { path: [field.key], equals: field.value } }
           : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
       ...(cursor
         ? { cursor: { tenantId_id: { tenantId, id: cursor } }, skip: 1 }
         : {}),
-      select: {
-        id: true,
-        pipelineId: true,
-        pipelineStageId: true,
-        ownerOperatorId: true,
-        amount: true,
-        currency: true,
-        source: true,
-        expectedCloseDate: true,
-        lostReason: true,
-        stageSetBy: true,
-        suggestedStageId: true,
-        suggestedReasonCodes: true,
-        score: true,
-        status: true,
-        summary: true,
-        createdAt: true,
-        updatedAt: true,
-        customFields: true,
-        contact: { select: { name: true, phone: true } },
-        conversation: {
-          select: {
-            id: true,
-            state: true,
-            channelAccount: { select: { channelType: true } },
-          },
-        },
-      },
+      select: LEAD_ITEM_SELECT,
     });
     const page = rows.slice(0, limit);
+    const items = await this.toItems(tenantId, page);
+    return {
+      items,
+      nextCursor: rows.length > limit ? items[items.length - 1].id : null,
+    };
+  }
+
+  /** Maps lead rows (selected with LEAD_ITEM_SELECT) to board/list items. */
+  private async toItems(
+    tenantId: string,
+    page: LeadItemRow[],
+  ): Promise<LeadPipelineItem[]> {
     const ownerIds = [
       ...new Set(
         page.flatMap((l) => (l.ownerOperatorId ? [l.ownerOperatorId] : [])),
@@ -653,7 +698,7 @@ export class LeadPipelineController {
         tenantId,
         page.map((l) => l.id),
       ),
-      activeFieldDefs(this.prisma, tenantId, 'LEAD'),
+      activeFieldDefs(this.prisma, tenantId, "LEAD"),
       // One batched read for every owner on the page (no N+1).
       ownerIds.length === 0
         ? Promise.resolve([])
@@ -663,7 +708,7 @@ export class LeadPipelineController {
           }),
     ]);
     const ownerById = new Map(owners.map((o) => [o.id, o]));
-    const items: LeadPipelineItem[] = page.map(
+    return page.map(
       ({
         conversation: { channelAccount, ...conversation },
         customFields,
@@ -685,17 +730,13 @@ export class LeadPipelineController {
         customFields: describeFields(defs, customFields),
       }),
     );
-    return {
-      items,
-      nextCursor: rows.length > limit ? items[items.length - 1].id : null,
-    };
   }
 
   /** Moves a lead to a stage; a stage of another pipeline moves the lead there. */
-  @Patch(':id/stage')
+  @Patch(":id/stage")
   async move(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
+    @Param("id", ParseUUIDPipe) leadId: string,
     @Body() body: unknown,
   ): Promise<{
     id: string;
@@ -704,7 +745,7 @@ export class LeadPipelineController {
     status: string;
   }> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw forbidden();
+    if (who.role === "VIEWER") throw forbidden();
     const parsed = MoveBody.safeParse(body);
     if (!parsed.success) throw invalidBody();
     return this.prisma.$transaction(async (tx) => {
@@ -712,7 +753,7 @@ export class LeadPipelineController {
         tenantId: who.tenantId,
         leadId,
         stageId: parsed.data.stageId,
-        actor: 'OPERATOR',
+        actor: "OPERATOR",
         actorId: who.operatorId,
         lostReason: parsed.data.lostReason,
       });
@@ -735,7 +776,7 @@ export class LeadPipelineController {
       where: {
         tenantId,
         pipelineId: stage.pipelineId,
-        kind: 'OPEN',
+        kind: "OPEN",
         archivedAt: null,
         id: { not: stage.id },
       },
@@ -743,10 +784,10 @@ export class LeadPipelineController {
   }
 
   /** Accepts the AI's stage suggestion: moves the lead as the operator (ADR 058). */
-  @Post(':id/stage-suggestion/accept')
+  @Post(":id/stage-suggestion/accept")
   async acceptSuggestion(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
+    @Param("id", ParseUUIDPipe) leadId: string,
   ): Promise<{
     id: string;
     pipelineStageId: string;
@@ -754,7 +795,7 @@ export class LeadPipelineController {
     status: string;
   }> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw forbidden();
+    if (who.role === "VIEWER") throw forbidden();
     return this.prisma.$transaction(async (tx) => {
       const lead = await tx.lead.findFirst({
         where: { tenantId: who.tenantId, id: leadId },
@@ -766,7 +807,7 @@ export class LeadPipelineController {
         tenantId: who.tenantId,
         leadId,
         stageId: lead.suggestedStageId,
-        actor: 'OPERATOR',
+        actor: "OPERATOR",
         actorId: who.operatorId,
         reasonCodes: lead.suggestedReasonCodes,
       });
@@ -779,13 +820,13 @@ export class LeadPipelineController {
     });
   }
 
-  @Post(':id/stage-suggestion/dismiss')
+  @Post(":id/stage-suggestion/dismiss")
   async dismissSuggestion(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
+    @Param("id", ParseUUIDPipe) leadId: string,
   ): Promise<{ id: string; suggestedStageId: null }> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw forbidden();
+    if (who.role === "VIEWER") throw forbidden();
     const updated = await this.prisma.lead.updateMany({
       where: { tenantId: who.tenantId, id: leadId },
       data: { suggestedStageId: null, suggestedReasonCodes: [] },
@@ -795,19 +836,19 @@ export class LeadPipelineController {
   }
 
   /** "Let the AI sort this lead": lifts the operator lock (ADR 058 decision 4). */
-  @Post(':id/hand-back-to-ai')
+  @Post(":id/hand-back-to-ai")
   async handBackToAi(
     @Req() request: InboxRequest,
-    @Param('id', ParseUUIDPipe) leadId: string,
-  ): Promise<{ id: string; stageSetBy: 'AGENT' }> {
+    @Param("id", ParseUUIDPipe) leadId: string,
+  ): Promise<{ id: string; stageSetBy: "AGENT" }> {
     const who = request.principal!;
-    if (who.role === 'VIEWER') throw forbidden();
+    if (who.role === "VIEWER") throw forbidden();
     const updated = await this.prisma.lead.updateMany({
       where: { tenantId: who.tenantId, id: leadId },
-      data: { stageSetBy: 'AGENT' },
+      data: { stageSetBy: "AGENT" },
     });
     if (updated.count === 0) throw notFound();
-    return { id: leadId, stageSetBy: 'AGENT' };
+    return { id: leadId, stageSetBy: "AGENT" };
   }
 
   private requireManager(request: InboxRequest): {
@@ -815,7 +856,7 @@ export class LeadPipelineController {
     operatorId: string;
   } {
     const { tenantId, operatorId, role } = request.principal!;
-    if (role !== 'OWNER' && role !== 'ADMIN') throw forbidden();
+    if (role !== "OWNER" && role !== "ADMIN") throw forbidden();
     return { tenantId, operatorId };
   }
 }
