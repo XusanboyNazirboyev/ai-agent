@@ -6,16 +6,14 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  ConversationSlotsSchema,
-  type TenantConnectorKey,
-} from '@agentcore/shared';
+import { ConversationSlotsSchema } from '@agentcore/shared';
 import type { AppEnvironment } from '../config/environment.js';
 import {
   DEFAULT_STUCK_WINDOW_MINUTES,
   selectEpisode,
 } from '../core/agent/stuck.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
+import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import {
   interruptedTurnResult,
@@ -178,6 +176,7 @@ export class AgentConversationService implements OnModuleInit {
   private readonly logger = new Logger(AgentConversationService.name);
   private readonly locales = new LocaleRegistry(INITIAL_LOCALE_PACKS);
   private readonly pricing: PricingSnapshot;
+  private readonly selector: ConnectorSelector;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -193,6 +192,7 @@ export class AgentConversationService implements OnModuleInit {
     @Optional() private readonly actions?: ActionService,
     @Optional() private readonly scheduling?: SchedulingActionsService,
   ) {
+    this.selector = new ConnectorSelector(prisma, loader);
     this.pricing = PRICING_CATALOG.snapshot(
       this.config.get('LLM_PRICING_VERSION', { infer: true }),
     );
@@ -612,30 +612,9 @@ export class AgentConversationService implements OnModuleInit {
     return computed.result;
   }
 
-  /** First active connector of the tenant that can search its catalog. */
-  private async connectorFor(
-    tenantId: string,
-  ): Promise<CrmConnector | undefined> {
-    const rows = await this.prisma.tenantConnector.findMany({
-      where: { tenantId, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-    });
-    for (const row of rows) {
-      try {
-        const connector = await this.loader.create(row);
-        if (connector.capabilities.search) return connector;
-      } catch (error: unknown) {
-        this.logger.warn(
-          JSON.stringify({
-            event: 'agent.connector_unavailable',
-            tenant: tenantId,
-            connector: row.connectorKey as TenantConnectorKey,
-            name: (error as Error).name,
-          }),
-        );
-      }
-    }
-    return undefined;
+  /** The connector bound to the catalog role, or the only capable one (ADR 059). */
+  private connectorFor(tenantId: string): Promise<CrmConnector | undefined> {
+    return this.selector.select(tenantId, 'CATALOG');
   }
 }
 

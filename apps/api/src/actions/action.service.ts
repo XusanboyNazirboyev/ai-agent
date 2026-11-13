@@ -21,6 +21,7 @@ import {
   afterFailure,
   beforeAttempt,
 } from '../connectors/operations/write-policy.js';
+import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import {
   ACTION_SLOT_PREFIX,
@@ -76,6 +77,7 @@ const PROTECTED: readonly WriteIdempotency[] = ['native', 'lookup'];
 export class ActionService {
   private readonly logger = new Logger(ActionService.name);
   private readonly operations: ConnectorOperations;
+  private readonly selector: ConnectorSelector;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -85,29 +87,14 @@ export class ActionService {
     @Optional() private readonly scheduling?: SchedulingActionsService,
   ) {
     this.operations = new ConnectorOperations(prisma);
+    this.selector = new ConnectorSelector(prisma, loader);
   }
 
-  private async writeConnector(
+  private writeConnector(
     tenantId: string,
     operation: ActionSpec['operation'],
   ): Promise<CrmConnector | undefined> {
-    const rows = await this.prisma.tenantConnector.findMany({
-      where: { tenantId, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-    });
-    for (const row of rows) {
-      try {
-        const connector = await this.loader.create(row);
-        if (
-          connector.capabilities[operation] &&
-          typeof connector[operation] === 'function'
-        )
-          return connector;
-      } catch {
-        // An unusable connector configuration is skipped.
-      }
-    }
-    return undefined;
+    return this.selector.select(tenantId, 'ACTIONS', operation);
   }
 
   /**
