@@ -56,6 +56,10 @@ test('the audit itself reports real violations (sensitivity check)', async ({
   expect(ids).toContain('image-alt');
 });
 
+// Every test here opens its own session, so they may be spread over the CI
+// shards one by one (this file alone is more than half of the e2e time).
+test.describe.configure({ mode: 'parallel' });
+
 test.describe('login page', () => {
   for (const [scheme, language] of [
     ['light', 'en'],
