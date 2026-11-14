@@ -129,7 +129,11 @@ async function tenant(label: string): Promise<{
           // Enrols a second factor in the MFA e2e; no other test signs in as it.
           ['mfa', 'ADMIN'],
         ]
-      : [['op1', 'OPERATOR']];
+      : [
+          ['op1', 'OPERATOR'],
+          // Uploads a price list in the catalog e2e without touching tenant A.
+          ['admin', 'ADMIN'],
+        ];
   for (const [key, role] of roles) {
     const operator = await db.operator.create({
       data: { tenantId: created.id, displayName: `${label}-${key}`, role },

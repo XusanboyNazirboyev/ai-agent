@@ -29,6 +29,12 @@ export function readCookie(name: string): string | undefined {
 interface Options {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
+  /**
+   * A body sent as it is, with `contentType` (a CSV file, ADR 064); used
+   * instead of `body`, which is always JSON.
+   */
+  rawBody?: string;
+  contentType?: string;
   /** Adds a fresh Idempotency-Key (operator commands). */
   command?: boolean;
   /** Which session's CSRF cookie to echo on unsafe methods. */
@@ -39,7 +45,10 @@ interface Options {
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { accept: 'application/json' };
-  if (options.body !== undefined) headers['content-type'] = 'application/json';
+  if (options.rawBody !== undefined)
+    headers['content-type'] = options.contentType ?? 'text/plain';
+  else if (options.body !== undefined)
+    headers['content-type'] = 'application/json';
   if (method !== 'GET') {
     const csrf = readCookie(options.csrfCookie ?? TENANT_CSRF_COOKIE);
     if (csrf) headers['x-csrf-token'] = csrf;
@@ -52,9 +61,11 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
       headers,
       credentials: 'same-origin',
       cache: 'no-store',
-      ...(options.body !== undefined
-        ? { body: JSON.stringify(options.body) }
-        : {}),
+      ...(options.rawBody !== undefined
+        ? { body: options.rawBody }
+        : options.body !== undefined
+          ? { body: JSON.stringify(options.body) }
+          : {}),
     });
   } catch {
     throw new ApiError(0, 'NETWORK');
