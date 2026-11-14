@@ -64,6 +64,8 @@ test('an admin reads the Section 11 metrics and changes the period', async ({
   await context.close();
 });
 
+// Since the role menu (task 026) the shell itself answers a role that may not
+// open a page, so the page never renders and no analytics data is requested.
 test('an operator sees that only owners and admins read analytics', async ({
   browser,
 }) => {
@@ -72,7 +74,10 @@ test('an operator sees that only owners and admins read analytics', async ({
     viewport: { width: 320, height: 800 },
   });
   await page.goto('/analytics');
-  await expect(page.getByTestId('analytics-admin-only')).toBeVisible();
+  await expect(page.getByTestId('access-denied')).toBeVisible();
+  await expect(
+    page.getByTestId('access-denied').getByRole('link'),
+  ).toHaveAttribute('href', '/inbox');
   await expect(page.getByTestId('analytics-conversations')).toHaveCount(0);
   expect(await findOverflow(page), 'analytics operator 320').toEqual([]);
   await context.close();

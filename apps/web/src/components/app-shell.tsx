@@ -417,7 +417,10 @@ export function AccessBanner(props: {
 function AccessDenied(): ReactNode {
   const { t } = useI18n();
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+    <div
+      data-testid="access-denied"
+      className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center"
+    >
       <p
         role="alert"
         className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
