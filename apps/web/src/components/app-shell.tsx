@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { useI18n } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
+import { NAV, visibleNav, type NavKey } from '@/lib/nav';
 import {
   useLiveUpdates,
   type ConnectionState,
@@ -47,18 +48,8 @@ export function useShell(): ShellValue {
   return value;
 }
 
-type NavKey = 'inbox' | 'leads' | 'analytics' | 'knowledge' | 'settings';
-
-const NAV: { key: NavKey; icon: IconName }[] = [
-  { key: 'inbox', icon: 'inbox' },
-  { key: 'leads', icon: 'target' },
-  { key: 'analytics', icon: 'chart' },
-  { key: 'knowledge', icon: 'book' },
-  { key: 'settings', icon: 'sliders' },
-];
-
 /** On phones only these fit the tab bar; the rest sit behind "More". */
-const PRIMARY: NavKey[] = ['inbox', 'leads'];
+export const PRIMARY: NavKey[] = ['inbox', 'leads'];
 
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';
@@ -232,6 +223,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     );
   }
   const operator = me.data.operator;
+  const allowed = visibleNav(operator.role);
   const conversationOpen = pathname.startsWith('/inbox') && params.has('c');
   const value: ShellValue = {
     operator,
@@ -256,17 +248,20 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
           <span className="mb-3 grid h-10 w-full place-items-center">
             <BrandMark className="h-8 w-9" />
           </span>
-          {NAV.map((item) => (
-            <NavLink
-              key={item.key}
-              layout="rail"
-              href={`/${item.key}`}
-              icon={item.icon}
-              label={t(`nav.${item.key}`)}
-              active={current?.key === item.key}
-              count={item.key === 'inbox' ? waitingCount : undefined}
-            />
-          ))}
+          {visibleNav(operator.role).map((key) => {
+            const item = NAV.find((i) => i.key === key)!;
+            return (
+              <NavLink
+                key={item.key}
+                layout="rail"
+                href={`/${item.key}`}
+                icon={item.icon}
+                label={t(`nav.${item.key}`)}
+                active={current?.key === item.key}
+                count={item.key === 'inbox' ? waitingCount : undefined}
+              />
+            );
+          })}
         </nav>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line bg-surface px-3 py-2 sm:px-4">
@@ -328,24 +323,31 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
             </div>
           ) : null}
           <main id="app-main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {children}
+            {current && !allowed.includes(current.key) ? (
+              <AccessDenied />
+            ) : (
+              children
+            )}
           </main>
           {conversationOpen ? null : (
             <nav
               aria-label={t('nav.label')}
               className="flex shrink-0 border-t border-line bg-surface px-1 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
             >
-              {NAV.filter((item) => PRIMARY.includes(item.key)).map((item) => (
-                <NavLink
-                  key={item.key}
-                  layout="bar"
-                  href={`/${item.key}`}
-                  icon={item.icon}
-                  label={t(`nav.${item.key}`)}
-                  active={current?.key === item.key}
-                  count={item.key === 'inbox' ? waitingCount : undefined}
-                />
-              ))}
+              {PRIMARY.filter((key) => allowed.includes(key)).map((key) => {
+                const item = NAV.find((i) => i.key === key)!;
+                return (
+                  <NavLink
+                    key={item.key}
+                    layout="bar"
+                    href={`/${item.key}`}
+                    icon={item.icon}
+                    label={t(`nav.${item.key}`)}
+                    active={current?.key === item.key}
+                    count={item.key === 'inbox' ? waitingCount : undefined}
+                  />
+                );
+              })}
               <NavLink
                 layout="bar"
                 href="/more"
@@ -408,6 +410,23 @@ export function AccessBanner(props: {
           {t('banner.subscriptionLink')}
         </Link>
       ) : null}
+    </div>
+  );
+}
+
+function AccessDenied(): ReactNode {
+  const { t } = useI18n();
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+      <p
+        role="alert"
+        className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
+      >
+        {t('access.notAllowed')}
+      </p>
+      <Link href="/inbox" className="underline underline-offset-2 text-primary">
+        {t('access.goToInbox')}
+      </Link>
     </div>
   );
 }

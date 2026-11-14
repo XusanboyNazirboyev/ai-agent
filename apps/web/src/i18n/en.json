@@ -1279,5 +1279,7 @@
   "errors.SHEET_MAPPING_INCOMPLETE": "Choose the price column and a name, destination or hotel column.",
   "errors.SHEET_NO_VALID_ROWS": "No row of the file could be read, so nothing was saved.",
   "errors.SHEET_COLUMN_OUT_OF_RANGE": "A chosen column is not in the file.",
-  "sheet.preview.table": "Rows that will be saved"
+  "sheet.preview.table": "Rows that will be saved",
+  "access.notAllowed": "You are not allowed to open this page.",
+  "access.goToInbox": "Go to Inbox"
 }

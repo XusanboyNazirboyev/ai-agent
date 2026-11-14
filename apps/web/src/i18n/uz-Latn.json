@@ -1279,5 +1279,7 @@
   "errors.SHEET_MAPPING_INCOMPLETE": "Narx ustunini va nom, yo‘nalish yoki mehmonxona ustunini tanlang.",
   "errors.SHEET_NO_VALID_ROWS": "Faylning birorta qatorini o‘qib bo‘lmadi, shuning uchun hech narsa saqlanmadi.",
   "errors.SHEET_COLUMN_OUT_OF_RANGE": "Tanlangan ustun faylda yo‘q.",
-  "sheet.preview.table": "Saqlanadigan qatorlar"
+  "sheet.preview.table": "Saqlanadigan qatorlar",
+  "access.notAllowed": "Bu sahifani ochishga ruxsat berilmaydi.",
+  "access.goToInbox": "Suhbatlarga kirish"
 }
