@@ -2,6 +2,38 @@
 
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
+## Status at 2026-11-14 (read this first; the dated entries below are older and kept as history)
+
+Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing that branch; CI must be green first). This section was rewritten from the code, the ADRs and the roadmap files; the entries below it were not re-verified.
+
+### Spec phases ([roadmap](spec/12-roadmap.md))
+| Phase | Status |
+|---|---|
+| 0, 1, 2 foundation, persistence, Telegram + queue | Done |
+| 3 connector framework | Partial: Bitrix24 lead sink is real; **no real catalog connector** (the tenant uses `mock`); explicit connector roles done (ADR 059) |
+| 4, 4B agent core, packs, locales | Done (locales are `beta`, no native review yet) |
+| 5 handover and leads | Done |
+| 6 knowledge, follow-ups, media | Mostly done; voice-note STT built (ADR 042), Instagram voice not verified on a real account; image understanding (optional) not built |
+| 6A web operator inbox | Done |
+| 7 evaluation, observability, second pack | Done (7.3 closed by the owner on 2026-11-02) |
+| 8 Meta channels | Partial: Instagram DM done; Messenger and Instagram comment replies built but not enabled (owner Meta steps); **WhatsApp not started** |
+| 9 hardening and production | Partial: staging on AWS, CI/CD deploy, MFA (ADR 048), retention and erasure (ADR 049), RLS on the first tables (ADR 050, slices S1 to S7 open), security audit done. **Missing:** runbooks (no `docs/runbooks`), load/soak test, restore drill and off-host backups (deferred by the owner until real data exists), public privacy pages (draft, no legal review), the pilot itself |
+| 10 self-serve and scale | Partial: team and roles, channel connect, knowledge upload, CRM connect, plan and subscription console, pipelines, tags and fields exist. Missing: pack selection, mapping wizard, eval run, audit-log page, operator copilot |
+| 11 new languages | Deferred by the owner |
+
+### Built since the entries below (2026-11-07 to 2026-11-14)
+- Sales funnel: pipelines, stages with kind OPEN/WON/LOST, AI staging with operator lock (ADR 057, 058); CRM-style Leads page (board, drag and swipe, list, filters, accordion pipeline settings, sticky column headers); the lead amount is hidden in the UI on purpose (`lib/lead-fields.ts`, owner decision 2026-11-13).
+- Leads added by hand (ADR 061), archived, restored and deleted for good from the archive (ADR 062).
+- Explicit connector roles (ADR 059) with a settings block; knowledge-only tenants (ADR 060, branch `feat/knowledge-only-tenants`, CI green, **not yet released**).
+- Person identity and merge (ADR 052), tags and custom fields (ADR 053), CSV export (ADR 056), retention and erasure (ADR 049), RLS first slice (ADR 050), MFA (ADR 048), platform console with subscriptions (ADR 047).
+- External audit follow-ups (AUD-01/02/08/11/12/13 done; AUD-09/14 in `feat/knowledge-only-tenants`).
+
+### Open work
+- Audit: AUD-04 (Instagram account, secret and audit atomicity), AUD-06 (graceful shutdown), AUD-07 (image reproducibility), release of ADR 060.
+- Roadmap ([2026-11-10](audit/2026-11-10/AGENTCORE_DEVELOPMENT_ROADMAP.md)): P0.7 RLS S1 to S7 before the first real customer, P0.3 secrets hygiene, P0.1 off-host backups (deferred), P1.4 companies, P1.6 tasks and reminders, P1.7 timeline, P1.8 teams and queues, P2.1 WhatsApp, P2.5 Click (needs owner credentials), TTS slices S2/S3.
+- Owner-side: Meta steps for Messenger and Instagram comments, Click credentials, rotate the jev key, legal review of the privacy pages, listen to TTS samples.
+- Working rules since 2026-11: pushes to `feat/production-pilot` only on the owner's command; CI must be green; the project `pnpm format` script is used (never `prettier` directly: it ignores the project config); a database backup is taken before a deploy that changes real data (the owner waived it on 2026-11-14 while the database holds only demo data; it becomes mandatory again with real customer data).
+
 ## Current state (updated 2026-10-27, after the Phase 6A–7.2 and design merges into `main`)
 
 - **Explicit connector roles, S1 API, branch WIP (2026-11-13, `feat/connector-roles`, [ADR 059](adr/059-explicit-connector-roles.md) "S1 status", audit AUD-13, not merged/pushed/deployed, awaiting reviewer verification):** additive migration `20261123090000_tenant_connector_roles` (enum `ConnectorRole`, table with PK `(tenant_id, role)`, composite FK cascade, RLS); `ConnectorSelector` replaces the three first-connector pickers (bound role: only that connector, no fallback; unbound: single capable ACTIVE connector, else `connector.ambiguous`); `GET`/`PUT /api/v1/connectors/roles`; `pnpm backfill:connector-roles` (dry run, `--apply`). Unit tests run; integration specs written but NOT run by the builder.
