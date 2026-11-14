@@ -60,7 +60,7 @@ const MAX_AMOUNT = 1_000_000_000;
  * (`1,250` and `1.250` are 1250), the usual meaning in a tour price.
  */
 export function parseAmount(text: string): string | null {
-  let value = text.replace(/[  \s]/gu, '').replace(/[^\d.,-]/gu, '');
+  let value = text.replace(/[\u00a0\u202f\s]/gu, '').replace(/[^\d.,-]/gu, '');
   if (value === '' || value.startsWith('-') || value.includes('-')) return null;
   const lastDot = value.lastIndexOf('.');
   const lastComma = value.lastIndexOf(',');
@@ -106,7 +106,7 @@ export function parseAmount(text: string): string | null {
 
 /** A whole number of 0 or more, or `null` (`6`, `6 seats` is not accepted). */
 export function parseCount(text: string): number | null {
-  const value = text.replace(/[ \s]/gu, '');
+  const value = text.replace(/[\u00a0\s]/gu, '');
   if (!/^\d{1,6}$/u.test(value)) return null;
   return Number(value);
 }
