@@ -90,7 +90,14 @@ export async function runTurn(options: {
   locales?: LocaleRegistry;
   /** Monotonic clock for stage timings (default performance.now). */
   clock?: () => number;
+  /** Tenant and conversation of the turn (default: fictional ids). A connector that
+   * reads a real tenant's data stamps facts with that tenant, so the turn must run in it. */
+  scope?: { tenantId: string; conversationId: string };
 }): Promise<TurnRun> {
+  const scope = options.scope ?? {
+    tenantId: 'tenant-eval',
+    conversationId: 'conversation-eval',
+  };
   const usage: LlmUsageEntry[] = [];
   const budget = new TurnBudget(
     { ...TEST_LIMITS, ...options.limits },
@@ -106,8 +113,8 @@ export async function runTurn(options: {
     budget,
     { record: async (entry): Promise<void> => void usage.push(entry) },
     {
-      tenantId: 'tenant-eval',
-      conversationId: 'conversation-eval',
+      tenantId: scope.tenantId,
+      conversationId: scope.conversationId,
       turnKey: 'turn-1',
     },
   );
@@ -132,7 +139,7 @@ export async function runTurn(options: {
           : (options.connector ?? educationConnector()),
       llm,
       ...(options.knowledge ? { knowledge: options.knowledge } : {}),
-      scope: { tenantId: 'tenant-eval', conversationId: 'conversation-eval' },
+      scope,
       toolTimeoutMs: 200,
       maxOutputTokens: { extract: 600, respond: 900 },
       now: () => now,
