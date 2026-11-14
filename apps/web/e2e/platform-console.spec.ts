@@ -141,7 +141,7 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
     admin.locator(`[data-testid="tenant-row"][data-slug="e2e-console-${run}"]`),
   ).toContainText(planName);
 
-  // The owner accepts in a fresh browser and lands in the inbox as OWNER.
+  // The owner accepts in a fresh browser and lands on Today as OWNER.
   const owner = await acceptInvite(
     browser,
     ownerInvite,

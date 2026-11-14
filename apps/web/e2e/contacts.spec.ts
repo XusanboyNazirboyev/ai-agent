@@ -33,7 +33,7 @@ test('contacts list the tenant customers, search and open their conversation', a
   await other.context.close();
 });
 
-test('on a phone the tab bar has three entries and settings leads to its sections', async ({
+test('on a phone the tab bar has four entries and settings leads to its sections', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -41,7 +41,7 @@ test('on a phone the tab bar has three entries and settings leads to its section
     viewport: { width: 375, height: 667 },
   });
   const bar = page.getByRole('navigation').last();
-  await expect(bar.getByRole('link')).toHaveCount(3);
+  await expect(bar.getByRole('link')).toHaveCount(4);
   await bar.getByRole('link', { name: 'More' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('More');
   await page.getByRole('link', { name: 'Settings' }).click();

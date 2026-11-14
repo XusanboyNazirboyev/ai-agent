@@ -260,7 +260,7 @@ function SetupCard(props: {
             key={item.key}
             data-testid={`today-step-${item.key}`}
             data-done={item.done}
-            className="flex items-center gap-3 py-3"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3"
           >
             <span
               aria-hidden="true"
@@ -272,7 +272,7 @@ function SetupCard(props: {
             >
               <Icon name="check" className="h-3.5 w-3.5" />
             </span>
-            <span className="flex min-w-0 flex-1 flex-col">
+            <span className="flex min-w-0 flex-1 basis-44 flex-col [overflow-wrap:anywhere]">
               <span
                 className={
                   item.done ? 'text-muted line-through' : 'font-medium'
