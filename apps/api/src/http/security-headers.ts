@@ -38,15 +38,25 @@ export function securityHeaders(
  */
 export const JSON_BODY_LIMIT = '256kb';
 
+/**
+ * A price list uploaded as `text/csv` (ADR 064): up to 5 MB of text plus
+ * margin. Only that content type may be this large; JSON stays at the limit above.
+ */
+export const CSV_BODY_LIMIT = '6mb';
+
 /** Shared HTTP setup so `main.ts` and the bootstrap test run the same code. */
 export function configureHttp(app: {
   use: (handler: typeof securityHeaders) => unknown;
-  useBodyParser: (type: 'json', options: { limit: string }) => unknown;
+  useBodyParser: (
+    type: 'json' | 'text',
+    options: { limit: string; type?: string },
+  ) => unknown;
   enableShutdownHooks: () => unknown;
 }): void {
   app.use(securityHeaders);
   // Refuse oversized JSON bodies (413). `rawBody` stays on for signatures.
   app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
+  app.useBodyParser('text', { type: 'text/csv', limit: CSV_BODY_LIMIT });
   // Run OnModuleDestroy (queue workers, connections) on SIGTERM and SIGINT.
   app.enableShutdownHooks();
 }

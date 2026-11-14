@@ -583,6 +583,9 @@ export const TenantConnectorConfigSchemas = {
   'generic-rest': GenericRestConnectorConfigSchema,
   mock: MockConnectorConfigSchema,
   bitrix24: Bitrix24ConnectorConfigSchema,
+  // ADR 064: the uploaded price list needs no settings (the data is in the
+  // database); the schema stays strict so nothing can be smuggled into it.
+  spreadsheet: z.object({}).strict(),
 } as const;
 
 export type TenantConnectorKey = keyof typeof TenantConnectorConfigSchemas;

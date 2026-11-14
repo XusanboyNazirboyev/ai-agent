@@ -14,6 +14,7 @@ import {
 } from './registry/registrations.js';
 import { EnvSecretResolver } from './registry/secret-resolver.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { SheetCatalogService } from './spreadsheet/sheet-catalog.service.js';
 import {
   PrismaSheetCatalogStore,
   type SheetCatalogReader,
@@ -73,6 +74,7 @@ export function createConnectorRegistry(
     ConnectorSelector,
     CatalogSyncService,
     CatalogSyncQueueRuntime,
+    SheetCatalogService,
     {
       provide: PrismaSheetCatalogStore,
       inject: [PrismaService],
@@ -102,6 +104,7 @@ export function createConnectorRegistry(
     },
   ],
   exports: [
+    SheetCatalogService,
     PrismaSheetCatalogStore,
     ConnectorRegistry,
     CatalogSyncQueueRuntime,

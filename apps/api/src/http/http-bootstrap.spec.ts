@@ -5,7 +5,11 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { configureHttp, JSON_BODY_LIMIT } from './security-headers.js';
+import {
+  configureHttp,
+  CSV_BODY_LIMIT,
+  JSON_BODY_LIMIT,
+} from './security-headers.js';
 
 @Controller('echo')
 class EchoController {
@@ -15,6 +19,14 @@ class EchoController {
     @Req() request: RawBodyRequest<Request>,
   ): { text: string | undefined; rawLength: number | undefined } {
     return { text: body.text, rawLength: request.rawBody?.length };
+  }
+
+  @Post('csv')
+  csv(@Body() body: unknown): { type: string; length: number } {
+    return {
+      type: typeof body,
+      length: typeof body === 'string' ? body.length : -1,
+    };
   }
 }
 
@@ -65,5 +77,29 @@ describe('HTTP bootstrap shared by main.ts', () => {
   it(`refuses a JSON body above ${JSON_BODY_LIMIT} with 413`, async () => {
     const response = await post(JSON.stringify({ text: 'x'.repeat(300_000) }));
     expect(response.status).toBe(413);
+  });
+
+  const postCsv = (body: string, type = 'text/csv'): Promise<Response> =>
+    fetch(`${base}/echo/csv`, {
+      method: 'POST',
+      headers: { 'content-type': type },
+      body,
+    });
+
+  it(`takes a text/csv body of a few MB, refuses one above ${CSV_BODY_LIMIT}`, async () => {
+    const ok = await postCsv('a,b\n'.repeat(500_000));
+    expect(ok.status).toBe(201);
+    expect(await ok.json()).toEqual({ type: 'string', length: 2_000_000 });
+    expect((await postCsv('x'.repeat(7 * 1024 * 1024))).status).toBe(413);
+  });
+
+  it('does not give the large limit to any other content type', async () => {
+    // Plain text is not parsed at all (the body stays empty), JSON keeps its small limit.
+    const plain = await postCsv('x'.repeat(1_000_000), 'text/plain');
+    expect(plain.status).toBe(201);
+    expect(await plain.json()).toMatchObject({ length: -1 });
+    expect(
+      (await post(JSON.stringify({ text: 'x'.repeat(300_000) }))).status,
+    ).toBe(413);
   });
 });

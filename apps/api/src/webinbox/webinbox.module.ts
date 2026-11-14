@@ -40,6 +40,7 @@ import { TagsService } from '../tags/tags.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { LeadArchiveService } from '../leads/lead-archive.service.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
+import { SheetCatalogController } from './sheet-catalog.controller.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
 import { PipelinesController } from './pipelines.controller.js';
@@ -88,6 +89,7 @@ import { ExportLock } from '../exports/export-lock.js';
     ConnectorsController,
     ConnectorRolesController,
     LeadsController,
+    SheetCatalogController,
     AnalyticsController,
     LeadPipelineController,
     PipelinesController,
