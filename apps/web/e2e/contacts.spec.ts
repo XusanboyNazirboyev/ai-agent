@@ -45,7 +45,7 @@ test('on a phone the tab bar has three entries and settings leads to its section
   await bar.getByRole('link', { name: 'More' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('More');
   await page.getByRole('link', { name: 'Settings' }).click();
-  await page.getByRole('link', { name: 'AI bot' }).click();
+  await page.getByRole('link', { name: 'Assistant' }).click();
   await expect(page.getByTestId('bot-current').first()).toBeVisible();
   // "More" stays marked as the current section.
   await expect(
