@@ -102,6 +102,14 @@ export function ConversationViewPane(props: {
   const notify = useToast();
   const now = useNow();
   const [reply, setReply] = useState('');
+  const replyBox = useRef<HTMLTextAreaElement | null>(null);
+  // The reply box grows with its text (up to its max height) and shrinks back.
+  useEffect(() => {
+    const box = replyBox.current;
+    if (!box) return;
+    box.style.height = 'auto';
+    box.style.height = `${box.scrollHeight}px`;
+  }, [reply]);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [showDetails, setShowDetails] = useState(false);
@@ -416,7 +424,7 @@ export function ConversationViewPane(props: {
               stickToBottom.current =
                 el.scrollHeight - el.scrollTop - el.clientHeight < 80;
             }}
-            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4 sm:px-5"
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3 sm:px-5"
           >
             {view.messages.length === 0 ? (
               <p className="m-auto text-muted">{t('view.noMessages')}</p>
@@ -542,9 +550,9 @@ export function ConversationViewPane(props: {
             </ol>
           </section>
 
-          <div className="shrink-0 border-t border-line bg-surface p-3">
+          <div className="shrink-0 border-t border-line bg-surface px-3 py-2">
             {canWrite ? (
-              <form onSubmit={send} className="flex flex-col gap-2">
+              <form onSubmit={send} className="flex flex-col gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Select
                     aria-label={t('action.canned')}
@@ -556,7 +564,7 @@ export function ConversationViewPane(props: {
                           `${prev}${prev ? '\n' : ''}${t(`canned.${e.target.value}`)}`,
                       )
                     }
-                    className="max-w-full"
+                    className="max-w-full min-h-9"
                   >
                     <option value="">{t('action.cannedNone')}</option>
                     {CANNED.map((id) => (
@@ -588,26 +596,25 @@ export function ConversationViewPane(props: {
                     </div>
                   ) : null}
                 </div>
-                <textarea
-                  data-testid="reply-input"
-                  aria-label={t('action.replyPlaceholder')}
-                  placeholder={t('action.replyPlaceholder')}
-                  value={reply}
-                  maxLength={4096}
-                  rows={3}
-                  onChange={(e) => onReplyChange(e.target.value)}
-                  onKeyDown={onReplyKey}
-                  className={`${textareaClass} min-h-24 resize-y`}
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="hidden text-xs text-muted sm:block">
-                    {t('action.sendHint')}
-                  </p>
+                <div className="flex items-end gap-2">
+                  <textarea
+                    ref={replyBox}
+                    data-testid="reply-input"
+                    aria-label={t('action.replyPlaceholder')}
+                    aria-describedby="reply-hint"
+                    placeholder={t('action.replyPlaceholder')}
+                    value={reply}
+                    maxLength={4096}
+                    rows={1}
+                    onChange={(e) => onReplyChange(e.target.value)}
+                    onKeyDown={onReplyKey}
+                    className={`${textareaClass} max-h-40 min-h-11 min-w-0 flex-1 resize-none py-2.5`}
+                  />
                   <Button
                     type="submit"
                     variant="primary"
                     icon="send"
-                    className="ml-auto"
+                    className="shrink-0"
                     data-testid="send-reply"
                     loading={busy}
                     disabled={!reply.trim()}
@@ -615,6 +622,9 @@ export function ConversationViewPane(props: {
                     {busy ? t('action.sending') : t('action.reply')}
                   </Button>
                 </div>
+                <p id="reply-hint" className="sr-only">
+                  {t('action.sendHint')}
+                </p>
               </form>
             ) : null}
             {!canWrite && notice ? (

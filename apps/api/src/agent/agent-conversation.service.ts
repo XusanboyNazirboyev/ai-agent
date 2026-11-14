@@ -80,6 +80,23 @@ export interface TurnRequest {
    * scheduling tools, which hold appointment slots, are then not offered.
    */
   readonly readOnly?: boolean;
+  /**
+   * Test chat (ADR 065): the dialogue lives in the caller, not in the
+   * database. History, slots and language come from here, nothing is read from
+   * or written to conversation rows, no business action or appointment is
+   * offered, and the run is read only. `conversationId` is only a metering key.
+   */
+  readonly sandbox?: SandboxTurn;
+}
+
+export interface SandboxTurn {
+  readonly history: ReadonlyArray<{
+    readonly role: 'customer' | 'agent';
+    readonly text: string;
+  }>;
+  readonly slots: SlotState;
+  readonly language?: string;
+  readonly script?: string;
 }
 
 /** Everything a commit needs; computing it has no side effects but usage. */
@@ -231,9 +248,17 @@ export class AgentConversationService implements OnModuleInit {
       throw new AgentConfigurationError(
         `Domain pack ${packRef} is not registered`,
       );
-    const conversation = await this.prisma.conversation.findFirst({
-      where: { tenantId, id: conversationId },
-    });
+    const sandbox = request.sandbox;
+    const conversation = sandbox
+      ? {
+          language: sandbox.language ?? null,
+          script: sandbox.script ?? null,
+          contactId: '',
+          channelAccountId: '',
+        }
+      : await this.prisma.conversation.findFirst({
+          where: { tenantId, id: conversationId },
+        });
     if (!conversation)
       throw new AgentConfigurationError('Unknown conversation');
 
@@ -263,22 +288,26 @@ export class AgentConversationService implements OnModuleInit {
       conversationExposure,
       monthExposure,
     ] = await Promise.all([
-      this.prisma.conversationSlots.findFirst({
-        where: { tenantId, conversationId },
-        orderBy: { version: 'desc' },
-      }),
-      this.prisma.message.findMany({
-        where: {
-          tenantId,
-          conversationId,
-          ...(request.beforeSequence !== undefined
-            ? { sequence: { lt: request.beforeSequence } }
-            : {}),
-        },
-        orderBy: { sequence: 'desc' },
-        take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
-        select: { direction: true, text: true },
-      }),
+      sandbox
+        ? Promise.resolve(null)
+        : this.prisma.conversationSlots.findFirst({
+            where: { tenantId, conversationId },
+            orderBy: { version: 'desc' },
+          }),
+      sandbox
+        ? Promise.resolve([])
+        : this.prisma.message.findMany({
+            where: {
+              tenantId,
+              conversationId,
+              ...(request.beforeSequence !== undefined
+                ? { sequence: { lt: request.beforeSequence } }
+                : {}),
+            },
+            orderBy: { sequence: 'desc' },
+            take: this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }),
+            select: { direction: true, text: true },
+          }),
       this.connectorFor(tenantId),
       this.usage.conversationSpendNano(tenantId, conversationId),
       this.usage.tenantMonthSpendNano(tenantId),
@@ -286,11 +315,15 @@ export class AgentConversationService implements OnModuleInit {
       this.ledger.conversationExposure(tenantId, conversationId),
       this.ledger.tenantMonthExposureNano(tenantId),
     ]);
-    const slots = slotState(slotRow?.slots);
-    const history: HistoryEntry[] = recent.reverse().map((message) => ({
-      role: message.direction === 'INBOUND' ? 'customer' : 'agent',
-      text: message.text,
-    }));
+    const slots = sandbox ? sandbox.slots : slotState(slotRow?.slots);
+    const history: HistoryEntry[] = sandbox
+      ? sandbox.history
+          .slice(-this.config.get('AGENT_HISTORY_MESSAGES', { infer: true }))
+          .map((entry) => ({ role: entry.role, text: entry.text }))
+      : recent.reverse().map((message) => ({
+          role: message.direction === 'INBOUND' ? 'customer' : 'agent',
+          text: message.text,
+        }));
 
     const environment = llmEnvironment(this.config);
     const budget = new TurnBudget(budgetLimits(environment), {
@@ -350,50 +383,54 @@ export class AgentConversationService implements OnModuleInit {
     const stuckWindowMs =
       (this.config.get('STUCK_WINDOW_MINUTES', { infer: true }) ??
         DEFAULT_STUCK_WINDOW_MINUTES) * 60_000;
-    const [priorTurns, lastHandover, contactRow, phoneAsked] =
-      await Promise.all([
-        this.prisma.agentTurn.findMany({
-          where: { tenantId, conversationId, status: 'COMMITTED' },
-          orderBy: { completedAt: 'desc' },
-          take: stuckLimit,
-          select: {
-            outcome: true,
-            askedSlot: true,
-            slotsFilled: true,
-            textFingerprint: true,
-            completedAt: true,
-          },
-        }),
-        // A human handover ends the dialogue the bot had before it.
-        this.prisma.handover.findFirst({
-          where: { tenantId, conversationId },
-          orderBy: { openedAt: 'desc' },
-          select: { openedAt: true, resolvedAt: true },
-        }),
-        this.prisma.contact.findFirst({
-          where: { tenantId, id: conversation.contactId },
-          select: { phone: true, name: true },
-        }),
-        this.prisma.message.findFirst({
-          where: {
-            tenantId,
-            conversationId,
-            direction: 'OUTBOUND',
-            OR: INITIAL_LOCALE_PACKS.map((pack) => ({
-              text: { contains: pack.templates.phoneRequest },
-            })),
-          },
-          select: { id: true },
-        }),
-      ]);
+    const [priorTurns, lastHandover, contactRow, phoneAsked] = sandbox
+      ? [[], null, null, null]
+      : await Promise.all([
+          this.prisma.agentTurn.findMany({
+            where: { tenantId, conversationId, status: 'COMMITTED' },
+            orderBy: { completedAt: 'desc' },
+            take: stuckLimit,
+            select: {
+              outcome: true,
+              askedSlot: true,
+              slotsFilled: true,
+              textFingerprint: true,
+              completedAt: true,
+            },
+          }),
+          // A human handover ends the dialogue the bot had before it.
+          this.prisma.handover.findFirst({
+            where: { tenantId, conversationId },
+            orderBy: { openedAt: 'desc' },
+            select: { openedAt: true, resolvedAt: true },
+          }),
+          this.prisma.contact.findFirst({
+            where: { tenantId, id: conversation.contactId },
+            select: { phone: true, name: true },
+          }),
+          this.prisma.message.findFirst({
+            where: {
+              tenantId,
+              conversationId,
+              direction: 'OUTBOUND',
+              OR: INITIAL_LOCALE_PACKS.map((pack) => ({
+                text: { contains: pack.templates.phoneRequest },
+              })),
+            },
+            select: { id: true },
+          }),
+        ]);
 
     // Retrieval sends the customer's question to the embedding provider, so
     // it follows the chat data-protection rule: a trusted provider, a test
     // account, or the owner's explicit consent.
-    const account = await this.prisma.channelAccount.findFirst({
-      where: { tenantId, id: conversation.channelAccountId },
-      select: { isTestAccount: true },
-    });
+    // A test chat is typed by the signed-in admin, never by a customer.
+    const account = sandbox
+      ? { isTestAccount: true }
+      : await this.prisma.channelAccount.findFirst({
+          where: { tenantId, id: conversation.channelAccountId },
+          select: { isTestAccount: true },
+        });
     const knowledgeAllowed =
       this.embedder !== undefined &&
       this.knowledgeStore !== undefined &&
@@ -414,25 +451,27 @@ export class AgentConversationService implements OnModuleInit {
 
     // Business actions (ADR 024): only what the tenant enabled and the
     // connector can do now; the pending proposal is looked up from storage.
-    const action = this.actions
-      ? await this.actions.turnContext({
-          tenantId,
-          conversationId,
-          pack,
-          packRef,
-          contact: { name: contactRow?.name, phone: contactRow?.phone },
-          customerText: request.text,
-          phoneFromText: !(
-            request.fromSpeech &&
-            this.config.get('VOICE_DIGITS_POLICY', { infer: true }) !== 'accept'
-          ),
-        })
-      : undefined;
+    const action =
+      this.actions && !sandbox
+        ? await this.actions.turnContext({
+            tenantId,
+            conversationId,
+            pack,
+            packRef,
+            contact: { name: contactRow?.name, phone: contactRow?.phone },
+            customerText: request.text,
+            phoneFromText: !(
+              request.fromSpeech &&
+              this.config.get('VOICE_DIGITS_POLICY', { infer: true }) !==
+                'accept'
+            ),
+          })
+        : undefined;
 
     // Appointment scheduling (ADR 046): only when the tenant has service
     // types and staff, and never in a run that must not write.
     const schedulingPort =
-      this.scheduling && !request.readOnly
+      this.scheduling && !request.readOnly && !sandbox
         ? await this.scheduling.portFor({
             tenantId,
             conversationId,
@@ -441,17 +480,21 @@ export class AgentConversationService implements OnModuleInit {
           })
         : undefined;
 
-    const voice = await this.voiceSignal(
-      tenantId,
-      conversationId,
-      request.text,
-      request.beforeSequence,
-    );
-    const publicComment = await this.fromPublicComment(
-      tenantId,
-      conversationId,
-      request.beforeSequence,
-    );
+    const voice = sandbox
+      ? undefined
+      : await this.voiceSignal(
+          tenantId,
+          conversationId,
+          request.text,
+          request.beforeSequence,
+        );
+    const publicComment = sandbox
+      ? false
+      : await this.fromPublicComment(
+          tenantId,
+          conversationId,
+          request.beforeSequence,
+        );
     const maxOutput = environment.LLM_MAX_OUTPUT_TOKENS;
     const input: AgentTurnInput = {
       ...(action ? { action } : {}),

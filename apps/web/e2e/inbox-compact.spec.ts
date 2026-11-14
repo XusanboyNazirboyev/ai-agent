@@ -113,6 +113,52 @@ test('the details panel is an accordion: summaries when closed, choices remember
   }
 });
 
+test('on a short laptop screen the messages get most of the height and the reply box is one row until it needs more', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const handover = newHandover(f.a.tenantId, `Short ${Date.now()}`);
+  const { page, context } = await newSession(
+    browser,
+    f.a.operators.admin.email,
+    {
+      viewport: { width: 1195, height: 715 },
+    },
+  );
+  try {
+    await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
+    await page
+      .getByTestId('conversation-item')
+      .filter({ hasText: handover.contactName })
+      .click();
+    const log = page.locator('section:has(> ol[data-testid="timeline"])');
+    const input = page.getByTestId('reply-input');
+    await expect(input).toBeVisible();
+    const logBox = (await log.boundingBox())!;
+    // The conversation pane is the room between the app header and the composer.
+    expect(logBox.height).toBeGreaterThan(715 * 0.5);
+    // The side menu and the conversation list leave the room to the messages.
+    const rail = page.getByRole('navigation', { name: 'Main navigation' });
+    expect((await rail.boundingBox())!.width).toBeLessThanOrEqual(76);
+    const list = page.getByTestId('conversation-list');
+    expect((await list.boundingBox())!.width).toBeLessThanOrEqual(305);
+    expect(logBox.width).toBeGreaterThan(430);
+    const one = (await input.boundingBox())!.height;
+    expect(one).toBeLessThan(60);
+    // The box grows with a long text, and shrinks back when it is sent away.
+    await input.fill('line\n'.repeat(4) + 'end');
+    await expect
+      .poll(async () => (await input.boundingBox())!.height)
+      .toBeGreaterThan(one + 40);
+    await input.fill('');
+    await expect
+      .poll(async () => (await input.boundingBox())!.height)
+      .toBeLessThan(60);
+  } finally {
+    await context.close();
+  }
+});
+
 test('the compact list has no accessibility violations and fits a phone in en, ru and uz-Latn', async ({
   browser,
 }) => {

@@ -31,7 +31,7 @@ export function InboxApp(): ReactNode {
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)]">
+    <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
       <section
         aria-label={t('list.region')}
         className={`${selected ? 'hidden md:flex' : 'flex'} min-h-0 min-w-0 flex-col border-r border-line bg-surface`}

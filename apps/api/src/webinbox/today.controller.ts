@@ -12,6 +12,8 @@ export interface TodayChecklist {
   teamInvited: boolean;
   /** An operator group receives the "needs an operator" alerts. */
   operatorGroup: boolean;
+  /** Someone tried the assistant in the test chat (ADR 065). */
+  testedAssistant: boolean;
 }
 
 export interface TodaySummary {
@@ -65,7 +67,7 @@ export class TodayController {
     tenantId: string,
     now: Date,
   ): Promise<TodayChecklist> {
-    const [channels, groups, prices, knowledge, operators, invites] =
+    const [channels, groups, prices, knowledge, operators, invites, tests] =
       await Promise.all([
         this.prisma.channelAccount.count({
           where: { tenantId, isTestAccount: false },
@@ -86,12 +88,16 @@ export class TodayController {
             expiresAt: { gt: now },
           },
         }),
+        this.prisma.auditEvent.count({
+          where: { tenantId, action: 'assistant.test_chat_used' },
+        }),
       ]);
     return {
       channelConnected: channels > 0,
       hasContent: prices + knowledge > 0,
       teamInvited: operators > 1 || invites > 0,
       operatorGroup: groups > 0,
+      testedAssistant: tests > 0,
     };
   }
 }

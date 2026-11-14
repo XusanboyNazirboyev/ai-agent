@@ -155,6 +155,7 @@ describe('Today summary (UX review A4)', () => {
       hasContent: false,
       teamInvited: false,
       operatorGroup: false,
+      testedAssistant: false,
     });
     for (const role of ['OPERATOR', 'VIEWER'] as Role[])
       expect((await controller.summary(w.request(role))).checklist).toBeNull();
@@ -197,6 +198,21 @@ describe('Today summary (UX review A4)', () => {
       operatorGroup: true,
       teamInvited: true,
     });
+    // Trying the assistant in the test chat leaves one audit row; that is all.
+    await db.auditEvent.create({
+      data: {
+        tenantId: w.tenantId,
+        actorType: 'OPERATOR',
+        actorId: w.owner.id,
+        action: 'assistant.test_chat_used',
+        entityType: 'tenant',
+        entityId: w.tenantId,
+        safeInputSummary: {},
+      },
+    });
+    expect(
+      (await controller.summary(w.request('OWNER'))).checklist,
+    ).toMatchObject({ testedAssistant: true });
   });
 
   it('never counts another workspace', async () => {

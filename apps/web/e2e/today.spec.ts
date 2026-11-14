@@ -80,9 +80,16 @@ test('an admin sees the assistant light and the getting-started list with a plac
     const setup = page.getByTestId('today-setup');
     await expect(setup).toBeVisible();
     await expect(page.getByTestId('today-setup-progress')).toContainText(
-      /^\d of 5 done$/u,
+      /^\d of 6 done$/u,
     );
-    for (const key of ['channel', 'content', 'assistant', 'team', 'group']) {
+    for (const key of [
+      'channel',
+      'content',
+      'test',
+      'assistant',
+      'team',
+      'group',
+    ]) {
       const step = page.getByTestId(`today-step-${key}`);
       await expect(step).toBeVisible();
       // An open step has a link to where it is done; a done one says so.

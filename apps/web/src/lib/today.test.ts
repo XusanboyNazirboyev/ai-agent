@@ -46,12 +46,14 @@ describe('setupItems', () => {
     hasContent: false,
     teamInvited: false,
     operatorGroup: false,
+    testedAssistant: false,
   };
-  it('lists the five steps in order, each with a place to do it', () => {
+  it('lists the six steps in order, each with a place to do it', () => {
     const items = setupItems(none, 'none');
     expect(items.map((i) => i.key)).toEqual([
       'channel',
       'content',
+      'test',
       'assistant',
       'team',
       'group',

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
@@ -66,6 +67,24 @@ export function BotPage(): ReactNode {
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('bot.intro')}</p>
+        {canChange ? (
+          <Link
+            href="/settings/bot/test"
+            data-testid="bot-try"
+            className="flex items-center gap-3 rounded-2xl border border-line bg-primary-soft p-4 transition-colors hover:bg-surface-2"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-primary-fg">
+              <Icon name="message" className="h-5 w-5" />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="font-semibold">{t('bot.tryTitle')}</span>
+              <span className="text-sm text-muted">{t('bot.tryBody')}</span>
+            </span>
+            <span className="shrink-0 text-sm font-medium text-primary-fg">
+              {t('bot.tryOpen')}
+            </span>
+          </Link>
+        ) : null}
         {!canChange ? (
           <p className="flex items-start gap-2 rounded-xl bg-surface-2 p-3 text-sm text-muted">
             <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />

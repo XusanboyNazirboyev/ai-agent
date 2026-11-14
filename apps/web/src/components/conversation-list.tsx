@@ -105,7 +105,7 @@ export function ConversationList(props: {
       <div
         role="tablist"
         aria-label={t('list.scopes')}
-        className="m-3 mb-0 flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
+        className="m-3 mb-0 flex gap-0.5 rounded-xl bg-surface-2 p-1"
       >
         {SCOPES.map((scope, index) => {
           const active = props.scope === scope;
@@ -121,7 +121,7 @@ export function ConversationList(props: {
               tabIndex={active ? 0 : -1}
               onClick={() => props.onScope(scope)}
               onKeyDown={(event) => onTabKey(event, index)}
-              className={`flex min-h-9 flex-auto items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
+              className={`flex min-h-9 min-w-0 flex-auto items-center justify-center gap-1 rounded-lg px-1.5 text-[0.8125rem] font-medium whitespace-nowrap transition-colors ${
                 active
                   ? 'bg-surface text-fg shadow-card'
                   : 'text-muted hover:text-fg'

@@ -86,12 +86,12 @@ function NavLink(props: {
     <Link
       href={props.href}
       aria-current={props.active ? 'page' : undefined}
-      className={`group flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-1.5 text-center text-[0.6875rem] leading-tight font-medium ${
+      className={`group flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1 text-center text-[0.6875rem] leading-tight font-medium ${
         props.layout === 'rail' ? 'w-full' : 'flex-1'
       } ${props.active ? 'text-fg' : 'text-muted hover:text-fg'}`}
     >
       <span
-        className={`relative grid h-8 w-12 place-items-center rounded-full transition-colors ${
+        className={`relative grid h-7 w-11 place-items-center rounded-full transition-colors ${
           props.active
             ? 'bg-primary-soft text-primary-fg'
             : 'group-hover:bg-surface-2'
@@ -243,9 +243,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
         </a>
         <nav
           aria-label={t('nav.label')}
-          className="hidden w-[5.5rem] shrink-0 flex-col items-center gap-1 border-r border-line bg-surface px-1 py-3 md:flex"
+          className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-0.5 border-r border-line bg-surface px-0.5 py-2 md:flex"
         >
-          <span className="mb-3 grid h-10 w-full place-items-center">
+          <span className="mb-2 grid h-9 w-full place-items-center">
             <BrandMark className="h-8 w-9" />
           </span>
           {visibleNav(operator.role).map((key) => {

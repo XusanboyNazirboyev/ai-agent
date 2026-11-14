@@ -10,6 +10,7 @@ export interface TodaySummary {
     hasContent: boolean;
     teamInvited: boolean;
     operatorGroup: boolean;
+    testedAssistant: boolean;
   } | null;
 }
 
@@ -40,7 +41,8 @@ export function assistantLight(
   return 'off';
 }
 
-export type SetupKey = 'channel' | 'content' | 'assistant' | 'team' | 'group';
+export type SetupKey =
+  'channel' | 'content' | 'test' | 'assistant' | 'team' | 'group';
 
 export interface SetupItem {
   key: SetupKey;
@@ -60,6 +62,11 @@ export function setupItems(
       href: '/settings/channels',
     },
     { key: 'content', done: checklist.hasContent, href: '/settings/catalog' },
+    {
+      key: 'test',
+      done: checklist.testedAssistant,
+      href: '/settings/bot/test',
+    },
     { key: 'assistant', done: light === 'live', href: '/settings/bot' },
     { key: 'team', done: checklist.teamInvited, href: '/settings/team' },
     { key: 'group', done: checklist.operatorGroup, href: '/settings/channels' },
