@@ -31,6 +31,7 @@ Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing tha
 ### Open work
 - Audit: AUD-04 (Instagram account, secret and audit atomicity), AUD-06 (graceful shutdown), AUD-07 (image reproducibility), release of ADR 060.
 - Roadmap ([2026-11-10](audit/2026-11-10/AGENTCORE_DEVELOPMENT_ROADMAP.md)): P0.7 RLS S1 to S7 before the first real customer, P0.3 secrets hygiene, P0.1 off-host backups (deferred), P1.4 companies, P1.6 tasks and reminders, P1.7 timeline, P1.8 teams and queues, P2.1 WhatsApp, P2.5 Click (needs owner credentials), TTS slices S2/S3.
+- **Proposed, not built (ADR 063, 2026-11-14):** conversation insights (top customer topics per tenant, topics the knowledge base misses), reviewed FAQ suggestions, faster answers (code-driven catalog search, caches that never hold live facts), then customer memory (ADR 026 slice 2). Waiting for the owner's answers to its three open questions.
 - Owner-side: Meta steps for Messenger and Instagram comments, Click credentials, rotate the jev key, legal review of the privacy pages, listen to TTS samples.
 - Working rules since 2026-11: pushes to `feat/production-pilot` only on the owner's command; CI must be green; the project `pnpm format` script is used (never `prettier` directly: it ignores the project config); a database backup is taken before a deploy that changes real data (the owner waived it on 2026-11-14 while the database holds only demo data; it becomes mandatory again with real customer data).
 
