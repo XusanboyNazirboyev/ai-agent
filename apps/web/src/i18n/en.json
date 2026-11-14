@@ -1209,7 +1209,7 @@
   "errors.LEAD_NOT_ARCHIVED": "Archive the lead first.",
   "settings.section.catalog": "Price list",
   "sheet.title": "Price list",
-  "sheet.intro": "Upload your prices as a CSV file (in Excel or Google Sheets: File, Download or Save as, CSV). The assistant states prices, dates and free seats only from this list.",
+  "sheet.intro": "Upload your prices as an Excel (.xlsx) or CSV file. The assistant states prices, dates and free seats only from this list.",
   "sheet.status.title": "Current price list",
   "sheet.status.none": "No price list yet. Choose a file below.",
   "sheet.status.updated": "Updated {date}: {accepted} rows saved, {rejected} skipped.",
@@ -1219,9 +1219,9 @@
   "sheet.stale.body": "The list is older than {days} days, so the assistant does not quote prices and hands customers to an operator. Upload a new file.",
   "sheet.bound": "The assistant now answers prices from this list.",
   "sheet.boundOther": "The assistant still uses \"{name}\" for prices. Change it in Settings, External CRM.",
-  "sheet.choose": "Choose a CSV file",
-  "sheet.chooseAnother": "Choose another CSV file",
-  "sheet.chooseHint": "Up to 5 MB. Each row is one departure with its price. Nothing is saved until you press Save.",
+  "sheet.choose": "Choose an Excel or CSV file",
+  "sheet.chooseAnother": "Choose another Excel or CSV file",
+  "sheet.chooseHint": "Up to 5 MB. Each row is one departure with its price. Rows hidden in Excel are not imported. Nothing is saved until you press Save.",
   "sheet.readFailed": "The file could not be read.",
   "sheet.columns.title": "Check the columns",
   "sheet.columns.hint": "We guessed which column is which. Correct anything that is wrong.",
@@ -1282,5 +1282,10 @@
   "sheet.preview.table": "Rows that will be saved",
   "access.notAllowed": "You are not allowed to open this page.",
   "access.goToInbox": "Go to Inbox",
-  "errors.SHEET_NO_ROWS": "The file has a header but no rows."
+  "errors.SHEET_NO_ROWS": "The file has a header but no rows.",
+  "sheet.sheet": "Sheet",
+  "errors.XLSX_UNREADABLE": "This Excel file could not be read. Save it again as .xlsx or as CSV.",
+  "errors.XLSX_TOO_LARGE": "This Excel file is too large or has too many rows (up to 20,000).",
+  "errors.XLSX_NO_DATA": "This Excel file has no visible sheet with data.",
+  "errors.XLSX_OLD_FORMAT": "Old .xls files are not supported. In Excel choose Save as and pick .xlsx or CSV."
 }

@@ -1209,7 +1209,7 @@
   "errors.LEAD_NOT_ARCHIVED": "Avval lidni arxivlang.",
   "settings.section.catalog": "Narx ro‘yxati",
   "sheet.title": "Narx ro‘yxati",
-  "sheet.intro": "Narxlaringizni CSV fayl sifatida yuklang (Excel yoki Google Sheets’da: Fayl, Yuklab olish yoki Boshqacha saqlash, CSV). Yordamchi narx, sana va bo‘sh joylarni faqat shu ro‘yxatdan aytadi.",
+  "sheet.intro": "Narxlaringizni Excel (.xlsx) yoki CSV fayl sifatida yuklang. Yordamchi narx, sana va bo‘sh joylarni faqat shu ro‘yxatdan aytadi.",
   "sheet.status.title": "Joriy narx ro‘yxati",
   "sheet.status.none": "Hozircha narx ro‘yxati yo‘q. Quyidan fayl tanlang.",
   "sheet.status.updated": "{date} da yangilandi: {accepted} ta qator saqlandi, {rejected} ta o‘tkazib yuborildi.",
@@ -1219,9 +1219,9 @@
   "sheet.stale.body": "Ro‘yxat {days} kundan eski, shuning uchun yordamchi narx aytmaydi va mijozni operatorga uzatadi. Yangi fayl yuklang.",
   "sheet.bound": "Endi yordamchi narxlarni shu ro‘yxatdan aytadi.",
   "sheet.boundOther": "Yordamchi narxlar uchun hali ham «{name}» dan foydalanadi. Buni Sozlamalar, Tashqi CRM bo‘limida o‘zgartiring.",
-  "sheet.choose": "CSV fayl tanlang",
-  "sheet.chooseAnother": "Boshqa CSV fayl tanlang",
-  "sheet.chooseHint": "5 MB gacha. Har bir qator — narxi bilan bitta jo‘nash. «Saqlash» bosilmaguncha hech narsa saqlanmaydi.",
+  "sheet.choose": "Excel yoki CSV fayl tanlang",
+  "sheet.chooseAnother": "Boshqa Excel yoki CSV fayl tanlang",
+  "sheet.chooseHint": "5 MB gacha. Har bir qator — narxi bilan bitta jo‘nash. Excel’da yashirilgan qatorlar yuklanmaydi. «Saqlash» bosilmaguncha hech narsa saqlanmaydi.",
   "sheet.readFailed": "Faylni o‘qib bo‘lmadi.",
   "sheet.columns.title": "Ustunlarni tekshiring",
   "sheet.columns.hint": "Qaysi ustun nima ekanini taxmin qildik. Noto‘g‘ri joyini tuzating.",
@@ -1282,5 +1282,10 @@
   "sheet.preview.table": "Saqlanadigan qatorlar",
   "access.notAllowed": "Bu sahifani ochishga ruxsat berilmaydi.",
   "access.goToInbox": "Suhbatlarga kirish",
-  "errors.SHEET_NO_ROWS": "Faylda sarlavha bor, lekin ma’lumot qatorlari yo‘q."
+  "errors.SHEET_NO_ROWS": "Faylda sarlavha bor, lekin ma’lumot qatorlari yo‘q.",
+  "sheet.sheet": "Varaq",
+  "errors.XLSX_UNREADABLE": "Bu Excel faylni o‘qib bo‘lmadi. Uni .xlsx yoki CSV sifatida qayta saqlang.",
+  "errors.XLSX_TOO_LARGE": "Bu Excel fayl juda katta yoki qatorlari ko‘p (20 000 gacha).",
+  "errors.XLSX_NO_DATA": "Bu Excel faylda ma’lumotli ko‘rinadigan varaq yo‘q.",
+  "errors.XLSX_OLD_FORMAT": "Eski .xls fayllar qo‘llab-quvvatlanmaydi. Excel’da «Boshqacha saqlash» ni tanlab, .xlsx yoki CSV formatini bering."
 }

@@ -36,7 +36,14 @@ const REQUIRED_FIELDS: readonly SheetField[] = ['price'];
 
 interface PickedFile {
   name: string;
+  /** The sheet as CSV (the file itself for a CSV file). */
   text: string;
+  /** Index of the chosen sheet of an Excel file; 0 for CSV. */
+  sheet: number;
+}
+
+interface PickedWorkbook {
+  sheets: Array<{ name: string; hasData: boolean; csv: string }>;
 }
 
 function canManage(role: string): boolean {
@@ -52,6 +59,7 @@ export function CatalogSheetPage(): ReactNode {
   const manage = canManage(operator.role);
 
   const [file, setFile] = useState<PickedFile | null>(null);
+  const [workbook, setWorkbook] = useState<PickedWorkbook | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   /** `null`: the server suggests the columns; set once the admin changes one. */
   const [mapping, setMapping] = useState<SheetMapping | null>(null);
@@ -71,7 +79,13 @@ export function CatalogSheetPage(): ReactNode {
     freshnessDays: days,
   });
   const preview = useQuery({
-    queryKey: ['sheet-preview', file?.name, file?.text.length, config],
+    queryKey: [
+      'sheet-preview',
+      file?.name,
+      file?.sheet,
+      file?.text.length,
+      config,
+    ],
     enabled: manage && file !== null,
     retry: false,
     queryFn: () =>
@@ -89,7 +103,7 @@ export function CatalogSheetPage(): ReactNode {
   const shown: SheetMapping = mapping ?? preview.data?.mapping ?? {};
   useEffect(() => {
     setMapping(null);
-  }, [file?.name, file?.text.length]);
+  }, [file?.name, file?.sheet, file?.text.length]);
 
   const upload = useMutation({
     mutationFn: () =>
@@ -100,6 +114,7 @@ export function CatalogSheetPage(): ReactNode {
     onSuccess: (result) => {
       toast(t('sheet.saved'));
       setFile(null);
+      setWorkbook(null);
       setMapping(null);
       void qc.invalidateQueries({ queryKey: ['sheet-status'] });
       void qc.invalidateQueries({ queryKey: ['connector-roles'] });
@@ -116,11 +131,49 @@ export function CatalogSheetPage(): ReactNode {
       setFileError(t('errors.SHEET_TOO_LARGE'));
       return;
     }
+    setWorkbook(null);
+    const lower = picked.name.toLowerCase();
     try {
-      setFile({ name: picked.name, text: await picked.text() });
+      if (lower.endsWith('.xlsx')) {
+        // Excel is turned into CSV here in the browser; the server reads CSV only.
+        const { readXlsx, XlsxError } = await import('@/lib/xlsx-to-csv');
+        try {
+          const sheets = readXlsx(new Uint8Array(await picked.arrayBuffer()));
+          const first = Math.max(
+            0,
+            sheets.findIndex((sheet) => sheet.hasData),
+          );
+          setWorkbook({ sheets });
+          setFile({
+            name: picked.name,
+            text: sheets[first]!.csv,
+            sheet: first,
+          });
+        } catch (error) {
+          setFileError(
+            t(
+              error instanceof XlsxError
+                ? `errors.${error.code}`
+                : 'sheet.readFailed',
+            ),
+          );
+        }
+        return;
+      }
+      if (lower.endsWith('.xls')) {
+        setFileError(t('errors.XLSX_OLD_FORMAT'));
+        return;
+      }
+      setFile({ name: picked.name, text: await picked.text(), sheet: 0 });
     } catch {
       setFileError(t('sheet.readFailed'));
     }
+  }
+
+  function chooseSheet(index: number): void {
+    const sheet = workbook?.sheets[index];
+    if (!file || !sheet) return;
+    setFile({ ...file, text: sheet.csv, sheet: index });
   }
 
   if (!manage)
@@ -201,12 +254,32 @@ export function CatalogSheetPage(): ReactNode {
             <input
               id={fileId}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               data-testid="sheet-file"
               onChange={(event) => void pick(event)}
               className="text-sm"
             />
             <p className="text-xs text-muted">{t('sheet.chooseHint')}</p>
+            {workbook &&
+            workbook.sheets.filter((sheet) => sheet.hasData).length > 1 ? (
+              <label className="flex min-w-0 flex-col gap-1 text-sm font-medium sm:max-w-xs">
+                {t('sheet.sheet')}
+                <select
+                  value={file?.sheet ?? 0}
+                  onChange={(event) => chooseSheet(Number(event.target.value))}
+                  data-testid="sheet-select"
+                  className={fieldClass}
+                >
+                  {workbook.sheets.map((sheet, index) =>
+                    sheet.hasData ? (
+                      <option key={sheet.name} value={index}>
+                        {sheet.name}
+                      </option>
+                    ) : null,
+                  )}
+                </select>
+              </label>
+            ) : null}
             {fileError ? (
               <p role="alert" className="text-sm text-danger-fg">
                 {fileError}
