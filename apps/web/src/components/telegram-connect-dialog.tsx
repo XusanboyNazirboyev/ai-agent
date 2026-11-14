@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { looksLikeBotToken } from '@/lib/telegram-token';
 import type { ChannelAccount } from '@/lib/types';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
@@ -113,11 +114,7 @@ export function TelegramConnectDialog(props: {
           </>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <ol className="flex list-decimal flex-col gap-1.5 pl-5 text-sm text-muted">
-              <li>{t('connect.step1')}</li>
-              <li>{t('connect.step2')}</li>
-              <li>{t('connect.step3')}</li>
-            </ol>
+            <BotFatherGuide />
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               {t('connect.token')}
               <input
@@ -133,6 +130,15 @@ export function TelegramConnectDialog(props: {
                 onChange={(e) => setToken(e.target.value)}
                 className={fieldClass}
               />
+              {token.trim() && !looksLikeBotToken(token) ? (
+                <span
+                  data-testid="connect-token-hint"
+                  className="flex items-start gap-1.5 text-xs font-normal text-warning-fg"
+                >
+                  <Icon name="info" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {t('connect.tokenHint')}
+                </span>
+              ) : null}
             </label>
           </form>
         )}
@@ -186,5 +192,87 @@ export function TelegramConnectDialog(props: {
         </div>
       </div>
     </dialog>
+  );
+}
+
+/**
+ * The four steps to get a bot token, each with a small picture of what the
+ * admin will see in Telegram (drawn here, not screenshots: Telegram's look
+ * changes). Nothing in the pictures is a real bot or token.
+ */
+function BotFatherGuide(): ReactNode {
+  const { t } = useI18n();
+  return (
+    <ol className="flex flex-col gap-3" data-testid="botfather-guide">
+      <Step n={1} title={t('connect.s1.title')} hint={t('connect.s1.hint')}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-sm"
+          >
+            <Icon name="search" className="h-3.5 w-3.5 text-muted" />
+            @BotFather
+            <Icon name="check" className="h-3.5 w-3.5 text-primary-fg" />
+          </span>
+          <a
+            href="https://t.me/BotFather"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="botfather-link"
+            className="inline-flex min-h-9 items-center rounded-lg border border-line px-3 text-sm font-medium text-primary-fg hover:bg-surface-2"
+          >
+            {t('connect.s1.open')}
+          </a>
+        </div>
+      </Step>
+      <Step n={2} title={t('connect.s2.title')} hint={t('connect.s2.hint')}>
+        <div aria-hidden="true" className="flex flex-col gap-1.5 text-sm">
+          <span className="self-end rounded-2xl rounded-br-md bg-primary px-3 py-1 text-white">
+            /newbot
+          </span>
+          <span className="self-start rounded-2xl rounded-bl-md border border-line bg-surface-2 px-3 py-1 text-muted">
+            {t('connect.s2.nameExample')}
+          </span>
+          <span className="self-end rounded-2xl rounded-br-md bg-primary px-3 py-1 text-white">
+            {t('connect.s2.usernameExample')}
+          </span>
+        </div>
+      </Step>
+      <Step n={3} title={t('connect.s3.title')} hint={t('connect.s3.hint')}>
+        <div
+          aria-hidden="true"
+          className="rounded-2xl rounded-bl-md border border-line bg-surface-2 px-3 py-2 font-mono text-sm break-all"
+        >
+          <span className="text-muted">123456789</span>
+          <span className="font-bold text-primary-fg">:</span>
+          <span>AAH…</span>
+        </div>
+        <p className="text-xs text-muted">{t('connect.s3.have')}</p>
+      </Step>
+      <Step n={4} title={t('connect.s4.title')} hint={t('connect.s4.hint')} />
+    </ol>
+  );
+}
+
+function Step(props: {
+  n: number;
+  title: string;
+  hint: string;
+  children?: ReactNode;
+}): ReactNode {
+  return (
+    <li className="flex gap-3">
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-semibold text-primary-fg"
+      >
+        {props.n}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <p className="font-medium">{props.title}</p>
+        <p className="text-sm text-muted">{props.hint}</p>
+        {props.children}
+      </div>
+    </li>
   );
 }

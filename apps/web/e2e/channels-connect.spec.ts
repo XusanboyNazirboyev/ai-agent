@@ -69,8 +69,20 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
   await page.goto('/settings/channels');
   await page.getByTestId('connect-telegram').click();
 
+  // The guide: four steps, with a link to the official BotFather.
+  await expect(
+    page.getByTestId('botfather-guide').getByRole('listitem'),
+  ).toHaveCount(4);
+  await expect(page.getByTestId('botfather-link')).toHaveAttribute(
+    'href',
+    'https://t.me/BotFather',
+  );
+  await expect(page.getByTestId('connect-token-hint')).toHaveCount(0);
+
   // A wrong token is refused without ever leaving a trace on the page.
   await page.getByTestId('connect-token').fill('not-a-token');
+  // The shape hint appears at once but never blocks sending.
+  await expect(page.getByTestId('connect-token-hint')).toBeVisible();
   await page.getByTestId('connect-submit').click();
   await expect(page.getByTestId('connect-error')).toContainText(
     'not a valid bot token',
@@ -82,6 +94,7 @@ test('an admin connects a Telegram bot with its token, enables it, checks it, se
   await expect(page.getByTestId('connect-error')).toBeVisible();
 
   await page.getByTestId('connect-token').fill(TOKEN);
+  await expect(page.getByTestId('connect-token-hint')).toHaveCount(0);
   await page.getByTestId('connect-submit').click();
   await expect(page.getByTestId('connect-done')).toContainText(`@${USERNAME}`);
   expect(await page.content()).not.toContain(TOKEN);
