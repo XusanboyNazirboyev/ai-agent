@@ -1,0 +1,16 @@
+Code,Destination,Hotel,Stars,Nights,Meal,Room,Departure date,Departure city,Price per person,Currency,Seats left,Flight included,Notes
+DXB-RIX-5-0314,Dubai,Rixos Premium Palm,5,5,BB,DBL,2026-03-14,Tashkent,820,USD,6,yes,Visa not included
+DXB-RIX-5-0321,Dubai,Rixos Premium Palm,5,5,BB,DBL,2026-03-21,Tashkent,860,USD,2,yes,Visa not included
+DXB-RIX-5-0328,Dubai,Rixos Premium Palm,5,5,BB,DBL,28.03.2026,Tashkent,890,USD,0,yes,Sold out
+DXB-RIX-5-0314-S,Dubai,Rixos Premium Palm,5,5,BB,SGL,2026-03-14,Tashkent,1150,USD,3,yes,Single supplement included
+DXB-ATL-4-0314,Dubai,Atlantis Sample Hotel,4,7,HB,DBL,2026-03-14,Tashkent,"1 240",USD,8,yes,
+SSH-NOV-5-0405,Sharm el-Sheikh,Nova Beach Resort,5,7,AI,DBL,2026-04-05,Tashkent,"710,50",USD,12,yes,Transfer included
+SSH-NOV-5-0412,Sharm el-Sheikh,Nova Beach Resort,5,7,AI,DBL,12/04/2026,Tashkent,745,USD,9,yes,Transfer included
+HRG-SUN-4-0405,Hurghada,Sun Garden Hotel,4,7,AI,DBL,2026-04-05,Tashkent,640,USD,15,yes,
+ANT-LIM-5-0510,Antalya,Lime Palace,5,7,AI,DBL,2026-05-10,Tashkent,690,USD,20,yes,Child under 6 free
+ANT-LIM-5-0517,Antalya,Lime Palace,5,7,AI,DBL,2026-05-17,Tashkent,720,USD,4,yes,Child under 6 free
+IST-CTY-4-0601,Istanbul,City Center Hotel,4,4,BB,DBL,2026-06-01,Tashkent,480,USD,10,yes,City tour included
+ALA-MTN-3-0701,Almaty,Mountain View,3,3,BB,DBL,2026-07-01,Tashkent,215,USD,18,no,Own transport
+BAD-NOPRICE,Dubai,Broken Row Hotel,4,5,BB,DBL,2026-03-14,Tashkent,,USD,5,yes,Price missing: must be rejected
+BAD-DATE,Dubai,Broken Row Hotel,4,5,BB,DBL,31.02.2026,Tashkent,500,USD,5,yes,Impossible date: must be rejected
+BAD-CURRENCY,Dubai,Broken Row Hotel,4,5,BB,DBL,2026-03-14,Tashkent,500,XXX,5,yes,Unknown currency: must be rejected
