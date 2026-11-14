@@ -71,6 +71,27 @@ export function normalizeTitle(text: string): string {
   return text.toLowerCase().replace(/\s+/gu, ' ').trim().slice(0, 600);
 }
 
+const MAX_SEARCH_WORDS = 8;
+const MIN_WORD_LENGTH = 3;
+
+/**
+ * The words of a customer's phrase that are worth matching, each already
+ * escaped for LIKE (a `%` or `_` typed by a customer is text, not a pattern).
+ * Short words ("5", "in") are dropped unless nothing else is left, then the
+ * whole phrase is matched as one piece, as before.
+ */
+export function searchWords(title: string | undefined): string[] {
+  if (!title) return [];
+  const text = normalizeTitle(title);
+  const escape = (value: string): string => value.replace(/[\\%_]/gu, '\\$&');
+  const words = [
+    ...new Set(text.split(' ').filter((w) => w.length >= MIN_WORD_LENGTH)),
+  ]
+    .slice(0, MAX_SEARCH_WORDS)
+    .map(escape);
+  return words.length > 0 ? words : text === '' ? [] : [escape(text)];
+}
+
 const ATTRIBUTE_NAME = /^[A-Za-z][A-Za-z0-9_]{0,39}$/u;
 const BATCH = 1_000;
 
@@ -123,11 +144,6 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
     ];
     if (query.itemType)
       conditions.push(Prisma.sql`item_type = ${query.itemType}`);
-    if (query.title) {
-      // LIKE wildcards in the agent's text are data, not patterns.
-      const escaped = normalizeTitle(query.title).replace(/[\\%_]/gu, '\\$&');
-      conditions.push(Prisma.sql`normalized_title LIKE ${`%${escaped}%`}`);
-    }
     for (const [name, value] of Object.entries(query.attributes ?? {})) {
       // Names come from an untrusted tool call: fixed shape, and bound as a parameter.
       if (!ATTRIBUTE_NAME.test(name)) return [];
@@ -135,19 +151,44 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
         Prisma.sql`lower(attributes ->> ${name}) = ${String(value).toLowerCase()}`,
       );
     }
-    const rows = await this.prisma.$queryRaw<
-      Array<{
-        key: string;
-        title: string;
-        item_type: string;
-        attributes: Record<string, unknown>;
-      }>
-    >(Prisma.sql`
-      SELECT key, title, item_type, attributes
-      FROM sheet_catalog_items
-      WHERE ${Prisma.join(conditions, ' AND ')}
-      ORDER BY title ASC, key ASC
-      LIMIT ${query.limit} OFFSET ${query.offset}`);
+    const words = searchWords(query.title);
+    type Row = {
+      key: string;
+      title: string;
+      item_type: string;
+      attributes: Record<string, unknown>;
+    };
+    const where = Prisma.join(conditions, ' AND ');
+    const rows =
+      words.length === 0
+        ? await this.prisma.$queryRaw<Row[]>(Prisma.sql`
+            SELECT key, title, item_type, attributes
+            FROM sheet_catalog_items
+            WHERE ${where}
+            ORDER BY title ASC, key ASC
+            LIMIT ${query.limit} OFFSET ${query.offset}`)
+        : // Each word of the phrase that is in the title scores one point; only
+          // the best-scoring titles are returned, so a word that is in no title
+          // ("tour", "price") never hides the match, and a second matching word
+          // narrows the answer.
+          await this.prisma.$queryRaw<Row[]>(Prisma.sql`
+            WITH scored AS (
+              SELECT key, title, item_type, attributes,
+                ${Prisma.join(
+                  words.map(
+                    (word) =>
+                      Prisma.sql`(CASE WHEN normalized_title LIKE ${`%${word}%`} THEN 1 ELSE 0 END)`,
+                  ),
+                  ' + ',
+                )} AS score
+              FROM sheet_catalog_items
+              WHERE ${where}
+            )
+            SELECT key, title, item_type, attributes
+            FROM scored
+            WHERE score > 0 AND score = (SELECT max(score) FROM scored)
+            ORDER BY title ASC, key ASC
+            LIMIT ${query.limit} OFFSET ${query.offset}`);
     return rows.map((row) => ({
       key: row.key,
       title: row.title,
