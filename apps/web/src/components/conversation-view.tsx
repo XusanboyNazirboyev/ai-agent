@@ -13,8 +13,8 @@ import { useI18n } from '@/i18n';
 import { FormDialog } from './ui/form-dialog';
 import { fieldClass } from './ui/fields';
 import { api, errorKey } from '@/lib/api';
-import { factLines } from '@/lib/facts';
 import { describeShownOffer } from '@/lib/shown-offer';
+import { slotPairs } from '@/lib/slot-labels';
 import { handoverSummaryLines, reasonLabel } from '@/lib/handover-text';
 import { markSeen } from '@/lib/seen';
 import type {
@@ -274,7 +274,7 @@ export function ConversationViewPane(props: {
     view.handover?.summary,
     view.handover?.reasonCode,
   );
-  const slots = factLines(view.slots);
+  const slots = slotPairs(view.slots, (key) => t(key));
   const slaDue = view.handover?.slaDueAt ?? null;
   const slaOverdue = slaDue ? Date.parse(slaDue) < now : false;
   const name = view.contact.name ?? t('list.unnamed');
@@ -800,7 +800,12 @@ export function ConversationViewPane(props: {
             {slots.length === 0 ? (
               <p className="text-muted">{t('view.noSlots')}</p>
             ) : (
-              slots.map((line) => <p key={line}>{line}</p>)
+              slots.map((slot) => (
+                <p key={slot.label}>
+                  <span className="text-muted">{slot.label}: </span>
+                  {slot.value}
+                </p>
+              ))
             )}
           </Section>
           <Section title={t('view.notes')} icon="note">
