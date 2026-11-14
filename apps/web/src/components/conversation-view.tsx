@@ -14,6 +14,7 @@ import { FormDialog } from './ui/form-dialog';
 import { fieldClass } from './ui/fields';
 import { api, errorKey } from '@/lib/api';
 import { factLines } from '@/lib/facts';
+import { describeShownOffer } from '@/lib/shown-offer';
 import { handoverSummaryLines, reasonLabel } from '@/lib/handover-text';
 import { markSeen } from '@/lib/seen';
 import type {
@@ -31,6 +32,7 @@ import { ConfirmDialog } from './ui/confirm-dialog';
 import { textareaClass } from './ui/fields';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { Select } from './ui/select';
+import { ShownOfferCard } from './shown-offer-card';
 import { Icon, type IconName } from './ui/icons';
 import { Section } from './ui/section';
 import { MoveToPipeline } from './move-to-pipeline';
@@ -468,31 +470,31 @@ export function ConversationViewPane(props: {
                       </p>
                     ) : null}
                     {offers.map((offer) => (
-                      <div
+                      <ShownOfferCard
                         key={offer.id}
-                        className="mt-1 rounded-lg border border-line bg-surface p-2 text-sm text-fg"
-                      >
-                        <p className="font-medium">{offer.offerRef}</p>
-                        {factLines(offer.facts).map((line) => (
-                          <p key={line}>{line}</p>
+                        offerRef={offer.offerRef}
+                        facts={offer.facts}
+                        timeZone={props.timeZone}
+                      />
+                    ))}
+                    {quotes.length > 0 && !cardShowsConfirmedPrice(offers) ? (
+                      <>
+                        {quotes.map((quote) => (
+                          <p
+                            key={quote.id}
+                            className="mt-1 rounded-lg bg-surface p-2 text-sm text-fg"
+                          >
+                            {t('view.quote', {
+                              amount: quote.amount,
+                              currency: quote.currency,
+                            })}
+                            {quote.validUntil
+                              ? ` · ${t('view.validUntil', { date: formatDateTime(quote.validUntil, props.timeZone) })}`
+                              : ''}
+                          </p>
                         ))}
-                      </div>
-                    ))}
-                    {quotes.map((quote) => (
-                      <p
-                        key={quote.id}
-                        className="mt-1 rounded-lg bg-surface p-2 text-sm text-fg"
-                      >
-                        {t('view.quote', {
-                          id: quote.id.slice(0, 8),
-                          amount: quote.amount,
-                          currency: quote.currency,
-                        })}
-                        {quote.validUntil
-                          ? ` · ${t('view.validUntil', { date: formatDateTime(quote.validUntil, props.timeZone) })}`
-                          : ''}
-                      </p>
-                    ))}
+                      </>
+                    ) : null}
                     {message.authorType === 'OPERATOR' ? (
                       <p
                         className={`flex items-center gap-1 text-xs ${
@@ -861,5 +863,15 @@ export function ConversationViewPane(props: {
         }}
       />
     </div>
+  );
+}
+
+/** A card that already shows the confirmed price makes the separate quote line redundant. */
+function cardShowsConfirmedPrice(
+  offers: ReadonlyArray<{ offerRef: string; facts: unknown }>,
+): boolean {
+  return offers.some(
+    (offer) =>
+      describeShownOffer(offer.offerRef, offer.facts).price?.confirmed === true,
   );
 }
