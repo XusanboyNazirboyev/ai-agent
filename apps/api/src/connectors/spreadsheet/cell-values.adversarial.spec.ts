@@ -44,12 +44,9 @@ describe('cell-values adversarial', () => {
       expect(parseAmount(input)).toBeNull();
     });
 
-    it.fails(
-      'returns null for "1e5" (code strips e and returns 15 — defect)',
-      () => {
-        expect(parseAmount('1e5')).toBeNull();
-      },
-    );
+    it('returns null for "1e5"', () => {
+      expect(parseAmount('1e5')).toBeNull();
+    });
   });
 
   describe('parseAmount documented edge cases', () => {
@@ -164,19 +161,13 @@ describe('cell-values adversarial', () => {
       expect(parseCurrency(input)).toBe(expected);
     });
 
-    it.fails(
-      'parseCurrency("сум") -> UZS (\\b word boundary does not match Cyrillic — defect)',
-      () => {
-        expect(parseCurrency('сум')).toBe('UZS');
-      },
-    );
+    it('parseCurrency("сум") -> UZS', () => {
+      expect(parseCurrency('сум')).toBe('UZS');
+    });
 
-    it.fails(
-      'parseCurrency("сўм") -> UZS (\\b word boundary does not match Cyrillic — defect)',
-      () => {
-        expect(parseCurrency('сўм')).toBe('UZS');
-      },
-    );
+    it('parseCurrency("сўм") -> UZS', () => {
+      expect(parseCurrency('сўм')).toBe('UZS');
+    });
 
     it.each(['XXX', 'abc', '', ' ', '123', 'USDD'])(
       'returns null for %j',
