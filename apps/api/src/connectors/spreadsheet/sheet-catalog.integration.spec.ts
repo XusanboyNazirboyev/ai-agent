@@ -153,6 +153,37 @@ describe('spreadsheet catalog (ADR 064)', () => {
     ).rejects.toMatchObject({ code: 'CONNECTOR_OFFER_NOT_FOUND' });
   });
 
+  it('finds tours from a whole phrase a customer might send, best match first', async () => {
+    const tenantId = await tenant();
+    await store.replace(tenantId, input(SAMPLE, NOW));
+    const connector = connectorFor(tenantId, () => NOW);
+    const titles = async (query: string) =>
+      (await connector.searchItems({ title: query })).map((i) => i.title);
+
+    // Words that are not in any title ("tour", "price") do not hide the match.
+    expect(
+      (await titles('Dubai tour price')).every((t) => t.startsWith('Dubai')),
+    ).toBe(true);
+    expect(await titles('Dubai tour price')).toHaveLength(2);
+    // More matching words win: only the hotel that matches both words is returned.
+    expect(await titles('dubai atlantis')).toEqual([
+      'Dubai · Atlantis Sample Hotel 4★ · 7 nights · HB',
+    ]);
+    // A phrase with a number of nights ranks the matching destination first.
+    expect((await titles('antalya 7 nights'))[0]).toContain('Antalya');
+    // Case, extra spaces and a word that matches nothing.
+    expect(await titles('  DUBAI   ')).toHaveLength(2);
+    expect(await titles('unknownplace')).toEqual([]);
+    // Short words alone still use the whole text.
+    expect(await titles('ist')).toHaveLength(1);
+    // Short words next to a real word are ignored: "7" does not narrow Dubai to the 7-night hotel.
+    expect(await titles('dubai 7')).toHaveLength(2);
+    // A wildcard typed by a customer is text: it matches no title.
+    expect(await titles('dub%')).toEqual([]);
+    expect(await titles('du_ai')).toEqual([]);
+    expect(await titles('%%%')).toEqual([]);
+  });
+
   it('does not quote a stale price list and reports availability unknown', async () => {
     const tenantId = await tenant();
     await store.replace(tenantId, input(SAMPLE, NOW, 3));
