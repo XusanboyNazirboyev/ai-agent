@@ -86,7 +86,17 @@ test.describe('no overflow in the signed-in pages', () => {
           '/analytics',
         ]) {
           await page.goto(path);
-          await expect(page.locator('#app-main [role="region"]')).toBeVisible();
+          // An operator opening /analytics gets the "not allowed" notice (026),
+          // not a region: wait for whichever page state belongs to the role.
+          await expect(
+            page
+              .locator(
+                path === '/analytics'
+                  ? '#app-main [role="region"], #app-main [role="alert"]'
+                  : '#app-main [role="region"]',
+              )
+              .first(),
+          ).toBeVisible();
           expect(await findOverflow(page), `${path} ${language}`).toEqual([]);
         }
 

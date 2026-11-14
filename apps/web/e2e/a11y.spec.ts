@@ -195,7 +195,17 @@ test.describe('leads, settings and status pages', () => {
         '/analytics',
       ]) {
         await page.goto(path);
-        await expect(page.locator('#app-main [role="region"]')).toBeVisible();
+        // An operator opening /analytics gets the "not allowed" notice (026),
+        // not a region: wait for whichever page state belongs to the role.
+        await expect(
+          page
+            .locator(
+              path === '/analytics'
+                ? '#app-main [role="region"], #app-main [role="alert"]'
+                : '#app-main [role="region"]',
+            )
+            .first(),
+        ).toBeVisible();
         await audit(page, `${path} ${scheme} ${language} ${viewport.width}`);
       }
       await page.goto('/settings/channels');

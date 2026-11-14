@@ -47,13 +47,15 @@ test.describe('role-based menu', () => {
     for (const role of ['op1', 'viewer'] as const) {
       const page = await openAs(browser, role);
       await page.goto('/more');
-      await expect(page.getByRole('link', { name: 'Analytics' })).toHaveCount(
+      // Inside the page: on a wide screen the side rail has the same names.
+      const more = page.locator('#app-main');
+      await expect(more.getByRole('link', { name: 'Analytics' })).toHaveCount(
         0,
       );
-      await expect(page.getByRole('link', { name: 'Knowledge' })).toHaveCount(
+      await expect(more.getByRole('link', { name: 'Knowledge' })).toHaveCount(
         1,
       );
-      await expect(page.getByRole('link', { name: 'Settings' })).toHaveCount(1);
+      await expect(more.getByRole('link', { name: 'Settings' })).toHaveCount(1);
     }
   });
 
@@ -63,6 +65,8 @@ test.describe('role-based menu', () => {
     const page = await openAs(browser, 'admin');
     await page.goto('/more');
     for (const name of ['Knowledge', 'Settings', 'Analytics'])
-      await expect(page.getByRole('link', { name })).toHaveCount(1);
+      await expect(
+        page.locator('#app-main').getByRole('link', { name }),
+      ).toHaveCount(1);
   });
 });

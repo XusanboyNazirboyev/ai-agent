@@ -424,7 +424,10 @@ function AccessDenied(): ReactNode {
       >
         {t('access.notAllowed')}
       </p>
-      <Link href="/inbox" className="underline underline-offset-2 text-primary">
+      <Link
+        href="/inbox"
+        className="text-primary-fg underline underline-offset-2"
+      >
         {t('access.goToInbox')}
       </Link>
     </div>
