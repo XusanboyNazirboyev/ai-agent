@@ -1206,5 +1206,7 @@
   "toast.leadRestored": "Lead restored.",
   "toast.leadDeleted": "Lead deleted.",
   "errors.LEAD_ARCHIVED": "This lead is archived. Restore it first.",
-  "errors.LEAD_NOT_ARCHIVED": "Archive the lead first."
+  "errors.LEAD_NOT_ARCHIVED": "Archive the lead first.",
+  "access.notAllowed": "You are not allowed to open this page.",
+  "access.goToInbox": "Go to Inbox"
 }

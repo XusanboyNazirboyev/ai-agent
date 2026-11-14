@@ -1206,5 +1206,7 @@
   "toast.leadRestored": "Lid qaytarildi.",
   "toast.leadDeleted": "Lid o'chirildi.",
   "errors.LEAD_ARCHIVED": "Lid arxivda. Avval uni qaytaring.",
-  "errors.LEAD_NOT_ARCHIVED": "Avval lidni arxivlang."
+  "errors.LEAD_NOT_ARCHIVED": "Avval lidni arxivlang.",
+  "access.notAllowed": "Bu sahifani ochishga ruxsat berilmaydi.",
+  "access.goToInbox": "Suhbatlarga kirish"
 }

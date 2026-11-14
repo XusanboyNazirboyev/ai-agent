@@ -1206,5 +1206,7 @@
   "toast.leadRestored": "Лид возвращён.",
   "toast.leadDeleted": "Лид удалён.",
   "errors.LEAD_ARCHIVED": "Лид в архиве. Сначала верните его.",
-  "errors.LEAD_NOT_ARCHIVED": "Сначала отправьте лид в архив."
+  "errors.LEAD_NOT_ARCHIVED": "Сначала отправьте лид в архив.",
+  "access.notAllowed": "Вы не можете открыть эту страницу.",
+  "access.goToInbox": "Перейти в диалоги"
 }
