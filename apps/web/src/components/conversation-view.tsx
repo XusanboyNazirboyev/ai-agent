@@ -17,6 +17,7 @@ import { describeShownOffer } from '@/lib/shown-offer';
 import { isSameDay, shortTime } from '@/lib/inbox-row';
 import { slotPairs } from '@/lib/slot-labels';
 import {
+  handoverHeadline,
   handoverSummaryGroups,
   handoverSummaryLines,
   reasonLabel,
@@ -38,6 +39,7 @@ import { textareaClass } from './ui/fields';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { Select } from './ui/select';
 import { ShownOfferCard } from './shown-offer-card';
+import { SuggestionCard } from './suggestion-card';
 import { Icon, type IconName } from './ui/icons';
 import { Section } from './ui/section';
 import { MoveToPipeline } from './move-to-pipeline';
@@ -216,6 +218,9 @@ export function ConversationViewPane(props: {
     );
 
   const operating = OPERATING.includes(props.me.role);
+  const latestCustomerMessageId =
+    [...view.messages].reverse().find((m) => m.authorType === 'CUSTOMER')?.id ??
+    null;
   const state = view.conversation.state;
   const mine = view.conversation.assignedOperatorId === props.me.id;
   const canAct = operating && state === 'OPERATOR_ACTIVE' && mine && handoverId;
@@ -243,13 +248,17 @@ export function ConversationViewPane(props: {
           ? t('view.assignedToOther')
           : null;
 
-  function send(event?: FormEvent): void {
+  function send(
+    event?: FormEvent,
+    suggested?: { text: string; done: () => void },
+  ): void {
     event?.preventDefault();
-    const text = reply.trim();
+    const text = (suggested?.text ?? reply).trim();
     if (!text || busy) return;
     const conversationId = props.id;
     const clearDraftIfStillActive = (): void => {
-      if (activeConversationId.current === conversationId) setReply('');
+      if (suggested) suggested.done();
+      else if (activeConversationId.current === conversationId) setReply('');
     };
     const deliver = (id?: string): void =>
       command.mutate(
@@ -287,6 +296,7 @@ export function ConversationViewPane(props: {
     view.handover?.summary,
     view.handover?.reasonCode,
   );
+  const headline = handoverHeadline(t, view.handover?.summary);
   const summaryGroups = handoverSummaryGroups(
     t,
     view.handover?.summary,
@@ -553,6 +563,17 @@ export function ConversationViewPane(props: {
           <div className="shrink-0 border-t border-line bg-surface px-3 py-2">
             {canWrite ? (
               <form onSubmit={send} className="flex flex-col gap-1.5">
+                <SuggestionCard
+                  key={props.id}
+                  conversationId={props.id}
+                  latestCustomerMessageId={latestCustomerMessageId}
+                  disabled={busy}
+                  onSend={(text, done) => send(undefined, { text, done })}
+                  onEdit={(text) => {
+                    onReplyChange(text);
+                    replyBox.current?.focus();
+                  }}
+                />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <Select
                     aria-label={t('action.canned')}
@@ -670,6 +691,19 @@ export function ConversationViewPane(props: {
                           date: formatDateTime(slaDue, props.timeZone),
                         })}
                   </p>
+                ) : null}
+                {headline.asked || headline.said ? (
+                  <div
+                    data-testid="handover-headline"
+                    className="rounded-lg bg-surface-2 p-2"
+                  >
+                    {headline.asked ? (
+                      <p className="font-medium">{headline.asked}</p>
+                    ) : null}
+                    {headline.said ? (
+                      <p className="text-muted">{headline.said}</p>
+                    ) : null}
+                  </div>
                 ) : null}
                 {summaryGroups.length > 0
                   ? summaryGroups.map((group) => (

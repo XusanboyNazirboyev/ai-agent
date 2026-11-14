@@ -272,3 +272,42 @@ export async function findOverflow(page: Page): Promise<string[]> {
     return problems;
   });
 }
+
+/**
+ * A same-origin POST as the signed-in page would send it (session cookie plus
+ * the CSRF header), so a refusal in a test is the role check and not a missing
+ * token.
+ */
+export async function postAsPage(
+  page: Page,
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  return page.evaluate(
+    async ({ path: target, payload }) => {
+      const csrf = document.cookie
+        .split('; ')
+        .find((part) => part.startsWith('ac_csrf='))
+        ?.slice('ac_csrf='.length);
+      const response = await fetch(target, {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          ...(payload === undefined
+            ? {}
+            : { 'content-type': 'application/json' }),
+          ...(csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : {}),
+        },
+        ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+      });
+      return {
+        status: response.status,
+        body: (await response.json().catch(() => ({}))) as Record<
+          string,
+          unknown
+        >,
+      };
+    },
+    { path, payload: body },
+  );
+}

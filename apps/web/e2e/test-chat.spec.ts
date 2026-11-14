@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { findOverflow, fixtures, newSession } from './helpers';
+import { findOverflow, fixtures, newSession, postAsPage } from './helpers';
 
 // Test chat (ADR 065, UX review C3): try the assistant without a customer.
 
@@ -153,15 +153,13 @@ test('an operator cannot use the test chat: the page says so and the API refuses
     await page.goto('/settings/bot/test');
     await expect(page.getByTestId('test-chat-input')).toHaveCount(0);
     await expect(page.getByTestId('bot-try')).toHaveCount(0);
-    const status = await page.evaluate(async () => {
-      const response = await fetch('/api/v1/assistant/test-chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId: crypto.randomUUID(), text: 'hi' }),
-      });
-      return response.status;
+    const refused = await postAsPage(page, '/api/v1/assistant/test-chat', {
+      sessionId: crypto.randomUUID(),
+      text: 'hi',
     });
-    expect(status).toBe(403);
+    expect(refused.status).toBe(403);
+    // The role check answered, not a missing token.
+    expect(refused.body.code).toBe('FORBIDDEN');
   } finally {
     await context.close();
   }

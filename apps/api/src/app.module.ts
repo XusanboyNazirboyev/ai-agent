@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { validateEnvironment } from './config/environment.js';
 import { HealthController } from './health/health.controller.js';
 import { WebInboxModule } from './webinbox/webinbox.module.js';
-import { TestChatModule } from './webinbox/test-chat.module.js';
+import { AssistantToolsModule } from './webinbox/assistant-tools.module.js';
 import { TelegramModule } from './channels/telegram/telegram.module.js';
 import { InstagramModule } from './channels/instagram/instagram.module.js';
 import { AgentModule } from './agent/agent.module.js';
@@ -18,7 +18,7 @@ import { PlatformModule } from './platform/platform.module.js';
     TelegramModule,
     InstagramModule,
     WebInboxModule,
-    TestChatModule,
+    AssistantToolsModule,
     BackgroundModule,
     PersistenceModule,
     ConnectorsModule,

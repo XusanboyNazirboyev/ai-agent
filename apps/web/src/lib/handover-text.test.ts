@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { translate } from '@/i18n';
 import {
+  handoverHeadline,
   handoverSummaryGroups,
   handoverSummaryLines,
   reasonLabel,
@@ -108,5 +109,26 @@ describe('handover summary groups', () => {
   it('is empty for a summary of another shape', () => {
     expect(handoverSummaryGroups(uz, { a: 1 })).toEqual([]);
     expect(handoverSummaryGroups(uz, null)).toEqual([]);
+  });
+});
+
+describe('handover headline', () => {
+  it('says what the customer asked for and what they said, in words', () => {
+    const head = handoverHeadline(en, {
+      customerClaims: ['subject=Mathematics', 'travelMonth=june'],
+      inferences: ['intent=human_request', 'locale=uz-Latn'],
+      unknowns: [],
+      verifiedFacts: [],
+    });
+    expect(head.asked).toMatch(/^[A-Z]/u);
+    expect(head.asked).not.toContain('human_request');
+    expect(head.said).toBe('Subject: Mathematics · Travel month: june');
+  });
+  it('is empty for a summary of another shape or without those parts', () => {
+    expect(handoverHeadline(en, null)).toEqual({ asked: null, said: null });
+    expect(handoverHeadline(en, { a: 1 })).toEqual({ asked: null, said: null });
+    expect(
+      handoverHeadline(en, { customerClaims: [], inferences: [] }),
+    ).toEqual({ asked: null, said: null });
   });
 });

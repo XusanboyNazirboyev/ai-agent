@@ -117,3 +117,34 @@ export function handoverSummaryGroups(
   }
   return out;
 }
+
+/**
+ * Two lines for the top of the handover card, from the stored summary and
+ * without a model: what the customer asked for (the intent) and what they said
+ * (their own details). Either is null when the summary has none.
+ */
+export function handoverHeadline(
+  t: Translate,
+  summary: unknown,
+): { asked: string | null; said: string | null } {
+  const items = (group: string): string[] => {
+    const list = (summary as Record<string, unknown> | null)?.[group];
+    return Array.isArray(list)
+      ? list.filter((item): item is string => typeof item === 'string')
+      : [];
+  };
+  if (!summary || typeof summary !== 'object')
+    return { asked: null, said: null };
+  const intent = items('inferences')
+    .map((item) => /^intent=(.+)$/u.exec(item)?.[1])
+    .find((value): value is string => Boolean(value));
+  const claims = items('customerClaims')
+    .slice(0, 6)
+    .map((item) => entry(t, item, undefined))
+    .filter((line): line is string => line !== null);
+  const text = intent ? known(t, `handover.intent.${intent}`, intent) : null;
+  return {
+    asked: text ? text.charAt(0).toLocaleUpperCase() + text.slice(1) : null,
+    said: claims.length > 0 ? claims.join(' · ') : null,
+  };
+}

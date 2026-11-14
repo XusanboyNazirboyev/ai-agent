@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  HttpCode,
   HttpException,
   HttpStatus,
   Inject,
@@ -89,6 +90,7 @@ export class TestChatController {
   ) {}
 
   @Post()
+  @HttpCode(200)
   async send(
     @Req() request: InboxRequest,
     @Body() body: unknown,
