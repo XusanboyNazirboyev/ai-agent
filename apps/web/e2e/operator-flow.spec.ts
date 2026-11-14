@@ -27,6 +27,13 @@ test('operator completes see → take over → reply → return in the browser',
   );
   await expect(page.getByTestId('reply-input')).toHaveValue('');
 
+  // Notes are a closed accordion row until someone has written one; its
+  // summary already says there are none.
+  const notesRow = page
+    .locator('summary')
+    .filter({ hasText: 'Internal notes' });
+  await expect(notesRow).toContainText('No notes');
+  await notesRow.click();
   await page
     .getByRole('textbox', { name: /Internal note/u })
     .fill('Customer prefers evenings');

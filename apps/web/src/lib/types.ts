@@ -215,6 +215,12 @@ export interface ConversationListItem {
   waitingSince: string | null;
   slaDueAt: string | null;
   updatedAt: string;
+  /** The newest message, cut short; plain text only. */
+  lastMessage?: {
+    text: string;
+    author: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
+    at: string;
+  } | null;
 }
 
 export interface ConversationPage {

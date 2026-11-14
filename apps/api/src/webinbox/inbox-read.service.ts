@@ -25,7 +25,43 @@ export interface ConversationListItem {
   readonly waitingSince: string | null;
   readonly slaDueAt: string | null;
   readonly updatedAt: string;
+  /** The newest message, cut short for the list (customer text: show as text only). */
+  readonly lastMessage: {
+    readonly text: string;
+    readonly author: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
+    readonly at: string;
+  } | null;
 }
+
+const PREVIEW_LENGTH = 120;
+
+/** One line of the newest message: whitespace collapsed, cut at a fixed length. */
+function previewOf(
+  message:
+    | {
+        text: string;
+        authorType: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
+        createdAt: Date;
+      }
+    | undefined,
+): ConversationListItem['lastMessage'] {
+  if (!message) return null;
+  const flat = message.text.replace(/\s+/gu, ' ').trim();
+  return {
+    text:
+      flat.length > PREVIEW_LENGTH
+        ? `${flat.slice(0, PREVIEW_LENGTH - 1)}…`
+        : flat,
+    author: message.authorType,
+    at: message.createdAt.toISOString(),
+  };
+}
+
+const LAST_MESSAGE = {
+  orderBy: { sequence: 'desc' },
+  take: 1,
+  select: { text: true, authorType: true, createdAt: true },
+} as const;
 
 export interface ConversationView {
   readonly conversation: {
@@ -311,6 +347,7 @@ export class InboxReadService {
                 take: 1,
                 select: { openedAt: true, slaDueAt: true },
               },
+              messages: LAST_MESSAGE,
             },
           })
         : [];
@@ -331,6 +368,7 @@ export class InboxReadService {
             waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
             slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
             updatedAt: row.updatedAt.toISOString(),
+            lastMessage: previewOf(row.messages[0]),
           },
         ];
       });
@@ -362,6 +400,7 @@ export class InboxReadService {
           take: 1,
           select: { openedAt: true, slaDueAt: true },
         },
+        messages: LAST_MESSAGE,
       },
     });
     const page = rows.slice(0, limit);
@@ -377,6 +416,7 @@ export class InboxReadService {
       waitingSince: row.handovers[0]?.openedAt.toISOString() ?? null,
       slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
+      lastMessage: previewOf(row.messages[0]),
     }));
     const last = page.at(-1);
     return {

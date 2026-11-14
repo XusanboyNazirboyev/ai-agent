@@ -1,4 +1,5 @@
 import { factLines } from './facts';
+import { slotLabel } from './slot-labels';
 
 /** The i18n `t` function (an unknown key comes back unchanged). */
 type Translate = (
@@ -48,7 +49,7 @@ function entry(
       return `${t('handover.field.technical')}: ${key} ${value}`;
     default:
       // A slot of the domain pack, as the customer gave it.
-      return `${key}: ${value}`;
+      return `${slotLabel(key, (name) => t(name))}: ${value}`;
   }
 }
 
@@ -81,4 +82,38 @@ export function handoverSummaryLines(
     }
   }
   return lines;
+}
+
+/**
+ * The same summary as headed groups ("Customer said", "Assistant understood",
+ * ...) with one line per item, for the details panel: the group name is said
+ * once instead of in front of every line.
+ */
+export function handoverSummaryGroups(
+  t: Translate,
+  summary: unknown,
+  shownReason?: string,
+): Array<{ title: string; items: string[] }> {
+  if (
+    !summary ||
+    typeof summary !== 'object' ||
+    !GROUPS.some((group) =>
+      Array.isArray((summary as Record<string, unknown>)[group]),
+    )
+  )
+    return [];
+  const out: Array<{ title: string; items: string[] }> = [];
+  for (const group of GROUPS) {
+    const items = (summary as Record<string, unknown>)[group];
+    if (!Array.isArray(items)) continue;
+    const lines = items
+      .slice(0, 10)
+      .flatMap((item) =>
+        typeof item === 'string' ? [entry(t, item, shownReason)] : [],
+      )
+      .filter((line): line is string => line !== null);
+    if (lines.length > 0)
+      out.push({ title: t(`handover.group.${group}`), items: lines });
+  }
+  return out;
 }

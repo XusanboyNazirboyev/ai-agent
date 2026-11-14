@@ -14,8 +14,13 @@ import { FormDialog } from './ui/form-dialog';
 import { fieldClass } from './ui/fields';
 import { api, errorKey } from '@/lib/api';
 import { describeShownOffer } from '@/lib/shown-offer';
+import { isSameDay, shortTime } from '@/lib/inbox-row';
 import { slotPairs } from '@/lib/slot-labels';
-import { handoverSummaryLines, reasonLabel } from '@/lib/handover-text';
+import {
+  handoverSummaryGroups,
+  handoverSummaryLines,
+  reasonLabel,
+} from '@/lib/handover-text';
 import { markSeen } from '@/lib/seen';
 import type {
   ConversationView,
@@ -92,7 +97,7 @@ export function ConversationViewPane(props: {
   timeZone?: string;
   onBack: () => void;
 }): ReactNode {
-  const { t, formatDateTime } = useI18n();
+  const { t, formatDateTime, locale } = useI18n();
   const queryClient = useQueryClient();
   const notify = useToast();
   const now = useNow();
@@ -274,6 +279,11 @@ export function ConversationViewPane(props: {
     view.handover?.summary,
     view.handover?.reasonCode,
   );
+  const summaryGroups = handoverSummaryGroups(
+    t,
+    view.handover?.summary,
+    view.handover?.reasonCode,
+  );
   const slots = slotPairs(view.slots, (key) => t(key));
   const slaDue = view.handover?.slaDueAt ?? null;
   const slaOverdue = slaDue ? Date.parse(slaDue) < now : false;
@@ -427,7 +437,7 @@ export function ConversationViewPane(props: {
                   <li
                     key={message.id}
                     data-author={message.authorType}
-                    className={`flex max-w-[88%] min-w-0 flex-col gap-1 px-3.5 py-2.5 sm:max-w-[78%] ${BUBBLE[message.authorType] ?? BUBBLE.CUSTOMER}`}
+                    className={`flex max-w-[88%] min-w-0 flex-col gap-0.5 px-3 py-2 sm:max-w-[78%] ${BUBBLE[message.authorType] ?? BUBBLE.CUSTOMER}`}
                   >
                     <p
                       className={`flex items-center gap-1.5 text-xs ${own ? 'text-on-primary-muted' : 'text-muted'}`}
@@ -437,7 +447,14 @@ export function ConversationViewPane(props: {
                         className="h-3 w-3"
                       />
                       {t(`author.${message.authorType}`)} ·{' '}
-                      {formatDateTime(message.createdAt, props.timeZone)}
+                      {isSameDay(message.createdAt, now, props.timeZone)
+                        ? shortTime(
+                            message.createdAt,
+                            now,
+                            locale,
+                            props.timeZone,
+                          )
+                        : formatDateTime(message.createdAt, props.timeZone)}
                     </p>
                     {message.type === 'VOICE' ? (
                       <p
@@ -614,7 +631,17 @@ export function ConversationViewPane(props: {
           aria-label={t('view.details')}
           className={`${showDetails ? 'flex' : 'hidden xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
         >
-          <Section title={t('view.handover')} icon="headset">
+          <Section
+            title={t('view.handover')}
+            icon="headset"
+            collapsible
+            storageKey="handover"
+            summary={
+              view.handover
+                ? reasonLabel(t, view.handover.reasonCode)
+                : t('view.noHandover')
+            }
+          >
             {view.handover ? (
               <>
                 <p>
@@ -634,24 +661,54 @@ export function ConversationViewPane(props: {
                         })}
                   </p>
                 ) : null}
-                {summaryLines.map((line) => (
-                  <p key={line} className="text-muted">
-                    {line}
-                  </p>
-                ))}
+                {summaryGroups.length > 0
+                  ? summaryGroups.map((group) => (
+                      <div key={group.title} className="mt-1">
+                        <p className="text-xs font-medium text-muted">
+                          {group.title}
+                        </p>
+                        <ul className="list-disc pl-4">
+                          {group.items.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  : summaryLines.map((line) => (
+                      <p key={line} className="text-muted">
+                        {line}
+                      </p>
+                    ))}
               </>
             ) : (
               <p className="text-muted">{t('view.noHandover')}</p>
             )}
           </Section>
-          <Section title={t('view.contact')} icon="user">
+          <Section
+            title={t('view.contact')}
+            icon="user"
+            collapsible
+            defaultOpen={false}
+            storageKey="contact"
+            summary={view.contact.phone ?? t('view.noPhone')}
+          >
             <p>
               {view.contact.phone
                 ? t('view.phone', { phone: view.contact.phone })
                 : t('view.noPhone')}
             </p>
           </Section>
-          <Section title={t('view.lead')} icon="inbox">
+          <Section
+            title={t('view.lead')}
+            icon="inbox"
+            collapsible
+            storageKey="lead"
+            summary={
+              view.lead
+                ? `${t(`score.${view.lead.score}`)} · ${t(`leadStatus.${view.lead.status}`)}`
+                : t('view.noLead')
+            }
+          >
             {view.lead ? (
               <>
                 <p className="flex flex-wrap items-center gap-2">
@@ -796,7 +853,16 @@ export function ConversationViewPane(props: {
             canResolve={operating}
             timeZone={props.timeZone}
           />
-          <Section title={t('view.slots')} icon="message">
+          <Section
+            title={t('view.slots')}
+            icon="message"
+            collapsible
+            storageKey="slots"
+            defaultOpen={slots.length > 0}
+            summary={
+              slots.length > 0 ? String(slots.length) : t('view.noneYet')
+            }
+          >
             {slots.length === 0 ? (
               <p className="text-muted">{t('view.noSlots')}</p>
             ) : (
@@ -808,7 +874,18 @@ export function ConversationViewPane(props: {
               ))
             )}
           </Section>
-          <Section title={t('view.notes')} icon="note">
+          <Section
+            title={t('view.notes')}
+            icon="note"
+            collapsible
+            storageKey="notes"
+            defaultOpen={view.notes.length > 0}
+            summary={
+              view.notes.length > 0
+                ? String(view.notes.length)
+                : t('view.noNotes')
+            }
+          >
             {view.notes.length === 0 ? (
               <p className="text-muted">{t('view.noNotes')}</p>
             ) : null}

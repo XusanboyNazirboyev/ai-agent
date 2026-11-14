@@ -64,7 +64,21 @@ export function ActionsPanel(props: {
   });
 
   return (
-    <Section title={t('view.actions')} icon="bolt" testId="actions-panel">
+    <Section
+      title={t('view.actions')}
+      icon="bolt"
+      testId="actions-panel"
+      collapsible
+      storageKey="actions"
+      defaultOpen={props.actions.some(
+        (action) => action.status === 'UNCERTAIN',
+      )}
+      summary={
+        props.actions.length === 0
+          ? t('view.noActions')
+          : String(props.actions.length)
+      }
+    >
       {props.actions.length === 0 ? (
         <p className="text-muted">{t('view.noActions')}</p>
       ) : null}

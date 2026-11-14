@@ -14,15 +14,19 @@ export function slotPairs(
   return factLines(slots).flatMap((line) => {
     const cut = line.indexOf(': ');
     if (cut < 0) return [];
-    const key = line.slice(0, cut);
-    const catalogKey = `slot.${key}`;
     return [
       {
-        label: catalogKey in en ? label(catalogKey) : humanize(key),
+        label: slotLabel(line.slice(0, cut), label),
         value: line.slice(cut + 2),
       },
     ];
   });
+}
+
+/** The label of one slot key: translated when the catalog knows it, spelled out otherwise. */
+export function slotLabel(key: string, label: (key: string) => string): string {
+  const catalogKey = `slot.${key}`;
+  return catalogKey in en ? label(catalogKey) : humanize(key);
 }
 
 /** "travelMonth" -> "Travel month". */

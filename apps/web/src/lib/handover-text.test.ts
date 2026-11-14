@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { translate } from '@/i18n';
-import { handoverSummaryLines, reasonLabel } from './handover-text';
+import {
+  handoverSummaryGroups,
+  handoverSummaryLines,
+  reasonLabel,
+} from './handover-text';
 
 const uz = (key: string, values?: Record<string, string | number>): string =>
   translate('uz-Latn', key, values);
@@ -56,7 +60,7 @@ describe('handover summary', () => {
   it('reads as plain words and does not repeat the reason shown above it', () => {
     const lines = handoverSummaryLines(uz, summary, 'LOW_LANG_CONFIDENCE');
     expect(lines).toHaveLength(3);
-    expect(lines[0]).toContain('subject: Mathematics');
+    expect(lines[0]).toContain('Fan: Mathematics');
     expect(lines.join('\n')).not.toMatch(
       /customerClaims|inferences|unknowns|intent=|locale=|LOW_LANG/u,
     );
@@ -79,5 +83,30 @@ describe('handover summary', () => {
       'note: call back',
     ]);
     expect(handoverSummaryLines(en, null)).toEqual([]);
+  });
+});
+
+describe('handover summary groups', () => {
+  const summary = {
+    customerClaims: ['subject=Mathematics', 'travelMonth=june'],
+    inferences: ['intent=asks_operator', 'reason=NO_DATA'],
+    unknowns: [],
+    verifiedFacts: [],
+  };
+  it('names each group once and labels the slots in words, never as raw keys', () => {
+    const groups = handoverSummaryGroups(uz, summary, 'NO_DATA');
+    expect(groups.map((g) => g.title)).toEqual([
+      uz('handover.group.customerClaims'),
+      uz('handover.group.inferences'),
+    ]);
+    expect(groups[0]!.items).toEqual(['Fan: Mathematics', 'Sayohat oyi: june']);
+    // The reason already shown above is not repeated; no raw key=value is left.
+    expect(JSON.stringify(groups)).not.toMatch(
+      /subject|travelMonth|reason=|=/u,
+    );
+  });
+  it('is empty for a summary of another shape', () => {
+    expect(handoverSummaryGroups(uz, { a: 1 })).toEqual([]);
+    expect(handoverSummaryGroups(uz, null)).toEqual([]);
   });
 });
