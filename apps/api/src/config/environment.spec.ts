@@ -24,6 +24,19 @@ describe('validateEnvironment', () => {
     });
   });
 
+  it('accepts the Google Sheets test address in development and refuses it in production (ADR 064)', () => {
+    const base = {
+      ...postgresEnvironment,
+      GOOGLE_SHEETS_TEST_BASE_URL: 'http://127.0.0.1:4024',
+    };
+    expect(validateEnvironment(base).GOOGLE_SHEETS_TEST_BASE_URL).toBe(
+      'http://127.0.0.1:4024',
+    );
+    expect(() =>
+      validateEnvironment({ ...base, NODE_ENV: 'production' }),
+    ).toThrow(/GOOGLE_SHEETS_TEST_BASE_URL is a test setting/u);
+  });
+
   it('lets voice-note STT use GEMINI_API_KEY when STT_API_KEY is not set (ADR 042)', () => {
     expect(() =>
       validateEnvironment({ ...postgresEnvironment, STT_PROVIDER: 'gemini' }),

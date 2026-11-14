@@ -65,6 +65,11 @@ export interface SheetStatus {
   rowCount?: number;
   acceptedCount?: number;
   rejectedCount?: number;
+  /** The shared Google Sheets link the list came from, and whether the server reloads it. */
+  sourceUrl?: string | null;
+  autoRefresh?: boolean;
+  /** Error code of the last failed reload (the old list is still used). */
+  refreshError?: string | null;
 }
 
 export interface SheetUploadResult {
@@ -93,6 +98,9 @@ export interface SheetSettings {
   mapping?: SheetMapping;
   defaultCurrency: string;
   freshnessDays: number;
+  /** A Google Sheets link the text was loaded from (kept for reloads). */
+  sourceUrl?: string;
+  autoRefresh?: boolean;
 }
 
 /** The JSON of the API's `config` query value; empty values are left out. */
@@ -111,6 +119,12 @@ export function sheetConfigQuery(settings: SheetSettings): string {
       ? { defaultCurrency: settings.defaultCurrency }
       : {}),
     freshnessDays: settings.freshnessDays,
+    ...(settings.sourceUrl
+      ? {
+          sourceUrl: settings.sourceUrl,
+          autoRefresh: settings.autoRefresh ?? false,
+        }
+      : {}),
   });
 }
 

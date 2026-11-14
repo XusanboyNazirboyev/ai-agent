@@ -14,7 +14,10 @@ import {
 } from './registry/registrations.js';
 import { EnvSecretResolver } from './registry/secret-resolver.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { SheetCatalogService } from './spreadsheet/sheet-catalog.service.js';
+import {
+  SHEET_FETCH_OPTIONS,
+  SheetCatalogService,
+} from './spreadsheet/sheet-catalog.service.js';
 import {
   PrismaSheetCatalogStore,
   type SheetCatalogReader,
@@ -74,6 +77,18 @@ export function createConnectorRegistry(
     ConnectorSelector,
     CatalogSyncService,
     CatalogSyncQueueRuntime,
+    {
+      provide: SHEET_FETCH_OPTIONS,
+      inject: [ConfigService],
+      useFactory: (
+        config: ConfigService<AppEnvironment, true>,
+      ): { origin?: string } => {
+        const origin = config.get('GOOGLE_SHEETS_TEST_BASE_URL', {
+          infer: true,
+        });
+        return origin ? { origin } : {};
+      },
+    },
     SheetCatalogService,
     {
       provide: PrismaSheetCatalogStore,

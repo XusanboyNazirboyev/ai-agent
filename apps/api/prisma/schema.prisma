@@ -1885,6 +1885,15 @@ model SheetCatalog {
   mapping        Json     @default("{}")
   /// defaultCurrency, limitedThreshold, defaultAvailability.
   options        Json     @default("{}")
+  /// A shared Google Sheets link the list was loaded from (never a secret).
+  sourceUrl      String?  @map("source_url") @db.VarChar(500)
+  /// The server reloads the link every few hours while this is on.
+  autoRefresh    Boolean  @default(false) @map("auto_refresh")
+  /// field -> header text of the mapped column at save time.
+  mappedHeaders  Json     @default("{}") @map("mapped_headers")
+  refreshAttemptedAt DateTime? @map("refresh_attempted_at") @db.Timestamptz(6)
+  /// Why the last refresh kept the old list (a code, never cell text).
+  refreshError   String?  @map("refresh_error") @db.VarChar(40)
   /// Prices older than this are not quoted (ADR 064 decision 5).
   freshnessDays  Int      @default(3) @map("freshness_days")
   uploadedAt     DateTime @map("uploaded_at") @db.Timestamptz(6)

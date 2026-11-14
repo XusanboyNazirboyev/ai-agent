@@ -386,6 +386,11 @@ const environmentSchema = postgresEnvironmentSchema
      * calls to this base instead of the portal. Refused in production.
      */
     BITRIX24_TEST_BASE_URL: z.url().optional(),
+    /**
+     * Test only (e2e fake Google, ADR 064): a shared-sheet link is read from
+     * this origin instead of docs.google.com. Refused in production.
+     */
+    GOOGLE_SHEETS_TEST_BASE_URL: z.url().optional(),
     /** https base URL of this API as Telegram sees it (webhook target). */
     PUBLIC_BASE_URL: z
       .url()
@@ -478,6 +483,17 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['STT_API_KEY'],
         message:
           'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
+      });
+    }
+    if (
+      environment.GOOGLE_SHEETS_TEST_BASE_URL &&
+      environment.NODE_ENV === 'production'
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GOOGLE_SHEETS_TEST_BASE_URL'],
+        message:
+          'GOOGLE_SHEETS_TEST_BASE_URL is a test setting and is refused in production',
       });
     }
     if (

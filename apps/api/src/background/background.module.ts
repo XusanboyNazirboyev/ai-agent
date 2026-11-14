@@ -10,6 +10,8 @@ import {
 import { DigestService } from '../handover/digest.service.js';
 import { HandoverModule } from '../handover/handover.module.js';
 import { OperatorIdleReturnService } from '../handover/operator-idle-return.service.js';
+import { ConnectorsModule } from '../connectors/connectors.module.js';
+import { SheetCatalogService } from '../connectors/spreadsheet/sheet-catalog.service.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadsModule } from '../leads/leads.module.js';
 import { ActionsModule } from '../actions/actions.module.js';
@@ -37,6 +39,7 @@ import { RetentionService } from '../retention/retention.service.js';
     ActionsModule,
     AccessModule,
     RetentionModule,
+    ConnectorsModule,
   ],
   providers: [
     FollowUpService,
@@ -55,6 +58,7 @@ import { RetentionService } from '../retention/retention.service.js';
         OperatorIdleReturnService,
         SubscriptionScanService,
         RetentionService,
+        SheetCatalogService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -66,6 +70,7 @@ import { RetentionService } from '../retention/retention.service.js';
         idle: OperatorIdleReturnService,
         subscriptions: SubscriptionScanService,
         retention: RetentionService,
+        sheets: SheetCatalogService,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -76,6 +81,7 @@ import { RetentionService } from '../retention/retention.service.js';
         idle,
         subscriptions,
         retention,
+        sheets,
       ],
     },
     HandoverRuntime,

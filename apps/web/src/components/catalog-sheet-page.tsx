@@ -33,6 +33,7 @@ import { useToast } from './ui/toast';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const REQUIRED_FIELDS: readonly SheetField[] = ['price'];
+const LINK_SOURCE_NAME = 'Google Sheets';
 
 interface PickedFile {
   name: string;
@@ -56,6 +57,7 @@ export function CatalogSheetPage(): ReactNode {
   const toast = useToast();
   const qc = useQueryClient();
   const fileId = useId();
+  const linkId = useId();
   const manage = canManage(operator.role);
 
   const [file, setFile] = useState<PickedFile | null>(null);
@@ -66,6 +68,10 @@ export function CatalogSheetPage(): ReactNode {
   const [currency, setCurrency] = useState('');
   const [days, setDays] = useState(3);
   const [bound, setBound] = useState<SheetUploadResult | null>(null);
+  /** A Google Sheets link the loaded text came from; `null` for a file. */
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [linkText, setLinkText] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const status = useQuery({
     queryKey: ['sheet-status'],
@@ -77,6 +83,12 @@ export function CatalogSheetPage(): ReactNode {
     mapping: mapping ?? undefined,
     defaultCurrency: currency,
     freshnessDays: days,
+  });
+  const saveConfig = sheetConfigQuery({
+    mapping: mapping ?? undefined,
+    defaultCurrency: currency,
+    freshnessDays: days,
+    ...(linkUrl ? { sourceUrl: linkUrl, autoRefresh } : {}),
   });
   const preview = useQuery({
     queryKey: [
@@ -108,7 +120,7 @@ export function CatalogSheetPage(): ReactNode {
   const upload = useMutation({
     mutationFn: () =>
       api<SheetUploadResult>(
-        `/api/v1/catalog/sheet?config=${encodeURIComponent(config)}&filename=${encodeURIComponent(file?.name ?? '')}`,
+        `/api/v1/catalog/sheet?config=${encodeURIComponent(saveConfig)}&filename=${encodeURIComponent(file?.name ?? '')}`,
         { method: 'POST', rawBody: file!.text, contentType: 'text/csv' },
       ),
     onSuccess: (result) => {
@@ -116,16 +128,49 @@ export function CatalogSheetPage(): ReactNode {
       setFile(null);
       setWorkbook(null);
       setMapping(null);
+      setLinkUrl(null);
+      setLinkText('');
       void qc.invalidateQueries({ queryKey: ['sheet-status'] });
       void qc.invalidateQueries({ queryKey: ['connector-roles'] });
       setBound(result);
     },
   });
+  const loadLink = useMutation({
+    mutationFn: () =>
+      api<{ csv: string; sourceUrl: string }>(
+        '/api/v1/catalog/sheet/from-link',
+        { method: 'POST', body: { url: linkText.trim() } },
+      ),
+    onSuccess: (read) => {
+      setBound(null);
+      setFileError(null);
+      setWorkbook(null);
+      setLinkUrl(read.sourceUrl);
+      setFile({ name: LINK_SOURCE_NAME, text: read.csv, sheet: 0 });
+    },
+  });
+  const refresh = useMutation({
+    mutationFn: () =>
+      api<{ accepted: number; rejected: number }>(
+        '/api/v1/catalog/sheet/refresh',
+        { method: 'POST' },
+      ),
+    onSuccess: (done) => {
+      toast(t('sheet.refreshed', { accepted: done.accepted }));
+      void qc.invalidateQueries({ queryKey: ['sheet-status'] });
+    },
+    onError: () => {
+      // The failure reason is shown in the status card.
+      void qc.invalidateQueries({ queryKey: ['sheet-status'] });
+    },
+  });
+
   async function pick(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const picked = event.target.files?.[0];
     event.target.value = '';
     setBound(null);
     setFileError(null);
+    setLinkUrl(null);
     if (!picked) return;
     if (picked.size > MAX_FILE_BYTES) {
       setFileError(t('errors.SHEET_TOO_LARGE'));
@@ -236,6 +281,54 @@ export function CatalogSheetPage(): ReactNode {
                         date: date(status.data.validUntil!),
                       })}
                 </p>
+                {status.data.sourceUrl ? (
+                  <div
+                    className="flex flex-col gap-2 border-t border-line pt-2"
+                    data-testid="sheet-link-status"
+                  >
+                    <p className="text-sm">
+                      {t('sheet.status.link')}.{' '}
+                      {status.data.autoRefresh
+                        ? t('sheet.status.auto')
+                        : t('sheet.status.manualLink')}{' '}
+                      <a
+                        href={status.data.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary-fg underline"
+                      >
+                        {t('sheet.status.open')}
+                      </a>
+                    </p>
+                    {status.data.refreshError ? (
+                      <p
+                        role="alert"
+                        data-testid="sheet-refresh-error"
+                        className="text-sm text-danger-fg"
+                      >
+                        {t('sheet.refreshFailed', {
+                          reason: t(`errors.${status.data.refreshError}`),
+                        })}
+                      </p>
+                    ) : null}
+                    {refresh.isError && !status.data.refreshError ? (
+                      <p role="alert" className="text-sm text-danger-fg">
+                        {t(errorKey(refresh.error))}
+                      </p>
+                    ) : null}
+                    <div>
+                      <Button
+                        variant="secondary"
+                        loading={refresh.isPending}
+                        onClick={() => refresh.mutate()}
+                        data-testid="sheet-refresh"
+                      >
+                        <Icon name="clock" />
+                        {t('sheet.refresh')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
             {bound ? (
@@ -283,6 +376,45 @@ export function CatalogSheetPage(): ReactNode {
             {fileError ? (
               <p role="alert" className="text-sm text-danger-fg">
                 {fileError}
+              </p>
+            ) : null}
+          </section>
+
+          <section className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4">
+            <label htmlFor={linkId} className="text-sm font-medium">
+              {t('sheet.link.label')}
+            </label>
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <input
+                id={linkId}
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                value={linkText}
+                onChange={(event) => setLinkText(event.target.value)}
+                placeholder={t('sheet.link.placeholder')}
+                data-testid="sheet-link"
+                className={`${fieldClass} min-w-0 flex-1 basis-64`}
+              />
+              <Button
+                variant="secondary"
+                loading={loadLink.isPending}
+                disabled={linkText.trim() === ''}
+                onClick={() => loadLink.mutate()}
+                data-testid="sheet-link-load"
+              >
+                {t('sheet.link.load')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted">{t('sheet.link.hint')}</p>
+            {loadLink.isError ? (
+              <p
+                role="alert"
+                data-testid="sheet-link-error"
+                className="text-sm text-danger-fg"
+              >
+                {t(errorKey(loadLink.error))}
               </p>
             ) : null}
           </section>
@@ -486,6 +618,24 @@ export function CatalogSheetPage(): ReactNode {
                   </div>
                 ) : null}
               </section>
+
+              {linkUrl ? (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autoRefresh}
+                    onChange={(event) => setAutoRefresh(event.target.checked)}
+                    data-testid="sheet-auto-refresh"
+                    className="mt-1"
+                  />
+                  <span className="flex flex-col">
+                    <span className="font-medium">{t('sheet.auto.label')}</span>
+                    <span className="text-xs text-muted">
+                      {t('sheet.auto.hint')}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
                 <Button

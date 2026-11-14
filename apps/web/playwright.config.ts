@@ -47,6 +47,9 @@ export const FAKE_BITRIX24_PORT = 4022;
 /** The fake instagram.com / api.instagram.com of Business Login (e2e/instagram-oauth.spec.ts). */
 export const FAKE_INSTAGRAM_OAUTH_PORT = 4023;
 
+/** The fake docs.google.com of the e2e (started by e2e/catalog-sheet-link.spec.ts). */
+export const FAKE_GOOGLE_SHEETS_PORT = 4024;
+
 export const E2E_ENV = {
   SECRETS_MASTER_KEY: SECRETS_KEY,
   PUBLIC_BASE_URL: 'https://e2e.example.test',
@@ -60,6 +63,7 @@ export const E2E_ENV = {
   INSTAGRAM_OAUTH_REDIRECT_URI: `http://127.0.0.1:${WEB_PORT}/channels/instagram/callback`,
   INSTAGRAM_OAUTH_BASE_URL: `http://127.0.0.1:${FAKE_INSTAGRAM_OAUTH_PORT}`,
   BITRIX24_TEST_BASE_URL: `http://127.0.0.1:${FAKE_BITRIX24_PORT}`,
+  GOOGLE_SHEETS_TEST_BASE_URL: `http://127.0.0.1:${FAKE_GOOGLE_SHEETS_PORT}`,
   WEB_PROXY_SECRET: PROXY_SECRET,
   ENV_FILE: resolve(import.meta.dirname, 'e2e/empty.env'),
   NODE_ENV: 'development',

@@ -9,7 +9,9 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { z } from 'zod';
 import { SheetReadError } from '../connectors/spreadsheet/csv-reader.js';
+import { SheetFetchError } from '../connectors/spreadsheet/google-sheet-fetch.js';
 import {
   SheetCatalogError,
   SheetCatalogService,
@@ -20,6 +22,7 @@ import {
 } from '../connectors/spreadsheet/sheet-catalog.service.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
 
+const LinkBody = z.object({ url: z.string().trim().min(1).max(500) }).strict();
 const MAX_CONFIG_LENGTH = 4_000;
 const MAX_FILENAME_LENGTH = 200;
 
@@ -55,7 +58,25 @@ function translate<T>(work: () => T): T {
   try {
     return work();
   } catch (error) {
-    if (error instanceof SheetReadError || error instanceof SheetCatalogError)
+    if (
+      error instanceof SheetReadError ||
+      error instanceof SheetCatalogError ||
+      error instanceof SheetFetchError
+    )
+      throw bad(error.code, error.message);
+    throw error;
+  }
+}
+
+async function translateAsync<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (
+      error instanceof SheetReadError ||
+      error instanceof SheetCatalogError ||
+      error instanceof SheetFetchError
+    )
       throw bad(error.code, error.message);
     throw error;
   }
@@ -120,19 +141,38 @@ export class SheetCatalogController {
     const csv = csvOf(body);
     const settings = parseConfig(config);
     const name = filename?.slice(0, MAX_FILENAME_LENGTH) ?? null;
-    try {
-      const done = await this.sheets.commit(actor, csv, settings, name);
-      return {
-        uploadedAt: done.meta.uploadedAt.toISOString(),
-        accepted: done.meta.acceptedCount,
-        rejected: done.rejected,
-        catalogBound: done.catalogBound,
-        boundTo: done.boundTo,
-      };
-    } catch (error) {
-      if (error instanceof SheetReadError || error instanceof SheetCatalogError)
-        throw bad(error.code, error.message);
-      throw error;
-    }
+    const done = await translateAsync(() =>
+      this.sheets.commit(actor, csv, settings, name),
+    );
+    return {
+      uploadedAt: done.meta.uploadedAt.toISOString(),
+      accepted: done.meta.acceptedCount,
+      rejected: done.rejected,
+      catalogBound: done.catalogBound,
+      boundTo: done.boundTo,
+    };
+  }
+
+  /** Reads a shared Google Sheets link on the server; nothing is saved. */
+  @Post('from-link')
+  async fromLink(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<{ csv: string; sourceUrl: string }> {
+    this.manager(request);
+    const parsed = LinkBody.safeParse(body);
+    if (!parsed.success) throw bad('INVALID_BODY', 'Send {"url": "..."}');
+    return translateAsync(() => this.sheets.fetchFromLink(parsed.data.url));
+  }
+
+  /** Reloads the saved link now, with the saved columns. */
+  @Post('refresh')
+  async refresh(
+    @Req() request: InboxRequest,
+  ): Promise<{ accepted: number; rejected: number }> {
+    const actor = this.manager(request);
+    return translateAsync(() =>
+      this.sheets.refresh(actor.tenantId, { operatorId: actor.operatorId }),
+    );
   }
 }

@@ -16,6 +16,13 @@ export interface SheetCatalogMeta {
   readonly rejectedCount: number;
   readonly mapping: ColumnMapping;
   readonly options: MapOptions;
+  /** The shared Google Sheets link the list came from, if any. */
+  readonly sourceUrl: string | null;
+  readonly autoRefresh: boolean;
+  /** field -> header text of the mapped column when the list was saved. */
+  readonly mappedHeaders: Readonly<Record<string, string>>;
+  readonly refreshAttemptedAt: Date | null;
+  readonly refreshError: string | null;
   /** IANA time zone of the tenant, for the local start of a departure day. */
   readonly timeZone: string;
 }
@@ -64,6 +71,9 @@ export interface SheetCatalogInput {
   readonly freshnessDays: number;
   readonly uploadedAt: Date;
   readonly result: SheetMapResult;
+  readonly sourceUrl?: string | null;
+  readonly autoRefresh?: boolean;
+  readonly mappedHeaders?: Readonly<Record<string, string>>;
 }
 
 /** Lower case, single spaces: the form used to match a title query. */
@@ -125,6 +135,11 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
       rejectedCount: row.rejectedCount,
       mapping: row.mapping as ColumnMapping,
       options: row.options as MapOptions,
+      sourceUrl: row.sourceUrl,
+      autoRefresh: row.autoRefresh,
+      mappedHeaders: row.mappedHeaders as Record<string, string>,
+      refreshAttemptedAt: row.refreshAttemptedAt,
+      refreshError: row.refreshError,
       timeZone: row.tenant.timezone,
     };
   }
@@ -250,6 +265,61 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
     };
   }
 
+  /** Claims a refresh attempt: false when another process already took it. */
+  async claimRefresh(
+    tenantId: string,
+    id: string,
+    now: Date,
+    notAfter: Date,
+  ): Promise<boolean> {
+    const claimed = await this.prisma.sheetCatalog.updateMany({
+      where: {
+        tenantId,
+        id,
+        OR: [
+          { refreshAttemptedAt: null },
+          { refreshAttemptedAt: { lte: notAfter } },
+        ],
+      },
+      data: { refreshAttemptedAt: now },
+    });
+    return claimed.count === 1;
+  }
+
+  /** The old list stays; only the reason and the time are kept. */
+  async markRefreshFailed(
+    tenantId: string,
+    code: string,
+    now: Date,
+  ): Promise<void> {
+    await this.prisma.sheetCatalog.updateMany({
+      where: { tenantId },
+      data: { refreshError: code.slice(0, 40), refreshAttemptedAt: now },
+    });
+  }
+
+  /** Catalogs with auto refresh on whose data is older than `olderThan`. */
+  async dueForRefresh(
+    olderThan: Date,
+    notAttemptedSince: Date,
+    limit: number,
+  ): Promise<Array<{ id: string; tenantId: string }>> {
+    return this.prisma.sheetCatalog.findMany({
+      where: {
+        autoRefresh: true,
+        sourceUrl: { not: null },
+        uploadedAt: { lte: olderThan },
+        OR: [
+          { refreshAttemptedAt: null },
+          { refreshAttemptedAt: { lte: notAttemptedSince } },
+        ],
+      },
+      orderBy: { uploadedAt: 'asc' },
+      take: limit,
+      select: { id: true, tenantId: true },
+    });
+  }
+
   /**
    * Replaces the tenant's price list in ONE transaction (ADR 064 decision 6):
    * either the whole new file is live or the old one stays.
@@ -274,6 +344,11 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
             rowCount: result.rowCount,
             acceptedCount: result.offers.length,
             rejectedCount: result.errors.length,
+            sourceUrl: input.sourceUrl ?? null,
+            autoRefresh: input.autoRefresh ?? false,
+            mappedHeaders: (input.mappedHeaders ?? {}) as Prisma.InputJsonValue,
+            refreshAttemptedAt: input.uploadedAt,
+            refreshError: null,
           },
           update: {
             name: input.name,
@@ -285,6 +360,11 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
             rowCount: result.rowCount,
             acceptedCount: result.offers.length,
             rejectedCount: result.errors.length,
+            sourceUrl: input.sourceUrl ?? null,
+            autoRefresh: input.autoRefresh ?? false,
+            mappedHeaders: (input.mappedHeaders ?? {}) as Prisma.InputJsonValue,
+            refreshAttemptedAt: input.uploadedAt,
+            refreshError: null,
           },
           select: { id: true },
         });

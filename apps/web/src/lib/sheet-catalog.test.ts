@@ -39,4 +39,24 @@ describe('sheet catalog helpers', () => {
       ),
     ).toMatchObject({ defaultCurrency: 'USD' });
   });
+
+  it('keeps a Google Sheets link and the auto refresh choice only together', () => {
+    const base = { mapping: {}, defaultCurrency: '', freshnessDays: 3 };
+    expect(
+      JSON.parse(
+        sheetConfigQuery({
+          ...base,
+          sourceUrl: 'https://docs.google.com/spreadsheets/d/x/edit',
+          autoRefresh: true,
+        }),
+      ),
+    ).toMatchObject({
+      sourceUrl: 'https://docs.google.com/spreadsheets/d/x/edit',
+      autoRefresh: true,
+    });
+    // No link: the choice is not sent at all.
+    expect(
+      JSON.parse(sheetConfigQuery({ ...base, autoRefresh: true })),
+    ).not.toHaveProperty('autoRefresh');
+  });
 });

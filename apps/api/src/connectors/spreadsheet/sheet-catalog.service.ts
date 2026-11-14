@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { SHEET_CURRENCIES } from './cell-values.js';
-import { parseSheet, type ParsedSheet } from './csv-reader.js';
+import { parseSheet, SheetReadError, type ParsedSheet } from './csv-reader.js';
 import {
   FIELD_KEYS,
   missingRequiredFields,
@@ -21,6 +21,19 @@ import {
   type SheetCatalogMeta,
 } from './sheet-catalog.store.js';
 import { SPREADSHEET_CONNECTOR_KEY } from './spreadsheet-connector.js';
+import {
+  fetchSheetCsv,
+  SheetFetchError,
+  type SheetFetchOptions,
+} from './google-sheet-fetch.js';
+import { parseGoogleSheetLink } from './google-sheet-link.js';
+
+/** DI token of the fetch settings (the e2e points them at a fake Google). */
+export const SHEET_FETCH_OPTIONS = 'SHEET_FETCH_OPTIONS';
+/** An auto-refreshed list is reloaded when its data is this old. */
+export const SHEET_REFRESH_EVERY_MS = 6 * 3_600_000;
+/** After a failed attempt the next one waits this long. */
+export const SHEET_REFRESH_RETRY_MS = 3_600_000;
 
 const DAY_MS = 86_400_000;
 export const SHEET_PREVIEW_ERRORS = 100;
@@ -47,6 +60,10 @@ export const SheetConfigSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     /** Bind the CATALOG role to the price list when nothing is bound yet (default true). */
     bindCatalog: z.boolean().optional(),
+    /** A shared Google Sheets link the file text came from (kept for refresh). */
+    sourceUrl: z.string().trim().max(500).optional(),
+    /** Reload the link by itself every few hours (needs `sourceUrl`). */
+    autoRefresh: z.boolean().optional(),
   })
   .strict();
 export type SheetConfig = z.infer<typeof SheetConfigSchema>;
@@ -57,7 +74,10 @@ export class SheetCatalogError extends Error {
       | 'SHEET_MAPPING_INCOMPLETE'
       | 'SHEET_NO_VALID_ROWS'
       | 'SHEET_NO_ROWS'
-      | 'SHEET_COLUMN_OUT_OF_RANGE',
+      | 'SHEET_COLUMN_OUT_OF_RANGE'
+      | 'SHEET_LINK_INVALID'
+      | 'SHEET_NO_LINK'
+      | 'SHEET_COLUMNS_CHANGED',
     message: string,
   ) {
     super(message);
@@ -100,6 +120,20 @@ export interface SheetStatus {
   readonly acceptedCount?: number;
   readonly rejectedCount?: number;
   readonly mapping?: ColumnMapping;
+  /** The shared link the list was loaded from, and whether the server reloads it. */
+  readonly sourceUrl?: string | null;
+  readonly autoRefresh?: boolean;
+  /** Why the last reload kept the old list (a code), when it did. */
+  readonly refreshError?: string | null;
+}
+
+/** The reason code of a failed reload; anything unexpected is a generic one. */
+function codeOf(error: unknown): string {
+  return error instanceof SheetFetchError ||
+    error instanceof SheetCatalogError ||
+    error instanceof SheetReadError
+    ? error.code
+    : 'SHEET_REFRESH_FAILED';
 }
 
 function checkMapping(mapping: ColumnMapping, columns: number): void {
@@ -133,10 +167,158 @@ function optionsOf(config: SheetConfig): MapOptions {
  */
 @Injectable()
 export class SheetCatalogService {
+  private readonly logger = new Logger(SheetCatalogService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly store: PrismaSheetCatalogStore,
+    @Optional()
+    @Inject(SHEET_FETCH_OPTIONS)
+    private readonly fetchOptions: SheetFetchOptions = {},
   ) {}
+
+  /**
+   * Reads a shared Google Sheets link on the server (a browser may not call
+   * Google: no CORS). Returns the CSV text and the normalised link; the admin
+   * then checks the columns and saves like for a file.
+   */
+  async fetchFromLink(
+    link: string,
+  ): Promise<{ csv: string; sourceUrl: string }> {
+    const ref = parseGoogleSheetLink(link);
+    if (!ref)
+      throw new SheetCatalogError(
+        'SHEET_LINK_INVALID',
+        'This is not a Google Sheets link',
+      );
+    const csv = await fetchSheetCsv(ref, this.fetchOptions);
+    return { csv, sourceUrl: ref.canonicalUrl };
+  }
+
+  /** Header text of each mapped column, the guard against moved columns. */
+  private headersOf(
+    sheet: ParsedSheet,
+    mapping: ColumnMapping,
+  ): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [field, index] of Object.entries(mapping))
+      if (index !== undefined) out[field] = (sheet.header[index] ?? '').trim();
+    return out;
+  }
+
+  /**
+   * Reloads the saved link with the saved mapping. The old list stays when
+   * anything is wrong (the link, the file, moved columns, no valid row); it
+   * then ages out by itself and the agent stops quoting it.
+   */
+  async refresh(
+    tenantId: string,
+    actor: { operatorId: string } | null,
+    now: Date = new Date(),
+  ): Promise<{ accepted: number; rejected: number }> {
+    const meta = await this.store.meta(tenantId);
+    if (!meta?.sourceUrl)
+      throw new SheetCatalogError('SHEET_NO_LINK', 'No link is saved');
+    const fail = async (error: unknown): Promise<never> => {
+      await this.store.markRefreshFailed(tenantId, codeOf(error), now);
+      throw error;
+    };
+    try {
+      const ref = parseGoogleSheetLink(meta.sourceUrl);
+      if (!ref)
+        throw new SheetCatalogError(
+          'SHEET_LINK_INVALID',
+          'The saved link is not valid',
+        );
+      const csv = await fetchSheetCsv(ref, this.fetchOptions);
+      const sheet = parseSheet(csv);
+      // A column inserted before the price would silently make the price the
+      // wrong column: every mapped header must still be where it was.
+      const expected = meta.mappedHeaders;
+      for (const [field, index] of Object.entries(meta.mapping))
+        if (
+          index !== undefined &&
+          (sheet.header[index] ?? '').trim() !== (expected[field] ?? '')
+        )
+          throw new SheetCatalogError(
+            'SHEET_COLUMNS_CHANGED',
+            'The columns of the sheet moved',
+          );
+      const result = mapSheet(sheet, meta.mapping, meta.options);
+      if (result.offers.length === 0)
+        throw new SheetCatalogError(
+          'SHEET_NO_VALID_ROWS',
+          'No row of the sheet could be read',
+        );
+      await this.store.replace(tenantId, {
+        name: meta.name,
+        sourceFilename: meta.sourceFilename,
+        mapping: meta.mapping,
+        options: meta.options,
+        freshnessDays: meta.freshnessDays,
+        uploadedAt: now,
+        result,
+        sourceUrl: meta.sourceUrl,
+        autoRefresh: meta.autoRefresh,
+        mappedHeaders: expected,
+      });
+      await this.prisma.auditEvent.create({
+        data: {
+          tenantId,
+          actorType: actor ? 'OPERATOR' : 'SYSTEM',
+          actorId: actor?.operatorId ?? null,
+          action: 'catalog.sheet.refreshed',
+          entityType: 'sheet_catalog',
+          entityId: meta.id,
+          // Counts only: never a cell, a hotel name or a price.
+          safeInputSummary: {
+            rows: result.rowCount,
+            accepted: result.offers.length,
+            rejected: result.errors.length,
+          },
+        },
+      });
+      return { accepted: result.offers.length, rejected: result.errors.length };
+    } catch (error) {
+      return fail(error);
+    }
+  }
+
+  /**
+   * The periodic scan: reloads every auto-refreshed list whose data is older
+   * than the interval, one attempt per list per retry window, claimed so that
+   * several API processes never fetch the same list twice.
+   */
+  async scanDue(now: Date, limit = 10): Promise<number> {
+    const due = await this.store.dueForRefresh(
+      new Date(now.getTime() - SHEET_REFRESH_EVERY_MS),
+      new Date(now.getTime() - SHEET_REFRESH_RETRY_MS),
+      limit,
+    );
+    let refreshed = 0;
+    for (const item of due) {
+      const claimed = await this.store.claimRefresh(
+        item.tenantId,
+        item.id,
+        now,
+        new Date(now.getTime() - SHEET_REFRESH_RETRY_MS),
+      );
+      if (!claimed) continue;
+      try {
+        await this.refresh(item.tenantId, null, now);
+        refreshed += 1;
+      } catch (error) {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'sheet_catalog.refresh_failed',
+            tenant: item.tenantId,
+            code: codeOf(error),
+          }),
+        );
+      }
+    }
+    return refreshed;
+  }
 
   /** Throws SheetReadError for an unreadable file. */
   private read(
@@ -198,7 +380,16 @@ export class SheetCatalogService {
     catalogBound: boolean;
     boundTo: string | null;
   }> {
-    const { mapping, result } = this.read(csv, config);
+    const { sheet, mapping, result } = this.read(csv, config);
+    // A link is kept only in its canonical form (read from the pasted text again here).
+    const link = config.sourceUrl
+      ? parseGoogleSheetLink(config.sourceUrl)
+      : null;
+    if (config.sourceUrl && !link)
+      throw new SheetCatalogError(
+        'SHEET_LINK_INVALID',
+        'This is not a Google Sheets link',
+      );
     const missing = missingRequiredFields(mapping);
     if (missing.length > 0)
       throw new SheetCatalogError(
@@ -218,6 +409,9 @@ export class SheetCatalogService {
       freshnessDays: config.freshnessDays ?? 3,
       uploadedAt: now,
       result,
+      sourceUrl: link?.canonicalUrl ?? null,
+      autoRefresh: link ? (config.autoRefresh ?? false) : false,
+      mappedHeaders: this.headersOf(sheet, mapping),
     });
     const binding = await this.ensureConnector(
       actor,
@@ -266,6 +460,9 @@ export class SheetCatalogService {
       acceptedCount: meta.acceptedCount,
       rejectedCount: meta.rejectedCount,
       mapping: meta.mapping,
+      sourceUrl: meta.sourceUrl,
+      autoRefresh: meta.autoRefresh,
+      refreshError: meta.refreshError,
     };
   }
 

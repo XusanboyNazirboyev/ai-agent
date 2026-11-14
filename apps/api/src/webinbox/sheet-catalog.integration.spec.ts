@@ -273,3 +273,114 @@ describe('price list upload API (ADR 064)', () => {
     });
   });
 });
+
+describe('price list from a Google Sheets link (ADR 064 S3)', () => {
+  const ID = 'LinkApiSheet0123456789abcdef';
+  const LINK = `https://docs.google.com/spreadsheets/d/${ID}/edit?usp=sharing#gid=0`;
+  const CANONICAL = `https://docs.google.com/spreadsheets/d/${ID}/edit#gid=0`;
+  const fake = { text: SAMPLE, status: 200, type: 'text/csv', calls: 0 };
+  const linkController = new SheetCatalogController(
+    new SheetCatalogService(prisma, store, {
+      fetchImpl: (async () => {
+        fake.calls += 1;
+        return new Response(fake.text, {
+          status: fake.status,
+          headers: { 'content-type': fake.type },
+        });
+      }) as unknown as typeof fetch,
+    }),
+  );
+
+  it('reads the link on the server, then saves it with auto refresh and refreshes on demand', async () => {
+    const w = await world();
+    const read = await linkController.fromLink(w.as.ADMIN, { url: LINK });
+    expect(read).toEqual({ csv: SAMPLE, sourceUrl: CANONICAL });
+    // Reading alone saves nothing.
+    expect(
+      await db.sheetCatalog.count({ where: { tenantId: w.tenantId } }),
+    ).toBe(0);
+
+    const config = JSON.stringify({
+      sourceUrl: read.sourceUrl,
+      autoRefresh: true,
+    });
+    await linkController.upload(w.as.ADMIN, read.csv, config, 'Google Sheets');
+    expect(await linkController.status(w.as.ADMIN)).toMatchObject({
+      sourceUrl: CANONICAL,
+      autoRefresh: true,
+      refreshError: null,
+      acceptedCount: 12,
+    });
+    expect(await linkController.refresh(w.as.ADMIN)).toEqual({
+      accepted: 12,
+      rejected: 3,
+    });
+    // The refresh is in the audit trail.
+    expect(
+      await db.auditEvent.count({
+        where: { tenantId: w.tenantId, action: 'catalog.sheet.refreshed' },
+      }),
+    ).toBe(1);
+  });
+
+  it('answers each failure with its own code and keeps the list', async () => {
+    const w = await world();
+    const read = await linkController.fromLink(w.as.ADMIN, { url: LINK });
+    await linkController.upload(
+      w.as.ADMIN,
+      read.csv,
+      JSON.stringify({ sourceUrl: read.sourceUrl, autoRefresh: true }),
+    );
+    const send = (url: unknown) =>
+      call(() => linkController.fromLink(w.as.ADMIN, url));
+    expect(await send({ url: 'https://evil.test/x' })).toEqual({
+      status: 400,
+      code: 'SHEET_LINK_INVALID',
+    });
+    expect(await send({})).toEqual({ status: 400, code: 'INVALID_BODY' });
+    expect(await send({ url: LINK, extra: 1 })).toEqual({
+      status: 400,
+      code: 'INVALID_BODY',
+    });
+    fake.type = 'text/html';
+    expect(await send({ url: LINK })).toEqual({
+      status: 400,
+      code: 'SHEET_LINK_NOT_PUBLIC',
+    });
+    expect(await call(() => linkController.refresh(w.as.ADMIN))).toEqual({
+      status: 400,
+      code: 'SHEET_LINK_NOT_PUBLIC',
+    });
+    fake.type = 'text/csv';
+    fake.status = 500;
+    expect(await call(() => linkController.refresh(w.as.ADMIN))).toEqual({
+      status: 400,
+      code: 'SHEET_LINK_UNREACHABLE',
+    });
+    fake.status = 200;
+    expect(await linkController.status(w.as.ADMIN)).toMatchObject({
+      acceptedCount: 12,
+      refreshError: 'SHEET_LINK_UNREACHABLE',
+    });
+  });
+
+  it('refresh without a saved link, and for roles that may not manage it', async () => {
+    const w = await world();
+    await linkController.upload(w.as.ADMIN, SAMPLE);
+    expect(await call(() => linkController.refresh(w.as.ADMIN))).toEqual({
+      status: 400,
+      code: 'SHEET_NO_LINK',
+    });
+    const calls = fake.calls;
+    for (const role of ['OPERATOR', 'VIEWER'] as Role[]) {
+      expect(
+        (await call(() => linkController.fromLink(w.as[role], { url: LINK })))
+          .status,
+      ).toBe(403);
+      expect(
+        (await call(() => linkController.refresh(w.as[role]))).status,
+      ).toBe(403);
+    }
+    expect(fake.calls).toBe(calls);
+  });
+});
