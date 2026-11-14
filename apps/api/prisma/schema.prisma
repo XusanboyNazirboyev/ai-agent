@@ -281,6 +281,7 @@ model Tenant {
   leads           Lead[]
   leadStages      LeadStage[]
   pipelines       Pipeline[]
+  sheetCatalogs   SheetCatalog[]
   handovers       Handover[]
   bookings        Booking[]
   inboundEvents   InboundEvent[]
@@ -1873,3 +1874,66 @@ model CustomFieldDef {
   @@map("custom_field_defs")
 }
 
+/// ADR 064: a price list uploaded as a spreadsheet (one per tenant for now),
+/// served by the `spreadsheet` connector. Cells are untrusted text.
+model SheetCatalog {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  name           String   @db.VarChar(120)
+  sourceFilename String?  @map("source_filename") @db.VarChar(200)
+  /// Field -> column index chosen by the admin.
+  mapping        Json     @default("{}")
+  /// defaultCurrency, limitedThreshold, defaultAvailability.
+  options        Json     @default("{}")
+  /// Prices older than this are not quoted (ADR 064 decision 5).
+  freshnessDays  Int      @default(3) @map("freshness_days")
+  uploadedAt     DateTime @map("uploaded_at") @db.Timestamptz(6)
+  rowCount       Int      @map("row_count")
+  acceptedCount  Int      @map("accepted_count")
+  rejectedCount  Int      @map("rejected_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items          SheetCatalogItem[]
+  offers         SheetCatalogOffer[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId])
+  @@map("sheet_catalogs")
+}
+
+model SheetCatalogItem {
+  tenantId        String   @map("tenant_id") @db.Uuid
+  catalogId       String   @map("catalog_id") @db.Uuid
+  key             String   @db.VarChar(32)
+  title           String   @db.VarChar(500)
+  normalizedTitle String   @map("normalized_title") @db.VarChar(600)
+  itemType        String   @map("item_type") @db.VarChar(100)
+  attributes      Json     @default("{}")
+  catalog         SheetCatalog @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, catalogId, key])
+  @@index([tenantId, catalogId, normalizedTitle])
+  @@map("sheet_catalog_items")
+}
+
+model SheetCatalogOffer {
+  tenantId     String   @map("tenant_id") @db.Uuid
+  catalogId    String   @map("catalog_id") @db.Uuid
+  key          String   @db.VarChar(200)
+  itemKey      String   @map("item_key") @db.VarChar(32)
+  price        Decimal  @db.Decimal(20, 6)
+  currency     String   @db.Char(3)
+  /// AVAILABLE | LIMITED | SOLD_OUT | UNKNOWN
+  availability String   @db.VarChar(16)
+  seatsLeft    Int?     @map("seats_left")
+  startsOn     DateTime? @map("starts_on") @db.Date
+  endsOn       DateTime? @map("ends_on") @db.Date
+  attributes   Json     @default("{}")
+  line         Int
+  catalog      SheetCatalog @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, catalogId, key])
+  @@index([tenantId, catalogId, itemKey])
+  @@map("sheet_catalog_offers")
+}

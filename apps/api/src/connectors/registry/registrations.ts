@@ -4,6 +4,11 @@ import { GenericRestConnector } from '../generic-rest/generic-rest-connector.js'
 import { OutboundUrlPolicy } from '../generic-rest/ssrf-protection.js';
 import { ConnectorConfigurationError } from '../interfaces/errors.js';
 import { MockConnector } from '../mock/mock-connector.js';
+import {
+  SPREADSHEET_CONNECTOR_KEY,
+  SpreadsheetConnector,
+} from '../spreadsheet/spreadsheet-connector.js';
+import type { SheetCatalogReader } from '../spreadsheet/sheet-catalog.store.js';
 import { allFixtures } from '../mock/mock-fixtures.js';
 import type { ConnectorRegistration } from './connector-registry.js';
 
@@ -90,5 +95,30 @@ export function bitrix24ConnectorRegistration(): ConnectorRegistration {
       new Bitrix24Connector(context, config, {
         resolveSecret: dependencies.resolveSecret,
       }),
+  };
+}
+
+/**
+ * The tenant's uploaded price list as a catalog (ADR 064): search, offers,
+ * availability and quotes from stored rows, no writes, no sync. The data is
+ * read through the given reader, scoped to the connector's tenant.
+ */
+export function spreadsheetConnectorRegistration(
+  reader: SheetCatalogReader,
+): ConnectorRegistration {
+  return {
+    key: SPREADSHEET_CONNECTOR_KEY,
+    capabilities: {
+      sync: false,
+      search: true,
+      liveQuote: true,
+      availability: true,
+      createLead: false,
+      updateLead: false,
+      createBooking: false,
+      webhooks: false,
+    },
+    factory: (context): SpreadsheetConnector =>
+      new SpreadsheetConnector(context, reader),
   };
 }

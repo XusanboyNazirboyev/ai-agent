@@ -10,8 +10,14 @@ import {
   bitrix24ConnectorRegistration,
   genericRestConnectorRegistration,
   mockConnectorRegistration,
+  spreadsheetConnectorRegistration,
 } from './registry/registrations.js';
 import { EnvSecretResolver } from './registry/secret-resolver.js';
+import { PrismaService } from '../persistence/prisma.service.js';
+import {
+  PrismaSheetCatalogStore,
+  type SheetCatalogReader,
+} from './spreadsheet/sheet-catalog.store.js';
 import { CatalogSyncQueueRuntime } from './sync/catalog-sync.queue.js';
 import { CatalogSyncService } from './sync/catalog-sync.service.js';
 import { CatalogSyncStore } from './sync/catalog-sync.store.js';
@@ -22,8 +28,12 @@ export function createConnectorRegistry(
   environment: Pick<AppEnvironment, 'NODE_ENV' | 'CONNECTOR_OUTBOUND_POLICY'> &
     Partial<Pick<AppEnvironment, 'CONNECTOR_DEMO_CATALOG'>>,
   secretResolver: SecretResolver = new EnvSecretResolver(),
+  /** The uploaded price list (ADR 064); without it the `spreadsheet` connector is not offered. */
+  sheetCatalog?: SheetCatalogReader,
 ): ConnectorRegistry {
   const registry = new ConnectorRegistry(secretResolver);
+  if (sheetCatalog)
+    registry.register(spreadsheetConnectorRegistration(sheetCatalog));
   registry.register(
     genericRestConnectorRegistration({
       outboundUrlPolicy:
@@ -64,23 +74,35 @@ export function createConnectorRegistry(
     CatalogSyncService,
     CatalogSyncQueueRuntime,
     {
+      provide: PrismaSheetCatalogStore,
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService): PrismaSheetCatalogStore =>
+        new PrismaSheetCatalogStore(prisma),
+    },
+    {
       provide: ConnectorRegistry,
-      inject: [ConfigService],
+      inject: [ConfigService, PrismaSheetCatalogStore],
       useFactory: (
         config: ConfigService<AppEnvironment, true>,
+        sheetCatalog: PrismaSheetCatalogStore,
       ): ConnectorRegistry =>
-        createConnectorRegistry({
-          NODE_ENV: config.get('NODE_ENV', { infer: true }),
-          CONNECTOR_OUTBOUND_POLICY: config.get('CONNECTOR_OUTBOUND_POLICY', {
-            infer: true,
-          }),
-          CONNECTOR_DEMO_CATALOG: config.get('CONNECTOR_DEMO_CATALOG', {
-            infer: true,
-          }),
-        }),
+        createConnectorRegistry(
+          {
+            NODE_ENV: config.get('NODE_ENV', { infer: true }),
+            CONNECTOR_OUTBOUND_POLICY: config.get('CONNECTOR_OUTBOUND_POLICY', {
+              infer: true,
+            }),
+            CONNECTOR_DEMO_CATALOG: config.get('CONNECTOR_DEMO_CATALOG', {
+              infer: true,
+            }),
+          },
+          undefined,
+          sheetCatalog,
+        ),
     },
   ],
   exports: [
+    PrismaSheetCatalogStore,
     ConnectorRegistry,
     CatalogSyncQueueRuntime,
     CatalogSyncStore,
