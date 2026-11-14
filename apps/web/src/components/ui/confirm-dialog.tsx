@@ -58,6 +58,9 @@ export function ConfirmDialog(props: {
       data-testid="confirm-dialog"
       onCancel={(event) => {
         event.preventDefault();
+        // Escape closes only this dialog, not a dialog it is nested in (React
+        // bubbles `cancel` through the component tree).
+        event.stopPropagation();
         props.onCancel();
       }}
       onClick={(event) => {

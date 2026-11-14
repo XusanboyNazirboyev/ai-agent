@@ -68,6 +68,9 @@ export function FormDialog(props: {
       data-testid={props.testId}
       onCancel={(event) => {
         event.preventDefault();
+        // Escape closes only this dialog, not a dialog it is nested in (React
+        // bubbles `cancel` through the component tree).
+        event.stopPropagation();
         props.onClose();
       }}
       onClick={(event) => {

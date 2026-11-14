@@ -245,7 +245,7 @@ export function LeadsBoard(): ReactNode {
       : columns;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
       <div aria-live="polite" data-testid="leads-live" className="sr-only">
         {dragStatus}
       </div>
