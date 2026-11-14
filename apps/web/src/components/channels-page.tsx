@@ -205,9 +205,13 @@ function AccountCard(props: {
       </div>
       <div className="flex flex-col gap-1.5 border-t border-line pt-3">
         <Check on={account.credentialsConfigured}>
-          {account.credentialsConfigured
-            ? t('channels.credentialsOn')
-            : t('channels.credentialsOff')}
+          {instagram
+            ? account.credentialsConfigured
+              ? t('channels.tokenOn')
+              : t('channels.tokenOff')
+            : account.credentialsConfigured
+              ? t('channels.credentialsOn')
+              : t('channels.credentialsOff')}
         </Check>
         {instagram ? null : (
           <Check on={account.operatorGroupConfigured}>
@@ -301,6 +305,17 @@ function AccountCard(props: {
               </label>
             </>
           )}
+          {account.channelType === 'instagram' ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="trash"
+              data-testid="account-disconnect"
+              onClick={() => setDisconnecting(true)}
+            >
+              {t('channels.disconnect')}
+            </Button>
+          ) : null}
           {instagram ? null : (
             <>
               <Button
@@ -343,8 +358,16 @@ function AccountCard(props: {
       ) : null}
       <ConfirmDialog
         open={disconnecting}
-        title={t('disconnect.title')}
-        body={t('disconnect.body')}
+        title={
+          account.channelType === 'instagram'
+            ? t('disconnect.instagramTitle')
+            : t('disconnect.title')
+        }
+        body={
+          account.channelType === 'instagram'
+            ? t('disconnect.instagramBody')
+            : t('disconnect.body')
+        }
         confirmLabel={t('channels.disconnect')}
         cancelLabel={t('confirm.cancel')}
         tone="danger"
@@ -392,6 +415,16 @@ export function ChannelsPage(): ReactNode {
     queryFn: () => api<ChannelList>('/api/v1/channels'),
   });
   const items = query.data?.items ?? [];
+  // A disconnected Instagram account (off, no token) only keeps its
+  // conversations; it is not shown as a channel. Connecting it again brings it back.
+  const shown = items.filter(
+    (account) =>
+      !(
+        account.channelType === 'instagram' &&
+        account.status === 'DISABLED' &&
+        !account.credentialsConfigured
+      ),
+  );
   const capabilities = query.data?.capabilities ?? {
     secretsConfigured: false,
     publicUrlConfigured: false,
@@ -463,13 +496,13 @@ export function ChannelsPage(): ReactNode {
               </Button>
             </div>
           ) : null}
-          {query.isSuccess && items.length === 0 ? (
+          {query.isSuccess && shown.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-line bg-surface p-6 text-center text-sm text-muted">
               {t('channels.empty')}
             </p>
           ) : null}
           <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {items.map((account, index) => (
+            {shown.map((account, index) => (
               <AccountCard
                 key={account.id}
                 account={account}

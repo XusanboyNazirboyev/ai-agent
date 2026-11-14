@@ -103,7 +103,9 @@ test('an admin connects an Instagram account with its token, enables and disable
   // Telegram-only actions are not offered for Instagram.
   await expect(card.getByTestId('account-test')).toHaveCount(0);
   await expect(card.getByTestId('account-group')).toHaveCount(0);
-  await expect(card.getByTestId('account-disconnect')).toHaveCount(0);
+  // Disconnecting is offered; Meta's own app permission note is in its dialog.
+  await expect(card.getByTestId('account-disconnect')).toBeVisible();
+  await expect(card).toContainText('Access token saved');
 
   await card.getByTestId('account-disable').click();
   await expect(card).toContainText('Disabled');
@@ -114,6 +116,34 @@ test('an admin connects an Instagram account with its token, enables and disable
     'messages,messaging_postbacks',
   ]);
   expect(await page.content()).not.toContain(TOKEN);
+
+  // Disconnect: the account leaves the list, nothing is subscribed or called.
+  const subscribedBefore = subscribed.length;
+  await card.getByTestId('account-disconnect').click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Disconnect this Instagram account?',
+  );
+  await expect(page.getByRole('dialog')).toContainText(
+    'until you remove it there',
+  );
+  await card.getByTestId('confirm-accept').click();
+  await expect(card).toHaveCount(0);
+  expect(subscribed.length).toBe(subscribedBefore);
+
+  // The same account connects again and is listed again, switched off.
+  await page.getByTestId('connect-instagram').click();
+  await page.getByTestId('ig-token-toggle').click();
+  await page.getByTestId('ig-connect-token').fill(TOKEN);
+  await page.getByTestId('ig-connect-submit').click();
+  await expect(page.getByTestId('ig-connect-done')).toContainText(
+    `@${USERNAME}`,
+  );
+  await page.getByTestId('ig-connect-later').click();
+  const again = page
+    .getByTestId('channel-account')
+    .filter({ hasText: `@${USERNAME}` });
+  await expect(again).toContainText('Disabled');
+  await expect(again).toContainText('Access token saved');
   await admin.context.close();
 });
 

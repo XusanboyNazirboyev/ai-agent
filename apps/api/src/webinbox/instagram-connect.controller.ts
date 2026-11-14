@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   HttpException,
   NotFoundException,
   Param,
@@ -466,5 +468,34 @@ export class InstagramConnectController {
     });
     await this.audit(who, 'channel.instagram_disabled', id);
     return this.summary(who.tenantId, id);
+  }
+
+  /**
+   * Disconnects the account: it is switched off, the assistant is OFF and every
+   * saved token is deleted, so nothing can be sent for it and nothing is kept
+   * that could be. The account row stays (its conversations belong to it) and
+   * connecting the same Instagram account again reuses it. Meta is not called:
+   * its unsubscribe call is not read in the docs (see `disable`), and
+   * deliveries for a disabled account are refused by the intake. The
+   * permission the owner gave this app stays on the Instagram side until they
+   * remove it there.
+   */
+  @Delete(':id')
+  @HttpCode(204)
+  async disconnect(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<void> {
+    const who = this.admit(request);
+    await this.account(who.tenantId, id);
+    await this.prisma.channelAccount.updateMany({
+      where: { id, tenantId: who.tenantId },
+      data: { status: 'DISABLED', agentMode: 'OFF' },
+    });
+    await this.secrets.deleteAll({
+      tenantId: who.tenantId,
+      channelAccountId: id,
+    });
+    await this.audit(who, 'channel.instagram_disconnected', id);
   }
 }

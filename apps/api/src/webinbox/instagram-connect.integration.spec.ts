@@ -337,6 +337,86 @@ describe('connecting an Instagram professional account from the web API', () => 
     expect(JSON.stringify(audits)).not.toContain(TOKEN);
   });
 
+  it('disconnects: switched off, the token deleted, the row and its conversations kept, Meta never called, and the same account can connect again', async () => {
+    const s = setup();
+    const t = await tenant();
+    const connected = await s.controller.connect(t.request, {
+      accessToken: TOKEN,
+    });
+    await s.controller.enable(t.request, connected.id);
+    const owner = { tenantId: t.tenantId, channelAccountId: connected.id };
+    expect(await s.store.get(owner, 'instagram_access_token')).toBe(TOKEN);
+    // A conversation that belongs to the account.
+    const contact = await db.contact.create({
+      data: {
+        tenantId: t.tenantId,
+        channelAccountId: connected.id,
+        providerUserId: `ig-${randomUUID()}`,
+      },
+    });
+    const conversation = await db.conversation.create({
+      data: {
+        tenantId: t.tenantId,
+        channelAccountId: connected.id,
+        contactId: contact.id,
+        providerChatId: `ig-${randomUUID()}`,
+      },
+    });
+    const callsBefore = s.calls.length;
+
+    await s.controller.disconnect(t.request, connected.id);
+
+    const row = await db.channelAccount.findUniqueOrThrow({
+      where: { id: connected.id },
+    });
+    expect(row).toMatchObject({ status: 'DISABLED', agentMode: 'OFF' });
+    expect(await s.store.get(owner, 'instagram_access_token')).toBeUndefined();
+    expect(
+      await db.channelSecret.count({
+        where: { tenantId: t.tenantId, channelAccountId: connected.id },
+      }),
+    ).toBe(0);
+    // Nobody was called, and the history stays.
+    expect(s.calls).toHaveLength(callsBefore);
+    expect(
+      await db.conversation.count({ where: { id: conversation.id } }),
+    ).toBe(1);
+    const audits = await db.auditEvent.findMany({
+      where: { tenantId: t.tenantId, action: 'channel.instagram_disconnected' },
+    });
+    expect(audits).toHaveLength(1);
+    expect(JSON.stringify(audits)).not.toContain(TOKEN);
+
+    // The list says there are no credentials; enabling is refused.
+    await expect(
+      s.controller.enable(t.request, connected.id),
+    ).rejects.toMatchObject({ response: { code: 'NOT_CONNECTED' } });
+
+    // Connecting the same Instagram account again reuses the row.
+    const again = await s.controller.connect(t.request, { accessToken: TOKEN });
+    expect(again.id).toBe(connected.id);
+    expect(again.credentialsConfigured).toBe(true);
+  });
+
+  it('disconnect is for owners and admins of that workspace only', async () => {
+    const s = setup();
+    const t = await tenant();
+    const connected = await s.controller.connect(t.request, {
+      accessToken: TOKEN,
+    });
+    const operator = await tenant('OPERATOR');
+    await expect(
+      s.controller.disconnect(operator.request, connected.id),
+    ).rejects.toMatchObject({ response: { code: 'FORBIDDEN' } });
+    const other = await tenant();
+    await expect(
+      s.controller.disconnect(other.request, connected.id),
+    ).rejects.toMatchObject({ response: { code: 'NOT_FOUND' } });
+    // Nothing was touched.
+    const owner = { tenantId: t.tenantId, channelAccountId: connected.id };
+    expect(await s.store.get(owner, 'instagram_access_token')).toBe(TOKEN);
+  });
+
   it('refuses a token Meta rejects, an invalid body and the operator role, storing nothing', async () => {
     const s = setup();
     const t = await tenant();
