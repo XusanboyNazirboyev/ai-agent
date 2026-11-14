@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { findOverflow, fixtures, newSession } from './helpers';
 
-test.describe('AI bot page', () => {
+test.describe('Assistant page', () => {
   test('an admin switches the assistant on and off; an operator can only look', async ({
     browser,
   }) => {
