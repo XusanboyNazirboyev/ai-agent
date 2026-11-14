@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { fixtures, login, nextClientAddress } from './helpers';
 
 const PAGES = [
+  '/today',
   '/inbox',
   '/leads',
   '/contacts',

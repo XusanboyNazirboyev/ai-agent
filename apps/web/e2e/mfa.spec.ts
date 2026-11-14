@@ -61,7 +61,8 @@ test('an operator enrols from Security, then signs in with a code (and not witho
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(f.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/inbox/u);
+  await page.waitForURL(/\/today/u);
+  await page.goto('/inbox');
 
   await page.goto('/settings/security');
   await expect(page.getByTestId('mfa-state')).toContainText('is off');
@@ -101,7 +102,8 @@ test('an operator enrols from Security, then signs in with a code (and not witho
   // The step used to enrol is spent (replay); the next step's code is valid.
   await other.getByTestId('mfa-code').fill(code(secret, 1));
   await other.getByRole('button', { name: 'Verify' }).click();
-  await other.waitForURL(/\/inbox/u);
+  await other.waitForURL(/\/today/u);
+  await other.goto('/inbox');
 });
 
 test('a console admin without a second factor must enrol before getting a session', async ({

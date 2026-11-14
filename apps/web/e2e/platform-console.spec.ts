@@ -51,7 +51,8 @@ async function acceptInvite(
   await session.page.getByTestId('invite-password').fill(password);
   await session.page.getByTestId('invite-repeat').fill(password);
   await session.page.getByTestId('invite-submit').click();
-  await session.page.waitForURL(/\/inbox/u);
+  await session.page.waitForURL(/\/today/u);
+  await session.page.goto('/inbox');
   return session;
 }
 
@@ -204,7 +205,8 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   await changeStatus(admin, 'reactivate', 'e2e: paid');
   await expect(admin.getByTestId('tenant-status')).toContainText('Active');
   await tenantLogin(retry.page, ownerEmail, ownerPassword);
-  await retry.page.waitForURL(/\/inbox/u);
+  await retry.page.waitForURL(/\/today/u);
+  await retry.page.goto('/inbox');
   await retry.context.close();
 
   // Every one of these writes is in the audit log.

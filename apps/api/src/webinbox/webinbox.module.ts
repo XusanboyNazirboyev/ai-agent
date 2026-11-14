@@ -27,6 +27,7 @@ import { TeamController } from './team.controller.js';
 import { SubscriptionController } from './subscription.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AnalyticsController } from './analytics.controller.js';
+import { TodayController } from './today.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
 import { ContactsController } from './contacts.controller.js';
@@ -91,6 +92,7 @@ import { ExportLock } from '../exports/export-lock.js';
     LeadsController,
     SheetCatalogController,
     AnalyticsController,
+    TodayController,
     LeadPipelineController,
     PipelinesController,
     FacebookConnectController,

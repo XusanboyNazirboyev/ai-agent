@@ -35,7 +35,7 @@ export function LoginForm(): ReactNode {
         setBusy(false);
         return;
       }
-      router.replace('/inbox');
+      router.replace('/today');
     } catch (failure) {
       setError(errorKey(failure));
       setBusy(false);
@@ -52,7 +52,7 @@ export function LoginForm(): ReactNode {
         method: 'POST',
         body: { challenge, ...factor },
       });
-      router.replace('/inbox');
+      router.replace('/today');
     } catch (failure) {
       setError(errorKey(failure));
       setBusy(false);

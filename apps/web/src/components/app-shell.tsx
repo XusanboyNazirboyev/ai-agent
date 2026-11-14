@@ -49,7 +49,7 @@ export function useShell(): ShellValue {
 }
 
 /** On phones only these fit the tab bar; the rest sit behind "More". */
-export const PRIMARY: NavKey[] = ['inbox', 'leads'];
+export const PRIMARY: NavKey[] = ['today', 'inbox', 'leads'];
 
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';

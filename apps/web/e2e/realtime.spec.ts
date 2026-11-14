@@ -145,7 +145,8 @@ test('a stream that cannot be opened is retried and the page catches up over RES
   await page.getByLabel('Email').fill(f.a.operators.op2.email);
   await page.getByLabel('Password').fill(f.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/inbox/u);
+  await page.waitForURL(/\/today/u);
+  await page.goto('/inbox');
   await expect(page.getByTestId('connection')).not.toHaveAttribute(
     'data-state',
     'live',
@@ -239,7 +240,8 @@ test('falls back to periodic refresh when the server refuses the stream, then re
   await page.getByLabel('Email').fill(f.a.operators.op2.email);
   await page.getByLabel('Password').fill(f.password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/inbox/u);
+  await page.waitForURL(/\/today/u);
+  await page.goto('/inbox');
   await expect(page.getByTestId('connection')).toHaveAttribute(
     'data-state',
     'polling',

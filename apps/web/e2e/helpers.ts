@@ -101,7 +101,8 @@ export async function login(
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL(/\/inbox/u);
+  await page.waitForURL(/\/today/u);
+  await page.goto('/inbox');
 }
 
 export async function newSession(

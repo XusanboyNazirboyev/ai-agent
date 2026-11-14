@@ -132,7 +132,8 @@ test.describe('nonce-based Content-Security-Policy', () => {
     await page.getByLabel('Email').fill(f.a.operators.op1.email);
     await page.getByLabel('Password').fill(f.password);
     await page.getByRole('button', { name: 'Sign in' }).click();
-    await page.waitForURL(/\/inbox/u);
+    await page.waitForURL(/\/today/u);
+    await page.goto('/inbox');
     await page.getByTestId('conversation-item').first().click();
     await expect(page.getByTestId('conversation-view')).toBeVisible();
     await expect(page.getByTestId('connection')).toHaveAttribute(

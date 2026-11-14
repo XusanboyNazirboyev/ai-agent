@@ -82,8 +82,9 @@ describe('AppShell rail', () => {
     renderShell('OPERATOR');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(links.map((link) => link.textContent)).toEqual([
+      'Today',
       'Inbox',
       'Leads',
       'Knowledge',
@@ -94,12 +95,13 @@ describe('AppShell rail', () => {
     ).toBeNull();
   });
 
-  it('shows an administrator all five items', async () => {
+  it('shows an administrator all six items', async () => {
     renderShell('ADMIN');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(links.map((link) => link.textContent)).toEqual([
+      'Today',
       'Inbox',
       'Leads',
       'Analytics',
@@ -112,8 +114,9 @@ describe('AppShell rail', () => {
     renderShell('VIEWER');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(4);
+    expect(links).toHaveLength(5);
     expect(links.map((link) => link.textContent)).toEqual([
+      'Today',
       'Inbox',
       'Leads',
       'Knowledge',
