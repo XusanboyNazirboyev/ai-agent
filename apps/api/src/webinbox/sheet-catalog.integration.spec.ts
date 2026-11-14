@@ -232,6 +232,10 @@ describe('price list upload API (ADR 064)', () => {
       status: 400,
       code: 'SHEET_NO_VALID_ROWS',
     });
+    expect(await upload('Hotel,Price,Currency\n')).toEqual({
+      status: 400,
+      code: 'SHEET_NO_ROWS',
+    });
     expect(await upload('a,b\n"open,1')).toEqual({
       status: 400,
       code: 'SHEET_UNTERMINATED_QUOTE',

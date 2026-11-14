@@ -1281,5 +1281,6 @@
   "errors.SHEET_COLUMN_OUT_OF_RANGE": "Выбранного столбца нет в файле.",
   "sheet.preview.table": "Строки, которые будут сохранены",
   "access.notAllowed": "Вы не можете открыть эту страницу.",
-  "access.goToInbox": "Перейти в диалоги"
+  "access.goToInbox": "Перейти в диалоги",
+  "errors.SHEET_NO_ROWS": "В файле есть заголовок, но нет ни одной строки с данными."
 }

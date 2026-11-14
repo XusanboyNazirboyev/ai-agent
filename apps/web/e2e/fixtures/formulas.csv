@@ -1,4 +1,4 @@
 Destination,Hotel,Price,Currency
-Dubai,=HYPERLINK("http://example.test","x"),820,USD
+Dubai,"=HYPERLINK(""http://example.test"",""x"")",820,USD
 Sharm el-Sheikh,+1+1,710,USD
 Hurghada,@SUM(A1),640,USD

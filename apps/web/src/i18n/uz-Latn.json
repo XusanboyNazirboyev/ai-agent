@@ -1281,5 +1281,6 @@
   "errors.SHEET_COLUMN_OUT_OF_RANGE": "Tanlangan ustun faylda yo‘q.",
   "sheet.preview.table": "Saqlanadigan qatorlar",
   "access.notAllowed": "Bu sahifani ochishga ruxsat berilmaydi.",
-  "access.goToInbox": "Suhbatlarga kirish"
+  "access.goToInbox": "Suhbatlarga kirish",
+  "errors.SHEET_NO_ROWS": "Faylda sarlavha bor, lekin ma’lumot qatorlari yo‘q."
 }

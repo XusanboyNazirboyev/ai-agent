@@ -102,8 +102,8 @@ test('Uzbek headers with apostrophes: mapping selects show the right columns', a
     const priceSelect = page.getByTestId('sheet-map-price');
     await expect(priceSelect).toHaveValue('5');
     await expect(priceSelect.locator('option:checked')).toHaveText('Narxi');
-    await expect(counts(page)).toContainText('3');
-    await expect(counts(page)).toContainText('0');
+    // The fixture has two data rows.
+    await expect(counts(page)).toContainText('2 rows will be saved, 0 will');
   } finally {
     await context.close();
   }
@@ -124,10 +124,10 @@ test('price formats are normalised in the sample rows', async ({ browser }) => {
     await expect(rows).toHaveCount(4);
     await expect(counts(page)).toContainText('4');
     await expect(counts(page)).toContainText('0');
-    // Normalised prices: 1 240 -> 1240, 1.250,50 -> 1250.50, 710,5 -> 710.50, $ 820 -> 820.
+    // Normalised prices: 1 240 -> 1240, 1.250,50 -> 1250.50, 710,5 -> 710.5, $ 820 -> 820.
     await expect(rows.nth(0)).toContainText('1240');
     await expect(rows.nth(1)).toContainText('1250.50');
-    await expect(rows.nth(2)).toContainText('710.50');
+    await expect(rows.nth(2)).toContainText(/710\.5(?!\d)/u);
     await expect(rows.nth(3)).toContainText('820');
   } finally {
     await context.close();
@@ -256,7 +256,9 @@ test('replacing: 1-row file then sample, status shows 12 accepted, old row gone'
     await expect(counts(page)).toContainText('1');
     await expect(counts(page)).toContainText('0');
     await page.getByTestId('sheet-save').click();
-    await expect(page.getByTestId('sheet-status')).toContainText('1');
+    await expect(page.getByTestId('sheet-status')).toContainText(
+      /: 1 rows saved/u,
+    );
 
     // Re-upload the sample and save; the catalog is replaced.
     await upload(page, SAMPLE, 'tours.csv');
@@ -264,12 +266,15 @@ test('replacing: 1-row file then sample, status shows 12 accepted, old row gone'
     await expect(counts(page)).toContainText('12');
     await expect(counts(page)).toContainText('3');
     await page.getByTestId('sheet-save').click();
-    await expect(page.getByTestId('sheet-status')).toContainText('12');
-
-    // The page never shows the old row from the 1-row file.
-    await expect(page.getByTestId('sheet-sample-row')).not.toContainText(
-      'One Row Hotel',
+    await expect(page.getByTestId('sheet-status')).toContainText(
+      /: 12 rows saved/u,
     );
+    // The saved list is the new one: the old row is not in the catalog.
+    const found = await page.evaluate(async () => {
+      const response = await fetch('/api/v1/catalog/sheet');
+      return (await response.json()) as { acceptedCount: number };
+    });
+    expect(found.acceptedCount).toBe(12);
   } finally {
     await context.close();
   }

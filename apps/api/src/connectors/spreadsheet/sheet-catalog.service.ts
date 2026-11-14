@@ -56,6 +56,7 @@ export class SheetCatalogError extends Error {
     readonly code:
       | 'SHEET_MAPPING_INCOMPLETE'
       | 'SHEET_NO_VALID_ROWS'
+      | 'SHEET_NO_ROWS'
       | 'SHEET_COLUMN_OUT_OF_RANGE',
     message: string,
   ) {
@@ -145,6 +146,11 @@ export class SheetCatalogService {
     const sheet = parseSheet(csv);
     const mapping = config.mapping ?? suggestMapping(sheet.header);
     checkMapping(mapping, sheet.header.length);
+    if (sheet.rows.length === 0)
+      throw new SheetCatalogError(
+        'SHEET_NO_ROWS',
+        'The file has a header but no rows',
+      );
     return {
       sheet,
       mapping,
