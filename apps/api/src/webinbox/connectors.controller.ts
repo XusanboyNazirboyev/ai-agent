@@ -17,6 +17,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { ConnectorRegistry } from '../connectors/registry/connector-registry.js';
 import {
   parseWebhookUrl,
   type Bitrix24Transport,
@@ -65,6 +66,8 @@ export interface ConnectorSummary {
   status: 'ACTIVE' | 'DISABLED' | 'ERROR';
   /** A credential is saved for it (never the value itself). */
   configured: boolean;
+  /** Capability flags that are true for this kind of connector (the list route only). */
+  capabilities?: string[];
 }
 
 export interface ConnectorList {
@@ -91,6 +94,7 @@ export class ConnectorsController {
     @Optional()
     @Inject(BITRIX24_CONNECT_TRANSPORT)
     private readonly transport?: Bitrix24Transport | null,
+    @Optional() private readonly registry?: ConnectorRegistry,
   ) {}
 
   /** OWNER/ADMIN only; reading the list is not rate limited. */
@@ -163,6 +167,13 @@ export class ConnectorsController {
         connectorKey: row.connectorKey,
         status: row.status,
         configured: row.secrets.length > 0,
+        // What this kind of connector can do, so a screen offers it only for a
+        // role it can serve (ADR 059): the capability flags that are true.
+        capabilities: Object.entries(
+          this.registry?.getDeclaredCapabilities(row.connectorKey) ?? {},
+        )
+          .filter(([, enabled]) => enabled === true)
+          .map(([name]) => name),
       })),
       secretsConfigured: this.secrets.configured,
     };

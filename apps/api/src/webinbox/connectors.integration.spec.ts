@@ -40,6 +40,15 @@ const CODE = (): string => randomBytes(8).toString('hex');
 const URL_OF = (code: string): string =>
   `https://portal-${code.slice(0, 6)}.bitrix24.test/rest/1/${code}/`;
 
+function capabilityRegistry(): ConnectorRegistry {
+  const registry = new ConnectorRegistry({
+    resolve: (): undefined => undefined,
+  });
+  registry.register(mockConnectorRegistration());
+  registry.register(bitrix24ConnectorRegistration());
+  return registry;
+}
+
 function setup(options: { withKey?: boolean } = {}): {
   portal: FakePortal;
   controller: ConnectorsController;
@@ -59,7 +68,12 @@ function setup(options: { withKey?: boolean } = {}): {
   return {
     portal,
     store,
-    controller: new ConnectorsController(prisma, store, portal.transport),
+    controller: new ConnectorsController(
+      prisma,
+      store,
+      portal.transport,
+      capabilityRegistry(),
+    ),
   };
 }
 
@@ -161,6 +175,16 @@ describe('connecting Bitrix24 from the web (ADR 032)', () => {
       expect.objectContaining({ connectorKey: 'bitrix24', configured: true }),
     ]);
     expect(JSON.stringify(listed)).not.toContain(code);
+
+    // Each connector reports what its kind can do, so a screen offers it only
+    // for a role it can serve: Bitrix24 takes leads and cannot answer prices.
+    const caps = Object.fromEntries(
+      listed.items.map((i) => [i.connectorKey, i.capabilities]),
+    );
+    expect(caps.bitrix24).toEqual(['createLead']);
+    expect(caps.mock).toEqual(
+      expect.arrayContaining(['search', 'liveQuote', 'availability']),
+    );
 
     // A reconnect replaces the URL on the same row.
     const next = CODE();

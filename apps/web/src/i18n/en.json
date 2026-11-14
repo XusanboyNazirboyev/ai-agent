@@ -1287,5 +1287,7 @@
   "errors.XLSX_TOO_LARGE": "This Excel file is too large or has too many rows (up to 20,000).",
   "errors.XLSX_NO_DATA": "This Excel file has no visible sheet with data.",
   "errors.XLSX_OLD_FORMAT": "Old .xls files are not supported. In Excel choose Save as and pick .xlsx or CSV.",
-  "analytics.chart.leadStages": "Leads by stage"
+  "analytics.chart.leadStages": "Leads by stage",
+  "connectorRoles.none": "No connected system can do this yet.",
+  "connectorRoles.noneCatalog": "No connected system can answer prices yet. Upload a price list in Settings, Price list."
 }

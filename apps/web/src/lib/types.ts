@@ -501,6 +501,8 @@ export interface ConnectorSummary {
   connectorKey: string;
   status: 'ACTIVE' | 'DISABLED' | 'ERROR';
   configured: boolean;
+  /** What this kind of connector can do (true capability flags); absent from an old API. */
+  capabilities?: string[];
 }
 
 export interface ConnectorList {

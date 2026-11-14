@@ -1287,5 +1287,7 @@
   "errors.XLSX_TOO_LARGE": "Bu Excel fayl juda katta yoki qatorlari ko‘p (20 000 gacha).",
   "errors.XLSX_NO_DATA": "Bu Excel faylda ma’lumotli ko‘rinadigan varaq yo‘q.",
   "errors.XLSX_OLD_FORMAT": "Eski .xls fayllar qo‘llab-quvvatlanmaydi. Excel’da «Boshqacha saqlash» ni tanlab, .xlsx yoki CSV formatini bering.",
-  "analytics.chart.leadStages": "Lidlar bosqichlar bo‘yicha"
+  "analytics.chart.leadStages": "Lidlar bosqichlar bo‘yicha",
+  "connectorRoles.none": "Hozircha buni qila oladigan ulangan tizim yo‘q.",
+  "connectorRoles.noneCatalog": "Hozircha narxlarga javob bera oladigan ulangan tizim yo‘q. Sozlamalar, Narx ro‘yxati bo‘limida narx ro‘yxatini yuklang."
 }

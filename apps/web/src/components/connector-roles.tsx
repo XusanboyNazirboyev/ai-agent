@@ -44,6 +44,22 @@ const ROLE_I18N: Record<ConnectorRole, { label: string; desc: string }> = {
   },
 };
 
+/** What a connector must be able to do for each role (ADR 059). */
+const ROLE_NEEDS: Record<ConnectorRole, readonly string[]> = {
+  CATALOG: ['search'],
+  LEAD_SINK: ['createLead'],
+  ACTIONS: ['createLead', 'updateLead', 'createBooking'],
+};
+
+export function connectorServesRole(
+  connector: ConnectorSummary,
+  role: ConnectorRole,
+): boolean {
+  if (connector.capabilities === undefined) return true;
+  const have = connector.capabilities;
+  return ROLE_NEEDS[role].some((capability) => have.includes(capability));
+}
+
 function ConnectorRoleRow(props: {
   role: ConnectorRole;
   item: ConnectorRoleItem;
@@ -53,8 +69,15 @@ function ConnectorRoleRow(props: {
   const { t } = useI18n();
   const notify = useToast();
   const { label, desc } = ROLE_I18N[props.role];
+  // Only a connector that can do what the role needs is offered, so a person
+  // is not led to a choice the server then refuses; the one bound now stays
+  // listed even if it cannot (an old binding), and an old API without
+  // capabilities offers everything as before.
   const activeConnectors = props.connectors.filter(
-    (c) => c.status === 'ACTIVE',
+    (c) =>
+      c.status === 'ACTIVE' &&
+      (c.id === props.item.tenantConnectorId ||
+        connectorServesRole(c, props.role)),
   );
   const [error, setError] = useState<string | undefined>();
 
@@ -88,6 +111,18 @@ function ConnectorRoleRow(props: {
         >
           {t(`connectorRoles.status.${props.item.status}`)}
         </Badge>
+        {activeConnectors.length === 0 ? (
+          <p
+            className="text-sm text-muted"
+            data-testid={`connector-role-none-${props.role}`}
+          >
+            {t(
+              props.role === 'CATALOG'
+                ? 'connectorRoles.noneCatalog'
+                : 'connectorRoles.none',
+            )}
+          </p>
+        ) : null}
         <Select
           aria-label={`${t(label)}: ${t('connectorRoles.activeConnectors')}`}
           data-testid={`connector-role-select-${props.role}`}
