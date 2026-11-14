@@ -29,7 +29,7 @@ const SYMBOLS: ReadonlyArray<readonly [RegExp, SheetCurrency]> = [
   [/£/u, 'GBP'],
   [/₽/u, 'RUB'],
   [/₺/u, 'TRY'],
-  [/\b(?:сум|сўм|som|so'?m|soum)\b/iu, 'UZS'],
+  [/(?<![\p{L}])(?:сум|сўм|som|so['’ʻʼ]?m|soum)(?![\p{L}])/iu, 'UZS'],
 ];
 
 /** `USD`, `usd`, `$` and `у.е.` style hints in a currency cell. */
@@ -60,8 +60,17 @@ const MAX_AMOUNT = 1_000_000_000;
  * (`1,250` and `1.250` are 1250), the usual meaning in a tour price.
  */
 export function parseAmount(text: string): string | null {
-  let value = text.replace(/[\u00a0\u202f\s]/gu, '').replace(/[^\d.,-]/gu, '');
-  if (value === '' || value.startsWith('-') || value.includes('-')) return null;
+  // Currency hints ($, EUR, сум) may sit around the number; any other letter
+  // or sign makes the cell unreadable (`1e5` must not become 15).
+  const cleaned = text
+    .replace(/[$€£₽₺]/gu, '')
+    .replace(/(?<![\p{L}])[A-Za-z]{3}(?![\p{L}])/gu, (word) =>
+      parseCurrency(word) === null ? word : '',
+    )
+    .replace(/(?<![\p{L}])(?:сум|сўм|so['’ʻʼ]?m|soum)(?![\p{L}])/giu, '')
+    .replace(/[\u00a0\u202f\s]/gu, '');
+  if (!/^[\d.,]+$/u.test(cleaned)) return null;
+  let value = cleaned;
   const lastDot = value.lastIndexOf('.');
   const lastComma = value.lastIndexOf(',');
   let decimal = '';
