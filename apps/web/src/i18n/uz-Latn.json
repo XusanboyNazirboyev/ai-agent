@@ -525,7 +525,6 @@
   "analytics.chart.handoversDaily": "Kunlik operatorga topshirishlar",
   "analytics.chart.handoverReasons": "Topshirish sabablari",
   "analytics.chart.languages": "Mijozlar tillari",
-  "analytics.chart.leadScores": "Lid baholari",
   "analytics.chart.empty": "Bu davrda ma’lumot yo‘q.",
   "analytics.chart.summary": "{title}: {from} – {to} oralig‘ida jami {total}; eng ko‘pi {peakDay} kuni ({peak}).",
   "analytics.table.show": "Jadval ko‘rinishida",
@@ -1287,5 +1286,6 @@
   "errors.XLSX_UNREADABLE": "Bu Excel faylni o‘qib bo‘lmadi. Uni .xlsx yoki CSV sifatida qayta saqlang.",
   "errors.XLSX_TOO_LARGE": "Bu Excel fayl juda katta yoki qatorlari ko‘p (20 000 gacha).",
   "errors.XLSX_NO_DATA": "Bu Excel faylda ma’lumotli ko‘rinadigan varaq yo‘q.",
-  "errors.XLSX_OLD_FORMAT": "Eski .xls fayllar qo‘llab-quvvatlanmaydi. Excel’da «Boshqacha saqlash» ni tanlab, .xlsx yoki CSV formatini bering."
+  "errors.XLSX_OLD_FORMAT": "Eski .xls fayllar qo‘llab-quvvatlanmaydi. Excel’da «Boshqacha saqlash» ni tanlab, .xlsx yoki CSV formatini bering.",
+  "analytics.chart.leadStages": "Lidlar bosqichlar bo‘yicha"
 }

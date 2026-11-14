@@ -525,7 +525,6 @@
   "analytics.chart.handoversDaily": "Handovers per day",
   "analytics.chart.handoverReasons": "Handover reasons",
   "analytics.chart.languages": "Customer languages",
-  "analytics.chart.leadScores": "Lead scores",
   "analytics.chart.empty": "No data in this period.",
   "analytics.chart.summary": "{title}: {total} in total from {from} to {to}; the most on {peakDay} ({peak}).",
   "analytics.table.show": "Show as a table",
@@ -1287,5 +1286,6 @@
   "errors.XLSX_UNREADABLE": "This Excel file could not be read. Save it again as .xlsx or as CSV.",
   "errors.XLSX_TOO_LARGE": "This Excel file is too large or has too many rows (up to 20,000).",
   "errors.XLSX_NO_DATA": "This Excel file has no visible sheet with data.",
-  "errors.XLSX_OLD_FORMAT": "Old .xls files are not supported. In Excel choose Save as and pick .xlsx or CSV."
+  "errors.XLSX_OLD_FORMAT": "Old .xls files are not supported. In Excel choose Save as and pick .xlsx or CSV.",
+  "analytics.chart.leadStages": "Leads by stage"
 }

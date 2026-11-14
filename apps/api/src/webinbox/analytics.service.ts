@@ -38,6 +38,14 @@ export interface AnalyticsReport {
   leads: {
     total: number;
     byScore: { score: string; count: number }[];
+    /** Leads created in the period per stage of the default funnel, in funnel order. */
+    byStage: Array<{
+      id: string;
+      code: string | null;
+      name: string | null;
+      kind: 'OPEN' | 'WON' | 'LOST';
+      count: number;
+    }>;
     captureRate: number | null;
     crmFailed: number;
     crmPending: number;
@@ -144,6 +152,7 @@ export class AnalyticsService {
       handoverDaily,
       handoverTimes,
       leadScores,
+      leadStages,
       leadCrm,
       turns,
       toolStats,
@@ -215,6 +224,41 @@ export class AnalyticsService {
         WHERE tenant_id = ${tenantId}::uuid AND created_at >= ${start} AND created_at < ${end}
           AND archived_at IS NULL
         GROUP BY 1`,
+      // The stages of the default funnel with the period's leads in each (a
+      // lead with no stage counts in the first open stage, as on the board).
+      q.$queryRaw<
+        Array<{
+          id: string;
+          code: string | null;
+          name: string | null;
+          kind: 'OPEN' | 'WON' | 'LOST';
+          count: number;
+        }>
+      >`
+        WITH dp AS (
+          SELECT id FROM pipelines
+          WHERE tenant_id = ${tenantId}::uuid AND is_default AND archived_at IS NULL
+          LIMIT 1
+        ),
+        st AS (
+          SELECT s.id, s.code, s.name, s.kind::text AS kind, s.position
+          FROM lead_stages s JOIN dp ON s.pipeline_id = dp.id
+          WHERE s.tenant_id = ${tenantId}::uuid AND s.archived_at IS NULL
+        ),
+        first_open AS (
+          SELECT id FROM st WHERE kind = 'OPEN' ORDER BY position ASC, id ASC LIMIT 1
+        )
+        SELECT st.id::text AS id, st.code, st.name, st.kind,
+               count(l.id)::int AS count
+        FROM st
+        LEFT JOIN leads l
+          ON l.tenant_id = ${tenantId}::uuid
+         AND l.pipeline_id = (SELECT id FROM dp)
+         AND l.archived_at IS NULL
+         AND l.created_at >= ${start} AND l.created_at < ${end}
+         AND COALESCE(l.pipeline_stage_id, (SELECT id FROM first_open)) = st.id
+        GROUP BY st.id, st.code, st.name, st.kind, st.position
+        ORDER BY st.position ASC, st.id ASC`,
       q.$queryRaw<{ failed: number; pending: number }[]>`
         SELECT count(*) FILTER (WHERE crm_sync_status = 'FAILED')::int AS failed,
                count(*) FILTER (WHERE crm_sync_status = 'PENDING')::int AS pending
@@ -312,6 +356,7 @@ export class AnalyticsService {
           score,
           count: leadScores.find((row) => row.score === score)?.count ?? 0,
         })),
+        byStage: leadStages,
         captureRate: ratio(leadTotal, r.total),
         crmFailed: leadCrm[0].failed,
         crmPending: leadCrm[0].pending,

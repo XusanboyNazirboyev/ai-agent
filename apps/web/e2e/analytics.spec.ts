@@ -34,7 +34,7 @@ test('an admin reads the Section 11 metrics and changes the period', async ({
     'analytics-chart-handovers',
     'analytics-chart-reasons',
     'analytics-chart-languages',
-    'analytics-chart-scores',
+    'analytics-chart-stages',
     'analytics-details',
   ])
     await expect(page.getByTestId(id)).toBeVisible();

@@ -340,10 +340,10 @@ function Report(props: { data: AnalyticsReport; f: MetricFormat }): ReactNode {
           f={fmt}
         />
         <Breakdown
-          testId="analytics-chart-scores"
-          title={t('analytics.chart.leadScores')}
-          rows={data.leads.byScore.map((row) => ({
-            label: t(`score.${row.score}`),
+          testId="analytics-chart-stages"
+          title={t('analytics.chart.leadStages')}
+          rows={data.leads.byStage.map((row) => ({
+            label: row.name ?? (row.code ? t(`leads.stage.${row.code}`) : ''),
             count: row.count,
           }))}
           f={fmt}

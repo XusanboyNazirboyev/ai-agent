@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { ensureLeadStages } from '../leads/lead-stage.util.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { AnalyticsController } from './analytics.controller.js';
@@ -471,5 +472,72 @@ describe('analytics access', () => {
         to: '2026-03-01',
       }),
     ).rejects.toMatchObject({ response: { code: 'INVALID_RANGE' } });
+  });
+});
+
+describe('leads by funnel stage (ADR 058)', () => {
+  it('counts the period leads per stage of the default funnel, in funnel order, archived ones left out', async () => {
+    const t = await tenant('UTC');
+    await ensureLeadStages(db, t.id);
+    const c1 = await conversation(t, {
+      created: '2026-03-01T01:00:00Z',
+      language: 'uz',
+    });
+    const c2 = await conversation(t, {
+      created: '2026-03-01T02:00:00Z',
+      language: 'uz',
+    });
+    const c3 = await conversation(t, {
+      created: '2026-03-01T03:00:00Z',
+      language: 'uz',
+    });
+    await lead(t, c1, 'HOT', 'PENDING', '2026-03-01T10:00:00Z');
+    await lead(t, c2, 'COLD', 'PENDING', '2026-03-01T11:00:00Z');
+    await lead(t, c3, 'WARM', 'PENDING', '2026-03-01T12:00:00Z');
+    // Funnel order is the stage position, not creation order: move Qualified first.
+    const created = await db.leadStage.findMany({
+      where: { tenantId: t.id, archivedAt: null, code: 'QUALIFIED' },
+    });
+    await db.leadStage.update({
+      where: { tenantId_id: { tenantId: t.id, id: created[0]!.id } },
+      data: { position: -1 },
+    });
+    const stages = await db.leadStage.findMany({
+      where: { tenantId: t.id, archivedAt: null },
+      orderBy: { position: 'asc' },
+    });
+    expect(stages[0]!.code).toBe('QUALIFIED');
+    const byCode = (code: string): (typeof stages)[number] =>
+      stages.find((s) => s.code === code)!;
+    const leads = await db.lead.findMany({
+      where: { tenantId: t.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    // One lead has no stage (counts in the first open stage), one is in Qualified, one is archived.
+    await db.lead.update({
+      where: { tenantId_id: { tenantId: t.id, id: leads[1]!.id } },
+      data: { pipelineStageId: byCode('QUALIFIED').id },
+    });
+    await db.lead.update({
+      where: { tenantId_id: { tenantId: t.id, id: leads[2]!.id } },
+      data: { archivedAt: new Date() },
+    });
+    const report = await new AnalyticsService(prisma).report(t.id, {
+      from: '2026-03-01',
+      to: '2026-03-02',
+    });
+    expect(report.leads.byStage.map((s) => s.code)).toEqual(
+      stages.map((s) => s.code),
+    );
+    const counts = Object.fromEntries(
+      report.leads.byStage.map((s) => [s.code, s.count]),
+    );
+    // Qualified is now the first open stage, so the lead without a stage lands there too.
+    expect(counts).toMatchObject({ QUALIFIED: 2, NEW: 0, WON: 0, LOST: 0 });
+    expect(report.leads.byStage.reduce((sum, s) => sum + s.count, 0)).toBe(2);
+    expect(report.leads.total).toBe(2);
+    expect(report.leads.byStage.find((s) => s.code === 'WON')?.kind).toBe(
+      'WON',
+    );
   });
 });

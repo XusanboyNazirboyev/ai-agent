@@ -525,7 +525,6 @@
   "analytics.chart.handoversDaily": "Передачи оператору по дням",
   "analytics.chart.handoverReasons": "Причины передачи",
   "analytics.chart.languages": "Языки клиентов",
-  "analytics.chart.leadScores": "Оценки лидов",
   "analytics.chart.empty": "Нет данных за этот период.",
   "analytics.chart.summary": "{title}: всего {total} с {from} по {to}; больше всего {peakDay} ({peak}).",
   "analytics.table.show": "Показать таблицей",
@@ -1287,5 +1286,6 @@
   "errors.XLSX_UNREADABLE": "Не удалось прочитать этот файл Excel. Сохраните его заново как .xlsx или CSV.",
   "errors.XLSX_TOO_LARGE": "Этот файл Excel слишком большой или в нём слишком много строк (до 20 000).",
   "errors.XLSX_NO_DATA": "В этом файле Excel нет видимого листа с данными.",
-  "errors.XLSX_OLD_FORMAT": "Старые файлы .xls не поддерживаются. В Excel выберите «Сохранить как» и формат .xlsx или CSV."
+  "errors.XLSX_OLD_FORMAT": "Старые файлы .xls не поддерживаются. В Excel выберите «Сохранить как» и формат .xlsx или CSV.",
+  "analytics.chart.leadStages": "Лиды по этапам"
 }

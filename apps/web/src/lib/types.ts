@@ -539,6 +539,14 @@ export interface AnalyticsReport {
   leads: {
     total: number;
     byScore: { score: string; count: number }[];
+    /** The default funnel's stages with the period's leads (ADR 058). */
+    byStage: Array<{
+      id: string;
+      code: string | null;
+      name: string | null;
+      kind: 'OPEN' | 'WON' | 'LOST';
+      count: number;
+    }>;
     captureRate: number | null;
     crmFailed: number;
     crmPending: number;
