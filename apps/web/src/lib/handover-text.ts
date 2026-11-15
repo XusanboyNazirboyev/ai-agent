@@ -1,5 +1,4 @@
-import { factLines } from './facts';
-import { slotLabel } from './slot-labels';
+import { slotLabel, slotPairs } from './slot-labels';
 
 /** The i18n `t` function (an unknown key comes back unchanged). */
 type Translate = (
@@ -70,7 +69,10 @@ export function handoverSummaryLines(
       Array.isArray((summary as Record<string, unknown>)[group]),
     )
   )
-    return factLines(summary);
+    // Any other shape: its keys spelled out in words, never raw.
+    return slotPairs(summary, (key) => t(key)).map(
+      (pair) => `${pair.label}: ${pair.value}`,
+    );
   const lines: string[] = [];
   for (const group of GROUPS) {
     const items = (summary as Record<string, unknown>)[group];

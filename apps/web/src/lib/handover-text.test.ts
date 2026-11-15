@@ -81,7 +81,7 @@ describe('handover summary', () => {
 
   it('falls back to plain lines for any other shape', () => {
     expect(handoverSummaryLines(en, { note: 'call back' })).toEqual([
-      'note: call back',
+      'Note: call back',
     ]);
     expect(handoverSummaryLines(en, null)).toEqual([]);
   });
@@ -130,5 +130,13 @@ describe('handover headline', () => {
     expect(
       handoverHeadline(en, { customerClaims: [], inferences: [] }),
     ).toEqual({ asked: null, said: null });
+  });
+});
+
+describe('a summary of another shape', () => {
+  it('spells its keys out instead of showing them raw', () => {
+    expect(
+      handoverSummaryLines(en, { topic: 'e2e fixture', partySize: 2 }),
+    ).toEqual(['Topic: e2e fixture', 'Number of travellers: 2']);
   });
 });
