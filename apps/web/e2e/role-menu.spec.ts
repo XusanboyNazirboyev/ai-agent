@@ -4,15 +4,8 @@ import { fixtures, newSession } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-const OPERATOR_ITEMS = ['Today', 'Inbox', 'Leads', 'Knowledge', 'Settings'];
-const ADMIN_ITEMS = [
-  'Today',
-  'Inbox',
-  'Leads',
-  'Analytics',
-  'Knowledge',
-  'Settings',
-];
+const OPERATOR_ITEMS = ['Today', 'Inbox', 'Leads', 'Settings'];
+const ADMIN_ITEMS = ['Today', 'Inbox', 'Leads', 'Analytics', 'Settings'];
 
 async function openAs(
   browser: Parameters<typeof newSession>[0],
@@ -42,7 +35,7 @@ test.describe('role-based menu', () => {
       await expect(links).toHaveCount(items.length);
       for (const name of items)
         await expect(rail.getByRole('link', { name })).toHaveCount(1);
-      const hidden = items.length === 6 ? [] : ['Analytics'];
+      const hidden = items.length === 5 ? [] : ['Analytics'];
       for (const name of hidden)
         await expect(rail.getByRole('link', { name })).toHaveCount(0);
     });
@@ -59,8 +52,9 @@ test.describe('role-based menu', () => {
       await expect(more.getByRole('link', { name: 'Analytics' })).toHaveCount(
         0,
       );
+      // Knowledge is no longer a menu item: it sits under Settings, Assistant.
       await expect(more.getByRole('link', { name: 'Knowledge' })).toHaveCount(
-        1,
+        0,
       );
       await expect(more.getByRole('link', { name: 'Settings' })).toHaveCount(1);
     }
@@ -71,7 +65,7 @@ test.describe('role-based menu', () => {
   }) => {
     const page = await openAs(browser, 'admin');
     await page.goto('/more');
-    for (const name of ['Knowledge', 'Settings', 'Analytics'])
+    for (const name of ['Settings', 'Analytics'])
       await expect(
         page.locator('#app-main').getByRole('link', { name }),
       ).toHaveCount(1);

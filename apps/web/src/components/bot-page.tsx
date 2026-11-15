@@ -71,12 +71,12 @@ export function BotPage(): ReactNode {
           <Link
             href="/settings/bot/test"
             data-testid="bot-try"
-            className="flex items-center gap-3 rounded-2xl border border-line bg-primary-soft p-4 transition-colors hover:bg-surface-2"
+            className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-primary-soft p-4 transition-colors hover:bg-surface-2"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-surface text-primary-fg">
               <Icon name="message" className="h-5 w-5" />
             </span>
-            <span className="flex min-w-0 flex-1 flex-col">
+            <span className="flex min-w-0 flex-1 basis-40 flex-col [overflow-wrap:anywhere]">
               <span className="font-semibold">{t('bot.tryTitle')}</span>
               <span className="text-sm text-muted">{t('bot.tryBody')}</span>
             </span>

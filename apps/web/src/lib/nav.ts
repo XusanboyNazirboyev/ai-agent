@@ -1,8 +1,7 @@
 import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
-export type NavKey =
-  'today' | 'inbox' | 'leads' | 'analytics' | 'knowledge' | 'settings';
+export type NavKey = 'today' | 'inbox' | 'leads' | 'analytics' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -10,6 +9,8 @@ export interface NavItem {
   /** Roles that may open this item. Items useful even read-only stay; only
    * a "not allowed" item is hidden from the rail and the "More" page. */
   roles: Role[];
+  /** Other top-level paths that belong under this item (the menu keeps it lit). */
+  alsoUnder?: string[];
 }
 
 /** One source of truth for the top-level menu. */
@@ -31,14 +32,11 @@ export const NAV: NavItem[] = [
   },
   { key: 'analytics', icon: 'chart', roles: ['OWNER', 'ADMIN'] },
   {
-    key: 'knowledge',
-    icon: 'book',
-    roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
-  },
-  {
     key: 'settings',
     icon: 'sliders',
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
+    // The knowledge base is part of the Assistant group of Settings.
+    alsoUnder: ['/knowledge'],
   },
 ];
 

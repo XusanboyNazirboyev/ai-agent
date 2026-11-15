@@ -99,7 +99,7 @@ export function TestChatPage(): ReactNode {
 
   if (!manage)
     return (
-      <SettingsSubPage active="bot">
+      <SettingsSubPage active="test">
         <p className="p-4 text-sm text-muted">{t('settings.readOnly')}</p>
       </SettingsSubPage>
     );
@@ -108,7 +108,7 @@ export function TestChatPage(): ReactNode {
   const details = chat ? slotPairs(chat.slots, (key) => t(key)) : [];
 
   return (
-    <SettingsSubPage active="bot">
+    <SettingsSubPage active="test">
       <div
         role="region"
         tabIndex={0}

@@ -178,7 +178,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     (item) => item.slaDueAt && Date.parse(item.slaDueAt) < now,
   ).length;
 
-  const current = NAV.find((item) => pathname.startsWith(`/${item.key}`));
+  const current = NAV.find(
+    (item) =>
+      pathname.startsWith(`/${item.key}`) ||
+      (item.alsoUnder ?? []).some((path) => pathname.startsWith(path)),
+  );
   const onMore = pathname.startsWith('/more');
   const title = onMore
     ? t('nav.more')

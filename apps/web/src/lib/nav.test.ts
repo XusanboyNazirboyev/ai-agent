@@ -4,21 +4,8 @@ import type { Role } from './types';
 import { NAV, visibleNav } from './nav';
 
 const ROLES: Role[] = ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'];
-const FULL: NavKey[] = [
-  'today',
-  'inbox',
-  'leads',
-  'analytics',
-  'knowledge',
-  'settings',
-];
-const WITHOUT_ANALYTICS: NavKey[] = [
-  'today',
-  'inbox',
-  'leads',
-  'knowledge',
-  'settings',
-];
+const FULL: NavKey[] = ['today', 'inbox', 'leads', 'analytics', 'settings'];
+const WITHOUT_ANALYTICS: NavKey[] = ['today', 'inbox', 'leads', 'settings'];
 
 describe('visibleNav', () => {
   it('shows the complete menu to an owner and an administrator', () => {
