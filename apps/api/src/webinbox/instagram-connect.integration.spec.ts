@@ -337,6 +337,49 @@ describe('connecting an Instagram professional account from the web API', () => 
     expect(JSON.stringify(audits)).not.toContain(TOKEN);
   });
 
+  it('connects atomically: when the token cannot be stored, no account row and no audit entry are left (AUD-04)', async () => {
+    const s = setup();
+    const t = await tenant();
+    s.store.put = async () => {
+      throw new Error('storage down');
+    };
+    await expect(
+      s.controller.connect(t.request, { accessToken: TOKEN }),
+    ).rejects.toThrow('storage down');
+    expect(
+      await db.channelAccount.count({ where: { tenantId: t.tenantId } }),
+    ).toBe(0);
+    expect(
+      await db.channelSecret.count({ where: { tenantId: t.tenantId } }),
+    ).toBe(0);
+    expect(await db.auditEvent.count({ where: { tenantId: t.tenantId } })).toBe(
+      0,
+    );
+  });
+
+  it('a failed reconnect keeps the old token, name and audit trail as they were (AUD-04)', async () => {
+    const s = setup();
+    const t = await tenant();
+    const first = await s.controller.connect(t.request, { accessToken: TOKEN });
+    const owner = { tenantId: t.tenantId, channelAccountId: first.id };
+    const audits = await db.auditEvent.count({
+      where: { tenantId: t.tenantId },
+    });
+    s.store.delete = async () => {
+      throw new Error('storage down');
+    };
+    await expect(
+      s.controller.connect(t.request, { accessToken: TOKEN }),
+    ).rejects.toThrow('storage down');
+    expect(await s.store.get(owner, 'instagram_access_token')).toBe(TOKEN);
+    expect(await db.auditEvent.count({ where: { tenantId: t.tenantId } })).toBe(
+      audits,
+    );
+    expect(
+      await db.channelAccount.count({ where: { tenantId: t.tenantId } }),
+    ).toBe(1);
+  });
+
   it('disconnects: switched off, the token deleted, the row and its conversations kept, Meta never called, and the same account can connect again', async () => {
     const s = setup();
     const t = await tenant();

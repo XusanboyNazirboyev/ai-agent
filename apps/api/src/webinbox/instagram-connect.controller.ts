@@ -371,6 +371,12 @@ export class InstagramConnectController {
     if (existing && existing.tenantId !== who.tenantId)
       throw refuse('ALREADY_CONNECTED');
     const displayName = me.username ? `@${me.username}` : null;
+    const [keep, drop] =
+      via === 'oauth'
+        ? (['instagram_system_user_token', 'instagram_access_token'] as const)
+        : (['instagram_access_token', 'instagram_system_user_token'] as const);
+    // The account row, its token and the audit entry are written together
+    // (AUD-04): a failure leaves either all of them or none.
     const id = await this.prisma.$transaction(async (tx) => {
       const row =
         existing ??
@@ -389,23 +395,24 @@ export class InstagramConnectController {
           where: { id: existing.id },
           data: { displayName },
         });
+      const owner = { tenantId: who.tenantId, channelAccountId: row.id };
+      await this.secrets.put(owner, keep, token, tx);
+      await this.secrets.delete(owner, drop, tx);
+      await tx.auditEvent.create({
+        data: {
+          tenantId: who.tenantId,
+          actorType: 'OPERATOR',
+          actorId: who.operatorId,
+          action: existing
+            ? 'channel.instagram_reconnected'
+            : 'channel.instagram_connected',
+          entityType: 'channel_account',
+          entityId: row.id,
+          safeInputSummary: { igUserId: me.userId, via },
+        },
+      });
       return row.id;
     });
-    const owner = { tenantId: who.tenantId, channelAccountId: id };
-    const [keep, drop] =
-      via === 'oauth'
-        ? (['instagram_system_user_token', 'instagram_access_token'] as const)
-        : (['instagram_access_token', 'instagram_system_user_token'] as const);
-    await this.secrets.put(owner, keep, token);
-    await this.secrets.delete(owner, drop);
-    await this.audit(
-      who,
-      existing
-        ? 'channel.instagram_reconnected'
-        : 'channel.instagram_connected',
-      id,
-      { igUserId: me.userId, via },
-    );
     return this.summary(who.tenantId, id);
   }
 

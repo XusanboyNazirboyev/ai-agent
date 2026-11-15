@@ -26,12 +26,16 @@ export const SECRET_CIPHER = Symbol('SECRET_CIPHER');
  * returned only to server code that must call the provider; it is never part
  * of a response, a log line or an audit row.
  */
+/** A transaction (or the client) the secret writes join, for atomic connects. */
+export type SecretWriter = Pick<PrismaService, 'channelSecret'>;
+
 export abstract class ChannelSecretStore {
   abstract readonly configured: boolean;
   abstract put(
     owner: { tenantId: string; channelAccountId: string },
     purpose: SecretPurpose,
     value: string,
+    tx?: SecretWriter,
   ): Promise<void>;
   abstract get(
     owner: { tenantId: string; channelAccountId: string },
@@ -44,6 +48,7 @@ export abstract class ChannelSecretStore {
   abstract delete(
     owner: { tenantId: string; channelAccountId: string },
     purpose: SecretPurpose,
+    tx?: SecretWriter,
   ): Promise<void>;
   abstract deleteAll(owner: {
     tenantId: string;
@@ -78,9 +83,10 @@ export class PrismaChannelSecretStore extends ChannelSecretStore {
     owner: { tenantId: string; channelAccountId: string },
     purpose: SecretPurpose,
     value: string,
+    tx: SecretWriter = this.prisma,
   ): Promise<void> {
     const sealed = this.requireCipher().seal(value, aad(owner, purpose));
-    await this.prisma.channelSecret.upsert({
+    await tx.channelSecret.upsert({
       where: {
         tenantId_channelAccountId_purpose: {
           tenantId: owner.tenantId,
@@ -146,8 +152,9 @@ export class PrismaChannelSecretStore extends ChannelSecretStore {
   async delete(
     owner: { tenantId: string; channelAccountId: string },
     purpose: SecretPurpose,
+    tx: SecretWriter = this.prisma,
   ): Promise<void> {
-    await this.prisma.channelSecret.deleteMany({
+    await tx.channelSecret.deleteMany({
       where: {
         tenantId: owner.tenantId,
         channelAccountId: owner.channelAccountId,
