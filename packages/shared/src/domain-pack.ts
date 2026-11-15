@@ -157,6 +157,84 @@ export const ActionSpecSchema = z
 export type ActionSpec = z.infer<typeof ActionSpecSchema>;
 export type ActionField = z.infer<typeof ActionFieldSchema>;
 
+/**
+ * A ready set of sales stages, lead fields and tags for one kind of business
+ * (UX review E, step 7). The admin applies it on purpose; nothing is created
+ * by itself. Stage codes are shown in the viewer's language by the web
+ * catalog; field labels and tag names are stored in the workspace language.
+ */
+export const CrmTemplateSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/u),
+    pipelineName: z.record(LocaleIdSchema, z.string().min(1).max(80)),
+    stages: z
+      .array(
+        z
+          .object({
+            code: z.string().regex(/^[A-Z][A-Z0-9_]{1,39}$/u),
+            kind: z.enum(['OPEN', 'WON', 'LOST']),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(12),
+    leadFields: z
+      .array(
+        z
+          .object({
+            key: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/u),
+            type: z.enum(['TEXT', 'NUMBER', 'DATE', 'BOOLEAN']),
+            label: z.record(LocaleIdSchema, z.string().min(1).max(80)),
+          })
+          .strict(),
+      )
+      .max(12)
+      .default([]),
+    tags: z
+      .array(
+        z
+          .object({
+            name: z.record(LocaleIdSchema, z.string().min(1).max(40)),
+            color: z
+              .enum(['gray', 'blue', 'green', 'amber', 'red', 'purple'])
+              .optional(),
+          })
+          .strict(),
+      )
+      .max(12)
+      .default([]),
+  })
+  .strict()
+  .superRefine((template, context) => {
+    const codes = template.stages.map((stage) => stage.code);
+    if (new Set(codes).size !== codes.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['stages'],
+        message: 'duplicate stage code',
+      });
+    if (!template.stages.some((stage) => stage.kind === 'OPEN'))
+      context.addIssue({
+        code: 'custom',
+        path: ['stages'],
+        message: 'needs an open stage',
+      });
+    if (template.stages.filter((stage) => stage.kind === 'LOST').length !== 1)
+      context.addIssue({
+        code: 'custom',
+        path: ['stages'],
+        message: 'needs exactly one lost stage',
+      });
+    const keys = template.leadFields.map((field) => field.key);
+    if (new Set(keys).size !== keys.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['leadFields'],
+        message: 'duplicate field key',
+      });
+  });
+export type CrmTemplate = z.infer<typeof CrmTemplateSchema>;
+
 export const DomainPackSchema = z
   .object({
     key: DomainPackKeySchema,
@@ -201,6 +279,8 @@ export const DomainPackSchema = z
     capabilities: z
       .partialRecord(LocaleIdSchema, z.string().min(1).max(400))
       .default({}),
+    /** Optional ready stages, lead fields and tags for this kind of business. */
+    crmTemplate: CrmTemplateSchema.optional(),
     prompt: z
       .object({
         businessRole: z.string().min(1).max(400),

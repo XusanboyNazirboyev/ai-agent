@@ -8,6 +8,7 @@ import type { LeadStage, PipelineView, Role } from '@/lib/types';
 import { useShell } from './app-shell';
 import { SettingsSubPage } from './settings-section-nav';
 import { Badge } from './ui/badge';
+import { CrmTemplateCard } from './crm-template-card';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass } from './ui/fields';
@@ -121,6 +122,7 @@ export function PipelinesSettingsPage(): ReactNode {
               </Button>
             ) : null}
           </div>
+          {manage ? <CrmTemplateCard /> : null}
           {!manage ? (
             <p className="flex items-start gap-2 rounded-xl bg-surface-2 p-3 text-sm text-muted">
               <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0" />
@@ -605,9 +607,6 @@ function StageRow(props: {
           {stageName(props.stage, t)}
         </span>
       )}
-      {props.stage.code ? (
-        <Badge tone="neutral">{props.stage.code}</Badge>
-      ) : null}
       {props.manage ? (
         <div className="flex flex-wrap items-center gap-1">
           <Button

@@ -57,11 +57,38 @@ export const TRAVEL_PACK: DomainPack = DomainPackSchema.parse({
       type: 'enum',
       description: 'Month the trip should start.',
       options: [
+        {
+          value: 'january',
+          synonyms: ['yanvar', 'январь', 'январе', 'january'],
+        },
+        {
+          value: 'february',
+          synonyms: ['fevral', 'февраль', 'феврале', 'february'],
+        },
+        { value: 'march', synonyms: ['mart', 'март', 'марте', 'march'] },
+        { value: 'april', synonyms: ['aprel', 'апрель', 'апреле', 'april'] },
+        { value: 'may', synonyms: ['may', 'май', 'мае'] },
         { value: 'june', synonyms: ['iyun', 'июнь', 'июне', 'june'] },
         { value: 'july', synonyms: ['iyul', 'июль', 'июле', 'july'] },
         {
           value: 'august',
           synonyms: ['avgust', 'август', 'августе', 'august'],
+        },
+        {
+          value: 'september',
+          synonyms: ['sentabr', 'сентябрь', 'сентябре', 'september'],
+        },
+        {
+          value: 'october',
+          synonyms: ['oktabr', 'октябрь', 'октябре', 'october'],
+        },
+        {
+          value: 'november',
+          synonyms: ['noyabr', 'ноябрь', 'ноябре', 'november'],
+        },
+        {
+          value: 'december',
+          synonyms: ['dekabr', 'декабрь', 'декабре', 'december'],
         },
       ],
       requiredFor: ['quote'],
@@ -100,6 +127,105 @@ export const TRAVEL_PACK: DomainPack = DomainPackSchema.parse({
       },
     },
   ],
+  crmTemplate: {
+    key: 'tourism',
+    pipelineName: {
+      'uz-Latn': 'Turlar',
+      'uz-Cyrl': 'Турлар',
+      ru: 'Туры',
+      en: 'Tours',
+    },
+    stages: [
+      { code: 'INQUIRY', kind: 'OPEN' },
+      { code: 'OFFER_SENT', kind: 'OPEN' },
+      { code: 'PREPAYMENT', kind: 'OPEN' },
+      { code: 'DOCUMENTS', kind: 'OPEN' },
+      { code: 'PAID', kind: 'WON' },
+      { code: 'TRAVELLED', kind: 'WON' },
+      { code: 'LOST', kind: 'LOST' },
+    ],
+    leadFields: [
+      {
+        key: 'destination',
+        type: 'TEXT',
+        label: {
+          'uz-Latn': 'Yo‘nalish',
+          'uz-Cyrl': 'Йўналиш',
+          ru: 'Направление',
+          en: 'Destination',
+        },
+      },
+      {
+        key: 'departure_date',
+        type: 'DATE',
+        label: {
+          'uz-Latn': 'Jo‘nash sanasi',
+          'uz-Cyrl': 'Жўнаш санаси',
+          ru: 'Дата вылета',
+          en: 'Departure date',
+        },
+      },
+      {
+        key: 'travellers',
+        type: 'NUMBER',
+        label: {
+          'uz-Latn': 'Sayohatchilar soni',
+          'uz-Cyrl': 'Саёҳатчилар сони',
+          ru: 'Число путешественников',
+          en: 'Travellers',
+        },
+      },
+      {
+        key: 'budget',
+        type: 'NUMBER',
+        label: {
+          'uz-Latn': 'Byudjet (1 kishi)',
+          'uz-Cyrl': 'Бюджет (1 киши)',
+          ru: 'Бюджет на человека',
+          en: 'Budget per person',
+        },
+      },
+      {
+        key: 'needs_visa',
+        type: 'BOOLEAN',
+        label: {
+          'uz-Latn': 'Viza yoki pasport kerak',
+          'uz-Cyrl': 'Виза ёки паспорт керак',
+          ru: 'Нужна виза или паспорт',
+          en: 'Needs a visa or passport',
+        },
+      },
+    ],
+    tags: [
+      {
+        name: {
+          'uz-Latn': 'Oilaviy',
+          'uz-Cyrl': 'Оилавий',
+          ru: 'Семья',
+          en: 'Family',
+        },
+        color: 'green',
+      },
+      {
+        name: {
+          'uz-Latn': 'Asal oyi',
+          'uz-Cyrl': 'Асал ойи',
+          ru: 'Медовый месяц',
+          en: 'Honeymoon',
+        },
+        color: 'purple',
+      },
+      {
+        name: {
+          'uz-Latn': 'Qaynoq tur',
+          'uz-Cyrl': 'Қайноқ тур',
+          ru: 'Горящий тур',
+          en: 'Hot tour',
+        },
+        color: 'red',
+      },
+    ],
+  },
   actions: [
     {
       key: 'trip_request',
