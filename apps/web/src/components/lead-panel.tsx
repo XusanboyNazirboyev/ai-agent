@@ -16,6 +16,7 @@ import { useToast } from './ui/toast';
 import { currentStageId, stageLabel } from './lead-board-utils';
 import { LeadArchiveButton } from './lead-archive-button';
 import { LeadOpportunity } from './lead-opportunity';
+import { Section } from './ui/section';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { MoveToPipeline } from './move-to-pipeline';
 
@@ -224,17 +225,30 @@ function PanelBody(props: {
           </h3>
           <LeadOpportunity leadId={item.id} item={item} hideSummary />
         </section>
-        {canEdit ? <MoveToPipeline leadId={item.id} /> : null}
-        <LeadTagsEditor
-          leadId={item.id}
-          tags={item.tags ?? []}
-          role={operator.role}
-        />
-        <LeadCustomFieldsEditor
-          leadId={item.id}
-          fields={item.customFields ?? []}
-          role={operator.role}
-        />
+        <Section
+          title={t('leads.more')}
+          icon="sliders"
+          testId="lead-panel-more"
+          collapsible
+          defaultOpen={false}
+          storageKey="lead-more"
+          summary={t('leads.moreSummary', {
+            tags: (item.tags ?? []).length,
+            fields: (item.customFields ?? []).length,
+          })}
+        >
+          {canEdit ? <MoveToPipeline leadId={item.id} /> : null}
+          <LeadTagsEditor
+            leadId={item.id}
+            tags={item.tags ?? []}
+            role={operator.role}
+          />
+          <LeadCustomFieldsEditor
+            leadId={item.id}
+            fields={item.customFields ?? []}
+            role={operator.role}
+          />
+        </Section>
         {canArchive ? (
           <LeadArchiveButton leadId={item.id} onArchived={props.onClose} />
         ) : null}

@@ -12,7 +12,8 @@ export function LeadsPage(): ReactNode {
   const { t } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
-  const view: View = params.get('view') === 'funnel' ? 'funnel' : 'list';
+  // The board is what the Leads page is for; the people list is the second tab.
+  const view: View = params.get('view') === 'list' ? 'list' : 'funnel';
 
   function choose(next: View): void {
     router.replace(`/leads?view=${next}`, { scroll: false });
@@ -25,7 +26,7 @@ export function LeadsPage(): ReactNode {
         aria-label={t('leads.views')}
         className="flex shrink-0 gap-1 border-b border-line bg-surface px-3 py-2 sm:px-4"
       >
-        {(['list', 'funnel'] as const).map((item) => (
+        {(['funnel', 'list'] as const).map((item) => (
           <button
             key={item}
             type="button"

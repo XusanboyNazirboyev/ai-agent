@@ -9,6 +9,7 @@ import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
+import { Icon } from './ui/icons';
 import { useCardDrag } from './use-card-drag';
 import {
   ageDays,
@@ -232,7 +233,9 @@ export function LeadCard(props: {
           ) : null}
           {item.stageSetBy === 'AGENT' ? (
             <Badge tone="accent" data-testid="lead-card-stage-by-ai">
-              {t('leads.aiChip')}
+              <Icon name="bot" className="h-3 w-3" />
+              <span aria-hidden="true">{t('leads.aiChip')}</span>
+              <span className="sr-only">{t('leads.stageByAI')}</span>
             </Badge>
           ) : null}
           {!terminal ? (
@@ -241,7 +244,11 @@ export function LeadCard(props: {
               dot={tone !== 'neutral'}
               data-testid="lead-card-age"
             >
-              <span aria-hidden="true">{t('leads.ageDays', { days })}</span>
+              <span aria-hidden="true">
+                {days === 0
+                  ? t('leads.ageToday')
+                  : t('leads.ageDays', { days })}
+              </span>
               <span className="sr-only">{t('leads.ageLabel', { days })}</span>
             </Badge>
           ) : null}
