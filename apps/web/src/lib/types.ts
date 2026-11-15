@@ -587,3 +587,11 @@ export interface AnalyticsReport {
     lowConfidence: number;
   };
 }
+
+/** A workspace quick reply (roadmap P1.8, ADR 070). */
+export interface CannedResponse {
+  id: string;
+  title: string;
+  text: string;
+  position: number;
+}

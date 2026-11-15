@@ -69,10 +69,13 @@ test('an admin finds everything under four groups, the knowledge base under Assi
     await page.getByTestId('settings-tab-general').click();
     await page.waitForURL(/\/settings$/u);
 
-    // A group with one section has no second row.
+    // Channels and the operators' quick replies (ADR 070) share a group.
     await page.getByTestId('settings-group-channels').click();
     await page.waitForURL(/\/settings\/channels$/u);
-    await expect(page.getByTestId('settings-subtabs')).toHaveCount(0);
+    await expect(tabs.getByRole('link')).toHaveText([
+      'Channels',
+      'Quick replies',
+    ]);
   } finally {
     await context.close();
   }

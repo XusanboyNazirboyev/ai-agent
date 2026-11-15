@@ -143,7 +143,7 @@ test('a quick reply is inserted into the composer', async ({ browser }) => {
     .filter({ hasText: handover.contactName })
     .click();
   await page.getByTestId('take-over').click();
-  await page.getByLabel('Quick replies').selectOption('thanks');
+  await page.getByLabel('Quick replies').selectOption('builtin:thanks');
   await expect(page.getByTestId('reply-input')).toHaveValue(
     'Thank you for your patience.',
   );

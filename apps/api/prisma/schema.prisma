@@ -298,6 +298,7 @@ model Tenant {
   customFieldDefs      CustomFieldDef[]
 
   leadTasks          LeadTask[]
+  cannedResponses    CannedResponse[]
 
   @@map("tenants")
 }
@@ -1973,4 +1974,20 @@ model LeadTask {
   @@unique([tenantId, id])
   @@index([tenantId, leadId])
   @@map("lead_tasks")
+}
+
+/// Quick replies a workspace writes for its operators (roadmap P1.8, ADR 070).
+model CannedResponse {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  title     String   @db.VarChar(80)
+  text      String   @db.Text
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, position])
+  @@map("canned_responses")
 }

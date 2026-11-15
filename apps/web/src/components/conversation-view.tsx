@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/i18n';
+import { composerReplies, useCannedResponses } from '@/lib/canned';
 import { FormDialog } from './ui/form-dialog';
 import { fieldClass } from './ui/fields';
 import { api, errorKey } from '@/lib/api';
@@ -45,7 +46,6 @@ import { Section } from './ui/section';
 import { MoveToPipeline } from './move-to-pipeline';
 import { useToast } from './ui/toast';
 
-const CANNED = ['greeting', 'wait', 'details', 'thanks', 'bye'];
 const LEAD_STATUSES: LeadStatus[] = ['NEW', 'IN_PROGRESS', 'WON', 'LOST'];
 const OPERATING: Role[] = ['OWNER', 'ADMIN', 'OPERATOR'];
 
@@ -100,6 +100,8 @@ export function ConversationViewPane(props: {
   onBack: () => void;
 }): ReactNode {
   const { t, formatDateTime, locale } = useI18n();
+  const ownReplies = useCannedResponses();
+  const quickReplies = composerReplies(ownReplies.items, t);
   const queryClient = useQueryClient();
   const notify = useToast();
   const now = useNow();
@@ -578,19 +580,20 @@ export function ConversationViewPane(props: {
                   <Select
                     aria-label={t('action.canned')}
                     value=""
-                    onChange={(e) =>
-                      e.target.value &&
-                      setReply(
-                        (prev) =>
-                          `${prev}${prev ? '\n' : ''}${t(`canned.${e.target.value}`)}`,
-                      )
-                    }
+                    onChange={(e) => {
+                      const text = quickReplies.find(
+                        (item) => item.id === e.target.value,
+                      )?.text;
+                      if (text)
+                        setReply((prev) => `${prev}${prev ? '\n' : ''}${text}`);
+                    }}
                     className="max-w-full min-h-9"
+                    data-testid="quick-reply-select"
                   >
                     <option value="">{t('action.cannedNone')}</option>
-                    {CANNED.map((id) => (
-                      <option key={id} value={id}>
-                        {t(`canned.${id}`)}
+                    {quickReplies.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
                       </option>
                     ))}
                   </Select>

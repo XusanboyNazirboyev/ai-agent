@@ -11,6 +11,7 @@ const ALL: SettingsSection[] = [
   'knowledge',
   'test',
   'channels',
+  'replies',
   'crm',
   'pipeline',
   'catalog',
@@ -40,6 +41,7 @@ describe('settings groups', () => {
     expect(groupOf('pipeline')).toBe('sales');
     expect(groupOf('crm')).toBe('sales');
     expect(groupOf('fields')).toBe('sales');
+    expect(groupOf('replies')).toBe('channels');
     expect(groupOf('team')).toBe('account');
     expect(groupOf('security')).toBe('account');
   });
@@ -66,6 +68,7 @@ describe('settings groups', () => {
       knowledge: '/knowledge',
       test: '/settings/bot/test',
       channels: '/settings/channels',
+      replies: '/settings/replies',
       pipeline: '/settings/pipeline',
       catalog: '/settings/catalog',
       fields: '/settings/fields',

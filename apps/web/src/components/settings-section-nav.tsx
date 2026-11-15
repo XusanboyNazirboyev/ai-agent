@@ -12,6 +12,7 @@ export type SettingsSection =
   | 'knowledge'
   | 'test'
   | 'channels'
+  | 'replies'
   | 'crm'
   | 'pipeline'
   | 'catalog'
@@ -65,6 +66,11 @@ export const SETTINGS_GROUPS: GroupDef[] = [
         key: 'channels',
         href: '/settings/channels',
         label: 'settings.section.channels',
+      },
+      {
+        key: 'replies',
+        href: '/settings/replies',
+        label: 'settings.section.replies',
       },
     ],
   },
