@@ -102,4 +102,14 @@ describe('HTTP bootstrap shared by main.ts', () => {
       (await post(JSON.stringify({ text: 'x'.repeat(300_000) }))).status,
     ).toBe(413);
   });
+
+  it('turns on graceful shutdown: SIGTERM closes workers and the pool through Nest (AUD-06)', () => {
+    const calls: string[] = [];
+    configureHttp({
+      use: () => calls.push('use'),
+      useBodyParser: (type) => calls.push(`body:${type}`),
+      enableShutdownHooks: () => calls.push('shutdown-hooks'),
+    });
+    expect(calls).toContain('shutdown-hooks');
+  });
 });

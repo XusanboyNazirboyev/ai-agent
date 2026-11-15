@@ -1,4 +1,9 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
@@ -7,7 +12,7 @@ import { assertUtcSession, createPostgresAdapter } from './postgres-adapter.js';
 @Injectable()
 export class PrismaService
   extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
+  implements OnModuleInit, OnApplicationShutdown
 {
   constructor(config: ConfigService<AppEnvironment, true>) {
     super({
@@ -27,8 +32,20 @@ export class PrismaService
     await assertUtcSession(this);
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /**
+   * The pool closes last: Nest runs every module's onModuleDestroy (queue
+   * workers finishing their active job, timers stopping) before any
+   * onApplicationShutdown, so a job still writing has its connection.
+   */
+  async onApplicationShutdown(signal?: string): Promise<void> {
     await this.$disconnect();
+    // The last step of a graceful stop: seen in the logs after a deploy.
+    new Logger(PrismaService.name).log(
+      JSON.stringify({
+        event: 'app.shutdown_complete',
+        signal: signal ?? null,
+      }),
+    );
   }
 
   /**
