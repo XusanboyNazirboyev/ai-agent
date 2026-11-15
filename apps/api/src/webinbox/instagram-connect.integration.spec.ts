@@ -340,7 +340,7 @@ describe('connecting an Instagram professional account from the web API', () => 
   it('connects atomically: when the token cannot be stored, no account row and no audit entry are left (AUD-04)', async () => {
     const s = setup();
     const t = await tenant();
-    s.store.put = async () => {
+    s.store.put = async (): Promise<void> => {
       throw new Error('storage down');
     };
     await expect(
@@ -365,7 +365,7 @@ describe('connecting an Instagram professional account from the web API', () => 
     const audits = await db.auditEvent.count({
       where: { tenantId: t.tenantId },
     });
-    s.store.delete = async () => {
+    s.store.delete = async (): Promise<void> => {
       throw new Error('storage down');
     };
     await expect(
