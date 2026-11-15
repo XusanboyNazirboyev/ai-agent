@@ -29,6 +29,14 @@ test('an operator adds a task to a lead, sees it on Today, and finishes it', asy
     const row = panel.getByTestId('task').filter({ hasText: title });
     await expect(row).toBeVisible();
     await expect(row).toContainText('Overdue');
+    // The lead's history (P1.7) shows the new task with who added it.
+    const history = page.getByTestId('lead-timeline');
+    await history.locator('summary').click();
+    await expect(
+      history
+        .getByTestId('timeline-entry')
+        .filter({ hasText: `Task added: ${title}` }),
+    ).toBeVisible();
     expect(await findOverflow(page)).toEqual([]);
 
     await page.goto('/today');

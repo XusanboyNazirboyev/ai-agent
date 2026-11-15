@@ -31,6 +31,7 @@ function localInput(hours: number): string {
 export function invalidateTasks(qc: ReturnType<typeof useQueryClient>): void {
   void qc.invalidateQueries({ queryKey: ['lead-tasks'] });
   void qc.invalidateQueries({ queryKey: ['tasks-mine'] });
+  void qc.invalidateQueries({ queryKey: ['lead-timeline'] });
 }
 
 /** One task row: finish it with the checkbox, see when and for whom. */

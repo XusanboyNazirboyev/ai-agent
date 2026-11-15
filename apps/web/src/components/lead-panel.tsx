@@ -18,6 +18,7 @@ import { LeadArchiveButton } from './lead-archive-button';
 import { LeadOpportunity } from './lead-opportunity';
 import { Section } from './ui/section';
 import { LeadTasks } from './lead-tasks';
+import { LeadTimeline } from './lead-timeline';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { MoveToPipeline } from './move-to-pipeline';
 
@@ -251,6 +252,7 @@ function PanelBody(props: {
             role={operator.role}
           />
         </Section>
+        <LeadTimeline leadId={item.id} />
         {canArchive ? (
           <LeadArchiveButton leadId={item.id} onArchived={props.onClose} />
         ) : null}
