@@ -17,6 +17,7 @@ import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 import { reasonLabel } from '@/lib/handover-text';
+import Link from 'next/link';
 
 type Range = { from: string; to: string };
 
@@ -159,6 +160,98 @@ function DailyBars(props: {
 /** A count with its share of the total, e.g. "12 · 40%". */
 const share = (format: MetricFormat, count: number, total: number): string =>
   `${format.count(count)} · ${format.percent(count / total)}`;
+
+/**
+ * What customers asked for (ADR 063 S1): per intent, how many messages, how
+ * many a person had to take and how many the assistant had no data for, with
+ * a pointer to the place that fixes the last ones.
+ */
+function AsksCard(props: {
+  rows: NonNullable<AnalyticsReport['asks']>;
+  f: MetricFormat;
+}): ReactNode {
+  const { t } = useI18n();
+  const label = (intent: string): string => {
+    const key = `handover.intent.${intent}`;
+    const text = t(key);
+    return text === key
+      ? intent
+      : text.charAt(0).toLocaleUpperCase() + text.slice(1);
+  };
+  const missing = props.rows.reduce((sum, row) => sum + row.noData, 0);
+  return (
+    <Card title={t('analytics.asks.title')} testId="analytics-asks">
+      {props.rows.length === 0 ? (
+        <p className="text-sm text-muted">{t('analytics.chart.empty')}</p>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-3">
+            {props.rows.map((row) => {
+              const answered = row.count - row.handedOver;
+              return (
+                <li
+                  key={row.intent}
+                  data-testid="analytics-ask"
+                  className="flex min-w-0 flex-col gap-1 text-sm"
+                >
+                  <div className="flex min-w-0 justify-between gap-3">
+                    <span className="min-w-0 break-words font-medium">
+                      {label(row.intent)}
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {props.f.count(row.count)}
+                    </span>
+                  </div>
+                  <div
+                    aria-hidden="true"
+                    className="flex h-2 overflow-hidden rounded bg-surface-2"
+                  >
+                    <div
+                      className="h-full bg-success-fg"
+                      style={{ width: `${(answered / row.count) * 100}%` }}
+                    />
+                    <div
+                      className="h-full bg-warning-fg"
+                      style={{
+                        width: `${(row.handedOver / row.count) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted">
+                    {t('analytics.asks.split', {
+                      answered: props.f.count(answered),
+                      handed: props.f.count(row.handedOver),
+                    })}
+                    {row.noData > 0
+                      ? ` · ${t('analytics.asks.noData', { count: props.f.count(row.noData) })}`
+                      : ''}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+          {missing > 0 ? (
+            <p
+              data-testid="analytics-asks-fix"
+              className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-warning-soft p-2 text-sm text-warning-fg"
+            >
+              <Icon name="info" className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 basis-48">
+                {t('analytics.asks.fixHint')}
+              </span>
+              <Link href="/knowledge" className="font-medium underline">
+                {t('analytics.asks.fixKnowledge')}
+              </Link>
+              <Link href="/settings/catalog" className="font-medium underline">
+                {t('analytics.asks.fixPrices')}
+              </Link>
+            </p>
+          ) : null}
+        </>
+      )}
+    </Card>
+  );
+}
 
 /** Labelled rows with a share bar; the text carries every number. */
 function Breakdown(props: {
@@ -339,6 +432,7 @@ function Report(props: { data: AnalyticsReport; f: MetricFormat }): ReactNode {
           }))}
           f={fmt}
         />
+        <AsksCard rows={data.asks ?? []} f={fmt} />
         <Breakdown
           testId="analytics-chart-stages"
           title={t('analytics.chart.leadStages')}

@@ -57,6 +57,17 @@ export interface AnalyticsReport {
     guardrailHandovers: number;
   };
   latency: { turns: number; p50Ms: number | null; p95Ms: number | null };
+  /**
+   * What customers asked for (ADR 063 S1): answered turns per pack intent,
+   * most asked first, with how many a person had to take and how many the
+   * assistant had no data for. Counts only.
+   */
+  asks: Array<{
+    intent: string;
+    count: number;
+    handedOver: number;
+    noData: number;
+  }>;
   cost: {
     conversationsWithTurns: number;
     totalUsd: number;
@@ -315,6 +326,19 @@ export class AnalyticsService {
     const h = handoverTimes[0];
     const g = turns[0];
     const t = toolStats[0] ?? { calls: 0, errors: 0 };
+    const asks = await q.$queryRaw<
+      { intent: string; count: number; handed_over: number; no_data: number }[]
+    >`
+      SELECT intent, count(*)::int AS count,
+        count(*) FILTER (WHERE handover_reason IS NOT NULL)::int AS handed_over,
+        count(*) FILTER (WHERE handover_reason = 'NO_DATA')::int AS no_data
+      FROM agent_turns
+      WHERE tenant_id = ${tenantId}::uuid AND status = 'COMMITTED'
+        AND intent IS NOT NULL
+        AND created_at >= ${start} AND created_at < ${end}
+      GROUP BY intent
+      ORDER BY count(*) DESC, intent ASC
+      LIMIT 12`;
     const d = detection[0];
     const totalCostUsd = Number(g.cost_nano ?? 0n) / 1e9;
     const leadTotal = leadScores.reduce((sum, row) => sum + row.count, 0);
@@ -368,6 +392,12 @@ export class AnalyticsService {
         guardrailHandovers: g.guardrail_handovers,
       },
       latency: { turns: g.timed, p50Ms: num(g.p50), p95Ms: num(g.p95) },
+      asks: asks.map((row) => ({
+        intent: row.intent,
+        count: row.count,
+        handedOver: row.handed_over,
+        noData: row.no_data,
+      })),
       cost: {
         conversationsWithTurns: g.convs,
         totalUsd: totalCostUsd,

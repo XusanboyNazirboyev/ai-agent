@@ -24,3 +24,6 @@ Fine-tuning (D3), cross-tenant learning, automatic publication of suggestions, l
 
 ## Risks
 Redaction misses a phone number or name in a topic key: mitigated by reusing the existing PII policy and a test with planted PII. Operators approve suggestions blindly: the report shows the evidence count and the draft is marked unverified until published.
+
+## Amendment 2026-11-15: the first slice, without the open questions
+Built before the owner answers the three open questions, because it needs none of them: each committed turn now stores its **pack intent** (`agent_turns.intent`, additive migration `20261125090000`; no customer text, the same retention as the turn), and Analytics shows **What customers ask** for the chosen days: per intent, how many messages, how many the assistant answered, how many a person took and how many had no data, with links to the knowledge base and the price list when some had no data. Topic keys (redacted query text) and FAQ suggestions (S1 topic part, S3) wait for open questions 1 and 2. Verified by an integration test of the report (order, hand-over and no-data counts; discarded turns, turns without an intent, other days and other workspaces left out), the turn-record unit test, and browser tests with the counts injected.

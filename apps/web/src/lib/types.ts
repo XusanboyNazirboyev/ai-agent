@@ -566,6 +566,13 @@ export interface AnalyticsReport {
     guardrailHandovers: number;
   };
   latency: { turns: number; p50Ms: number | null; p95Ms: number | null };
+  /** What customers asked for, per pack intent (ADR 063 S1); absent on older servers. */
+  asks?: Array<{
+    intent: string;
+    count: number;
+    handedOver: number;
+    noData: number;
+  }>;
   cost: {
     conversationsWithTurns: number;
     totalUsd: number;

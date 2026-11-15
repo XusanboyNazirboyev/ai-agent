@@ -912,6 +912,7 @@ export function turnMetrics(
     usage.reduce((total, entry) => total + pick(entry), 0);
   return {
     outcome: result.outcome,
+    intent: result.intent ?? null,
     handoverReason: result.outcome === 'HANDOVER' ? result.handover : null,
     failureCode: result.llmFailure ?? null,
     locale: result.locale,

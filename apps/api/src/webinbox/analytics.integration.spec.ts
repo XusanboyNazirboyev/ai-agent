@@ -204,6 +204,7 @@ async function turn(
     handoverReason?: string;
     tools?: { name: string; status: string }[];
     status?: 'COMMITTED' | 'DISCARDED';
+    intent?: string;
   },
 ): Promise<void> {
   const row = await db.agentTurn.create({
@@ -223,6 +224,7 @@ async function turn(
       inboundEventIds: [],
       correlationId: 'c',
       outcome: options.outcome,
+      intent: options.intent ?? null,
       handoverReason: options.handoverReason ?? null,
       latencyMs: options.latencyMs,
       actualCostNano: options.costNano,
@@ -539,5 +541,60 @@ describe('leads by funnel stage (ADR 058)', () => {
     expect(report.leads.byStage.find((s) => s.code === 'WON')?.kind).toBe(
       'WON',
     );
+  });
+
+  it('says what customers asked for, by intent, most asked first, with hand-overs and missing data (counts only)', async () => {
+    const t = await tenant('UTC');
+    const other = await tenant('UTC');
+    const c = await conversation(t, {
+      created: '2026-03-02T01:00:00Z',
+      language: 'uz',
+    });
+    const o = await conversation(other, {
+      created: '2026-03-02T01:00:00Z',
+      language: 'uz',
+    });
+    const at = '2026-03-02T10:00:00Z';
+    const base = { created: at, latencyMs: 100, costNano: 1n };
+    await turn(t, c, { ...base, outcome: 'ANSWERED', intent: 'price' });
+    await turn(t, c, { ...base, outcome: 'ANSWERED', intent: 'price' });
+    await turn(t, c, {
+      ...base,
+      outcome: 'HANDOVER',
+      intent: 'price',
+      handoverReason: 'NO_DATA',
+    });
+    await turn(t, c, {
+      ...base,
+      outcome: 'HANDOVER',
+      intent: 'human_request',
+      handoverReason: 'CUSTOMER_REQUEST',
+    });
+    await turn(t, c, { ...base, outcome: 'ANSWERED', intent: 'greeting' });
+    // Not counted: a discarded turn, a turn without an intent, another day, another workspace.
+    await turn(t, c, {
+      ...base,
+      outcome: 'ANSWERED',
+      intent: 'price',
+      status: 'DISCARDED',
+    });
+    await turn(t, c, { ...base, outcome: 'ANSWERED' });
+    await turn(t, c, {
+      ...base,
+      created: '2026-02-01T10:00:00Z',
+      outcome: 'ANSWERED',
+      intent: 'price',
+    });
+    await turn(other, o, { ...base, outcome: 'ANSWERED', intent: 'price' });
+
+    const report = await new AnalyticsService(prisma).report(t.id, {
+      from: '2026-03-01',
+      to: '2026-03-03',
+    });
+    expect(report.asks).toEqual([
+      { intent: 'price', count: 3, handedOver: 1, noData: 1 },
+      { intent: 'greeting', count: 1, handedOver: 0, noData: 0 },
+      { intent: 'human_request', count: 1, handedOver: 1, noData: 0 },
+    ]);
   });
 });

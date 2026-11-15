@@ -473,6 +473,8 @@ describe('turn record mapping', () => {
     const metrics = turnMetrics(computed);
     expect(metrics).toMatchObject({
       outcome: 'HANDOVER',
+      // What the customer asked for is kept (ADR 063 S1), never their text.
+      intent: run.result.intent ?? null,
       handoverReason: 'NEGOTIATION',
       provider: 'mock',
       llmCalls: 1,
