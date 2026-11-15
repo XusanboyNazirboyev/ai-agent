@@ -26,11 +26,11 @@ ChatGPT prepares code and tests only. Claude Code owns review, local test execut
 | AUD-06 | P1 | Graceful shutdown lifecycle is only partially covered | PARTIAL | Inventory every worker, queue, SSE stream, provider and DB resource; implement ordered/idempotent shutdown and tests |
 | AUD-07 | P1 | Deployment image and source HEAD cannot be reproduced/verified reliably | BLOCKED / NEEDS EVIDENCE | Define immutable image digest + embedded commit SHA; Claude verifies deployed runtime against expected SHA |
 | AUD-08 | P0 | SSE response backpressure is uncontrolled | IMPLEMENTED / VALIDATION PENDING | Review bounded queue/drain/slow-client close behavior and run its integration regression test |
-| AUD-09 | P1 | Knowledge-only tenant cannot operate without a catalog connector | OPEN | Trace tenant capability resolution and tool registration; add catalog-free knowledge-only tests |
+| AUD-09 | P1 | Knowledge-only tenant cannot operate without a catalog connector | implemented on feat/knowledge-only-tenants, awaiting reviewer verification (ADR 060 S1) | Trace tenant capability resolution and tool registration; add catalog-free knowledge-only tests |
 | AUD-11 | P1 | Delayed mutation in conversation A can clear draft in conversation B | IMPLEMENTED / VALIDATION PENDING | Review active-conversation guard and run frontend regression test |
 | AUD-12 | P1 | SSE JSON events lack runtime schema validation | OPEN | Define discriminated event schemas and validate at the event boundary; test malformed/unknown payloads |
 | AUD-13 | P1 | Connector selection may choose the oldest active search connector instead of configured source | Implemented on `feat/connector-roles` (ADR 059 S1), awaiting reviewer verification | Trace tenant connector configuration and routing; make source selection explicit and deterministic |
-| AUD-14 | P1 | DomainPack requires search_catalog, preventing catalog-less packs | OPEN | Separate optional catalog capability from required pack contract; add scheduling/knowledge-only pack tests |
+| AUD-14 | P1 | DomainPack requires search_catalog, preventing catalog-less packs | implemented on feat/knowledge-only-tenants, awaiting reviewer verification (ADR 060 S1) | Separate optional catalog capability from required pack contract; add scheduling/knowledge-only pack tests |
 
 **Count:** 11 audit items remain not fully closed. Three have code prepared from earlier work (AUD-02, AUD-08, AUD-11); AUD-01 is now implemented on its own branch but awaits Claude Code validation. AUD-04 and AUD-06 remain partial. AUD-07 needs runtime evidence. The remaining four are open.
 

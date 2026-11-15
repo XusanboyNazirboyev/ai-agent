@@ -166,6 +166,35 @@ describe('slot engine', () => {
       }),
     ).toThrow(/required for search/);
   });
+
+  it('accepts a knowledge-only pack and rejects a pack with neither tool (ADR 060)', () => {
+    const knowledgeOnly = DomainPackSchema.parse({
+      ...EDUCATION_PACK,
+      tools: ['knowledge_search'],
+      slots: EDUCATION_PACK.slots.map((slot) => ({ ...slot, requiredFor: [] })),
+    });
+    expect(knowledgeOnly.tools).toEqual(['knowledge_search']);
+    expect(() =>
+      DomainPackSchema.parse({ ...EDUCATION_PACK, tools: ['get_quote'] }),
+    ).toThrow(/needs search_catalog or knowledge_search/);
+    expect(() =>
+      DomainPackSchema.parse({
+        ...EDUCATION_PACK,
+        tools: ['search_catalog', 'knowledge_search'],
+      }),
+    ).not.toThrow();
+    // a catalog pack still needs a search slot
+    expect(() =>
+      DomainPackSchema.parse({
+        ...EDUCATION_PACK,
+        tools: ['search_catalog'],
+        slots: EDUCATION_PACK.slots.map((slot) => ({
+          ...slot,
+          requiredFor: [],
+        })),
+      }),
+    ).toThrow(/required for search/);
+  });
 });
 
 describe('facts and guardrail', () => {

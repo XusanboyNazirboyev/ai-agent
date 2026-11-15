@@ -148,7 +148,11 @@ export interface ToolTraceEntry {
 }
 
 export interface ToolContext {
-  readonly connector: CrmConnector;
+  /**
+   * The tenant's catalog connector. Absent for a knowledge-only turn (ADR 060):
+   * then only knowledge_search can run and no catalog tool is offered.
+   */
+  readonly connector: CrmConnector | undefined;
   readonly pack: DomainPack;
   readonly facts: FactStore;
   readonly budget: TurnBudget;
@@ -325,7 +329,11 @@ const DEFINITIONS: Readonly<Record<AgentToolName, LlmToolDefinition>> = {
   },
 };
 
-function supported(connector: CrmConnector, name: AgentToolName): boolean {
+function supported(
+  connector: CrmConnector | undefined,
+  name: AgentToolName,
+): boolean {
+  if (!connector) return false;
   switch (name) {
     case 'search_catalog':
       return (
@@ -366,6 +374,13 @@ export class AgentTools {
   private pendingChange: SchedulingChange | undefined;
 
   constructor(private readonly context: ToolContext) {}
+
+  /** Only reached by catalog tools, which available() never offers without one. */
+  private catalogConnector(): CrmConnector {
+    if (!this.context.connector)
+      throw new Error('catalog tool used without a connector');
+    return this.context.connector;
+  }
 
   /** Pack-enabled tools the tenant's connector actually supports. */
   available(): AgentToolName[] {
@@ -411,12 +426,13 @@ export class AgentTools {
   ): FactProvenance {
     return {
       tool,
-      connectorKey: this.context.connector.connectorKey,
+      connectorKey: this.context.connector?.connectorKey ?? 'knowledge',
       sourceSystem,
       sourceEntityId,
       retrievedAt: this.context.now().toISOString(),
       ...(validUntil ? { validUntil } : {}),
-      tenantId: this.context.connector.context.tenantId,
+      tenantId:
+        this.context.connector?.context.tenantId ?? this.context.scope.tenantId,
       conversationId: this.context.scope.conversationId,
       ...binding,
     };
@@ -644,7 +660,7 @@ export class AgentTools {
         title: query.title,
         attributes: Object.keys(query.attributes ?? {}).join(','),
       },
-      () => this.context.connector.searchItems!(query),
+      () => this.catalogConnector().searchItems!(query),
     );
   }
 
@@ -690,7 +706,8 @@ export class AgentTools {
       return this.runKnowledge(input.query, started);
     if (SCHEDULING_TOOLS.has(tool))
       return this.runScheduling(tool, input, started);
-    const { connector, pack } = this.context;
+    const { pack } = this.context;
+    const connector = this.catalogConnector();
     switch (tool) {
       case 'search_catalog':
         return this.execute(name, 'model', input, () =>
@@ -1165,9 +1182,8 @@ export class AgentTools {
       input: redactedSummary(input),
       durationMs: Date.now() - started,
     });
-    const sourceSystem =
-      this.context.connector.sourceSystem ??
-      this.context.connector.connectorKey;
+    const connector = this.catalogConnector();
+    const sourceSystem = connector.sourceSystem ?? connector.connectorKey;
     switch (shape) {
       case 'items': {
         const items = result as CatalogItem[];

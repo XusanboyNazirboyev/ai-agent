@@ -253,6 +253,13 @@ const COMMENT_REPLY_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   'regulated_info',
 ]);
 
+/** ADR 060: intents a knowledge turn cannot answer (commercial facts). */
+const KNOWLEDGE_TURN_HANDOVER_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
+  'price',
+  'availability',
+  'booking_interest',
+]);
+
 /** Stored as the turn's asked slot so a second frustration in a row is seen. */
 export const FRUSTRATION_MARK = 'apology:frustration';
 
@@ -353,19 +360,25 @@ export async function runAgentTurn(
   let slots: SlotState = input.slots;
   let intent: Intent | undefined;
   let extractionFailure: string | undefined;
-  const tools = deps.connector
-    ? new AgentTools({
-        connector: deps.connector,
-        pack,
-        facts,
-        budget: llm.budget,
-        timeoutMs: deps.toolTimeoutMs,
-        now,
-        scope: deps.scope,
-        ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
-        ...(deps.scheduling ? { scheduling: deps.scheduling } : {}),
-      })
-    : undefined;
+  // ADR 060: without a catalog connector a pack that offers knowledge_search
+  // still gets tools, but only that one (no catalog, no scheduling).
+  const tools =
+    deps.connector ||
+    (deps.knowledge && pack.tools.includes('knowledge_search'))
+      ? new AgentTools({
+          connector: deps.connector,
+          pack,
+          facts,
+          budget: llm.budget,
+          timeoutMs: deps.toolTimeoutMs,
+          now,
+          scope: deps.scope,
+          ...(deps.knowledge ? { knowledge: deps.knowledge } : {}),
+          ...(deps.connector && deps.scheduling
+            ? { scheduling: deps.scheduling }
+            : {}),
+        })
+      : undefined;
 
   const locale = (): LocalePack => locales.get(localeId);
   // Any message other than an exact confirmation or decline retires the open
@@ -738,8 +751,17 @@ export async function runAgentTurn(
   // from verified, recent regulated knowledge; otherwise nobody answers it but
   // a person. No search slots are asked for it.
   const regulated = intent === 'regulated_info';
+  // ADR 060: no catalog tool but a knowledge tool = a knowledge turn. It
+  // answers only from retrieved knowledge facts, so there is no catalog
+  // search to ask search slots for.
+  const knowledgeTurn =
+    !regulated &&
+    !schedulingTurn &&
+    tools !== undefined &&
+    !tools.available().includes('search_catalog') &&
+    tools.available().includes('knowledge_search');
   const missing =
-    regulated || schedulingTurn
+    regulated || schedulingTurn || knowledgeTurn
       ? undefined
       : firstMissing(pack, slots, 'search');
   if (missing) {
@@ -781,7 +803,13 @@ export async function runAgentTurn(
   // 4. Search early, then one relaxed search before giving up.
   let knowledgeOutcome: ToolOutcome | undefined;
   if (regulated) {
-    if (!tools || !tools.available().includes('knowledge_search'))
+    // Regulated answers stay as before ADR 060: they need the connector-backed
+    // tool set, so a knowledge-only tool set hands them over.
+    if (
+      !tools ||
+      !deps.connector ||
+      !tools.available().includes('knowledge_search')
+    )
       return handover('LEGAL_UNVERIFIED');
     try {
       knowledgeOutcome = await stopwatch.time('search', () =>
@@ -811,6 +839,29 @@ export async function runAgentTurn(
       !verified
     )
       return handover('LEGAL_UNVERIFIED');
+  } else if (knowledgeTurn) {
+    // Commercial facts (price, availability, booking) exist only as catalog
+    // or offer facts, which this tool set has none of: a person answers them.
+    // The intent comes from the classifier, never from the customer's words.
+    if (intent !== undefined && KNOWLEDGE_TURN_HANDOVER_INTENTS.has(intent))
+      return handover('NO_DATA');
+    try {
+      knowledgeOutcome = await stopwatch.time('search', () =>
+        tools.searchKnowledge(input.customerText),
+      );
+    } catch (error: unknown) {
+      if (error instanceof BudgetExhaustedError)
+        return handover(budgetHandoverReason(error.reason), {
+          budgetStop: error.reason,
+        });
+      throw error;
+    }
+    if (
+      !knowledgeOutcome.ok ||
+      knowledgeOutcome.outcome !== 'FOUND' ||
+      !facts.list().some((fact) => fact.value.kind === 'knowledge')
+    )
+      return handover('NO_DATA');
   } else if (
     !schedulingTurn &&
     (!tools || !tools.available().includes('search_catalog'))
