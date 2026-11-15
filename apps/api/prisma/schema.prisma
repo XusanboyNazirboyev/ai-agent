@@ -297,6 +297,8 @@ model Tenant {
   leadTags             LeadTag[]
   customFieldDefs      CustomFieldDef[]
 
+  leadTasks          LeadTask[]
+
   @@map("tenants")
 }
 
@@ -586,6 +588,7 @@ model Operator {
   personMerges          PersonMerge[]  @relation("PersonMergeBy")
   personUnmerges        PersonMerge[]  @relation("PersonMergeUndoneBy")
   ownedLeads            Lead[]         @relation("LeadOwner")
+  assignedTasks         LeadTask[]     @relation("LeadTaskAssignee")
 
   @@unique([tenantId, id])
   @@unique([tenantId, telegramUserId])
@@ -939,6 +942,7 @@ model Lead {
   suggestedStage  LeadStage?   @relation("LeadSuggestedStage", fields: [tenantId, suggestedStageId], references: [tenantId, id], onDelete: Restrict)
   owner           Operator?    @relation("LeadOwner", fields: [tenantId, ownerOperatorId], references: [tenantId, id], onDelete: Restrict)
   tags            LeadTag[]
+  tasks           LeadTask[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, idempotencyKey])
@@ -1947,4 +1951,26 @@ model SheetCatalogOffer {
   @@id([tenantId, catalogId, key])
   @@index([tenantId, catalogId, itemKey])
   @@map("sheet_catalog_offers")
+}
+
+/// A task on a lead with a due time (roadmap P1.6, ADR 068): "call back
+/// tomorrow at 10". The reminder scan announces it once in the web inbox.
+model LeadTask {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  leadId              String    @map("lead_id") @db.Uuid
+  title               String    @db.VarChar(200)
+  dueAt               DateTime  @map("due_at") @db.Timestamptz(6)
+  assigneeOperatorId  String?   @map("assignee_operator_id") @db.Uuid
+  createdByOperatorId String?   @map("created_by_operator_id") @db.Uuid
+  doneAt              DateTime? @map("done_at") @db.Timestamptz(6)
+  notifiedAt          DateTime? @map("notified_at") @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead                Lead      @relation(fields: [tenantId, leadId], references: [tenantId, id], onDelete: Cascade)
+  assignee            Operator? @relation("LeadTaskAssignee", fields: [tenantId, assigneeOperatorId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, leadId])
+  @@map("lead_tasks")
 }

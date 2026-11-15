@@ -28,6 +28,7 @@ import { SubscriptionController } from './subscription.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AnalyticsController } from './analytics.controller.js';
 import { TodayController } from './today.controller.js';
+import { LeadTasksController } from '../tasks/lead-tasks.js';
 import { CrmTemplateController } from './crm-template.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
@@ -94,6 +95,7 @@ import { ExportLock } from '../exports/export-lock.js';
     SheetCatalogController,
     AnalyticsController,
     TodayController,
+    LeadTasksController,
     CrmTemplateController,
     LeadPipelineController,
     PipelinesController,

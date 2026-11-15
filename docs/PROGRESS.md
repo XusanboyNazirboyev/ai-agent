@@ -17,8 +17,8 @@ Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing tha
 | 6A web operator inbox | Done |
 | 7 evaluation, observability, second pack | Done (7.3 closed by the owner on 2026-11-02) |
 | 8 Meta channels | Partial: Instagram DM done; Messenger and Instagram comment replies built but not enabled (owner Meta steps); **WhatsApp not started** |
-| 9 hardening and production | Partial: staging on AWS, CI/CD deploy, MFA (ADR 048), retention and erasure (ADR 049), RLS on the first tables (ADR 050, slices S1 to S7 open), security audit done. **Missing:** runbooks (no `docs/runbooks`), load/soak test, restore drill and off-host backups (deferred by the owner until real data exists), public privacy pages (draft, no legal review), the pilot itself |
-| 10 self-serve and scale | Partial: team and roles, channel connect, knowledge upload, CRM connect, plan and subscription console, pipelines, tags and fields exist. Missing: pack selection, mapping wizard, eval run, audit-log page, operator copilot |
+| 9 hardening and production | Partial: staging on AWS, CI/CD deploy, 7 runbooks (`docs/runbooks`), graceful shutdown (AUD-06), MFA (ADR 048), retention and erasure (ADR 049), RLS on the first tables (ADR 050, slices S1 to S7 open), security audit done. **Missing:** load/soak test, restore drill and off-host backups (deferred by the owner until real data exists), public privacy pages (draft, no legal review), the pilot itself |
+| 10 self-serve and scale | Partial: team and roles, channel connect, knowledge upload, CRM connect, plan and subscription console, pipelines, tags and fields exist. Built since: Today page with a getting-started list, test chat (ADR 065), assistant reply suggestions (ADR 066), ready CRM templates (ADR 067), lead tasks and reminders (ADR 068). Missing: pack selection, mapping wizard, eval run, audit-log page |
 | 11 new languages | Deferred by the owner |
 
 ### Built since the entries below (2026-11-07 to 2026-11-14)

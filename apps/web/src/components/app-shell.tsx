@@ -147,6 +147,14 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
   };
   const onEvent = useCallback(
     (event: LiveEvent) => {
+      if (event.type === 'task.due') {
+        // A task's time came: refresh the lists and say so once.
+        void queryClient.invalidateQueries({ queryKey: ['tasks-mine'] });
+        void queryClient.invalidateQueries({ queryKey: ['lead-tasks'] });
+        if (soundRef.current) beep();
+        toast(tRef.current('notify.task.due'));
+        return;
+      }
       if (event.type.startsWith('subscription.')) {
         // The access answer changed: refetch it (banner) and say so once.
         void queryClient.invalidateQueries({ queryKey: ['me'] });

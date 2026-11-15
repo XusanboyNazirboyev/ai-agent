@@ -16,6 +16,7 @@ import {
 } from '@/lib/today';
 import type { ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
+import { MyTasksCard } from './lead-tasks';
 import { Badge, type Tone } from './ui/badge';
 import { buttonClass } from './ui/button';
 import { Icon } from './ui/icons';
@@ -117,6 +118,8 @@ export function TodayPage(): ReactNode {
             action={t('today.action.openLeads')}
           />
         </div>
+
+        <MyTasksCard />
 
         {light ? (
           <AssistantCard light={light} manager={manager} />

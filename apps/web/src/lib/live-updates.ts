@@ -15,6 +15,8 @@ const EVENT_TYPES = [
   'subscription.bot_paused',
   'subscription.past_due',
   'subscription.expired',
+  // ADR 068: a task's due time came.
+  'task.due',
 ] as const;
 
 const POLL_MS = 10_000;

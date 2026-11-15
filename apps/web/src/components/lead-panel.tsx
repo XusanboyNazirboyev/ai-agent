@@ -17,6 +17,7 @@ import { currentStageId, stageLabel } from './lead-board-utils';
 import { LeadArchiveButton } from './lead-archive-button';
 import { LeadOpportunity } from './lead-opportunity';
 import { Section } from './ui/section';
+import { LeadTasks } from './lead-tasks';
 import { LeadCustomFieldsEditor, LeadTagsEditor } from './lead-tags-fields';
 import { MoveToPipeline } from './move-to-pipeline';
 
@@ -208,6 +209,7 @@ function PanelBody(props: {
           </ol>
         </nav>
         {canEdit ? <AiBlock item={item} stages={stages} /> : null}
+        <LeadTasks leadId={item.id} />
         {item.lostReason ? (
           <p
             data-testid="lead-panel-lost-reason"
