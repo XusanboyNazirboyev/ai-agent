@@ -118,6 +118,7 @@ const GEMINI_PAID_2026_10_29: PricingConfig = {
   version: 'gemini-paid-2026-10-29',
   provider: 'google',
   asOf: '2026-10-29',
+  validUntil: '2026-12-31',
   sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
   models: {
     'gemini-3.8-flash': {
@@ -204,6 +205,7 @@ const ROUTING_GEMINI_PAID_2026_11_09: PricingConfig = {
   version: 'routing-gemini-paid-2026-11-09',
   provider: 'multi',
   asOf: '2026-11-09',
+  validUntil: '2026-12-31',
   sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
   models: {
     'gemini-3.8-flash': GEMINI_PAID_2026_10_29.models['gemini-3.8-flash']!,
@@ -221,6 +223,42 @@ const ROUTING_GEMINI_PAID_2026_11_09: PricingConfig = {
   },
 };
 
+/**
+ * The Gemini Paid Tier prices Google announced from January 1, 2027, on the
+ * same page (https://ai.google.dev/gemini-api/docs/pricing, read 2026-10-29):
+ * input $1.50, output $7.50, context caching $0.15 per 1M tokens for
+ * `gemini-3.8-flash`. Prepared so the switch on January 1 is one setting
+ * (`LLM_PRICING_VERSION`); re-read the page before switching, since an
+ * announcement can change. Using it earlier only overstates the cost.
+ */
+const GEMINI_PAID_2027_01_01: PricingConfig = {
+  version: 'gemini-paid-2027-01-01',
+  provider: 'google',
+  asOf: '2026-10-29',
+  sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+  models: {
+    'gemini-3.8-flash': {
+      inputPerMTok: '1.50',
+      outputPerMTok: '7.50',
+      cacheReadPerMTok: '0.15',
+      cacheWrite5mPerMTok: '1.50',
+      cacheWrite1hPerMTok: '1.50',
+    },
+  },
+};
+
+/** The 2026-11-09 routing table with the 2027 Gemini prices (see above). */
+const ROUTING_GEMINI_PAID_2027_01_01: PricingConfig = {
+  version: 'routing-gemini-paid-2027-01-01',
+  provider: 'multi',
+  asOf: '2026-10-29',
+  sourceUrl: ROUTING_GEMINI_PAID_2026_11_09.sourceUrl,
+  models: {
+    ...ROUTING_GEMINI_PAID_2026_11_09.models,
+    'gemini-3.8-flash': GEMINI_PAID_2027_01_01.models['gemini-3.8-flash']!,
+  },
+};
+
 export const PRICING_CATALOG = new PricingCatalog([
   ANTHROPIC_2026_10_23,
   GEMINI_FREE_2026_10_23,
@@ -228,9 +266,14 @@ export const PRICING_CATALOG = new PricingCatalog([
   LOCAL_FREE_2026_10_23,
   ROUTING_FREE_2026_10_23,
   ROUTING_GEMINI_PAID_2026_11_09,
+  GEMINI_PAID_2027_01_01,
+  ROUTING_GEMINI_PAID_2027_01_01,
 ]);
 
 export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';
+
+/** A price list ending within this many days is flagged at startup. */
+export const PRICING_EXPIRY_WARN_DAYS = 14;
 
 /** Pricing older than this is flagged at startup for re-verification. */
 export const PRICING_MAX_AGE_DAYS = 30;

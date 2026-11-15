@@ -1,3 +1,4 @@
+import { pricingDaysLeft } from '../core/llm/pricing.js';
 import { describe, expect, it } from 'vitest';
 import {
   costOfUsage,
@@ -69,6 +70,59 @@ describe('configured Claude pricing (anthropic-2026-10-23)', () => {
     });
     expect(pricingFor(snapshot, 'claude-sonnet-5-5').longContext).toBe(
       undefined,
+    );
+  });
+});
+
+describe('price lists with an end date', () => {
+  const at = (iso: string): Date => new Date(`${iso}T12:00:00Z`);
+  it('the 2026 Gemini prices end on December 31 and say so', () => {
+    for (const version of [
+      'gemini-paid-2026-10-29',
+      'routing-gemini-paid-2026-11-09',
+    ]) {
+      const snapshot = PRICING_CATALOG.snapshot(version);
+      expect(snapshot.validUntil, version).toBe('2026-12-31');
+      expect(pricingDaysLeft(snapshot, at('2026-12-17'))).toBe(14);
+      expect(pricingDaysLeft(snapshot, at('2026-12-31'))).toBe(0);
+      expect(pricingDaysLeft(snapshot, at('2027-01-01'))).toBe(-1);
+    }
+  });
+
+  it('the announced 2027 prices are ready and twice the 2026 ones, with no end date', () => {
+    const now = PRICING_CATALOG.snapshot('gemini-paid-2026-10-29').models[
+      'gemini-3.8-flash'
+    ]!;
+    for (const version of [
+      'gemini-paid-2027-01-01',
+      'routing-gemini-paid-2027-01-01',
+    ]) {
+      const next = PRICING_CATALOG.snapshot(version);
+      expect(next.validUntil, version).toBeUndefined();
+      expect(pricingDaysLeft(next, at('2027-06-01'))).toBeNull();
+      const model = next.models['gemini-3.8-flash']!;
+      expect(model.free).toBe(false);
+      for (const rate of [
+        'input',
+        'output',
+        'cacheRead',
+        'cacheWrite5m',
+        'cacheWrite1h',
+      ] as const)
+        expect(model.standard[rate], `${version} ${rate}`).toBeCloseTo(
+          now.standard[rate] * 2,
+          12,
+        );
+    }
+    // The free fallbacks of the routing table are unchanged.
+    expect(
+      Object.keys(
+        PRICING_CATALOG.snapshot('routing-gemini-paid-2027-01-01').models,
+      ).sort(),
+    ).toEqual(
+      Object.keys(
+        PRICING_CATALOG.snapshot('routing-gemini-paid-2026-11-09').models,
+      ).sort(),
     );
   });
 });

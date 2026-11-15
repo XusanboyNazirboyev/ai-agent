@@ -60,6 +60,8 @@ export const PricingConfigSchema = z
     provider: z.string().min(1).max(40),
     /** Date the prices were read from `sourceUrl` (YYYY-MM-DD). */
     asOf: z.iso.date(),
+    /** Last day these prices hold, when the source names one (YYYY-MM-DD). */
+    validUntil: z.iso.date().optional(),
     sourceUrl: z.url(),
     models: z.record(
       z.string().min(1).max(100),
@@ -104,6 +106,8 @@ export interface PricingSnapshot {
   readonly version: string;
   readonly provider: string;
   readonly asOf: string;
+  /** Last day the prices hold, when the source names one. */
+  readonly validUntil?: string;
   readonly source: string;
   readonly models: Readonly<Record<string, ModelPricing>>;
 }
@@ -181,6 +185,7 @@ export function parsePricingConfig(raw: unknown): PricingSnapshot {
     version: config.version,
     provider: config.provider,
     asOf: config.asOf,
+    ...(config.validUntil ? { validUntil: config.validUntil } : {}),
     source: config.sourceUrl,
     models,
   };
@@ -277,6 +282,19 @@ export function worstCaseCost(
     estimatedInputTokens * Math.max(r.input, r.cacheWrite5m, r.cacheWrite1h) +
     maxOutputTokens * r.output
   );
+}
+
+/**
+ * Days left until the end of `validUntil` (UTC): negative once it passed,
+ * null when the source names no end date.
+ */
+export function pricingDaysLeft(
+  snapshot: PricingSnapshot,
+  now: Date,
+): number | null {
+  if (!snapshot.validUntil) return null;
+  const end = Date.parse(`${snapshot.validUntil}T00:00:00Z`) + 86_400_000;
+  return Math.ceil((end - now.getTime()) / 86_400_000) - 1;
 }
 
 /** Whole days between `asOf` and `now` (UTC). */

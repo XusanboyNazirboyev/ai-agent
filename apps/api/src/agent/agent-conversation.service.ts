@@ -26,11 +26,16 @@ import type { SlotState } from '../core/agent/slots.js';
 import { TurnBudget } from '../core/llm/budget.js';
 import type { LlmProvider } from '../core/llm/llm-provider.js';
 import { MeteredLlm, type LlmUsageEntry } from '../core/llm/metered-llm.js';
-import { pricingAgeDays, type PricingSnapshot } from '../core/llm/pricing.js';
+import {
+  pricingAgeDays,
+  pricingDaysLeft,
+  type PricingSnapshot,
+} from '../core/llm/pricing.js';
 import { LocaleRegistry, type LocaleId } from '../core/locales/locale-pack.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import {
   PRICING_CATALOG,
+  PRICING_EXPIRY_WARN_DAYS,
   PRICING_MAX_AGE_DAYS,
 } from '../llm/pricing-catalog.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
@@ -216,6 +221,26 @@ export class AgentConversationService implements OnModuleInit {
   }
 
   onModuleInit(): void {
+    // A price list past its end date undercounts every call, so the budget
+    // guards stop too late: said loudly at every start until it is replaced.
+    const left = pricingDaysLeft(this.pricing, new Date());
+    if (left !== null && left < 0)
+      this.logger.error(
+        JSON.stringify({
+          event: 'llm.pricing_expired',
+          pricingVersion: this.pricing.version,
+          validUntil: this.pricing.validUntil,
+        }),
+      );
+    else if (left !== null && left <= PRICING_EXPIRY_WARN_DAYS)
+      this.logger.warn(
+        JSON.stringify({
+          event: 'llm.pricing_expiring',
+          pricingVersion: this.pricing.version,
+          validUntil: this.pricing.validUntil,
+          daysLeft: left,
+        }),
+      );
     const age = pricingAgeDays(this.pricing, new Date());
     if (age > PRICING_MAX_AGE_DAYS) {
       this.logger.warn(
