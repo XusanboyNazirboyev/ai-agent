@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import {
   billingRequired,
   decideAccess,
@@ -7,6 +8,13 @@ import {
 } from './access-decision.js';
 
 export const ACCESS_CACHE_MS = 60_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const UNKNOWN: TenantAccess = {
+  state: 'ARCHIVED',
+  subscriptionStatus: null,
+  periodEnd: null,
+  graceUntil: null,
+};
 
 /**
  * Whether a tenant is suspended, archived or out of subscription (ADR 047
@@ -26,7 +34,11 @@ export class TenantAccessService {
     const cached = this.cache.get(tenantId);
     if (cached && now.getTime() - cached.at < ACCESS_CACHE_MS)
       return cached.value;
-    const value = await this.load(tenantId, now);
+    // Called before a session exists (login, invite), so the reads run
+    // under the tenant they are about (RLS plan S5).
+    const value = UUID.test(tenantId)
+      ? await runWithTenant(tenantId, () => this.load(tenantId, now))
+      : UNKNOWN;
     if (this.cache.size > 10_000) this.cache.clear();
     this.cache.set(tenantId, { value, at: now.getTime() });
     return value;
@@ -41,13 +53,7 @@ export class TenantAccessService {
       where: { id: tenantId },
       select: { status: true, config: true },
     });
-    if (!tenant)
-      return {
-        state: 'ARCHIVED',
-        subscriptionStatus: null,
-        periodEnd: null,
-        graceUntil: null,
-      };
+    if (!tenant) return UNKNOWN;
     // The open row wins (there is at most one); otherwise the newest.
     const open = await this.prisma.tenantSubscription.findFirst({
       where: { tenantId, status: { in: ['TRIAL', 'ACTIVE', 'PAST_DUE'] } },

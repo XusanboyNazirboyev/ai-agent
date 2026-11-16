@@ -188,6 +188,7 @@ describe('Telegram update normalization for operators', () => {
 });
 
 describe('webhook routing', () => {
+  const TENANT = '00000000-0000-4000-8000-000000000001';
   const build = (): {
     controller: TelegramWebhookController;
     accept: ReturnType<typeof vi.fn>;
@@ -196,6 +197,7 @@ describe('webhook routing', () => {
     const accept = vi.fn().mockResolvedValue('accepted');
     const handle = vi.fn().mockResolvedValue(undefined);
     const webhook = {
+      routeTenant: vi.fn().mockResolvedValue(TENANT),
       assertWebhookSecret: vi.fn(),
       operatorChannel: vi
         .fn()

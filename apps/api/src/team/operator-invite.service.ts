@@ -1,6 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { hashPassword } from '../webinbox/password.js';
 import {
@@ -64,13 +66,24 @@ type Db = Prisma.TransactionClient | PrismaService;
  */
 @Injectable()
 export class OperatorInviteService {
+  /**
+   * Finds an invite by its token alone, before the tenant is known (RLS plan
+   * S5); everything after that runs under the invite's tenant.
+   */
+  private readonly lookup: PrismaClient;
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional()
     @Inject(SESSION_POLICY)
     private readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
     @Optional() private readonly access?: TenantAccessService,
-  ) {}
+    // Optional only so specs can build the service by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.lookup = privileged?.db ?? prisma;
+  }
 
   /** `maxOperators` of the tenant's open subscription, if any. */
   async seatLimit(
@@ -235,7 +248,7 @@ export class OperatorInviteService {
     expiresAt: Date;
   }> {
     if (!plausibleInviteToken(token)) throw new InviteError('INVITE_INVALID');
-    const invite = await this.prisma.operatorInvite.findUnique({
+    const invite = await this.lookup.operatorInvite.findUnique({
       where: { tokenHash: hashInviteToken(token) },
       include: { tenant: { select: { name: true } } },
     });
@@ -265,7 +278,7 @@ export class OperatorInviteService {
   ): Promise<{ tenantId: string; operatorId: string; email: string }> {
     if (!plausibleInviteToken(token)) throw new InviteError('INVITE_INVALID');
     const tokenHash = hashInviteToken(token);
-    const found = await this.prisma.operatorInvite.findUnique({
+    const found = await this.lookup.operatorInvite.findUnique({
       where: { tokenHash },
       select: { tenantId: true },
     });
@@ -277,11 +290,30 @@ export class OperatorInviteService {
         throw new InviteError('TENANT_SUSPENDED');
     }
     const passwordHash = await hashPassword(input.password, this.policy.scrypt);
+    return runWithTenant(found.tenantId, () =>
+      this.acceptFor(
+        found.tenantId,
+        tokenHash,
+        input.displayName,
+        passwordHash,
+        now,
+      ),
+    );
+  }
+
+  /** The accept transaction, run under the invite's tenant. */
+  private acceptFor(
+    tenantId: string,
+    tokenHash: string,
+    displayName: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<{ tenantId: string; operatorId: string; email: string }> {
     return this.prisma.$transaction(async (tx) => {
-      await lockTenantTeam(tx, found.tenantId);
+      await lockTenantTeam(tx, tenantId);
       const invite = await tx.operatorInvite.findFirst({
         where: {
-          tenantId: found.tenantId,
+          tenantId,
           tokenHash,
           acceptedAt: null,
           revokedAt: null,
@@ -304,7 +336,7 @@ export class OperatorInviteService {
       const operator = await tx.operator.create({
         data: {
           tenantId: invite.tenantId,
-          displayName: input.displayName,
+          displayName,
           role: invite.role,
         },
       });

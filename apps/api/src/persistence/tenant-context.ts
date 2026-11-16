@@ -77,3 +77,14 @@ export function runWithoutTenant<T>(fn: () => T): T {
 export function currentTenant(): string | null {
   return storage.getStore()?.tenantId ?? null;
 }
+
+/**
+ * True inside a request whose tenant is not known yet (an open, empty slot).
+ * A statement on the main connection here is one the RLS plan S5 moved to the
+ * privileged connection (or a platform-console query, S5b), so the warn mode
+ * reports each of them instead of a sample.
+ */
+export function awaitingTenant(): boolean {
+  const slot = storage.getStore();
+  return slot !== undefined && slot.tenantId === null;
+}

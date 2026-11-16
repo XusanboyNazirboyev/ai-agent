@@ -37,6 +37,25 @@ describe('validateEnvironment', () => {
     ).toThrow(/GOOGLE_SHEETS_TEST_BASE_URL is a test setting/u);
   });
 
+  it('refuses RLS strict mode without the privileged role (RLS plan S5)', () => {
+    expect(() =>
+      validateEnvironment({
+        ...postgresEnvironment,
+        RLS_CONTEXT_MODE: 'strict',
+      }),
+    ).toThrow(/POSTGRES_ADMIN_USER is required/u);
+    const parsed = validateEnvironment({
+      ...postgresEnvironment,
+      RLS_CONTEXT_MODE: 'strict',
+      POSTGRES_ADMIN_USER: 'owner_role',
+    });
+    expect(parsed.RLS_CONTEXT_MODE).toBe('strict');
+    expect(
+      validateEnvironment({ ...postgresEnvironment, RLS_CONTEXT_MODE: 'warn' })
+        .RLS_CONTEXT_MODE,
+    ).toBe('warn');
+  });
+
   it('lets voice-note STT use GEMINI_API_KEY when STT_API_KEY is not set (ADR 042)', () => {
     expect(() =>
       validateEnvironment({ ...postgresEnvironment, STT_PROVIDER: 'gemini' }),

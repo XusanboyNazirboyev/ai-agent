@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { SECRET_CIPHER } from '../secrets/channel-secret-store.js';
 import { SecretCipher } from '../secrets/secret-cipher.js';
 import { verifyPassword } from '../webinbox/password.js';
@@ -66,15 +68,21 @@ const principalType = (subject: MfaSubject): string =>
 @Injectable()
 export class MfaService {
   private readonly store: MfaStore;
+  /** Challenges and factors belong to a person before any tenant is known (RLS plan S5). */
+  private readonly db: PrismaClient;
 
   constructor(
-    private readonly prisma: PrismaService,
+    prisma: PrismaService,
     @Optional() @Inject(SECRET_CIPHER) private readonly cipher?: SecretCipher,
     @Optional()
     @Inject(SESSION_POLICY)
     private readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+    // Optional only so specs can build the service by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
-    this.store = new MfaStore(prisma);
+    this.db = privileged?.db ?? prisma;
+    this.store = new MfaStore(this.db);
   }
 
   /** False without the keyring: enrolment and verification are refused, never done in clear. */
@@ -155,7 +163,7 @@ export class MfaService {
     const step = verifyTotp(secret, code, now.getTime(), null);
     if (step === undefined) throw await this.failure(subject, now);
     const recoveryCodes = generateRecoveryCodes();
-    const done = await this.prisma.$transaction(async (tx) => {
+    const done = await this.db.$transaction(async (tx) => {
       const ok = await this.store.activate(
         tx,
         subject,
@@ -181,7 +189,7 @@ export class MfaService {
     await this.checkFactor(subject, row, { code }, now);
     const secret = this.secretOf(subject, row);
     const recoveryCodes = generateRecoveryCodes();
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       await this.store.setRecovery(
         tx,
         subject,
@@ -210,7 +218,7 @@ export class MfaService {
     )
       throw await this.failure(subject, now, 'INVALID_CREDENTIALS');
     await this.checkFactor(subject, row, factor, now);
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       await this.store.clear(tx, subject);
       await this.store.audit(tx, subject, 'auth.mfa_disabled');
     });
@@ -218,7 +226,7 @@ export class MfaService {
 
   /** Platform owner resets another admin's second factor (ADR 048 consequences); audited. */
   async reset(target: MfaSubject, actorAdminId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       await this.store.clear(tx, target);
       if (target.kind === 'PLATFORM')
         await tx.platformAuditEvent.create({
@@ -241,7 +249,7 @@ export class MfaService {
     now = new Date(),
   ): Promise<string> {
     const token = randomBytes(32).toString('base64url');
-    await this.prisma.mfaChallenge.create({
+    await this.db.mfaChallenge.create({
       data: {
         principalType: principalType(subject),
         principalId:
@@ -253,7 +261,7 @@ export class MfaService {
       },
     });
     // Housekeeping, best effort: old challenges are useless.
-    await this.prisma.mfaChallenge
+    await this.db.mfaChallenge
       .deleteMany({
         where: { expiresAt: { lt: new Date(now.getTime() - 3_600_000) } },
       })
@@ -269,7 +277,7 @@ export class MfaService {
   ): Promise<MfaSubject> {
     if (token.length < 20 || token.length > 200)
       throw new MfaError('MFA_CHALLENGE_INVALID');
-    const rows = await this.prisma.$queryRaw<
+    const rows = await this.db.$queryRaw<
       {
         principal_type: string;
         principal_id: string;
@@ -305,7 +313,7 @@ export class MfaService {
   }
 
   private async consume(token: string, now: Date): Promise<void> {
-    const { count } = await this.prisma.mfaChallenge.updateMany({
+    const { count } = await this.db.mfaChallenge.updateMany({
       where: { tokenHash: sha256(token), consumedAt: null },
       data: { consumedAt: now },
     });
@@ -316,7 +324,7 @@ export class MfaService {
   async enrollSubject(token: string, now = new Date()): Promise<MfaSubject> {
     if (token.length < 20 || token.length > 200)
       throw new MfaError('MFA_CHALLENGE_INVALID');
-    const row = await this.prisma.mfaChallenge.findFirst({
+    const row = await this.db.mfaChallenge.findFirst({
       where: {
         tokenHash: sha256(token),
         purpose: 'ENROLL',
@@ -346,7 +354,7 @@ export class MfaService {
     const method = await this.checkFactor(subject, row, factor, now);
     await this.consume(token, now);
     if (method === 'recovery')
-      await this.store.audit(this.prisma, subject, 'auth.mfa_recovery_used', {
+      await this.store.audit(this.db, subject, 'auth.mfa_recovery_used', {
         remaining: row.recoveryHashes.length - 1,
       });
     return { subject };
@@ -366,7 +374,7 @@ export class MfaService {
 
   /** Clears the failure counter once the whole sign-in is verified. */
   async resetFailures(subject: MfaSubject): Promise<void> {
-    await this.store.resetFailures(this.prisma, subject);
+    await this.store.resetFailures(this.db, subject);
   }
 
   // ---- internals ----

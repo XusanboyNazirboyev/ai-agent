@@ -1,6 +1,5 @@
 import { MfaStore } from '../auth/mfa-store.js';
 import type { PrismaClient } from '../generated/prisma/client.js';
-import type { PrismaService } from '../persistence/prisma.service.js';
 
 /**
  * Server-side reset of a platform admin's second factor (ADR 048
@@ -54,7 +53,7 @@ export async function resetPlatformAdminMfa(
   });
   if (!admin) throw new Error('No platform admin with that email');
   if (!admin.isActive) throw new Error('That platform admin is inactive');
-  const store = new MfaStore(db as unknown as PrismaService);
+  const store = new MfaStore(db);
   await db.$transaction(async (tx) => {
     await store.clear(tx, { kind: 'PLATFORM', adminId: admin.id });
     await tx.mfaChallenge.deleteMany({

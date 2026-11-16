@@ -1,5 +1,4 @@
-import type { Prisma } from '../generated/prisma/client.js';
-import type { PrismaService } from '../persistence/prisma.service.js';
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import type { Sealed } from '../secrets/secret-cipher.js';
 
 /** The two principal types that can hold a second factor (ADR 048). */
@@ -43,7 +42,7 @@ const bytes = (value: Uint8Array): Uint8Array<ArrayBuffer> =>
 
 /** Persistence of second-factor state for both principal types; every query is scoped to its subject. */
 export class MfaStore {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaClient) {}
 
   private scope(subject: MfaSubject): Record<string, unknown> {
     return subject.kind === 'OPERATOR'

@@ -6,7 +6,9 @@ import {
   HttpCode,
   Param,
   Post,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { runWithTenant } from '../../persistence/tenant-context.js';
 import type { NormalizedTelegramUpdate } from './telegram-normalizer.js';
 import {
   InvalidTelegramUpdateError,
@@ -38,6 +40,24 @@ export class TelegramWebhookController {
     @Param('channelAccountId') channelAccountId: string,
     @Headers('x-telegram-bot-api-secret-token') secret: string | undefined,
     @Body() body: unknown,
+  ): Promise<{ accepted: boolean; duplicate?: boolean; ignored?: boolean }> {
+    // The URL names the account, not the tenant: find the tenant first (one
+    // lookup across tenants), then handle the whole update under it (RLS
+    // plan S5). An unknown account answers like an unconfigured one.
+    const tenantId = await this.webhook.routeTenant(channelAccountId);
+    if (!tenantId)
+      throw new ServiceUnavailableException(
+        'Telegram webhook is not configured',
+      );
+    return runWithTenant(tenantId, () =>
+      this.handle(channelAccountId, secret, body),
+    );
+  }
+
+  private async handle(
+    channelAccountId: string,
+    secret: string | undefined,
+    body: unknown,
   ): Promise<{ accepted: boolean; duplicate?: boolean; ignored?: boolean }> {
     await this.webhook.assertWebhookSecret(channelAccountId, secret);
     let update: NormalizedTelegramUpdate;

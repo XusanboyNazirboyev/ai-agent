@@ -488,6 +488,18 @@ const environmentSchema = postgresEnvironmentSchema
     STUCK_WINDOW_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   })
   .superRefine((environment, context) => {
+    // Strict refuses any statement without a tenant, so the work that spans
+    // tenants (sign-in, webhook routing) needs its own unwrapped connection.
+    if (
+      environment.RLS_CONTEXT_MODE === 'strict' &&
+      !environment.POSTGRES_ADMIN_USER
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['POSTGRES_ADMIN_USER'],
+        message: 'POSTGRES_ADMIN_USER is required when RLS_CONTEXT_MODE=strict',
+      });
+    }
     if (
       environment.STT_PROVIDER === 'gemini' &&
       !environment.STT_API_KEY &&

@@ -8,11 +8,12 @@ import {
 } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '../../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import type { AppEnvironment } from '../../config/environment.js';
 import { isOptOutMessage } from '../../core/followup/optout.js';
 import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import {
   inboundEventExpiresAt,
   parseRetentionSettings,
@@ -38,12 +39,32 @@ export class TelegramWebhookService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() credentials?: TelegramCredentials,
+    // Optional only so specs can build the service by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
     this.credentials =
       credentials ?? new TelegramCredentials(prisma, config, undefined);
+    this.router = privileged?.db ?? prisma;
   }
 
   private readonly credentials: TelegramCredentials;
+  /** Finds the tenant a webhook is for, across tenants (RLS plan S5). */
+  private readonly router: PrismaClient;
+
+  /**
+   * The tenant that owns a Telegram account, whatever its status (the
+   * handlers check status). The only query of an update that spans tenants;
+   * the controller runs everything else under the tenant it returns.
+   */
+  async routeTenant(routeAccountId: string): Promise<string | null> {
+    if (!UUID.test(routeAccountId)) return null;
+    const row = await this.router.channelAccount.findFirst({
+      where: { id: routeAccountId, channelType: 'telegram' },
+      select: { tenantId: true },
+    });
+    return row?.tenantId ?? null;
+  }
 
   /**
    * The secret that Telegram sends with every update of this account's

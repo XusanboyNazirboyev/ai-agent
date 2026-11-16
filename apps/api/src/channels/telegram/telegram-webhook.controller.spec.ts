@@ -2,9 +2,12 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { TelegramWebhookController } from './telegram-webhook.controller.js';
 
+const TENANT = '00000000-0000-4000-8000-000000000001';
+
 describe('TelegramWebhookController', () => {
   it('rejects an invalid secret before durable acceptance', async () => {
     const webhook = {
+      routeTenant: vi.fn().mockResolvedValue(TENANT),
       assertWebhookSecret: vi.fn(() => {
         throw new UnauthorizedException();
       }),
@@ -20,6 +23,7 @@ describe('TelegramWebhookController', () => {
 
   it('rejects malformed updates and acknowledges unsupported message types without storage', async () => {
     const webhook = {
+      routeTenant: vi.fn().mockResolvedValue(TENANT),
       assertWebhookSecret: vi.fn(),
       accept: vi.fn(),
     };
@@ -47,6 +51,7 @@ describe('TelegramWebhookController', () => {
     type Mock = ReturnType<typeof vi.fn>;
     interface GroupSetup {
       webhook: Record<
+        | 'routeTenant'
         | 'assertWebhookSecret'
         | 'operatorChannel'
         | 'linkOperatorGroup'
@@ -58,6 +63,7 @@ describe('TelegramWebhookController', () => {
     }
     function setup(linked: 'linked' | 'refused'): GroupSetup {
       const webhook = {
+        routeTenant: vi.fn().mockResolvedValue(TENANT),
         assertWebhookSecret: vi.fn(),
         operatorChannel: vi.fn().mockResolvedValue({
           tenantId: 't1',

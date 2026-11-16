@@ -1,6 +1,12 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma } from '../../generated/prisma/client.js';
+import {
+  Injectable,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
 import {
   inboundEventExpiresAt,
   parseRetentionSettings,
@@ -27,7 +33,38 @@ export type MetaChannelType = 'instagram' | 'facebook';
 
 @Injectable()
 export class InstagramWebhookService {
-  constructor(private readonly prisma: PrismaService) {}
+  /** Finds the tenant a webhook is for, across tenants (RLS plan S5). */
+  private readonly router: PrismaClient;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional only so specs can build the service by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.router = privileged?.db ?? prisma;
+  }
+
+  /**
+   * The tenant that owns a Meta account. A webhook names the account, not
+   * the tenant, so this one lookup spans tenants; the intake then runs under
+   * the tenant it returns. Status checks stay in the intake.
+   */
+  private async routeTenant(
+    channelType: MetaChannelType,
+    accountId: string,
+  ): Promise<string | null> {
+    const row = await this.router.channelAccount.findUnique({
+      where: {
+        channelType_externalAccountId: {
+          channelType,
+          externalAccountId: accountId,
+        },
+      },
+      select: { tenantId: true },
+    });
+    return row?.tenantId ?? null;
+  }
 
   async accept(
     event: NormalizedInstagramText | NormalizedInstagramVoice,
@@ -44,11 +81,24 @@ export class InstagramWebhookService {
       );
     }
 
+    const tenantId = await this.routeTenant(channelType, event.accountId);
+    if (!tenantId) return 'unavailable';
+    return runWithTenant(tenantId, () =>
+      this.acceptOwned(event, channelType, tenantId),
+    );
+  }
+
+  private async acceptOwned(
+    event: NormalizedInstagramText | NormalizedInstagramVoice,
+    channelType: MetaChannelType,
+    tenantId: string,
+  ): Promise<InstagramAcceptance> {
     const storedId = storedMetaId(event.messageId);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
           where: {
+            tenantId,
             channelType,
             externalAccountId: event.accountId,
             status: 'ACTIVE',
@@ -238,8 +288,21 @@ export class InstagramWebhookService {
       !EXTERNAL_ID.test(event.customerId)
     )
       return 'ignored';
+    const tenantId = await this.routeTenant('instagram', event.accountId);
+    if (!tenantId) return 'unavailable';
+    return runWithTenant(tenantId, () =>
+      this.postbackOwned(event, itemId, tenantId),
+    );
+  }
+
+  private async postbackOwned(
+    event: NormalizedInstagramPostback,
+    itemId: string,
+    tenantId: string,
+  ): Promise<InstagramAcceptance | 'ignored'> {
     const channel = await this.prisma.channelAccount.findFirst({
       where: {
+        tenantId,
         channelType: 'instagram',
         externalAccountId: event.accountId,
         status: 'ACTIVE',
@@ -302,6 +365,15 @@ export class InstagramWebhookService {
     ) {
       return 'ignored';
     }
+    const tenantId = await this.routeTenant('instagram', event.accountId);
+    if (!tenantId) return 'unavailable';
+    return runWithTenant(tenantId, () => this.commentOwned(event, tenantId));
+  }
+
+  private async commentOwned(
+    event: NormalizedInstagramComment,
+    tenantId: string,
+  ): Promise<InstagramAcceptance | 'ignored'> {
     const mediaId =
       event.mediaId && EXTERNAL_ID.test(event.mediaId) ? event.mediaId : null;
     const providerKey = `comment:${event.commentId}`;
@@ -309,6 +381,7 @@ export class InstagramWebhookService {
       return await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
           where: {
+            tenantId,
             channelType: 'instagram',
             externalAccountId: event.accountId,
             status: 'ACTIVE',

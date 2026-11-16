@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  awaitingTenant,
   currentTenant,
   runWithoutTenant,
   runWithTenant,
@@ -40,6 +41,21 @@ describe('tenant context (RLS plan S1)', () => {
     });
     expect(() => setTenant(a)).not.toThrow();
     expect(currentTenant()).toBeNull();
+  });
+
+  it('tells a request still waiting for its tenant from everything else (S5)', async () => {
+    expect(awaitingTenant()).toBe(false);
+    await runWithTenantSlot(async () => {
+      expect(awaitingTenant()).toBe(true);
+      await runWithTenant(randomUUID(), () =>
+        expect(awaitingTenant()).toBe(false),
+      );
+      setTenant(randomUUID());
+      expect(awaitingTenant()).toBe(false);
+    });
+    runWithTenantSlot(() =>
+      runWithoutTenant(() => expect(awaitingTenant()).toBe(false)),
+    );
   });
 
   it('leaves the context for shared work', () => {

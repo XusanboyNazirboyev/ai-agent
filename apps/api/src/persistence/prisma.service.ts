@@ -9,6 +9,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { assertUtcSession, createPostgresAdapter } from './postgres-adapter.js';
 import { TenantContextAdapterFactory } from './tenant-adapter.js';
+import { awaitingTenant } from './tenant-context.js';
 
 /** At most one "no tenant" warning per this many statements (warn mode). */
 const MISSING_TENANT_LOG_EVERY = 100;
@@ -35,6 +36,19 @@ export class PrismaService
         }),
         config.get('RLS_CONTEXT_MODE', { infer: true }) ?? 'off',
         (sql) => {
+          // Inside a request still waiting for its tenant: every one is
+          // reported (RLS plan S5 moved these to the privileged connection),
+          // with the request's trace id from the log context.
+          if (awaitingTenant()) {
+            logger.warn(
+              JSON.stringify({
+                event: 'db.tenant_context_missing',
+                inRequest: true,
+                statement: sql.slice(0, 40),
+              }),
+            );
+            return;
+          }
           missing += 1;
           if (missing % MISSING_TENANT_LOG_EVERY !== 1) return;
           // The statement's first words only: never values.

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../../persistence/prisma.service.js';
 import { metaInboundKey } from '../meta/meta-event-key.js';
 import type { NormalizedInstagramText } from './instagram-normalizer.js';
+import { currentTenant } from '../../persistence/tenant-context.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
+
+const TENANT = '00000000-0000-4000-8000-0000000000a1';
 
 const event: NormalizedInstagramText = {
   kind: 'text',
@@ -13,10 +16,17 @@ const event: NormalizedInstagramText = {
   receivedAt: new Date('2026-10-31T10:00:00.000Z'),
 };
 
-function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
+function makeService(options?: {
+  channel?: unknown;
+  duplicate?: unknown;
+  routed?: unknown;
+}): {
   service: InstagramWebhookService;
-  prisma: PrismaService;
+  prisma: PrismaService & {
+    channelAccount: { findUnique: ReturnType<typeof vi.fn> };
+  };
   tx: {
+    channelAccount: { findFirst: ReturnType<typeof vi.fn> };
     inboundEvent: { create: ReturnType<typeof vi.fn> };
     message: { create: ReturnType<typeof vi.fn> };
     outboxEvent: { create: ReturnType<typeof vi.fn> };
@@ -28,7 +38,7 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
         options?.channel === undefined
           ? {
               id: 'channel-1',
-              tenantId: 'tenant-1',
+              tenantId: TENANT,
               tenant: { retentionSettings: {} },
             }
           : options.channel,
@@ -58,10 +68,20 @@ function makeService(options?: { channel?: unknown; duplicate?: unknown }): {
     $queryRaw: vi.fn().mockResolvedValue([]),
   };
   const prisma = {
+    // RLS plan S5: the account's tenant is found first, across tenants.
+    channelAccount: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue(
+          options?.routed === undefined ? { tenantId: TENANT } : options.routed,
+        ),
+    },
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) =>
       callback(tx),
     ),
-  } as unknown as PrismaService;
+  } as unknown as PrismaService & {
+    channelAccount: { findUnique: ReturnType<typeof vi.fn> };
+  };
   return { service: new InstagramWebhookService(prisma), prisma, tx };
 }
 
@@ -73,7 +93,7 @@ describe('InstagramWebhookService', () => {
     expect(tx.inboundEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          tenantId: 'tenant-1',
+          tenantId: TENANT,
           channelAccountId: 'channel-1',
           providerEventId: event.messageId,
         }),
@@ -111,11 +131,51 @@ describe('InstagramWebhookService', () => {
     expect(tx.inboundEvent.create).not.toHaveBeenCalled();
   });
 
+  it('runs the intake under the tenant that owns the account (RLS plan S5)', async () => {
+    const { service, prisma, tx } = makeService();
+    let seen: string | null = null;
+    tx.channelAccount.findFirst.mockImplementation(() => {
+      seen = currentTenant();
+      return Promise.resolve({
+        id: 'channel-1',
+        tenantId: TENANT,
+        tenant: { retentionSettings: {} },
+      });
+    });
+    await expect(service.accept(event)).resolves.toBe('accepted');
+    expect(prisma.channelAccount.findUnique).toHaveBeenCalledWith({
+      where: {
+        channelType_externalAccountId: {
+          channelType: 'instagram',
+          externalAccountId: event.accountId,
+        },
+      },
+      select: { tenantId: true },
+    });
+    expect(seen).toBe(TENANT);
+    expect(tx.channelAccount.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tenantId: TENANT }),
+      }),
+    );
+    expect(currentTenant()).toBeNull();
+  });
+
+  it('answers an account no tenant owns as unavailable without a transaction', async () => {
+    const { service, prisma } = makeService({ routed: null });
+    await expect(service.accept(event)).resolves.toBe('unavailable');
+    await expect(service.accept(event, 'facebook')).resolves.toBe(
+      'unavailable',
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed external identifiers before touching persistence', async () => {
     const { service, prisma } = makeService();
     await expect(
       service.accept({ ...event, customerId: 'not-numeric' }),
     ).rejects.toThrow('Instagram account is unavailable');
+    expect(prisma.channelAccount.findUnique).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TenantAccessService } from '../access/tenant-access.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   DEFAULT_SESSION_POLICY,
   SESSION_POLICY,
@@ -66,15 +68,25 @@ export function hashesEqual(a: string, b: string): boolean {
 @Injectable()
 export class SessionService {
   private dummyHash: Promise<string> | undefined;
+  /**
+   * Sessions are looked up before any tenant is known (login by e-mail,
+   * cookie by hash), so they use the privileged connection (RLS plan S5).
+   */
+  private readonly db: PrismaClient;
 
   constructor(
-    private readonly prisma: PrismaService,
+    prisma: PrismaService,
     @Optional()
     @Inject(SESSION_POLICY)
     private readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
     @Optional() private readonly access?: TenantAccessService,
     @Optional() private readonly mfa?: MfaService,
-  ) {}
+    // Optional only so specs can build the service by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.db = privileged?.db ?? prisma;
+  }
 
   private dummy(): Promise<string> {
     this.dummyHash ??= hashPassword('not-a-real-password', this.policy.scrypt);
@@ -88,7 +100,7 @@ export class SessionService {
   ): Promise<LoginResult> {
     const email = emailInput.trim().toLowerCase();
     for (let attempt = 0; attempt < MAX_CREDENTIAL_RACE_RETRIES; attempt += 1) {
-      const credential = await this.prisma.operatorCredential.findUnique({
+      const credential = await this.db.operatorCredential.findUnique({
         where: { email },
         include: { operator: true },
       });
@@ -142,7 +154,7 @@ export class SessionService {
       const sessionToken = randomBytes(32).toString('base64url');
       const csrfToken = randomBytes(32).toString('base64url');
       const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
-      const committed = await this.prisma.$transaction(async (tx) => {
+      const committed = await this.db.$transaction(async (tx) => {
         const updated = await tx.operatorCredential.updateMany({
           where: {
             id: credential.id,
@@ -199,7 +211,7 @@ export class SessionService {
     const { subject } = await this.mfa.verifyLogin(challenge, factor, now);
     if (subject.kind !== 'OPERATOR')
       throw new MfaError('MFA_CHALLENGE_INVALID');
-    const credential = await this.prisma.operatorCredential.findFirst({
+    const credential = await this.db.operatorCredential.findFirst({
       where: { tenantId: subject.tenantId, operatorId: subject.operatorId },
       include: { operator: true },
     });
@@ -213,7 +225,7 @@ export class SessionService {
     const sessionToken = randomBytes(32).toString('base64url');
     const csrfToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       await tx.operatorCredential.updateMany({
         where: { id: credential.id, tenantId: credential.tenantId },
         data: { failedAttempts: 0, lockedUntil: null },
@@ -255,7 +267,7 @@ export class SessionService {
     now: Date,
   ): Promise<'recorded' | 'locked' | 'retry'> {
     const lockUntil = new Date(now.getTime() + this.policy.lockMs);
-    const updated = await this.prisma.$queryRaw<{ id: string }[]>`
+    const updated = await this.db.$queryRaw<{ id: string }[]>`
       UPDATE operator_credentials
       SET failed_attempts = CASE
             WHEN (CASE
@@ -283,7 +295,7 @@ export class SessionService {
     `;
     if (updated.length > 0) return 'recorded';
 
-    const current = await this.prisma.operatorCredential.findUnique({
+    const current = await this.db.operatorCredential.findUnique({
       where: { id: snapshot.id },
       select: {
         passwordHash: true,
@@ -304,7 +316,7 @@ export class SessionService {
     now = new Date(),
   ): Promise<(InboxPrincipal & { csrfHash: string }) | undefined> {
     if (sessionToken.length < 20 || sessionToken.length > 200) return undefined;
-    const session = await this.prisma.operatorSession.findUnique({
+    const session = await this.db.operatorSession.findUnique({
       where: { tokenHash: sha256(sessionToken) },
       include: { operator: true },
     });
@@ -318,7 +330,7 @@ export class SessionService {
       return undefined;
     // Touch at most once a minute: bookkeeping must not become a write storm.
     if (now.getTime() - session.lastSeenAt.getTime() > 60_000) {
-      await this.prisma.operatorSession
+      await this.db.operatorSession
         .updateMany({ where: { id: session.id }, data: { lastSeenAt: now } })
         .catch(() => undefined);
     }
@@ -337,7 +349,7 @@ export class SessionService {
   }
 
   async logout(sessionId: string, tenantId: string): Promise<void> {
-    await this.prisma.operatorSession.updateMany({
+    await this.db.operatorSession.updateMany({
       where: { id: sessionId, tenantId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
@@ -348,7 +360,7 @@ export class SessionService {
     principal: Pick<InboxPrincipal, 'tenantId' | 'operatorId' | 'sessionId'>,
     now = new Date(),
   ): Promise<boolean> {
-    const session = await this.prisma.operatorSession.findFirst({
+    const session = await this.db.operatorSession.findFirst({
       where: {
         id: principal.sessionId,
         tenantId: principal.tenantId,
@@ -374,7 +386,7 @@ export class SessionService {
   ): Promise<void> {
     const email = emailInput.trim().toLowerCase();
     const passwordHash = await hashPassword(password, this.policy.scrypt);
-    await this.prisma.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx) => {
       await tx.operatorCredential.upsert({
         where: { operatorId, tenantId },
         create: { tenantId, operatorId, email, passwordHash },
