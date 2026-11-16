@@ -136,15 +136,18 @@ describe('RLS tenant context over HTTP (plan S5)', () => {
       RLS_CONTEXT_MODE: 'warn',
       // Its own pool as the same test role: unwrapped, so no tenant needed.
       POSTGRES_ADMIN_USER: process.env.TEST_POSTGRES_USER,
-      POSTGRES_ADMIN_PASSWORD: process.env.TEST_POSTGRES_PASSWORD,
       TELEGRAM_CHANNEL_ACCOUNT_ID: f.telegramAccountId,
       TELEGRAM_WEBHOOK_SECRET: TELEGRAM_SECRET,
-      // Nothing may reach Telegram from this test.
+      // Nothing may reach Telegram from this test: a placeholder token
+      // (process.env wins over the .env file) and an address nothing serves.
+      TELEGRAM_BOT_TOKEN: '000000:placeholder-not-a-token',
       TELEGRAM_API_BASE_URL: 'http://127.0.0.1:9',
       INSTAGRAM_APP_SECRET: META_SECRET,
       SESSION_COOKIE_SECURE: 'false',
     });
-    delete process.env.TELEGRAM_BOT_TOKEN;
+    // Unset stays unset (assigning undefined would store "undefined").
+    if (process.env.TEST_POSTGRES_PASSWORD !== undefined)
+      process.env.POSTGRES_ADMIN_PASSWORD = process.env.TEST_POSTGRES_PASSWORD;
     const { AppModule } = await import('../app.module.js');
     app = await NestFactory.create(AppModule, {
       logger: capture,
