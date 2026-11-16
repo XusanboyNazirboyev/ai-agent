@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { config as loadEnv } from 'dotenv';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
@@ -27,20 +27,29 @@ const owner = new PrismaClient({
   adapter: createPostgresAdapter(process.env, 'TEST_'),
 });
 const missed: string[] = [];
+/** A login role that cannot bypass RLS; only created where we may (CI). */
+const APP_ROLE = 'agentcore_rls_app_test';
+const appPassword = randomBytes(18).toString('hex');
+let roleEnv: Record<string, unknown> = process.env;
 const client = (mode: 'warn' | 'strict') =>
   new PrismaClient({
     adapter: new TenantContextAdapterFactory(
-      createPostgresAdapter(process.env, 'TEST_'),
+      createPostgresAdapter(roleEnv, 'TEST_'),
       mode,
       (sql) => missed.push(sql),
     ),
   });
-const strict = client('strict');
-const warn = client('warn');
+let strict: PrismaClient;
+let warn: PrismaClient;
 const POLICY =
   "tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid";
 
 beforeAll(async () => {
+  // A superuser (the CI database user) bypasses RLS even with FORCE: there the
+  // test connects as a NOBYPASSRLS login role instead. Locally the test user
+  // is the table owner without CREATEROLE, and FORCE binds the owner.
+  const [me] = await owner.$queryRaw<{ superuser: boolean }[]>`
+    SELECT rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`;
   await owner.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS rls_probe');
   await owner.$executeRawUnsafe(
     'CREATE TABLE IF NOT EXISTS rls_probe.rows (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)',
@@ -57,6 +66,32 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(
     `CREATE POLICY tenant_isolation ON rls_probe.rows USING (${POLICY}) WITH CHECK (${POLICY})`,
   );
+  if (me?.superuser) {
+    const [exists] = await owner.$queryRaw<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_roles WHERE rolname = ${APP_ROLE}`;
+    if (!exists?.n) await owner.$executeRawUnsafe(`CREATE ROLE ${APP_ROLE}`);
+    await owner.$executeRawUnsafe(
+      `ALTER ROLE ${APP_ROLE} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${appPassword}'`,
+    );
+    for (const schema of ['public', 'rls_probe']) {
+      await owner.$executeRawUnsafe(
+        `GRANT USAGE ON SCHEMA ${schema} TO ${APP_ROLE}`,
+      );
+      await owner.$executeRawUnsafe(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema} TO ${APP_ROLE}`,
+      );
+      await owner.$executeRawUnsafe(
+        `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${schema} TO ${APP_ROLE}`,
+      );
+    }
+    roleEnv = {
+      ...process.env,
+      TEST_POSTGRES_USER: APP_ROLE,
+      TEST_POSTGRES_PASSWORD: appPassword,
+    };
+  }
+  strict = client('strict');
+  warn = client('warn');
 });
 
 afterAll(async () => {
