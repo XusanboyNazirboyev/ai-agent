@@ -267,10 +267,18 @@ test('the language switcher keeps icon, label and chevron apart', async ({
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
   await page.getByLabel('Language', { exact: true }).selectOption('uz-Latn');
   const row = page.locator('header span:has(> select)').first();
+  // The select's box reaches under the icon and the chevron so a click there
+  // opens it (owner report 2026-11-16); its text area, inside the padding,
+  // is what must stay clear of them.
   const boxes = await row.evaluate((element) => {
     const rect = (node: Element): { l: number; r: number } => {
       const box = node.getBoundingClientRect();
-      return { l: box.left, r: box.right };
+      if (node.tagName !== 'SELECT') return { l: box.left, r: box.right };
+      const style = getComputedStyle(node);
+      return {
+        l: box.left + parseFloat(style.paddingLeft),
+        r: box.right - parseFloat(style.paddingRight),
+      };
     };
     return Array.from(element.children).map(rect);
   });
