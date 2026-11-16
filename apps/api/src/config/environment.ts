@@ -268,6 +268,19 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_PRICING_VERSION: z.string().min(1).default('anthropic-2026-10-23'),
     /** RLS enforcement plan: off (default) | warn | strict. */
     RLS_CONTEXT_MODE: z.enum(['off', 'warn', 'strict']).default('off'),
+    /**
+     * RLS plan S3: the privileged connection (table owner) for cross-tenant
+     * work. Unset: the main connection is used, as today. Host, port,
+     * database and SSL mode default to the main ones.
+     */
+    POSTGRES_ADMIN_USER: z.string().min(1).optional(),
+    POSTGRES_ADMIN_PASSWORD: z.string().min(1).optional(),
+    POSTGRES_ADMIN_HOST: z.string().trim().min(1).optional(),
+    POSTGRES_ADMIN_PORT: z.coerce.number().int().min(1).max(65_535).optional(),
+    POSTGRES_ADMIN_DATABASE: z.string().trim().min(1).optional(),
+    POSTGRES_ADMIN_SSL_MODE: z
+      .enum(['disable', 'require', 'verify-full'])
+      .optional(),
     LLM_REQUEST_TIMEOUT_MS: z.coerce
       .number()
       .int()
