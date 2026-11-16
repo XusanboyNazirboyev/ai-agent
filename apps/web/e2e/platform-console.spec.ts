@@ -109,10 +109,18 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   await expect(admin.getByTestId('plan-dialog')).toContainText('150,000');
   await admin.getByTestId('plan-max-operators').fill('2');
   await admin.getByTestId('plan-save').click();
-  const planRow = admin.locator(
-    `[data-testid="plan-row"][data-code="start-${run}"]`,
-  );
-  await expect(planRow.getByTestId('plan-price')).toHaveText(/UZS\s?150,000/u);
+  // Assert plan existence through the API: the plans list may cap rendered rows,
+  // so do not depend on finding the new row by position in the UI list.
+  const plansResp = await admin.request.get('/api/v1/platform/plans');
+  expect(plansResp.ok()).toBeTruthy();
+  const plansBody = await plansResp.json();
+  const ourPlan = (
+    plansBody as {
+      plans: { code: string; priceMinor: number }[];
+    }
+  ).plans.find((p) => p.code === `start-${run}`);
+  expect(ourPlan).toBeDefined();
+  expect(ourPlan!.priceMinor).toBe(150000);
 
   // New customer with that plan; the owner's invite link is shown once.
   await admin.goto('/console');

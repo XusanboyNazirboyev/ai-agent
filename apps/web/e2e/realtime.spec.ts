@@ -62,8 +62,13 @@ test('two browsers stay in sync: take-over, new message and new handover', async
   );
 
   // A new handover appears in the waiting list of an idle browser.
+  // Type the unique contact name before creating the handover so the list is
+  // filtered to at most that one record regardless of leftover waiting rows.
   const fresh = newHandover(f.a.tenantId, `Fresh ${Date.now()}`);
   await two.page.getByRole('tab', { name: 'Waiting' }).click();
+  await two.page
+    .getByLabel('Search name, phone or message')
+    .fill(fresh.contactName);
   await expect(
     two.page
       .getByTestId('conversation-item')

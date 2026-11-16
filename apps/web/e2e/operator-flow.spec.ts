@@ -105,6 +105,16 @@ test('changes the lead status and searches by contact name and message text', as
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
   const first = f.a.conversations[0];
   await page.getByRole('tab', { name: 'All' }).click();
+  // Find the seeded conversation deterministically via search instead of
+  // scanning the first page of the All list (leftover rows push it off-page).
+  await page
+    .getByLabel('Search name, phone or message')
+    .fill(first.contactName);
+  await expect(
+    page
+      .getByTestId('conversation-item')
+      .filter({ hasText: first.contactName }),
+  ).toHaveCount(1);
   await page
     .getByTestId('conversation-item')
     .filter({ hasText: first.contactName })
