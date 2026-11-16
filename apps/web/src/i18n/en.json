@@ -269,6 +269,8 @@
   "view.details": "Conversation details",
   "view.showDetails": "Details",
   "view.showConversation": "Conversation",
+  "view.panelHide": "Hide details",
+  "view.panelShow": "Show details",
   "action.sendHint": "Ctrl or ⌘ + Enter to send",
   "confirm.cancel": "Cancel",
   "confirm.closeTitle": "Close this conversation?",

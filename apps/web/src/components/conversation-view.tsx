@@ -46,6 +46,9 @@ import { Section } from './ui/section';
 import { MoveToPipeline } from './move-to-pipeline';
 import { useToast } from './ui/toast';
 
+/** Remembers whether the details panel is folded away on wide screens. */
+const PANEL_KEY = 'tezda.inbox.detailsHidden';
+
 const LEAD_STATUSES: LeadStatus[] = ['NEW', 'IN_PROGRESS', 'WON', 'LOST'];
 const OPERATING: Role[] = ['OWNER', 'ADMIN', 'OPERATOR'];
 
@@ -117,6 +120,25 @@ export function ConversationViewPane(props: {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [showDetails, setShowDetails] = useState(false);
+  // Wide screens (xl) show the details beside the chat; the operator can fold
+  // the whole panel away, and the choice is remembered (owner 2026-11-16).
+  const [panelHidden, setPanelHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setPanelHidden(window.localStorage.getItem(PANEL_KEY) === '1');
+    } catch {
+      // Storage blocked: the panel starts open.
+    }
+  }, []);
+  function togglePanel(): void {
+    const next = !panelHidden;
+    setPanelHidden(next);
+    try {
+      window.localStorage.setItem(PANEL_KEY, next ? '1' : '0');
+    } catch {
+      // Not remembered; the choice still applies to this page view.
+    }
+  }
   const [confirm, setConfirm] = useState<'close' | 'return-to-bot' | null>(
     null,
   );
@@ -402,6 +424,21 @@ export function ConversationViewPane(props: {
         ) : null}
         <Button
           size="sm"
+          variant={panelHidden ? 'secondary' : 'ghost'}
+          icon="panel"
+          className="shrink-0 max-xl:hidden"
+          aria-expanded={!panelHidden}
+          aria-controls="conversation-details"
+          data-testid="details-panel-toggle"
+          title={panelHidden ? t('view.panelShow') : t('view.panelHide')}
+          onClick={togglePanel}
+        >
+          <span className="sr-only">
+            {panelHidden ? t('view.panelShow') : t('view.panelHide')}
+          </span>
+        </Button>
+        <Button
+          size="sm"
           variant={showDetails ? 'primary' : 'secondary'}
           icon="panel"
           className="shrink-0 xl:hidden"
@@ -672,7 +709,7 @@ export function ConversationViewPane(props: {
         <aside
           id="conversation-details"
           aria-label={t('view.details')}
-          className={`${showDetails ? 'flex' : 'hidden xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
+          className={`${showDetails ? 'flex' : 'hidden'} ${panelHidden ? 'xl:hidden' : 'xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
         >
           <Section
             title={t('view.chatTags')}

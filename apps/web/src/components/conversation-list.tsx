@@ -189,10 +189,10 @@ export function ConversationList(props: {
         {filtersOpen ? (
           <div
             id="inbox-filters"
-            className="flex flex-wrap gap-2"
+            className="grid grid-cols-2 gap-2"
             data-testid="inbox-filters"
           >
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
+            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
               {t('list.filterLanguage')}
               <Select
                 value={language}
@@ -206,7 +206,7 @@ export function ConversationList(props: {
                 ))}
               </Select>
             </label>
-            <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
+            <label className="flex min-w-0 flex-col gap-1 text-xs text-muted">
               {t('list.filterScore')}
               <Select value={score} onChange={(e) => setScore(e.target.value)}>
                 <option value="">{t('list.any')}</option>
@@ -217,7 +217,7 @@ export function ConversationList(props: {
                 ))}
               </Select>
             </label>
-            <label className="flex min-w-0 flex-1 basis-24 flex-col gap-1 text-xs text-muted">
+            <label className="col-span-2 flex min-w-0 flex-col gap-1 text-xs text-muted">
               {t('list.filterTag')}
               <Select
                 value={tagId}

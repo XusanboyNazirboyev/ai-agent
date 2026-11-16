@@ -269,6 +269,8 @@
   "view.details": "Сведения о диалоге",
   "view.showDetails": "Сведения",
   "view.showConversation": "Диалог",
+  "view.panelHide": "Скрыть детали",
+  "view.panelShow": "Показать детали",
   "action.sendHint": "Ctrl или ⌘ + Enter — отправить",
   "confirm.cancel": "Отмена",
   "confirm.closeTitle": "Закрыть этот диалог?",

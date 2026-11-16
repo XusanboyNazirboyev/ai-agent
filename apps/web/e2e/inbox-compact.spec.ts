@@ -51,6 +51,19 @@ test('the filters are behind a button that shows how many are on', async ({
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await toggle.click();
     await expect(page.getByTestId('inbox-filters')).toBeVisible();
+    // Language and score sit side by side, wide enough to read; the tag
+    // filter takes the next row (owner screenshot 2026-11-16).
+    const boxes = await page
+      .getByTestId('inbox-filters')
+      .getByRole('combobox')
+      .evaluateAll((els) =>
+        els.map((el) => el.parentElement!.getBoundingClientRect().toJSON()),
+      );
+    expect(boxes).toHaveLength(3);
+    expect(boxes[0].width).toBeGreaterThan(110);
+    expect(boxes[1].width).toBeGreaterThan(110);
+    expect(Math.abs(boxes[0].top - boxes[1].top)).toBeLessThan(2);
+    expect(boxes[2].top).toBeGreaterThan(boxes[0].bottom);
     await page
       .getByTestId('inbox-filters')
       .getByRole('combobox')
@@ -108,6 +121,22 @@ test('the details panel is an accordion: summaries when closed, choices remember
         .filter({ hasText: 'Contact' })
         .locator('xpath=ancestor::details[1]'),
     ).toHaveAttribute('open', '');
+
+    // The whole panel folds away on a wide screen, and stays folded.
+    const fold = page.getByTestId('details-panel-toggle');
+    await expect(fold).toHaveAttribute('aria-expanded', 'true');
+    await fold.click();
+    await expect(panel).toBeHidden();
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+    await page.reload();
+    await page
+      .getByTestId('conversation-item')
+      .filter({ hasText: handover.contactName })
+      .click();
+    await expect(page.getByTestId('conversation-view')).toBeVisible();
+    await expect(panel).toBeHidden();
+    await fold.click();
+    await expect(panel).toBeVisible();
   } finally {
     await context.close();
   }

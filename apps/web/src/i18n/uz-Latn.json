@@ -269,6 +269,8 @@
   "view.details": "Suhbat tafsilotlari",
   "view.showDetails": "Tafsilotlar",
   "view.showConversation": "Suhbat",
+  "view.panelHide": "Tafsilotlarni yashirish",
+  "view.panelShow": "Tafsilotlarni ko‘rsatish",
   "action.sendHint": "Yuborish: Ctrl yoki ⌘ + Enter",
   "confirm.cancel": "Bekor qilish",
   "confirm.closeTitle": "Bu suhbat yopilsinmi?",

@@ -146,6 +146,12 @@ select {
   outline-offset: 2px;
 }
 
+/* The select inside ui/select.tsx: its row draws the ring, never the select
+   too. Unlayered like the rule above, so a utility class could not win. */
+.tz-select:focus-visible {
+  outline: none;
+}
+
 ::selection {
   background: var(--primary-soft);
   color: var(--primary-fg);
