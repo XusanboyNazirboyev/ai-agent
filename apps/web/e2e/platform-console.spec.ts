@@ -108,19 +108,25 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   await admin.getByTestId('plan-price-input').fill('150 000');
   await expect(admin.getByTestId('plan-dialog')).toContainText('150,000');
   await admin.getByTestId('plan-max-operators').fill('2');
-  await admin.getByTestId('plan-save').click();
-  // Assert plan existence through the API: the plans list may cap rendered rows,
-  // so do not depend on finding the new row by position in the UI list.
-  const plansResp = await admin.request.get('/api/v1/platform/plans');
-  expect(plansResp.ok()).toBeTruthy();
-  const plansBody = await plansResp.json();
-  const ourPlan = (
-    plansBody as {
-      plans: { code: string; priceMinor: number }[];
-    }
-  ).plans.find((p) => p.code === `start-${run}`);
-  expect(ourPlan).toBeDefined();
-  expect(ourPlan!.priceMinor).toBe(150000);
+  // Check the saved plan from the save response itself: the list (UI and
+  // API, at most 200 rows, oldest first) can miss a new plan once leftover
+  // runs have filled it, and a GET right after the click could race the save.
+  const [saved] = await Promise.all([
+    admin.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/v1/platform/plans',
+    ),
+    admin.getByTestId('plan-save').click(),
+  ]);
+  expect(saved.ok()).toBeTruthy();
+  const plan = (await saved.json()) as { id: string };
+  expect(plan).toMatchObject({
+    code: `start-${run}`,
+    // 150 000 som typed, stored in tiyin (minor units, 2 decimals).
+    priceMinor: 15_000_000,
+  });
+  await expect(admin.getByTestId('plan-dialog')).toBeHidden();
 
   // New customer with that plan; the owner's invite link is shown once.
   await admin.goto('/console');
@@ -222,6 +228,16 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   await expect(admin.getByTestId('audit-row').first()).toContainText(
     'tenant.updated',
   );
+  // Leave no active plan behind: the plan list holds at most 200 rows,
+  // active first, and a re-run must find its own new plan among them.
+  const csrf = (await adminContext.cookies()).find(
+    (cookie) => cookie.name === 'ac_platform_csrf',
+  )?.value;
+  const retired = await admin.request.patch(
+    `/api/v1/platform/plans/${plan.id}`,
+    { headers: { 'x-csrf-token': csrf ?? '' }, data: { isActive: false } },
+  );
+  expect(retired.ok()).toBeTruthy();
   await adminContext.close();
 });
 
