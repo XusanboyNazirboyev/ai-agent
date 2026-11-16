@@ -5,9 +5,11 @@ import { useState, type ReactNode } from 'react';
 import { I18nProvider } from '@/i18n';
 import { ApiError } from '@/lib/api';
 import { PreferencesProvider } from '@/lib/preferences';
+import { useInputModality } from './input-modality';
 import { ToastProvider } from './ui/toast';
 
 export function Providers({ children }: { children: ReactNode }): ReactNode {
+  useInputModality();
   const [client] = useState(
     () =>
       new QueryClient({

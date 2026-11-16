@@ -146,6 +146,24 @@ select {
   outline-offset: 2px;
 }
 
+/* After a mouse or touch press, no ring on focus the browser moved itself
+   (a dialog giving focus back, a scroll region, a button); text fields keep
+   theirs, and any key brings every ring back (components/input-modality.tsx). */
+html[data-input='pointer']
+  :focus-visible:not(
+    input:not(
+      [type='checkbox'],
+      [type='radio'],
+      [type='range'],
+      [type='button'],
+      [type='submit']
+    ),
+    textarea,
+    [contenteditable]
+  ) {
+  outline: none;
+}
+
 /* The select inside ui/select.tsx: its row draws the ring, never the select
    too. Unlayered like the rule above, so a utility class could not win. */
 .tz-select:focus-visible {
