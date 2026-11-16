@@ -8,6 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { assertUtcSession, createPostgresAdapter } from './postgres-adapter.js';
+import { TenantContextAdapterFactory } from './tenant-adapter.js';
+
+/** At most one "no tenant" warning per this many statements (warn mode). */
+const MISSING_TENANT_LOG_EVERY = 100;
 
 @Injectable()
 export class PrismaService
@@ -15,15 +19,34 @@ export class PrismaService
   implements OnModuleInit, OnApplicationShutdown
 {
   constructor(config: ConfigService<AppEnvironment, true>) {
+    let missing = 0;
+    const logger = new Logger(PrismaService.name);
     super({
-      adapter: createPostgresAdapter({
-        POSTGRES_HOST: config.get('POSTGRES_HOST', { infer: true }),
-        POSTGRES_PORT: config.get('POSTGRES_PORT', { infer: true }),
-        POSTGRES_DATABASE: config.get('POSTGRES_DATABASE', { infer: true }),
-        POSTGRES_USER: config.get('POSTGRES_USER', { infer: true }),
-        POSTGRES_PASSWORD: config.get('POSTGRES_PASSWORD', { infer: true }),
-        POSTGRES_SSL_MODE: config.get('POSTGRES_SSL_MODE', { infer: true }),
-      }),
+      // RLS plan S2: with RLS_CONTEXT_MODE=off (default) this is the plain
+      // PostgreSQL adapter; warn/strict give each statement its tenant.
+      adapter: new TenantContextAdapterFactory(
+        createPostgresAdapter({
+          POSTGRES_HOST: config.get('POSTGRES_HOST', { infer: true }),
+          POSTGRES_PORT: config.get('POSTGRES_PORT', { infer: true }),
+          POSTGRES_DATABASE: config.get('POSTGRES_DATABASE', { infer: true }),
+          POSTGRES_USER: config.get('POSTGRES_USER', { infer: true }),
+          POSTGRES_PASSWORD: config.get('POSTGRES_PASSWORD', { infer: true }),
+          POSTGRES_SSL_MODE: config.get('POSTGRES_SSL_MODE', { infer: true }),
+        }),
+        config.get('RLS_CONTEXT_MODE', { infer: true }) ?? 'off',
+        (sql) => {
+          missing += 1;
+          if (missing % MISSING_TENANT_LOG_EVERY !== 1) return;
+          // The statement's first words only: never values.
+          logger.warn(
+            JSON.stringify({
+              event: 'db.tenant_context_missing',
+              count: missing,
+              statement: sql.slice(0, 40),
+            }),
+          );
+        },
+      ),
     });
   }
 

@@ -266,6 +266,8 @@ const environmentSchema = postgresEnvironmentSchema
     LLM_STRONG_MODEL: z.string().min(1).default('claude-haiku-5-5'),
     LLM_EFFORT: z.enum(['low', 'medium', 'high']).default('low'),
     LLM_PRICING_VERSION: z.string().min(1).default('anthropic-2026-10-23'),
+    /** RLS enforcement plan: off (default) | warn | strict. */
+    RLS_CONTEXT_MODE: z.enum(['off', 'warn', 'strict']).default('off'),
     LLM_REQUEST_TIMEOUT_MS: z.coerce
       .number()
       .int()

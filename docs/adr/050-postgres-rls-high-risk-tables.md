@@ -23,3 +23,7 @@ Tenant isolation is enforced by application queries passing `tenantId` and by in
 ## Verification
 
 Migration SQL checked into repo. Integration test (real DB) sets `app.tenant_id` in a transaction and asserts cross-tenant reads return 0 rows on a protected table when policies apply. Full non-owner enforcement is environment-dependent and documented as follow-up.
+
+## Amendment 2026-11-16: enforcement plan
+The rollout to a non-owner NOBYPASSRLS application role is planned in `docs/design/rls-enforcement-plan-2026-11-16.md` (slices S1 to S10). Tenant context now travels in AsyncLocalStorage and a wrapper around the driver adapter sets `app.tenant_id` per transaction (S1, S2; off by default via `RLS_CONTEXT_MODE`). `PrismaService.withTenant` stays for explicit use. Policies were added on 2026-11-16 to `conversation_tags`, `lead_tasks` and `canned_responses` (ADR 071 migration).
+

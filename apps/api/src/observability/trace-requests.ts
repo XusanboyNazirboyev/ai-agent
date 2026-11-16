@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { runWithTenantSlot } from '../persistence/tenant-context.js';
 import {
   newTraceId,
   runWithLogContext,
@@ -26,5 +27,6 @@ export function traceRequests(
 ): void {
   const traceId = traceIdFrom(request.headers[TRACE_HEADER]);
   response.setHeader(TRACE_HEADER, traceId);
-  runWithLogContext({ traceId }, next);
+  // An empty tenant slot per request; the session check fills it (RLS plan).
+  runWithLogContext({ traceId }, () => runWithTenantSlot(next));
 }

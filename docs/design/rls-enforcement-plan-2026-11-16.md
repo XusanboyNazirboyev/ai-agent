@@ -1,6 +1,6 @@
 # RLS enforcement plan (P0.7 follow-up to ADR 050), 2026-11-16
 
-Architect design, not yet built. Today the policies exist (ENABLE, not FORCE) but the app connects as the table owner and sets no tenant context (`PrismaService.withTenant` is used nowhere), so nothing is enforced. Switching to a restricted role now would make every protected query return no rows.
+Architect design; slices S1 and S2 built on 2026-11-16 (see Status). Today the policies exist (ENABLE, not FORCE) but the app connects as the table owner and sets no tenant context (`PrismaService.withTenant` is used nowhere), so nothing is enforced. Switching to a restricted role now would make every protected query return no rows.
 
 ## Design
 - **Context:** `persistence/tenant-context.ts` (AsyncLocalStorage, set once, immutable). HTTP: the slot opened in `observability/trace-requests.ts`, filled by `SessionGuard` (same pattern as `observability/log-context.ts`). Jobs: `runWithTenant(data.tenantId)` in `telegram-queue.runtime.ts` and `connectors/sync/catalog-sync.queue.ts`.
@@ -16,3 +16,9 @@ Approve creating `agentcore_app` (LOGIN, NOSUPERUSER, NOBYPASSRLS; DML grants, d
 
 ## Risks
 Two pools per process (check `max_connections`); session-level advisory locks or `SET` in raw SQL that the wrapper would move into a transaction (`handover/conversation-lock.ts`, `agent/llm-budget-ledger.ts`); the inbox event bus `setInterval` inherits the first subscriber's context (`webinbox/inbox-event-bus.ts`); triggers run as the caller (`leads_fill_pipeline_trg` reads `pipelines`); 195 raw SQL or transaction sites in 66 files, `webinbox/analytics.service.ts` the largest; missing context fails closed as silently empty results, so strict mode in CI and alerts on warn logs.
+
+## Status
+- **S1 done:** `apps/api/src/persistence/tenant-context.ts` (`runWithTenant`, `runWithTenantSlot`, `setTenant`, `runWithoutTenant`, `currentTenant`). HTTP requests open a slot in `observability/trace-requests.ts`; `SessionGuard` fills it. Jobs and scans do not set it yet (S6, S7).
+- **S2 done:** `persistence/tenant-adapter.ts` wraps the PostgreSQL adapter; `PrismaService` uses it with `RLS_CONTEXT_MODE` (default `off`: the plain adapter, no change in behaviour). Verified in `tenant-adapter.integration.spec.ts` on a probe table with FORCE RLS (the test database user may not create roles, so a NOBYPASSRLS login role is left to S8 in CI): single statements, interactive transactions, raw SQL, nested writes, 20 concurrent operations of two tenants, strict refusal and warn reporting. Mutations: dropping the setting from single statements or from transactions each fail 2 tests.
+- **Findings while building:** (1) adapter-pg 7.10 `Transaction.commit()` only releases the connection; COMMIT and ROLLBACK are statements sent by the client, so the wrapper sends them for its own short transactions. (2) Prisma queries are lazy thenables: `runWithTenant(id, () => prisma.x.findMany())` returned unstarted would run outside the context when awaited; `runWithTenant` therefore starts a returned thenable inside the context. Code inside an async callback is unaffected.
+- **Next:** S3 privileged client, then S5 to S7 (pre-tenant lookups, queues, scans and the event bus), S8 strict CI job as a NOBYPASSRLS role.
