@@ -25,13 +25,30 @@ test('a select keeps no ring after a mouse pick, and shows one for the keyboard'
   await expect.poll(outline).toEqual({ select: 'none', row: 'solid' });
 });
 
-test('a click on the chevron opens the select too (owner report 2026-11-16)', async ({
+test('a click on the chevron or the icon lands on the select itself (owner report 2026-11-16)', async ({
   page,
 }) => {
   await page.goto('/login');
   const select = page.getByLabel(/^(Language|Язык|Til)$/u).first();
+  // Whatever element sits under the centre of the icon and the chevron is
+  // what a click hits: it must be the native select, so every browser opens
+  // its own picker (showPicker() did not in all of them).
+  const hits = await select.evaluate((el) => {
+    const svgs = Array.from(el.parentElement!.querySelectorAll('svg'));
+    return svgs.map((svg) => {
+      const box = svg.getBoundingClientRect();
+      return (
+        document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        ) === el
+      );
+    });
+  });
+  expect(hits).toEqual([true, true]);
   const chevron = select.locator('xpath=following-sibling::*[1]');
-  await chevron.click();
+  const box = (await chevron.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(select).toBeFocused();
   // Opened with the mouse: no keyboard ring on the row.
   await expect
@@ -39,7 +56,6 @@ test('a click on the chevron opens the select too (owner report 2026-11-16)', as
       select.evaluate((el) => getComputedStyle(el.parentElement!).outlineStyle),
     )
     .toBe('none');
-  // The picker answers the keyboard like a select opened by its own click.
   await page.keyboard.press('Escape');
   await expect(select).toBeFocused();
 });

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Select } from './select';
 
 afterEach(cleanup);
@@ -43,52 +43,32 @@ describe('Select focus ring (owner screenshot 2026-11-16)', () => {
     expect(row(select).className).toContain('has-[:focus-visible]:outline-2');
   });
 
-  it('opens the picker from a click on the chevron or the icon, not twice from the select itself', () => {
+  it('lets a click on the icon or the chevron fall through to the select itself (owner report 2026-11-16)', () => {
     render(
       <Select aria-label="Language" icon="globe">
         <option value="uz">O‘zbekcha</option>
       </Select>,
     );
     const select = screen.getByRole('combobox', { name: 'Language' });
-    const showPicker = vi.fn();
-    Object.defineProperty(select, 'showPicker', { value: showPicker });
     const [icon, chevron] = Array.from(row(select).querySelectorAll('svg'));
-    fireEvent.click(chevron!);
-    expect(showPicker).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(select);
-    expect(row(select).dataset.pointer).toBe('true');
-    fireEvent.click(icon!);
-    expect(showPicker).toHaveBeenCalledTimes(2);
-    // A click on the select opens it natively; the row adds nothing.
-    fireEvent.click(select);
-    expect(showPicker).toHaveBeenCalledTimes(2);
+    // Drawn over the select, never catching the pointer.
+    expect(icon!.getAttribute('class')).toContain('pointer-events-none');
+    expect(chevron!.getAttribute('class')).toContain('pointer-events-none');
+    // The select reaches under both, so the native picker opens anywhere.
+    expect(select.className).toContain('-ml-9');
+    expect(select.className).toContain('-mr-9');
+    expect(select.className).toContain('self-stretch');
   });
 
-  it('only focuses where showPicker is missing or refused, and ignores a disabled select', () => {
+  it('reaches only under the row padding when there is no icon', () => {
     render(
-      <>
-        <Select aria-label="A">
-          <option value="a">A</option>
-        </Select>
-        <Select aria-label="B" disabled>
-          <option value="b">B</option>
-        </Select>
-      </>,
+      <Select aria-label="Plain">
+        <option value="a">A</option>
+      </Select>,
     );
-    const a = screen.getByRole('combobox', { name: 'A' });
-    Object.defineProperty(a, 'showPicker', {
-      value: () => {
-        throw new Error('NotAllowedError');
-      },
-    });
-    fireEvent.click(row(a).querySelector('svg')!);
-    expect(document.activeElement).toBe(a);
-    const b = screen.getByRole('combobox', { name: 'B' });
-    const picker = vi.fn();
-    Object.defineProperty(b, 'showPicker', { value: picker });
-    fireEvent.click(row(b).querySelector('svg')!);
-    expect(picker).not.toHaveBeenCalled();
-    expect(document.activeElement).not.toBe(b);
+    const select = screen.getByRole('combobox', { name: 'Plain' });
+    expect(select.className).toContain('-ml-3');
+    expect(select.className).not.toContain('-ml-9');
   });
 
   it('still calls the handlers it was given', () => {
