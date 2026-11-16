@@ -12,6 +12,7 @@ import { CrmTemplateCard } from './crm-template-card';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
@@ -453,7 +454,8 @@ function PipelineCard(props: {
           {props.manage ? (
             <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted">
               <span className="shrink-0">{t('pipelines.aiStaging')}:</span>
-              <select
+              <Select
+                field
                 aria-label={t('pipelines.aiStaging')}
                 data-testid="pipeline-ai-staging"
                 value={props.pipeline.aiStaging ?? 'OFF'}
@@ -462,7 +464,7 @@ function PipelineCard(props: {
                     e.target.value as 'OFF' | 'SUGGEST' | 'AUTO',
                   )
                 }
-                className={fieldClass}
+                className="w-full"
                 disabled={updateAiStaging.isPending}
               >
                 <option value="OFF">{t('pipelines.aiStaging.off')}</option>
@@ -470,7 +472,7 @@ function PipelineCard(props: {
                   {t('pipelines.aiStaging.suggest')}
                 </option>
                 <option value="AUTO">{t('pipelines.aiStaging.auto')}</option>
-              </select>
+              </Select>
               <span className="truncate text-xs">
                 {t('pipelines.aiStagingHint')}
               </span>
@@ -531,15 +533,16 @@ function PipelineCard(props: {
                     data-testid="stage-add-name"
                   />
                 </label>
-                <label className="flex min-w-0 basis-32 flex-col gap-1 text-sm font-medium sr-only">
+                <label className="flex min-w-0 basis-32 flex-col gap-1 text-sm font-medium">
                   {t('pipelines.stageKind')}
-                  <select
+                  <Select
+                    field
                     aria-label={t('pipelines.stageKind')}
                     value={createKind}
                     onChange={(e) =>
                       setCreateKind(e.target.value as 'OPEN' | 'WON' | 'LOST')
                     }
-                    className={fieldClass}
+                    className="w-full"
                     data-testid="stage-add-kind"
                   >
                     <option value="OPEN">
@@ -549,7 +552,7 @@ function PipelineCard(props: {
                     <option value="LOST">
                       {t('pipelines.stageKind.LOST')}
                     </option>
-                  </select>
+                  </Select>
                 </label>
                 <Button
                   type="submit"
@@ -617,7 +620,8 @@ function StageRow(props: {
           >
             {t('app.save')}
           </Button>
-          <select
+          <Select
+            field
             aria-label={t('pipelines.stageKind')}
             data-testid="stage-kind"
             value={kind}
@@ -626,13 +630,13 @@ function StageRow(props: {
               setKind(next);
               props.onRenameKind(next);
             }}
-            className={fieldClass}
+            className="w-full"
             disabled={props.busy}
           >
             <option value="OPEN">{t('pipelines.stageKind.OPEN')}</option>
             <option value="WON">{t('pipelines.stageKind.WON')}</option>
             <option value="LOST">{t('pipelines.stageKind.LOST')}</option>
-          </select>
+          </Select>
           <Button
             size="sm"
             variant="secondary"

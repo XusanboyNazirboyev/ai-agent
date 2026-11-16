@@ -19,6 +19,7 @@ import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button, buttonClass } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
 
@@ -143,12 +144,13 @@ export function ContactsPage(): ReactNode {
               </div>
               <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-sm">
                 <span className="sr-only">{t('people.filterByTag')}</span>
-                <select
+                <Select
+                  field
                   aria-label={t('people.filterByTag')}
                   data-testid="people-tag-filter"
                   value={tagId}
                   onChange={(e) => setTagId(e.target.value)}
-                  className={fieldClass}
+                  className="w-full"
                 >
                   <option value="">{t('people.allTags')}</option>
                   {(tagsQuery.data?.items ?? []).map((tag) => (
@@ -156,7 +158,7 @@ export function ContactsPage(): ReactNode {
                       {tag.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             </div>
 

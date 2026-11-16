@@ -15,6 +15,7 @@ import type {
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { Icon } from './ui/icons';
 import { useToast } from './ui/toast';
 
@@ -112,12 +113,13 @@ export function LeadTagsEditor(props: {
         <div className="flex flex-wrap items-center gap-2">
           {open ? (
             <>
-              <select
+              <Select
+                field
                 aria-label={t('leads.addTag')}
                 data-testid={`${prefix}-select`}
                 defaultValue=""
                 onChange={(e) => add(e.target.value)}
-                className={`${fieldClass} max-w-xs`}
+                className="w-full max-w-xs"
               >
                 <option value="">{t('leads.addTag')}</option>
                 {available.map((tag) => (
@@ -125,7 +127,7 @@ export function LeadTagsEditor(props: {
                     {tag.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               <Button size="sm" onClick={() => setOpen(false)}>
                 {t('confirm.cancel')}
               </Button>

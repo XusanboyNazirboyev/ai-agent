@@ -7,6 +7,7 @@ import { api, errorKey } from '@/lib/api';
 import type { LeadStage, PipelineView } from '@/lib/types';
 import { Button } from './ui/button';
 import { FormDialog } from './ui/form-dialog';
+import { Select } from './ui/select';
 import { useToast } from './ui/toast';
 
 export function MoveToPipeline(props: { leadId: string }): ReactNode {
@@ -87,13 +88,14 @@ export function MoveToPipeline(props: { leadId: string }): ReactNode {
       >
         <label className="flex flex-col gap-1 text-sm font-medium">
           {t('pipelines.switcher')}
-          <select
+          <Select
+            field
             value={pipelineId}
             onChange={(e) => {
               setPipelineId(e.target.value);
               setStageId('');
             }}
-            className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+            className="w-full"
             aria-label={t('pipelines.switcher')}
           >
             <option value="">—</option>
@@ -102,15 +104,16 @@ export function MoveToPipeline(props: { leadId: string }): ReactNode {
                 {p.name ?? t('pipeline.defaultName')}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           {t('leads.moveToStage')}
-          <select
+          <Select
+            field
             value={stageId}
             onChange={(e) => setStageId(e.target.value)}
             disabled={!pipelineId}
-            className="min-h-9 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
+            className="w-full"
             aria-label={t('leads.moveToStage')}
           >
             <option value="">—</option>
@@ -119,7 +122,7 @@ export function MoveToPipeline(props: { leadId: string }): ReactNode {
                 {s.name ?? (s.code ? t(`leads.stage.${s.code}`) : s.id)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {move.isError ? (
           <p role="alert" className="text-sm text-danger-fg">

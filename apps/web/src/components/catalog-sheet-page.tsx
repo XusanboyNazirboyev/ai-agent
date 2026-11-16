@@ -28,6 +28,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { Select } from './ui/select';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 
@@ -357,11 +358,12 @@ export function CatalogSheetPage(): ReactNode {
             workbook.sheets.filter((sheet) => sheet.hasData).length > 1 ? (
               <label className="flex min-w-0 flex-col gap-1 text-sm font-medium sm:max-w-xs">
                 {t('sheet.sheet')}
-                <select
+                <Select
+                  field
                   value={file?.sheet ?? 0}
                   onChange={(event) => chooseSheet(Number(event.target.value))}
                   data-testid="sheet-select"
-                  className={fieldClass}
+                  className="w-full"
                 >
                   {workbook.sheets.map((sheet, index) =>
                     sheet.hasData ? (
@@ -370,7 +372,7 @@ export function CatalogSheetPage(): ReactNode {
                       </option>
                     ) : null,
                   )}
-                </select>
+                </Select>
               </label>
             ) : null}
             {fileError ? (
@@ -455,7 +457,8 @@ export function CatalogSheetPage(): ReactNode {
                           <span className="text-danger-fg"> *</span>
                         ) : null}
                       </span>
-                      <select
+                      <Select
+                        field
                         value={shown[field] ?? ''}
                         onChange={(event) =>
                           setMapping(
@@ -469,7 +472,7 @@ export function CatalogSheetPage(): ReactNode {
                           )
                         }
                         data-testid={`sheet-map-${field}`}
-                        className={fieldClass}
+                        className="w-full"
                       >
                         <option value="">{t('sheet.notUsed')}</option>
                         {data.header.map((name, index) => (
@@ -477,18 +480,19 @@ export function CatalogSheetPage(): ReactNode {
                             {name || t('sheet.column', { n: index + 1 })}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                   ))}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-end gap-3">
                   <label className="flex min-w-0 basis-48 flex-col gap-1 text-sm font-medium">
                     {t('sheet.options.currency')}
-                    <select
+                    <Select
+                      field
                       value={currency}
                       onChange={(event) => setCurrency(event.target.value)}
                       data-testid="sheet-currency"
-                      className={fieldClass}
+                      className="w-full"
                     >
                       <option value="">{t('sheet.notUsed')}</option>
                       {CURRENCIES.map((code) => (
@@ -496,7 +500,7 @@ export function CatalogSheetPage(): ReactNode {
                           {code}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label className="flex min-w-0 basis-48 flex-col gap-1 text-sm font-medium">
                     {t('sheet.options.days')}

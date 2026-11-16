@@ -23,6 +23,7 @@ import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass, textareaClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { Section } from './ui/section';
+import { Select } from './ui/select';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 
@@ -154,11 +155,12 @@ function TagsManager(): ReactNode {
           </label>
           <label className="flex min-w-0 flex-1 basis-36 flex-col gap-1 text-sm font-medium">
             {t('fields.tagColor')}
-            <select
+            <Select
+              field
               data-testid="tag-color-select"
               value={color}
               onChange={(e) => setColor(e.target.value)}
-              className={fieldClass}
+              className="w-full"
             >
               <option value="">{t('fields.noColor')}</option>
               {PALETTE.map((c) => (
@@ -166,7 +168,7 @@ function TagsManager(): ReactNode {
                   {t(`fields.color.${c}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <Button
             type="submit"
@@ -451,18 +453,19 @@ function CustomFieldEntityPanel(props: {
           </div>
           <label className="flex flex-col gap-1 text-sm font-medium">
             {t('fields.defType')}
-            <select
+            <Select
+              field
               data-testid="def-type-select"
               value={type}
               onChange={(e) => setType(e.target.value as CustomFieldType)}
-              className={fieldClass}
+              className="w-full"
             >
               {TYPES.map((tp) => (
                 <option key={tp} value={tp}>
                   {t(`fields.type.${tp}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {type === 'SELECT' ? (
             <label className="flex flex-col gap-1 text-sm font-medium">

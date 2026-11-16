@@ -17,6 +17,7 @@ import { stageLabel } from './lead-board-utils';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { FormDialog } from './ui/form-dialog';
+import { Select } from './ui/select';
 import { useToast } from './ui/toast';
 
 /**
@@ -162,10 +163,11 @@ export function AddLeadDialog(props: {
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium">
           {t('leads.add.stage')}
-          <select
+          <Select
+            field
             value={stageId}
             onChange={(e) => setStageId(e.target.value)}
-            className={fieldClass}
+            className="w-full"
             data-testid="lead-add-stage"
           >
             {openStages.map((s) => (
@@ -173,7 +175,7 @@ export function AddLeadDialog(props: {
                 {stageLabel(s, t)}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {LEAD_AMOUNT_ENABLED ? (
           <div className="flex min-w-0 flex-wrap items-end gap-2">
@@ -191,10 +193,11 @@ export function AddLeadDialog(props: {
             </label>
             <label className="flex min-w-0 basis-24 flex-col gap-1 text-sm font-medium">
               {t('opportunity.currency')}
-              <select
+              <Select
+                field
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className={fieldClass}
+                className="w-full"
                 data-testid="lead-add-currency"
               >
                 {CURRENCIES.map((c) => (
@@ -202,7 +205,7 @@ export function AddLeadDialog(props: {
                     {c}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
         ) : null}
@@ -220,10 +223,11 @@ export function AddLeadDialog(props: {
         {isManager ? (
           <label className="flex flex-col gap-1 text-sm font-medium">
             {t('opportunity.owner')}
-            <select
+            <Select
+              field
               value={ownerId}
               onChange={(e) => setOwnerId(e.target.value)}
-              className={fieldClass}
+              className="w-full"
               data-testid="lead-add-owner"
             >
               {operators.length === 0 ? (
@@ -234,7 +238,7 @@ export function AddLeadDialog(props: {
                   {o.displayName}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         ) : null}
         <label className="flex flex-col gap-1 text-sm font-medium">

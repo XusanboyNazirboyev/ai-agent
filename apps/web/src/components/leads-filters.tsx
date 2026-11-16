@@ -9,6 +9,7 @@ import { useShell } from './app-shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
 import { NO_FILTERS, type LeadFilters } from './lead-board-utils';
@@ -71,10 +72,11 @@ function FilterFields(props: {
       {options.manager ? (
         <label className={labelClass}>
           {t('leads.filterOwner')}
-          <select
+          <Select
+            field
             value={filters.ownerId}
             onChange={(e) => update({ ownerId: e.target.value })}
-            className={fieldClass}
+            className="w-full"
           >
             <option value="">{t('leads.anyOwner')}</option>
             {options.operators
@@ -84,7 +86,7 @@ function FilterFields(props: {
                   {o.displayName}
                 </option>
               ))}
-          </select>
+          </Select>
         </label>
       ) : null}
       <label className={labelClass}>
@@ -138,11 +140,12 @@ function FilterFields(props: {
       </div>
       <label className={labelClass}>
         {t('people.filterByTag')}
-        <select
+        <Select
+          field
           data-testid="leads-tag-filter"
           value={filters.tagId}
           onChange={(e) => update({ tagId: e.target.value })}
-          className={fieldClass}
+          className="w-full"
         >
           <option value="">{t('people.allTags')}</option>
           {options.tags.map((tag) => (
@@ -150,7 +153,7 @@ function FilterFields(props: {
               {tag.name}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     </div>
   );

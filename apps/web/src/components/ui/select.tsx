@@ -17,6 +17,7 @@ import { Icon, type IconName } from './icons';
 export function Select({
   icon,
   compact = false,
+  field = false,
   className = '',
   children,
   onPointerDown,
@@ -27,6 +28,8 @@ export function Select({
   icon?: IconName;
   /** As tall as a small button, for toolbars. */
   compact?: boolean;
+  /** As tall as a text field (fieldClass), 16px text: forms, no iOS zoom. */
+  field?: boolean;
 }): ReactNode {
   const [byPointer, setByPointer] = useState(false);
   const ring = byPointer
@@ -38,7 +41,7 @@ export function Select({
   return (
     <span
       data-pointer={byPointer || undefined}
-      className={`flex ${compact ? 'min-h-9' : 'min-h-10'} min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-fg has-[:disabled]:opacity-60 ${ring} ${className}`}
+      className={`flex ${compact ? 'min-h-9' : field ? 'min-h-11' : 'min-h-10'} min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-fg has-[:disabled]:opacity-60 ${ring} ${className}`}
     >
       {icon ? (
         <Icon
@@ -47,7 +50,7 @@ export function Select({
         />
       ) : null}
       <select
-        className={`min-w-0 flex-1 self-stretch bg-transparent ${reach} ${compact ? 'py-1.5' : 'py-2'} tz-select cursor-pointer text-sm text-fg disabled:cursor-not-allowed`}
+        className={`min-w-0 flex-1 self-stretch bg-transparent ${reach} ${compact ? 'py-1.5' : 'py-2'} tz-select cursor-pointer ${field ? 'text-base' : 'text-sm'} text-fg disabled:cursor-not-allowed`}
         onPointerDown={(event) => {
           setByPointer(true);
           onPointerDown?.(event);

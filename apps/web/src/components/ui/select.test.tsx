@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { Select } from './select';
@@ -88,5 +90,24 @@ describe('Select focus ring (owner screenshot 2026-11-16)', () => {
     fireEvent.keyDown(select, { key: 'a' });
     fireEvent.blur(select);
     expect(calls).toEqual(['pointer', 'key', 'blur']);
+  });
+});
+
+describe('every select is this component (owner report 2026-11-16)', () => {
+  it('leaves no bare <select> elsewhere: those had no chevron at all', () => {
+    const root = join(process.cwd(), 'src');
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        if (statSync(path).isDirectory()) return files(path);
+        return /\.tsx$/u.test(name) && !/\.test\.tsx$/u.test(name)
+          ? [path]
+          : [];
+      });
+    const bare = files(root)
+      .filter((path) => !path.endsWith(join('components', 'ui', 'select.tsx')))
+      .filter((path) => /<select\b/u.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(root, path));
+    expect(bare).toEqual([]);
   });
 });

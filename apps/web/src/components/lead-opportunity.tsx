@@ -16,6 +16,7 @@ import type { LeadPipelineItem, TeamMember } from '@/lib/types';
 import { useShell } from './app-shell';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { useToast } from './ui/toast';
 
 const MAX_SOURCE = 60;
@@ -136,11 +137,11 @@ export function LeadOpportunity(props: {
     isManager && !isViewer ? (
       <label className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
         {t('opportunity.owner')}
-        <select
+        <Select
+          compact
           value={ownerId}
           onChange={(e) => changeOwner(e.target.value)}
           disabled={save.isPending}
-          className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
           aria-label={t('opportunity.owner')}
         >
           <option value="">{t('opportunity.unassigned')}</option>
@@ -149,7 +150,7 @@ export function LeadOpportunity(props: {
               {o.displayName}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
     ) : (
       <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
@@ -217,11 +218,11 @@ export function LeadOpportunity(props: {
                   aria-label={t('opportunity.amount')}
                   data-testid="opportunity-amount"
                 />
-                <select
+                <Select
+                  compact
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
                   disabled={!canEdit || isViewer || save.isPending}
-                  className="min-h-9 min-w-0 rounded-lg border border-line bg-surface px-2 text-sm text-fg"
                   aria-label={t('opportunity.currency')}
                   data-testid="opportunity-currency"
                 >
@@ -230,7 +231,7 @@ export function LeadOpportunity(props: {
                       {c}
                     </option>
                   ))}
-                </select>
+                </Select>
                 {canEdit && !isViewer ? (
                   <Button
                     size="sm"

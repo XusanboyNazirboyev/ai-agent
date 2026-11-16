@@ -16,6 +16,7 @@ import type {
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { Icon } from './ui/icons';
 import { Section } from './ui/section';
 import { useToast } from './ui/toast';
@@ -118,12 +119,13 @@ export function PersonTagsSection(props: {
         <div className="flex flex-wrap items-center gap-2">
           {open ? (
             <>
-              <select
+              <Select
+                field
                 aria-label={t('people.addTag')}
                 data-testid="person-tag-select"
                 defaultValue=""
                 onChange={(e) => add(e.target.value)}
-                className={`${fieldClass} max-w-xs`}
+                className="w-full max-w-xs"
               >
                 <option value="">{t('people.addTag')}</option>
                 {available.map((tag) => (
@@ -131,7 +133,7 @@ export function PersonTagsSection(props: {
                     {tag.name}
                   </option>
                 ))}
-              </select>
+              </Select>
               <Button size="sm" onClick={() => setOpen(false)}>
                 {t('confirm.cancel')}
               </Button>
