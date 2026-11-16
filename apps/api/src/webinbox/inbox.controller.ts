@@ -24,6 +24,7 @@ const ListQuery = z.object({
     .optional(),
   leadScore: z.enum(['HOT', 'WARM', 'COLD']).optional(),
   leadStatus: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']).optional(),
+  tagId: z.uuid().optional(),
 });
 
 @Controller('api/v1/inbox')

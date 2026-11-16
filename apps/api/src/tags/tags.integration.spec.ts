@@ -239,7 +239,7 @@ describe('Tags CRUD and limits (ADR 053)', () => {
     expect(created).toMatchObject({
       name: 'VIP',
       color: 'blue',
-      usage: { people: 0, leads: 0 },
+      usage: { people: 0, leads: 0, conversations: 0 },
     });
     const p = await person(f);
     const lead = await leadFor(f, p.contacts[0].id);
@@ -250,7 +250,7 @@ describe('Tags CRUD and limits (ADR 053)', () => {
         id: created.id,
         name: 'VIP',
         color: 'blue',
-        usage: { people: 1, leads: 1 },
+        usage: { people: 1, leads: 1, conversations: 0 },
       },
     ]);
     const renamed = await tagsC.update(f.as.ADMIN, created.id, {

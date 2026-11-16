@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
   useEffect,
   useRef,
@@ -17,6 +17,7 @@ import type {
   ConversationPage,
   LeadScore,
   Scope,
+  TagRef,
 } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
 import { Avatar } from './ui/avatar';
@@ -58,14 +59,20 @@ export function ConversationList(props: {
   const [search, setSearch] = useState('');
   const [language, setLanguage] = useState('');
   const [score, setScore] = useState('');
+  const [tagId, setTagId] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const activeFilters = (language ? 1 : 0) + (score ? 1 : 0);
+  const activeFilters = (language ? 1 : 0) + (score ? 1 : 0) + (tagId ? 1 : 0);
+  const tagList = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<{ items: TagRef[] }>('/api/v1/tags'),
+    enabled: filtersOpen || Boolean(tagId),
+  });
   const q = useDebounced(search.trim(), 300);
   const now = useNow();
   const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const query = useInfiniteQuery({
-    queryKey: ['conversations', props.scope, q, language, score],
+    queryKey: ['conversations', props.scope, q, language, score, tagId],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ scope: props.scope, limit: '25' });
@@ -73,6 +80,7 @@ export function ConversationList(props: {
       if (q) params.set('q', q);
       if (language) params.set('language', language);
       if (score) params.set('leadScore', score);
+      if (tagId) params.set('tagId', tagId);
       return api<ConversationPage>(
         `/api/v1/inbox/conversations?${params.toString()}`,
       );
@@ -80,7 +88,7 @@ export function ConversationList(props: {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(q || language || score);
+  const filtered = Boolean(q || language || score || tagId);
 
   function onTabKey(event: KeyboardEvent, index: number): void {
     const last = SCOPES.length - 1;
@@ -181,7 +189,7 @@ export function ConversationList(props: {
         {filtersOpen ? (
           <div
             id="inbox-filters"
-            className="flex gap-2"
+            className="flex flex-wrap gap-2"
             data-testid="inbox-filters"
           >
             <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
@@ -205,6 +213,21 @@ export function ConversationList(props: {
                 {SCORES.map((id) => (
                   <option key={id} value={id}>
                     {t(`score.${id}`)}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex min-w-0 flex-1 basis-24 flex-col gap-1 text-xs text-muted">
+              {t('list.filterTag')}
+              <Select
+                value={tagId}
+                onChange={(e) => setTagId(e.target.value)}
+                data-testid="inbox-filter-tag"
+              >
+                <option value="">{t('list.anyTag')}</option>
+                {(tagList.data?.items ?? []).map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
                   </option>
                 ))}
               </Select>
@@ -318,6 +341,18 @@ function ConversationRow(props: {
         {t(`score.${item.leadScore}`)}
       </Badge>,
     );
+  // Chat tags (ADR 071): the first two, then "+N" so the row stays one line.
+  const tags = item.tags ?? [];
+  for (const tag of tags.slice(0, 2))
+    chips.push(
+      <Badge key={`tag-${tag.id}`}>
+        <span data-testid="conversation-item-tag" className="max-w-24 truncate">
+          {tag.name}
+        </span>
+      </Badge>,
+    );
+  if (tags.length > 2)
+    chips.push(<Badge key="tag-more">{`+${tags.length - 2}`}</Badge>);
   return (
     <li>
       <button

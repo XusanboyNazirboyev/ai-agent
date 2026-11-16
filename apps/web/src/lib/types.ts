@@ -221,6 +221,8 @@ export interface ConversationListItem {
     author: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
     at: string;
   } | null;
+  /** Tags on the conversation (ADR 071, additive). */
+  tags?: TagRef[];
 }
 
 export interface ConversationPage {
@@ -236,6 +238,8 @@ export interface ConversationView {
     language: string | null;
     script: string | null;
     version: number;
+    /** Tags on the conversation (ADR 071, additive). */
+    tags?: TagRef[];
   };
   contact: { name: string | null; phone: string | null };
   handover: {
@@ -385,7 +389,8 @@ export interface CustomFieldDef {
 
 /** Tag as managed in settings, including usage counts. */
 export interface Tag extends TagRef {
-  usage: { people: number; leads: number };
+  /** `conversations` from ADR 071; older payloads may lack it. */
+  usage: { people: number; leads: number; conversations?: number };
 }
 
 /** Custom field value resolved against active definitions. */

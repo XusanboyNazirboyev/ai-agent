@@ -5,6 +5,7 @@ import { PrismaService } from '../persistence/prisma.service.js';
 import { describeFields } from '../tags/custom-field-values.js';
 import {
   activeFieldDefs,
+  tagsOfConversations,
   tagsOfLeads,
   type TagView,
 } from '../tags/tag-reads.js';
@@ -31,6 +32,8 @@ export interface ConversationListItem {
     readonly author: 'CUSTOMER' | 'BOT' | 'OPERATOR' | 'SYSTEM';
     readonly at: string;
   } | null;
+  /** Tags on the conversation (ADR 071). */
+  readonly tags: TagView[];
 }
 
 const PREVIEW_LENGTH = 120;
@@ -71,6 +74,8 @@ export interface ConversationView {
     language: string | null;
     script: string | null;
     version: number;
+    /** Tags on the conversation (ADR 071). */
+    tags: TagView[];
   };
   readonly contact: {
     name: string | null;
@@ -181,6 +186,7 @@ export class InboxReadService {
       language?: string;
       leadScore?: 'HOT' | 'WARM' | 'COLD';
       leadStatus?: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
+      tagId?: string;
     },
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), MAX_PAGE);
@@ -198,6 +204,16 @@ export class InboxReadService {
         : {}),
       ...(options.scope === 'closed' ? { state: 'CLOSED' } : {}),
       ...(options.language ? { language: options.language } : {}),
+      ...(options.tagId
+        ? {
+            tags: {
+              some: {
+                tenantId: principal.tenantId,
+                tagId: options.tagId,
+              },
+            },
+          }
+        : {}),
       ...(options.leadScore || options.leadStatus
         ? {
             leads: {
@@ -257,6 +273,13 @@ export class InboxReadService {
       ];
       if (options.language)
         filters.push(Prisma.sql`c.language = ${options.language}`);
+      if (options.tagId)
+        filters.push(Prisma.sql`EXISTS (
+          SELECT 1 FROM conversation_tags t
+          WHERE t.tenant_id = c.tenant_id
+            AND t.conversation_id = c.id
+            AND t.tag_id = ${options.tagId}::uuid
+        )`);
       if (options.leadScore || options.leadStatus) {
         filters.push(Prisma.sql`EXISTS (
           SELECT 1
@@ -352,6 +375,11 @@ export class InboxReadService {
           })
         : [];
       const byId = new Map(rows.map((row) => [row.id, row]));
+      const tagMap = await tagsOfConversations(
+        this.prisma,
+        principal.tenantId,
+        rows.map((row) => row.id),
+      );
       const items = page.flatMap((candidate) => {
         const row = byId.get(candidate.id);
         if (!row) return [];
@@ -369,6 +397,7 @@ export class InboxReadService {
             slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
             updatedAt: row.updatedAt.toISOString(),
             lastMessage: previewOf(row.messages[0]),
+            tags: tagMap.get(row.id) ?? [],
           },
         ];
       });
@@ -404,6 +433,11 @@ export class InboxReadService {
       },
     });
     const page = rows.slice(0, limit);
+    const tagMap = await tagsOfConversations(
+      this.prisma,
+      principal.tenantId,
+      page.map((row) => row.id),
+    );
     const items = page.map((row) => ({
       id: row.id,
       state: row.state,
@@ -417,6 +451,7 @@ export class InboxReadService {
       slaDueAt: row.handovers[0]?.slaDueAt?.toISOString() ?? null,
       updatedAt: row.updatedAt.toISOString(),
       lastMessage: previewOf(row.messages[0]),
+      tags: tagMap.get(row.id) ?? [],
     }));
     const last = page.at(-1);
     return {
@@ -470,6 +505,11 @@ export class InboxReadService {
     });
     if (!conversation) return undefined;
     const lead = conversation.leads[0] ?? null;
+    const conversationTags = await tagsOfConversations(
+      this.prisma,
+      principal.tenantId,
+      [conversation.id],
+    );
     const [leadTags, leadDefs] = lead
       ? await Promise.all([
           tagsOfLeads(this.prisma, principal.tenantId, [lead.id]),
@@ -556,6 +596,7 @@ export class InboxReadService {
         language: conversation.language,
         script: conversation.script,
         version: conversation.version,
+        tags: conversationTags.get(conversation.id) ?? [],
       },
       contact: conversation.contact,
       handover: conversation.handovers[0] ?? null,

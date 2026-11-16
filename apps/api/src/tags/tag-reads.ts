@@ -57,6 +57,30 @@ export async function tagsOfLeads(
   return map;
 }
 
+/** Active tags of many conversations in ONE query (ADR 071). */
+export async function tagsOfConversations(
+  db: Db,
+  tenantId: string,
+  conversationIds: readonly string[],
+): Promise<Map<string, TagView[]>> {
+  const map = new Map<string, TagView[]>(conversationIds.map((id) => [id, []]));
+  if (conversationIds.length === 0) return map;
+  const rows = await db.conversationTag.findMany({
+    where: {
+      tenantId,
+      conversationId: { in: [...conversationIds] },
+      tag: { archivedAt: null },
+    },
+    select: {
+      conversationId: true,
+      tag: { select: { id: true, name: true, color: true } },
+    },
+  });
+  for (const row of rows) map.get(row.conversationId)?.push(row.tag);
+  for (const list of map.values()) sortTags(list);
+  return map;
+}
+
 function sortTags(list: TagView[]): void {
   list.sort(
     (a, b) =>

@@ -1521,5 +1521,8 @@
   "replies.deleteTitle": "Bu tezkor javob o‘chirilsinmi?",
   "replies.deleteBody": "«{title}» endi inboxda taklif qilinmaydi.",
   "replies.deleteConfirm": "O‘chirish",
-  "errors.cannedLimit": "Bu ishxonada tezkor javoblar soni chegaraga yetdi (200). Avval bittasini o‘chiring."
+  "errors.cannedLimit": "Bu ishxonada tezkor javoblar soni chegaraga yetdi (200). Avval bittasini o‘chiring.",
+  "view.chatTags": "Suhbat teglari",
+  "list.filterTag": "Teg",
+  "list.anyTag": "Istalgan teg"
 }

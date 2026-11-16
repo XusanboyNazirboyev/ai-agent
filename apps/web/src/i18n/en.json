@@ -1521,5 +1521,8 @@
   "replies.deleteTitle": "Delete this quick reply?",
   "replies.deleteBody": "“{title}” will no longer be offered in the inbox.",
   "replies.deleteConfirm": "Delete",
-  "errors.cannedLimit": "This workspace has the most quick replies allowed (200). Delete one first."
+  "errors.cannedLimit": "This workspace has the most quick replies allowed (200). Delete one first.",
+  "view.chatTags": "Chat tags",
+  "list.filterTag": "Tag",
+  "list.anyTag": "Any tag"
 }

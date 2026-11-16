@@ -31,6 +31,7 @@ import { TodayController } from './today.controller.js';
 import { LeadTasksController } from '../tasks/lead-tasks.js';
 import { LeadTimelineController } from '../leads/lead-timeline.js';
 import { CannedResponsesController } from './canned-responses.controller.js';
+import { ConversationTagsController } from './conversation-tags.controller.js';
 import { CrmTemplateController } from './crm-template.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ChannelsController } from './channels.controller.js';
@@ -100,6 +101,7 @@ import { ExportLock } from '../exports/export-lock.js';
     LeadTasksController,
     LeadTimelineController,
     CannedResponsesController,
+    ConversationTagsController,
     CrmTemplateController,
     LeadPipelineController,
     PipelinesController,

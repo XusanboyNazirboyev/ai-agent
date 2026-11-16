@@ -22,12 +22,21 @@ function canEdit(role: Role): boolean {
   return role === 'OWNER' || role === 'ADMIN' || role === 'OPERATOR';
 }
 
+/**
+ * The tags of a lead, or of a conversation when `conversationId` is given
+ * (ADR 071): the same tag dictionary, another endpoint and test ids.
+ */
 export function LeadTagsEditor(props: {
-  leadId: string;
+  leadId?: string;
+  conversationId?: string;
   tags: TagRef[];
   role: Role;
 }): ReactNode {
-  const { leadId, role } = props;
+  const { leadId, conversationId, role } = props;
+  const prefix = conversationId ? 'conversation-tag' : 'lead-tag';
+  const endpoint = conversationId
+    ? `/api/v1/inbox/conversations/${conversationId}/tags`
+    : `/api/v1/leads/${leadId}/tags`;
   const tags = props.tags ?? [];
   const { t } = useI18n();
   const toast = useToast();
@@ -42,10 +51,11 @@ export function LeadTagsEditor(props: {
   });
   const save = useMutation({
     mutationFn: (tagIds: string[]) =>
-      api(`/api/v1/leads/${leadId}/tags`, { method: 'PUT', body: { tagIds } }),
+      api(endpoint, { method: 'PUT', body: { tagIds } }),
     onSuccess: () => {
       toast(t('toast.tagsSaved'));
       void qc.invalidateQueries({ queryKey: ['conversation'] });
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
       void qc.invalidateQueries({ queryKey: ['leads'] });
       void qc.invalidateQueries({ queryKey: ['person'] });
     },
@@ -64,8 +74,10 @@ export function LeadTagsEditor(props: {
   }
 
   return (
-    <div className="flex flex-col gap-2" data-testid="lead-tags">
-      <span className="text-xs font-medium text-muted">{t('leads.tags')}</span>
+    <div className="flex flex-col gap-2" data-testid={`${prefix}s`}>
+      <span className="text-xs font-medium text-muted">
+        {t(conversationId ? 'view.chatTags' : 'leads.tags')}
+      </span>
       <div className="flex flex-wrap items-center gap-2">
         {tags.length === 0 ? (
           <span className="text-xs text-muted">{t('leads.noTags')}</span>
@@ -73,7 +85,7 @@ export function LeadTagsEditor(props: {
         {tags.map((tag) => (
           <span
             key={tag.id}
-            data-testid="lead-tag-chip"
+            data-testid={`${prefix}-chip`}
             className="inline-flex items-center gap-1"
           >
             <Badge>{tag.name}</Badge>
@@ -81,7 +93,7 @@ export function LeadTagsEditor(props: {
               <button
                 type="button"
                 aria-label={t('leads.removeTag', { name: tag.name })}
-                data-testid="lead-tag-remove"
+                data-testid={`${prefix}-remove`}
                 disabled={save.isPending}
                 onClick={() => remove(tag)}
                 className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted hover:bg-surface-2 hover:text-fg"
@@ -98,7 +110,7 @@ export function LeadTagsEditor(props: {
             <>
               <select
                 aria-label={t('leads.addTag')}
-                data-testid="lead-tag-select"
+                data-testid={`${prefix}-select`}
                 defaultValue=""
                 onChange={(e) => add(e.target.value)}
                 className={`${fieldClass} max-w-xs`}
@@ -119,7 +131,7 @@ export function LeadTagsEditor(props: {
               size="sm"
               icon="plus"
               onClick={() => setOpen(true)}
-              data-testid="lead-tag-add"
+              data-testid={`${prefix}-add`}
               disabled={save.isPending}
             >
               {t('leads.addTag')}

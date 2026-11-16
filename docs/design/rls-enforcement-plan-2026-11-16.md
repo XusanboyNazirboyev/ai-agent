@@ -1,0 +1,18 @@
+# RLS enforcement plan (P0.7 follow-up to ADR 050), 2026-11-16
+
+Architect design, not yet built. Today the policies exist (ENABLE, not FORCE) but the app connects as the table owner and sets no tenant context (`PrismaService.withTenant` is used nowhere), so nothing is enforced. Switching to a restricted role now would make every protected query return no rows.
+
+## Design
+- **Context:** `persistence/tenant-context.ts` (AsyncLocalStorage, set once, immutable). HTTP: the slot opened in `observability/trace-requests.ts`, filled by `SessionGuard` (same pattern as `observability/log-context.ts`). Jobs: `runWithTenant(data.tenantId)` in `telegram-queue.runtime.ts` and `connectors/sync/catalog-sync.queue.ts`.
+- **Applying it:** a wrapper around the PrismaPg driver adapter (`SqlDriverAdapter` / `Transaction`, `@prisma/driver-adapter-utils@7.10.0`): `startTransaction()` runs `set_config('app.tenant_id', $1, true)` first; a standalone query runs in BEGIN, set, query, COMMIT. Cost: +1 round trip per interactive transaction, 4 instead of 1 for a single query (local Docker DB, about 1 ms). Rejected: one transaction per request (holds a pool connection through LLM calls; pool is 10). Unverified until slice S2 proves it: that AsyncLocalStorage reaches the adapter calls in Prisma 7.10.
+- **Privileged client:** `PrivilegedPrismaService` via `createPostgresAdapter(env, 'POSTGRES_ADMIN_')` for sign-in and session lookups, MFA, invite acceptance, webhook routing to a tenant, outbox publishing, the inbox event bus poller, the scheduled scans (find tenants, then per-tenant context), `platform/**`, `ops/**`, `dev/**`, scripts and migrations. A unit test allows injecting it only in those files.
+- **Failing loudly:** `RLS_CONTEXT_MODE` = off | warn | strict; strict throws on a protected query without a tenant. A CI job runs the integration suite as a NOBYPASSRLS role in strict mode.
+
+## Slices
+S1 context, S2 adapter wrapper plus tests as a NOBYPASSRLS role (interactive transactions, single queries, raw SQL, nested writes), S3 privileged client, S4 HTTP slot and guard, S5 pre-tenant lookups, S6 queues, S7 scans and event bus, S8 strict CI job, S9 policies on the remaining tenant tables by domain, S10 staging: warn mode on the owner role, then switch to the app role.
+
+## Owner steps (only at S10)
+Approve creating `agentcore_app` (LOGIN, NOSUPERUSER, NOBYPASSRLS; DML grants, default privileges, no access to `_prisma_migrations`) with a new secret; a verified backup; the switch of `POSTGRES_USER`/`POSTGRES_PASSWORD` to that role while migrations and the privileged client keep the owner role (`POSTGRES_ADMIN_*`). Rollback: point `POSTGRES_USER` back and restart; dropping the role needs separate approval.
+
+## Risks
+Two pools per process (check `max_connections`); session-level advisory locks or `SET` in raw SQL that the wrapper would move into a transaction (`handover/conversation-lock.ts`, `agent/llm-budget-ledger.ts`); the inbox event bus `setInterval` inherits the first subscriber's context (`webinbox/inbox-event-bus.ts`); triggers run as the caller (`leads_fill_pipeline_trg` reads `pipelines`); 195 raw SQL or transaction sites in 66 files, `webinbox/analytics.service.ts` the largest; missing context fails closed as silently empty results, so strict mode in CI and alerts on warn logs.

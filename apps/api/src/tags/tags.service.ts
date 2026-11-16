@@ -7,33 +7,50 @@ import {
   uniqueIds,
 } from './custom-field-values.js';
 import { conflict, notFound, unknownTag } from './tag-errors.js';
-import { tagsOfLeads, tagsOfPersons, type TagView } from './tag-reads.js';
+import {
+  tagsOfConversations,
+  tagsOfLeads,
+  tagsOfPersons,
+  type TagView,
+} from './tag-reads.js';
 
 export interface TagItem extends TagView {
-  usage: { people: number; leads: number };
+  usage: { people: number; leads: number; conversations: number };
 }
 
 type Tx = Prisma.TransactionClient;
 export type TagTarget = 'person' | 'lead';
+/** Where a tag can be set: a person, a lead, or a conversation (ADR 071). */
+export type TagSetTarget = TagTarget | 'conversation';
 
 const tagSelect = {
   id: true,
   name: true,
   color: true,
-  _count: { select: { personTags: true, leadTags: true } },
+  _count: {
+    select: { personTags: true, leadTags: true, conversationTags: true },
+  },
 } as const;
 
 function toItem(row: {
   id: string;
   name: string;
   color: string | null;
-  _count: { personTags: number; leadTags: number };
+  _count: {
+    personTags: number;
+    leadTags: number;
+    conversationTags: number;
+  };
 }): TagItem {
   return {
     id: row.id,
     name: row.name,
     color: row.color,
-    usage: { people: row._count.personTags, leads: row._count.leadTags },
+    usage: {
+      people: row._count.personTags,
+      leads: row._count.leadTags,
+      conversations: row._count.conversationTags,
+    },
   };
 }
 
@@ -153,22 +170,26 @@ export class TagsService {
       const leads = await tx.leadTag.deleteMany({
         where: { tenantId, tagId: id },
       });
+      const conversations = await tx.conversationTag.deleteMany({
+        where: { tenantId, tagId: id },
+      });
       await audit(tx, tenantId, operatorId, 'tag.archived', 'tag', id, {
         people: people.count,
         leads: leads.count,
+        conversations: conversations.count,
       });
       return { id };
     });
   }
 
   /**
-   * Replaces the tag set of a person or lead. null = not found (unknown,
-   * other tenant, merged or erased); throws UNKNOWN_TAG / TAG_LIMIT.
+   * Replaces the tag set of a person, lead or conversation. Not found =
+   * unknown, other tenant, merged or erased; throws UNKNOWN_TAG / TAG_LIMIT.
    */
   async setTags(
     tenantId: string,
     operatorId: string,
-    target: TagTarget,
+    target: TagSetTarget,
     targetId: string,
     tagIds: readonly string[],
   ): Promise<{ tags: TagView[] }> {
@@ -191,12 +212,19 @@ export class TagsService {
                 select: { tagId: true },
               })
             ).map((r) => r.tagId)
-          : (
-              await tx.leadTag.findMany({
-                where: { tenantId, leadId: targetId },
-                select: { tagId: true },
-              })
-            ).map((r) => r.tagId);
+          : target === 'lead'
+            ? (
+                await tx.leadTag.findMany({
+                  where: { tenantId, leadId: targetId },
+                  select: { tagId: true },
+                })
+              ).map((r) => r.tagId)
+            : (
+                await tx.conversationTag.findMany({
+                  where: { tenantId, conversationId: targetId },
+                  select: { tagId: true },
+                })
+              ).map((r) => r.tagId);
       const remove = current.filter((t) => !wanted.includes(t));
       const add = wanted.filter((t) => !current.includes(t));
       if (target === 'person') {
@@ -207,6 +235,23 @@ export class TagsService {
         if (add.length)
           await tx.personTag.createMany({
             data: add.map((tagId) => ({ tenantId, personId: targetId, tagId })),
+          });
+      } else if (target === 'conversation') {
+        if (remove.length)
+          await tx.conversationTag.deleteMany({
+            where: {
+              tenantId,
+              conversationId: targetId,
+              tagId: { in: remove },
+            },
+          });
+        if (add.length)
+          await tx.conversationTag.createMany({
+            data: add.map((tagId) => ({
+              tenantId,
+              conversationId: targetId,
+              tagId,
+            })),
           });
       } else {
         if (remove.length)
@@ -230,7 +275,9 @@ export class TagsService {
       const map =
         target === 'person'
           ? await tagsOfPersons(tx, tenantId, [targetId])
-          : await tagsOfLeads(tx, tenantId, [targetId]);
+          : target === 'lead'
+            ? await tagsOfLeads(tx, tenantId, [targetId])
+            : await tagsOfConversations(tx, tenantId, [targetId]);
       return { tags: map.get(targetId) ?? [] };
     });
   }
@@ -273,9 +320,18 @@ function isUniqueViolation(error: unknown): boolean {
 export async function lockVisibleTarget(
   tx: Tx,
   tenantId: string,
-  target: TagTarget,
+  target: TagSetTarget,
   id: string,
 ): Promise<boolean> {
+  if (target === 'conversation') {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT v.id FROM conversations v
+      JOIN contacts c ON c.tenant_id = v.tenant_id AND c.id = v.contact_id
+      WHERE v.tenant_id = ${tenantId}::uuid AND v.id = ${id}::uuid
+        AND c.deleted_at IS NULL
+      FOR UPDATE OF v`;
+    return rows.length === 1;
+  }
   if (target === 'person') {
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT p.id FROM persons p

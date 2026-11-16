@@ -295,6 +295,7 @@ model Tenant {
   tags                 Tag[]
   personTags           PersonTag[]
   leadTags             LeadTag[]
+  conversationTags     ConversationTag[]
   customFieldDefs      CustomFieldDef[]
 
   leadTasks          LeadTask[]
@@ -708,6 +709,7 @@ model Conversation {
   slots    ConversationSlots[]
   quotes   Quote[]
   leads    Lead[]
+  tags     ConversationTag[]
   handovers Handover[]
   agentTurns AgentTurn[]
   actionProposals ActionProposal[]
@@ -1823,6 +1825,7 @@ model Tag {
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   personTags PersonTag[]
   leadTags   LeadTag[]
+  conversationTags ConversationTag[]
 
   @@unique([tenantId, id])
   // Active-name uniqueness is partial (lower(name), archived_at IS NULL) in
@@ -1990,4 +1993,19 @@ model CannedResponse {
   @@unique([tenantId, id])
   @@index([tenantId, position])
   @@map("canned_responses")
+}
+
+/// Tags on a conversation (roadmap P1.8, ADR 071); same dictionary as ADR 053.
+model ConversationTag {
+  tenantId       String       @map("tenant_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  tagId          String       @map("tag_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+  tag            Tag          @relation(fields: [tenantId, tagId], references: [tenantId, id], onDelete: Cascade)
+
+  @@id([tenantId, conversationId, tagId])
+  @@index([tenantId, tagId])
+  @@map("conversation_tags")
 }
