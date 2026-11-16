@@ -328,7 +328,7 @@ export function ConversationViewPane(props: {
           <span className="sr-only">{t('view.back')}</span>
         </Button>
         <Avatar name={view.contact.name} size="sm" />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
           <h2 className="min-w-0 truncate text-sm leading-5 font-semibold">
             {name}
           </h2>
