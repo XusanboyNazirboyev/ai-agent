@@ -31,6 +31,8 @@ export function LeadTagsEditor(props: {
   conversationId?: string;
   tags: TagRef[];
   role: Role;
+  /** The surrounding section already shows the title. */
+  hideLabel?: boolean;
 }): ReactNode {
   const { leadId, conversationId, role } = props;
   const prefix = conversationId ? 'conversation-tag' : 'lead-tag';
@@ -75,9 +77,11 @@ export function LeadTagsEditor(props: {
 
   return (
     <div className="flex flex-col gap-2" data-testid={`${prefix}s`}>
-      <span className="text-xs font-medium text-muted">
-        {t(conversationId ? 'view.chatTags' : 'leads.tags')}
-      </span>
+      {props.hideLabel ? null : (
+        <span className="text-xs font-medium text-muted">
+          {t(conversationId ? 'view.chatTags' : 'leads.tags')}
+        </span>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {tags.length === 0 ? (
           <span className="text-xs text-muted">{t('leads.noTags')}</span>

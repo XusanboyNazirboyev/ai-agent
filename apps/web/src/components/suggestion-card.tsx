@@ -57,15 +57,14 @@ export function SuggestionCard(props: {
     </Button>
   );
 
-  if (!suggestion && !ask.isPending && !ask.isError)
-    return <div className="flex">{askButton}</div>;
+  if (!suggestion && !ask.isPending && !ask.isError) return askButton;
 
   return (
     <section
       data-testid="suggestion"
       aria-label={t('suggest.title')}
       aria-busy={ask.isPending}
-      className="flex flex-col gap-2 rounded-xl border border-primary/40 bg-primary-soft p-3 text-sm"
+      className="flex w-full basis-full flex-col gap-2 rounded-xl border border-primary/40 bg-primary-soft p-3 text-sm"
     >
       <p className="flex items-center gap-1.5 text-xs font-semibold text-primary-fg">
         <Icon name="bot" className="h-3.5 w-3.5" />

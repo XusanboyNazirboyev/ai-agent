@@ -314,7 +314,10 @@ export function ConversationViewPane(props: {
       className="flex min-h-0 flex-1 flex-col bg-canvas"
       data-testid="conversation-view"
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-2 sm:gap-3 sm:px-4">
+      <div
+        data-testid="conversation-header"
+        className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-1.5 sm:gap-2.5 sm:px-4"
+      >
         <Button
           size="sm"
           variant="ghost"
@@ -324,10 +327,12 @@ export function ConversationViewPane(props: {
         >
           <span className="sr-only">{t('view.back')}</span>
         </Button>
-        <Avatar name={view.contact.name} />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="truncate font-semibold">{name}</h2>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Avatar name={view.contact.name} size="sm" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+          <h2 className="min-w-0 truncate text-sm leading-5 font-semibold">
+            {name}
+          </h2>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <span
               data-testid="state"
               data-state={state}
@@ -359,7 +364,7 @@ export function ConversationViewPane(props: {
           <div
             role="radiogroup"
             aria-label={t('mode.label')}
-            className="order-last flex w-full gap-1 rounded-xl border border-line bg-surface-2 p-1 lg:order-none lg:w-auto lg:shrink-0"
+            className="order-last flex w-full gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5 lg:order-none lg:w-auto lg:shrink-0"
           >
             <button
               type="button"
@@ -368,13 +373,13 @@ export function ConversationViewPane(props: {
               data-testid="mode-ai"
               disabled={busy}
               onClick={toAi}
-              className={`flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors lg:flex-none ${
+              className={`flex min-h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors lg:min-h-7 lg:flex-none ${
                 !operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
-              <Icon name="bot" className="h-4 w-4" />
+              <Icon name="bot" className="h-3.5 w-3.5" />
               {t('mode.ai')}
             </button>
             <button
@@ -384,13 +389,13 @@ export function ConversationViewPane(props: {
               data-testid="take-over"
               disabled={busy}
               onClick={toOperator}
-              className={`flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors lg:flex-none ${
+              className={`flex min-h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors lg:min-h-7 lg:flex-none ${
                 operatorMode
                   ? 'bg-primary text-white'
                   : 'text-muted hover:text-fg'
               }`}
             >
-              <Icon name="headset" className="h-4 w-4" />
+              <Icon name="headset" className="h-3.5 w-3.5" />
               {t('mode.operator')}
             </button>
           </div>
@@ -565,19 +570,23 @@ export function ConversationViewPane(props: {
           <div className="shrink-0 border-t border-line bg-surface px-3 py-2">
             {canWrite ? (
               <form onSubmit={send} className="flex flex-col gap-1.5">
-                <SuggestionCard
-                  key={props.id}
-                  conversationId={props.id}
-                  latestCustomerMessageId={latestCustomerMessageId}
-                  disabled={busy}
-                  onSend={(text, done) => send(undefined, { text, done })}
-                  onEdit={(text) => {
-                    onReplyChange(text);
-                    replyBox.current?.focus();
-                  }}
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* One tool row: suggest, quick replies, and on the right the
+                    hand-back and close actions. A shown suggestion takes the
+                    whole first line of it. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <SuggestionCard
+                    key={props.id}
+                    conversationId={props.id}
+                    latestCustomerMessageId={latestCustomerMessageId}
+                    disabled={busy}
+                    onSend={(text, done) => send(undefined, { text, done })}
+                    onEdit={(text) => {
+                      onReplyChange(text);
+                      replyBox.current?.focus();
+                    }}
+                  />
                   <Select
+                    compact
                     aria-label={t('action.canned')}
                     value=""
                     onChange={(e) => {
@@ -587,7 +596,7 @@ export function ConversationViewPane(props: {
                       if (text)
                         setReply((prev) => `${prev}${prev ? '\n' : ''}${text}`);
                     }}
-                    className="max-w-full min-h-9"
+                    className="max-w-60 min-w-0 flex-1 sm:flex-none"
                     data-testid="quick-reply-select"
                   >
                     <option value="">{t('action.cannedNone')}</option>
@@ -598,7 +607,7 @@ export function ConversationViewPane(props: {
                     ))}
                   </Select>
                   {canAct ? (
-                    <div className="flex gap-2">
+                    <div className="ml-auto flex gap-2">
                       <Button
                         size="sm"
                         data-testid="return-to-bot"
@@ -665,11 +674,28 @@ export function ConversationViewPane(props: {
           aria-label={t('view.details')}
           className={`${showDetails ? 'flex' : 'hidden xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
         >
-          <LeadTagsEditor
-            conversationId={props.id}
-            tags={view.conversation.tags ?? []}
-            role={props.me.role}
-          />
+          <Section
+            title={t('view.chatTags')}
+            icon="tag"
+            collapsible
+            storageKey="chatTags"
+            testId="conversation-tags-section"
+            defaultOpen={(view.conversation.tags ?? []).length > 0}
+            summary={
+              (view.conversation.tags ?? []).length > 0
+                ? (view.conversation.tags ?? [])
+                    .map((tag) => tag.name)
+                    .join(', ')
+                : t('leads.noTags')
+            }
+          >
+            <LeadTagsEditor
+              conversationId={props.id}
+              tags={view.conversation.tags ?? []}
+              role={props.me.role}
+              hideLabel
+            />
+          </Section>
           <Section
             title={t('view.handover')}
             icon="headset"

@@ -143,6 +143,15 @@ test('on a short laptop screen the messages get most of the height and the reply
     const list = page.getByTestId('conversation-list');
     expect((await list.boundingBox())!.width).toBeLessThanOrEqual(305);
     expect(logBox.width).toBeGreaterThan(430);
+    // The conversation header is one compact row: name, state, AI | Operator.
+    const header = page.getByTestId('conversation-header');
+    expect((await header.boundingBox())!.height).toBeLessThan(52);
+    // The composer tools share one row: suggest and quick replies side by side.
+    const ask = (await page.getByTestId('suggest-ask').boundingBox())!;
+    const quick = (await page.getByTestId('quick-reply-select').boundingBox())!;
+    expect(
+      Math.abs(ask.y + ask.height / 2 - (quick.y + quick.height / 2)),
+    ).toBeLessThan(8);
     const one = (await input.boundingBox())!.height;
     expect(one).toBeLessThan(60);
     // The box grows with a long text, and shrinks back when it is sent away.

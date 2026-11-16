@@ -28,6 +28,10 @@ test('an operator tags a chat, sees the tag in the list and filters by it', asyn
       .getByTestId('conversation-item')
       .filter({ hasText: handover.contactName });
     await item.click();
+    // The tags are a collapsed section while the conversation has none.
+    const section = page.getByTestId('conversation-tags-section');
+    await expect(section).toContainText(/No tags|Нет тегов|Teglar yo/u);
+    await section.locator('summary').click();
     const editor = page.getByTestId('conversation-tags');
     await editor.getByTestId('conversation-tag-add').click();
     await editor.getByTestId('conversation-tag-select').selectOption(tagId);
