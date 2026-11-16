@@ -24,3 +24,22 @@ test('a select keeps no ring after a mouse pick, and shows one for the keyboard'
   await expect(select).toBeFocused();
   await expect.poll(outline).toEqual({ select: 'none', row: 'solid' });
 });
+
+test('a click on the chevron opens the select too (owner report 2026-11-16)', async ({
+  page,
+}) => {
+  await page.goto('/login');
+  const select = page.getByLabel(/^(Language|Язык|Til)$/u).first();
+  const chevron = select.locator('xpath=following-sibling::*[1]');
+  await chevron.click();
+  await expect(select).toBeFocused();
+  // Opened with the mouse: no keyboard ring on the row.
+  await expect
+    .poll(() =>
+      select.evaluate((el) => getComputedStyle(el.parentElement!).outlineStyle),
+    )
+    .toBe('none');
+  // The picker answers the keyboard like a select opened by its own click.
+  await page.keyboard.press('Escape');
+  await expect(select).toBeFocused();
+});
