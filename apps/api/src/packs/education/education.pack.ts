@@ -87,6 +87,12 @@ export const EDUCATION_PACK: DomainPack = DomainPackSchema.parse({
         ru: 'Какой предмет или курс вас интересует?',
         en: 'Which subject or course are you interested in?',
       },
+      retryHint: {
+        'uz-Latn': "Iltimos, o'qimoqchi bo'lgan fan yoki kurs nomini yozing.",
+        'uz-Cyrl': 'Илтимос, ўқимоқчи бўлган фан ёки курс номини ёзинг.',
+        ru: 'Пожалуйста, напишите название предмета или курса.',
+        en: 'Please write the name of the subject or course.',
+      },
     },
     {
       key: 'format',

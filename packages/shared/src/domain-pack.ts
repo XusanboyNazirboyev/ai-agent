@@ -64,6 +64,12 @@ export const SlotDefinitionSchema = z
     searchFilter: SearchFilterSchema.optional(),
     /** One clarifying question per locale, asked when the slot is missing. */
     questions: z.record(LocaleIdSchema, z.string().min(1).max(300)),
+    /**
+     * ADR 072: added when the same question is asked again after an answer
+     * that did not give the slot. Says how to answer; never names items,
+     * prices or dates (it must not read as an offer the catalog may not have).
+     */
+    retryHint: z.record(LocaleIdSchema, z.string().min(1).max(200)).optional(),
   })
   .strict();
 

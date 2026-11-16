@@ -263,6 +263,9 @@ const KNOWLEDGE_TURN_HANDOVER_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
 /** Stored as the turn's asked slot so a second frustration in a row is seen. */
 export const FRUSTRATION_MARK = 'apology:frustration';
 
+/** Stored as the turn's asked slot so a second out-of-scope request in a row is seen (ADR 072). */
+export const OUT_OF_SCOPE_MARK = 'scope:outside';
+
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
   human_request: 'CUSTOMER_REQUEST',
   complaint: 'COMPLAINT',
@@ -632,8 +635,13 @@ export async function runAgentTurn(
     (intent === undefined || !COMMENT_REPLY_INTENTS.has(intent))
   )
     return noReply();
+  const before = slots;
   const merged = mergeSlots(pack, slots, proposed);
   slots = merged.state;
+  // ADR 072: did this message give any slot (new or changed)?
+  const gaveSlot = Object.entries(slots).some(
+    ([key, entry]) => before[key]?.value !== entry.value,
+  );
   const invalid = merged.invalid;
   // ADR 046: a scheduling turn starts on a booking intent and continues while
   // the previous reply was part of the same scheduling exchange.
@@ -747,6 +755,26 @@ export async function runAgentTurn(
     });
   }
 
+  // ADR 072: a request this business does not serve is said so, with what
+  // the assistant can do and the next question, all rendered by code. The
+  // slots win over the label: a message that gave a slot is not refused. The
+  // second such request in a row offers a person instead of repeating.
+  if (intent === 'out_of_scope' && !gaveSlot) {
+    const previous = input.progress?.priorTurns.at(-1);
+    const again = previous?.askedSlot === OUT_OF_SCOPE_MARK;
+    const lead = locale().templates.outOfScope;
+    const what = pack.capabilities[localeId] ?? locale().templates.capabilities;
+    const next = firstMissing(pack, slots, 'search');
+    const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
+    return finish(
+      again
+        ? `${lead} ${locale().templates.offerOperator}`
+        : `${lead} ${what} ${tail}`.trim(),
+      'ANSWERED',
+      { askedSlot: OUT_OF_SCOPE_MARK },
+    );
+  }
+
   // A question about what the law or an authority requires is answered only
   // from verified, recent regulated knowledge; otherwise nobody answers it but
   // a person. No search slots are asked for it.
@@ -765,14 +793,21 @@ export async function runAgentTurn(
       ? undefined
       : firstMissing(pack, slots, 'search');
   if (missing) {
-    const prefix = invalid.includes(missing.key)
+    // ADR 072: the same question right after an answer that did not give the
+    // slot is never repeated word for word: it says so and adds a hint.
+    const askedAgain =
+      intent !== 'greeting' &&
+      input.progress?.priorTurns.at(-1)?.askedSlot === missing.key;
+    const unclear = invalid.includes(missing.key) || askedAgain;
+    const prefix = unclear
       ? `${locale().templates.notUnderstood} `
       : intent === 'greeting' ||
           (intent === undefined && input.history.length === 0)
         ? `${locale().templates.greeting} `
         : '';
+    const hint = unclear ? (missing.retryHint?.[localeId] ?? '') : '';
     return finish(
-      `${prefix}${missing.questions[localeId] ?? ''}`.trim(),
+      `${prefix}${missing.questions[localeId] ?? ''} ${hint}`.trim(),
       'ASKED_SLOT',
       {
         askedSlot: missing.key,

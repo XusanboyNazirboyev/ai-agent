@@ -51,6 +51,13 @@ export const TRAVEL_PACK: DomainPack = DomainPackSchema.parse({
         ru: 'Куда вы хотите поехать?',
         en: 'Where would you like to travel?',
       },
+      retryHint: {
+        'uz-Latn':
+          'Iltimos, borishni xohlagan shahar yoki davlat nomini yozing.',
+        'uz-Cyrl': 'Илтимос, боришни хоҳлаган шаҳар ёки давлат номини ёзинг.',
+        ru: 'Пожалуйста, напишите город или страну, куда хотите поехать.',
+        en: 'Please write the city or country you would like to go to.',
+      },
     },
     {
       key: 'travelMonth',

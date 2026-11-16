@@ -54,6 +54,11 @@ export interface LocaleTemplates {
   readonly optionsIntro: string;
   readonly notUnderstood: string;
   /**
+   * ADR 072: opens the answer to a request this business does not serve
+   * (followed by the pack's capabilities). No facts, no promises.
+   */
+  readonly outOfScope: string;
+  /**
    * Asks the customer to write in a supported language. Must not promise
    * anything and must be understandable to a customer whose language we
    * could not identify, so it names every supported language.

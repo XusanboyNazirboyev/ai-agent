@@ -64,6 +64,7 @@ export const UZ_LATN: LocalePack = {
     offerOperator: 'Xohlasangiz, savolingizni operatorga yetkazaman.',
     optionsIntro: 'Sizga mos variantlar:',
     notUnderstood: "Kechirasiz, javobingizni to'liq tushunmadim.",
+    outOfScope: "Kechirasiz, bu bo'yicha yordam bera olmayman.",
     languageSwitched:
       "Albatta, endi o'zbek tilida yozaman. Sizga qanday yordam bera olaman?",
     languageClarification:
@@ -266,6 +267,7 @@ export const UZ_CYRL: LocalePack = {
     offerOperator: 'Хоҳласангиз, саволингизни операторга етказаман.',
     optionsIntro: 'Сизга мос вариантлар:',
     notUnderstood: 'Кечирасиз, жавобингизни тўлиқ тушунмадим.',
+    outOfScope: 'Кечирасиз, бу бўйича ёрдам бера олмайман.',
     languageSwitched:
       'Албатта, энди ўзбек тилида ёзаман. Сизга қандай ёрдам бера оламан?',
     languageClarification:
@@ -461,6 +463,7 @@ export const RU: LocalePack = {
     offerOperator: 'Если хотите, я передам ваш вопрос оператору.',
     optionsIntro: 'Подходящие варианты:',
     notUnderstood: 'Извините, я не совсем понял ваш ответ.',
+    outOfScope: 'Извините, с этим я помочь не могу.',
     languageSwitched: 'Хорошо, теперь пишу по-русски. Чем могу помочь?',
     languageClarification:
       "Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.",
@@ -652,6 +655,7 @@ export const EN: LocalePack = {
     offerOperator: 'If you like, I can pass your question to an operator.',
     optionsIntro: 'Here are matching options:',
     notUnderstood: "Sorry, I didn't quite understand your answer.",
+    outOfScope: "Sorry, I can't help with that.",
     languageSwitched:
       "Sure, I'll write in English from now on. How can I help you?",
     languageClarification:

@@ -1479,6 +1479,7 @@
   "analytics.asks.fixPrices": "Narx ro‘yxati",
   "handover.intent.capabilities": "yordamchi nima qila oladi",
   "handover.intent.small_talk": "oddiy suhbat",
+  "handover.intent.out_of_scope": "biznes xizmatlaridan tashqari",
   "handover.intent.frustration": "norozilik",
   "connectorRoles.none": "Hozircha buni qila oladigan ulangan tizim yo‘q.",
   "connectorRoles.noneCatalog": "Hozircha narxlarga javob bera oladigan ulangan tizim yo‘q. Sozlamalar, Narx ro‘yxati bo‘limida narx ro‘yxatini yuklang.",

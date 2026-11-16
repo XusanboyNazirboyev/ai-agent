@@ -50,6 +50,8 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
     'small talk or a casual question to the assistant (how are you, what is up) with no request',
   frustration:
     'is annoyed that the assistant did not understand or did not answer, without a complaint about the business',
+  out_of_scope:
+    'asks for a product or service this business clearly does not offer (judge by the business context above), with no detail the slots below can hold',
   other: 'anything else',
 };
 

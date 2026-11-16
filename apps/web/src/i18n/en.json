@@ -1479,6 +1479,7 @@
   "analytics.asks.fixPrices": "Price list",
   "handover.intent.capabilities": "what the assistant can do",
   "handover.intent.small_talk": "small talk",
+  "handover.intent.out_of_scope": "outside what the business offers",
   "handover.intent.frustration": "frustration",
   "connectorRoles.none": "No connected system can do this yet.",
   "connectorRoles.noneCatalog": "No connected system can answer prices yet. Upload a price list in Settings, Price list.",

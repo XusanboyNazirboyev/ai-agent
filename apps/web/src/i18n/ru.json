@@ -1479,6 +1479,7 @@
   "analytics.asks.fixPrices": "Прайс-лист",
   "handover.intent.capabilities": "что умеет ассистент",
   "handover.intent.small_talk": "разговор не по делу",
+  "handover.intent.out_of_scope": "вне услуг компании",
   "handover.intent.frustration": "недовольство",
   "connectorRoles.none": "Пока нет подключённой системы, которая это умеет.",
   "connectorRoles.noneCatalog": "Пока нет подключённой системы для ответов о ценах. Загрузите прайс-лист в Настройки, Прайс-лист.",
