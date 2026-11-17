@@ -1,0 +1,64 @@
+[
+  {
+    "id": "edu-en-o01",
+    "pack": "education",
+    "locale": "en",
+    "category": "conversational",
+    "description": "Owner test 2026-11-16: 'what's up' in an Uzbek conversation is English and gets an English reply",
+    "input": {
+      "text": "what's up",
+      "conversationLocale": "uz-Latn"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "small_talk",
+        "language": "en",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "handover": null
+    }
+  },
+  {
+    "id": "edu-en-o02",
+    "pack": "education",
+    "locale": "en",
+    "category": "conversational",
+    "description": "Owner test 2026-11-16: \"do you have IELTS?\" never ends in a GUARDRAIL handover; drafts that fail on wording become the option list",
+    "input": {
+      "text": "I need course in IELTS . do you have"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "search",
+        "language": "en",
+        "script": "Latn"
+      },
+      {
+        "kind": "respond",
+        "text": "Yes, {{F1}} has places available on weekdays."
+      },
+      {
+        "kind": "respond",
+        "text": "Yes, {{F1}} has places available on weekdays."
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  }
+]

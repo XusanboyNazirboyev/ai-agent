@@ -1,0 +1,92 @@
+[
+  {
+    "id": "edu-uz-latn-o01",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-16: after 'inglizcha gapir', a clearly Uzbek message is answered in Uzbek",
+    "input": {
+      "text": "menga matematika kursi kerak",
+      "conversationLocale": "en",
+      "history": [
+        {
+          "role": "customer",
+          "text": "Salom, menga kurs kerak"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Qaysi fan bo‘yicha kurs kerak?"
+        },
+        {
+          "role": "customer",
+          "text": "inglizcha gapir"
+        },
+        {
+          "role": "agent",
+          "text": "Sure, I'll write in English from now on. How can I help you?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "matematika"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn"
+    }
+  },
+  {
+    "id": "edu-uz-latn-o02",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "Owner test 2026-11-16: \"answer in the language I write in\" is acknowledged in Uzbek and drops the English pin",
+    "input": {
+      "text": "o'zbekcha yozsam o'zbekcha yoz inglizcha bo'lsa inglizcha",
+      "conversationLocale": "en",
+      "history": [
+        {
+          "role": "customer",
+          "text": "Salom, menga kurs kerak"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Qaysi fan bo‘yicha kurs kerak?"
+        },
+        {
+          "role": "customer",
+          "text": "inglizcha gapir"
+        },
+        {
+          "role": "agent",
+          "text": "Sure, I'll write in English from now on. How can I help you?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "other",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "replyIncludes": [
+        "javob beraman"
+      ]
+    }
+  }
+]
