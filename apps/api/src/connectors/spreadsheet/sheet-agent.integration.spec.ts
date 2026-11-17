@@ -228,19 +228,25 @@ describe('the agent answers from an uploaded price list (ADR 064)', () => {
       scope: { tenantId, conversationId: 'conversation-eval' },
     });
     expect(result.outcome).toBe('NO_RESULTS');
-    // Only the code's own searches ran, all found nothing, and the model was never
-    // given a tool: there is nothing it could quote.
-    expect(result.tools.length).toBeGreaterThan(0);
+    // ADR 073: the first time, the list's titles are offered instead of a
+    // hand-over. Only the code's own searches ran (the filtered ones found
+    // nothing, the last one is the unfiltered list) and the model was never
+    // given a tool: there is no price it could quote.
+    expect(result.handover).toBeUndefined();
+    expect(result.tools.length).toBeGreaterThan(1);
     expect(
       result.tools.every(
-        (t) =>
-          t.origin === 'code' &&
-          t.name === 'search_catalog' &&
-          t.outcome === 'NOT_FOUND',
+        (t) => t.origin === 'code' && t.name === 'search_catalog',
       ),
     ).toBe(true);
+    expect(
+      result.tools.slice(0, -1).every((t) => t.outcome === 'NOT_FOUND'),
+    ).toBe(true);
+    expect(result.tools.at(-1)?.outcome).toBe('FOUND');
     expect(plain(result.reply)).not.toMatch(/\d{3}/u);
-    expect(result.facts).toEqual([]);
+    expect(result.facts.every((fact) => fact.value.kind === 'title')).toBe(
+      true,
+    );
   });
 
   it('reports a sold-out departure as sold out', async () => {
