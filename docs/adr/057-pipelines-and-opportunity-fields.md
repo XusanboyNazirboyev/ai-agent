@@ -51,3 +51,11 @@ Deviations and decisions made while building:
 - `amount` and `currency` must be sent together (both set or both null); amount as a number is `INVALID_BODY`. Clearing `lostReason` while LOST is `INVALID_VALUE`. `closeBefore`/`closeAfter` are inclusive. `source` filter is case-insensitive.
 - Status route: `lostReason` is additive; `LOST` without it is 400 `LOST_REASON_REQUIRED`, a reason with another status is 400 `INVALID_BODY`.
 - Not tested: running the migration against a populated production-sized database (only the backfill statements on the old shape inside a transaction).
+
+## Amendment (2026-11-17): every customer who writes is a lead
+- **Owner question:** "kontaktda 4 ta odam bor lekin lidlar voronkada 3 ta" (four contacts, two of them not in the funnel). Until now a lead was created only when the assistant (LIVE) scored the chat WARM/HOT or it was handed over; a cold chat, or any chat while the assistant was off or in SHADOW, had no lead.
+- **Owner decision:** every customer who writes is a lead.
+- **Built:** the Telegram and Instagram/Messenger intake create the lead (COLD) in the same transaction as the customer's message, under the conversation lock, in any assistant mode (`LeadService.ensureForCustomerMessage`); AI staging places it as before. Not a lead: a bare Telegram `/start` (opening the bot, maybe with a one-time link code) and public Instagram comments. An existing or archived lead is left as is; a lead deleted for good comes back only if the customer writes again.
+- **Older chats:** `LeadBackfillScan` (background scans) gives each tenant's existing conversations with a real customer message a lead once, then writes the audit marker `lead.backfill_customers`. Lead deletions now record their conversation, and the backfill skips those; deletions made before this change did not record it, so such a lead can come back once.
+- **CRM:** a new cold lead is queued for CRM sync like any other lead.
+- **Checked:** integration tests (`customer-lead.integration.spec.ts`): a Telegram message with the assistant OFF makes one cold lead in an open stage, `/start` makes none, a second message keeps one lead; the backfill creates the lead for a written chat and skips `/start`-only, comment-only and deleted-lead chats, writes the marker, and a second run creates nothing.

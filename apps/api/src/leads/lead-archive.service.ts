@@ -18,6 +18,7 @@ interface ArchivableLead {
   pipelineId: string;
   pipelineStageId: string | null;
   archivedAt: Date | null;
+  conversationId: string;
   /** Added by hand (ADR 061): its contact is erased with it. */
   manual: boolean;
 }
@@ -107,6 +108,7 @@ export class LeadArchiveService {
         pipelineId: true,
         pipelineStageId: true,
         archivedAt: true,
+        conversationId: true,
         conversation: {
           select: { channelAccount: { select: { channelType: true } } },
         },
@@ -119,6 +121,7 @@ export class LeadArchiveService {
       pipelineId: row.pipelineId,
       pipelineStageId: row.pipelineStageId,
       archivedAt: row.archivedAt,
+      conversationId: row.conversationId,
       manual: isManualChannelType(row.conversation.channelAccount.channelType),
     };
   }
@@ -127,7 +130,12 @@ export class LeadArchiveService {
     tx: Tx,
     actor: LeadArchiveActor,
     action: 'lead.archived' | 'lead.restored' | 'lead.deleted',
-    lead: { id: string; pipelineId: string; pipelineStageId: string | null },
+    lead: {
+      id: string;
+      pipelineId: string;
+      pipelineStageId: string | null;
+      conversationId?: string;
+    },
   ): Promise<void> {
     await tx.auditEvent.create({
       data: {
@@ -141,6 +149,11 @@ export class LeadArchiveService {
         safeInputSummary: {
           pipelineId: lead.pipelineId,
           stageId: lead.pipelineStageId,
+          // A deleted lead's conversation is not given a lead again by the
+          // one-time backfill (LeadBackfillScan).
+          ...(action === 'lead.deleted' && lead.conversationId
+            ? { conversationId: lead.conversationId }
+            : {}),
         },
       },
     });

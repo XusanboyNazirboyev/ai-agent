@@ -279,6 +279,17 @@ export const OUT_OF_SCOPE_MARK = 'scope:outside';
  */
 export const NO_RESULTS_MARK = 'search:no_results';
 
+/** Intents that, sent with a language switch, are answered in the new language. */
+const SWITCH_CONTENT_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
+  'catalog_overview',
+  'search',
+  'details',
+  'price',
+  'availability',
+  'booking_interest',
+  'capabilities',
+]);
+
 /** How many catalog titles a "what do you have?" answer lists at most. */
 const OVERVIEW_LIMIT = 8;
 
@@ -727,6 +738,7 @@ export async function runAgentTurn(
   // so nothing extracted from it is kept. The facts gate still applies: a
   // request never makes unreadable text understood.
   const previous = past.pinned ?? input.conversationLocale ?? past.established;
+  let switchedFor: 'content' | 'repeat' | undefined;
   if (requested && requested !== previous) {
     const unclear = languageStop(
       decideBeforeFacts(
@@ -739,9 +751,42 @@ export async function runAgentTurn(
       ),
     );
     if (unclear) return unclear;
-    return finish(locale().templates.languageSwitched, 'ANSWERED', {
-      slots: input.slots,
-    });
+    // ADR 073 (owner's test chat 2026-11-17): a switch that also asks for
+    // something ("tell me about them, in Russian") is answered in the
+    // new language; one that points back at a catalog list ("shuni rus
+    // tilida bo'lsin") lists it again in the new language. Only a bare
+    // request gets the acknowledgement.
+    const lastAgent = [...input.history]
+      .reverse()
+      .find((entry) => entry.role === 'agent');
+    const listedBefore =
+      lastAgent !== undefined &&
+      locales
+        .all()
+        .some((pack) => lastAgent.text.includes(pack.templates.catalogIntro));
+    // "ingliz tilida gaplash" is often read as a search for an English
+    // item: a search whose item name came from this very message is the
+    // request's own words, so it is only acknowledged.
+    const titleFromRequest = pack.slots.some(
+      (slot) =>
+        slot.searchFilter?.kind === 'title' &&
+        slots[slot.key] !== undefined &&
+        before[slot.key]?.value !== slots[slot.key]?.value,
+    );
+    if (
+      intent !== undefined &&
+      SWITCH_CONTENT_INTENTS.has(intent) &&
+      !((intent === 'search' || intent === 'details') && titleFromRequest)
+    )
+      switchedFor = 'content';
+    else if (listedBefore) switchedFor = 'repeat';
+    else
+      return finish(locale().templates.languageSwitched, 'ANSWERED', {
+        slots: input.slots,
+      });
+    // The words of the request ("rus tilida") are not what the customer asks
+    // about: nothing extracted from this message is kept.
+    slots = before;
   }
   // "Answer in the language I write in": acknowledged by code in the language
   // of this message; nothing extracted from it is kept.
@@ -934,7 +979,7 @@ export async function runAgentTurn(
 
   // ADR 073: "which languages do you speak / can I write in X" is answered
   // from the locale's list of reply languages, worded by the model.
-  if (intent === 'language_question') {
+  if (intent === 'language_question' && switchedFor !== 'repeat') {
     const spokenLine = locale().templates.languagesSpoken;
     const next = firstMissing(pack, slots, 'search');
     const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
@@ -953,9 +998,10 @@ export async function runAgentTurn(
   // is talking, so these turns are progress and never count toward STUCK.
   // Frustration a second time in a row goes to a person.
   if (
-    intent === 'capabilities' ||
-    intent === 'small_talk' ||
-    intent === 'frustration'
+    switchedFor !== 'repeat' &&
+    (intent === 'capabilities' ||
+      intent === 'small_talk' ||
+      intent === 'frustration')
   ) {
     const previous = input.progress?.priorTurns.at(-1);
     if (intent === 'frustration' && previous?.askedSlot === FRUSTRATION_MARK)
@@ -984,7 +1030,7 @@ export async function runAgentTurn(
   // the assistant can do and the next question, all rendered by code. The
   // slots win over the label: a message that gave a slot is not refused. The
   // second such request in a row offers a person instead of repeating.
-  if (intent === 'out_of_scope' && !gaveSlot) {
+  if (intent === 'out_of_scope' && !gaveSlot && switchedFor !== 'repeat') {
     const previous = input.progress?.priorTurns.at(-1);
     const again = previous?.askedSlot === OUT_OF_SCOPE_MARK;
     const lead = locale().templates.outOfScope;
@@ -1030,8 +1076,18 @@ export async function runAgentTurn(
       pack.slots.find((slot) => slot.key === key)?.searchFilter?.kind ===
         'title',
   );
+  const titleKnown = pack.slots.some(
+    (slot) =>
+      slot.searchFilter?.kind === 'title' && slots[slot.key] !== undefined,
+  );
+  const overviewWanted =
+    intent === 'catalog_overview' ||
+    switchedFor === 'repeat' ||
+    (switchedFor === 'content' &&
+      (intent === 'search' || intent === 'details') &&
+      !titleKnown);
   if (
-    intent === 'catalog_overview' &&
+    overviewWanted &&
     !namedItem &&
     !regulated &&
     !schedulingTurn &&

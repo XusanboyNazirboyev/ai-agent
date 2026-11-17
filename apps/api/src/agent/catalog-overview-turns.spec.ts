@@ -5,7 +5,8 @@ import type { PriorTurnSignal } from '../core/agent/stuck.js';
 import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
-import { extraction, runTurn } from './testing/agent-harness.js';
+import { languageRequest } from '../core/agent/language-policy.js';
+import { extraction, LOCALES, runTurn } from './testing/agent-harness.js';
 
 // ADR 073, from the owner's test chat of 2026-11-17 (uz-Latn, education
 // workspace): "qanaqa kurslar bor" and "kurslar haqida malumot ber" got the
@@ -122,5 +123,71 @@ describe('which languages (ADR 073)', () => {
     expect(prompt).toContain('catalog_overview');
     expect(prompt).toContain('language_question');
     expect(prompt).toMatch(/capabilities: asks in general/u);
+  });
+});
+
+describe('asking for another language mid-chat (ADR 073)', () => {
+  const ru = INITIAL_LOCALE_PACKS.find((locale) => locale.id === 'ru')!;
+  const all = ['uz-Latn', 'uz-Cyrl', 'ru', 'en'] as const;
+
+  it('reads informal requests as a switch to Russian', () => {
+    for (const text of [
+      'endi shu kurslar haqidagi malumotni ruschada yozib ber',
+      'yaxshi menga kurslar haqidagi malumotni rus tilida javob ber',
+      "shuni rus tilida bo'lsin",
+    ])
+      expect(languageRequest(text, LOCALES, all), text).toEqual({
+        kind: 'locale',
+        locale: 'ru',
+      });
+    for (const text of ['inglizcha gapr', 'endi english tilida gapr'])
+      expect(languageRequest(text, LOCALES, all), text).toEqual({
+        kind: 'locale',
+        locale: 'en',
+      });
+    // A course name with no request verb is not a switch.
+    expect(
+      languageRequest('rus tili kursi bormi', LOCALES, all),
+    ).toBeUndefined();
+  });
+
+  it('a switch that asks for the courses lists them in the new language', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([extraction({}, 'catalog_overview')]),
+      text: 'yaxshi menga kurslar haqidagi malumotni rus tilida javob ber',
+      input: { conversationLocale: 'uz-Latn' },
+    });
+    expect(result.locale).toBe('ru');
+    expect(result.reply.startsWith(ru.templates.catalogIntro)).toBe(true);
+    expect(result.reply).toContain('IELTS');
+    expect(result.reply).not.toBe(ru.templates.languageSwitched);
+  });
+
+  it('"make that Russian" after a list lists it again in Russian', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([extraction({}, 'language_question')]),
+      text: "shuni rus tilida bo'lsin",
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [
+          { role: 'customer', text: 'qanaqa kurslar bor' },
+          {
+            role: 'agent',
+            text: `${uz.templates.catalogIntro}\n• IELTS Preparation\n• General English\n${subjectQuestion}`,
+          },
+        ],
+      },
+    });
+    expect(result.locale).toBe('ru');
+    expect(result.reply.startsWith(ru.templates.catalogIntro)).toBe(true);
+  });
+
+  it('a bare request is still acknowledged in the new language', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([extraction({}, 'other')]),
+      text: 'rus tilida yozing',
+      input: { conversationLocale: 'uz-Latn' },
+    });
+    expect(result.reply).toBe(ru.templates.languageSwitched);
   });
 });

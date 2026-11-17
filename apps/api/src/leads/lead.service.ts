@@ -113,9 +113,55 @@ export class LeadService {
   }
 
   /**
-   * Re-scores the conversation and creates or updates its lead. A COLD
-   * conversation without an open handover does not create a lead. The score
-   * can rise or fall with the evidence, but reason codes always match it.
+   * Every customer who writes is a lead (owner decision 2026-11-17): called
+   * in the intake transaction right after a customer's message is stored,
+   * under the conversation lock, whatever the assistant mode. Creates the
+   * lead in the first stage of the default pipeline when the conversation
+   * has none (a cold lead too); an existing or archived lead is left as is.
+   */
+  async ensureForCustomerMessage(
+    tx: Tx,
+    input: { tenantId: string; conversationId: string },
+  ): Promise<void> {
+    const existing = await tx.lead.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        idempotencyKey: `lead:${input.conversationId}`,
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+    const tenant = await tx.tenant.findFirst({
+      where: { id: input.tenantId },
+      select: { packKey: true, packVersion: true },
+    });
+    const pack = tenant
+      ? DOMAIN_PACKS.get(`${tenant.packKey}@${tenant.packVersion}`)
+      : undefined;
+    if (!pack) return;
+    const stored = await tx.conversationSlots.findFirst({
+      where: { tenantId: input.tenantId, conversationId: input.conversationId },
+      orderBy: { version: 'desc' },
+      select: { slots: true },
+    });
+    await this.rescore(tx, {
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      pack,
+      slots: ((
+        stored?.slots as {
+          slots?: Record<string, { value: string | number }>;
+        } | null
+      )?.slots ?? {}) as Record<string, { value: string | number }>,
+      createCold: true,
+    });
+  }
+
+  /**
+   * Re-scores the conversation and creates or updates its lead. Without
+   * `createCold`, a COLD conversation without an open handover does not
+   * create a lead. The score can rise or fall with the evidence, but reason
+   * codes always match it.
    */
   async rescore(
     tx: Tx,
@@ -126,6 +172,8 @@ export class LeadService {
       slots: Readonly<Record<string, { value: string | number }>>;
       intent?: string;
       summaryHint?: string;
+      /** Create the lead even when it is COLD (a customer message arrived). */
+      createCold?: boolean;
     },
   ): Promise<LeadUpdate | undefined> {
     const scoring = input.pack.leadScoring;
@@ -208,7 +256,12 @@ export class LeadService {
         ? (existing.score as LeadLevel)
         : computedLevel,
     };
-    if (result.level === 'COLD' && openHandover === 0 && !existing)
+    if (
+      result.level === 'COLD' &&
+      openHandover === 0 &&
+      !existing &&
+      !input.createCold
+    )
       return undefined;
     const summary = [
       `${result.level}${existing?.scoreSetByOperator ? ' (operator)' : ''} (${result.points}): ${result.reasonCodes.join(', ') || 'no reasons'}`,

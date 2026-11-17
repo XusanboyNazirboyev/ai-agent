@@ -49,7 +49,7 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
   catalog_overview:
     'asks which items the business has: a list, an overview, how many or what kinds there are, without naming or describing one item',
   language_question:
-    'asks which languages the assistant speaks or whether it can answer in a particular language',
+    'asks which languages the assistant speaks or whether it can answer in a particular language (a request to write or answer something in a language is not this: label what they want written)',
   small_talk:
     'small talk or a casual question to the assistant (how are you, what is up) with no request',
   frustration:

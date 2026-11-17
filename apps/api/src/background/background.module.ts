@@ -14,6 +14,7 @@ import { ConnectorsModule } from '../connectors/connectors.module.js';
 import { SheetCatalogService } from '../connectors/spreadsheet/sheet-catalog.service.js';
 import { LeadTaskReminders } from '../tasks/lead-tasks.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
+import { LeadBackfillScan } from '../leads/lead-backfill.scan.js';
 import { LeadsModule } from '../leads/leads.module.js';
 import { ActionsModule } from '../actions/actions.module.js';
 import { ActionService } from '../actions/action.service.js';
@@ -62,6 +63,7 @@ import { RetentionService } from '../retention/retention.service.js';
         RetentionService,
         SheetCatalogService,
         LeadTaskReminders,
+        LeadBackfillScan,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -75,6 +77,7 @@ import { RetentionService } from '../retention/retention.service.js';
         retention: RetentionService,
         sheets: SheetCatalogService,
         reminders: LeadTaskReminders,
+        leadBackfill: LeadBackfillScan,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -87,6 +90,7 @@ import { RetentionService } from '../retention/retention.service.js';
         retention,
         sheets,
         reminders,
+        leadBackfill,
       ],
     },
     HandoverRuntime,

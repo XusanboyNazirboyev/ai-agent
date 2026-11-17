@@ -13,6 +13,8 @@ import type { AppEnvironment } from '../../config/environment.js';
 import { isOptOutMessage } from '../../core/followup/optout.js';
 import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { LeadService } from '../../leads/lead.service.js';
+import { isStartCommand } from './telegram-start.js';
 import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import {
   inboundEventExpiresAt,
@@ -42,15 +44,18 @@ export class TelegramWebhookService {
     // Optional only so specs can build the service by hand; Nest always
     // provides it, next to PrismaService, from PersistenceModule.
     @Optional() privileged?: PrivilegedDatabase,
+    @Optional() leads?: LeadService,
   ) {
     this.credentials =
       credentials ?? new TelegramCredentials(prisma, config, undefined);
     this.router = privileged?.db ?? prisma;
+    this.leads = leads ?? new LeadService(prisma);
   }
 
   private readonly credentials: TelegramCredentials;
   /** Finds the tenant a webhook is for, across tenants (RLS plan S5). */
   private readonly router: PrismaClient;
+  private readonly leads: LeadService;
 
   /**
    * The tenant that owns a Telegram account, whatever its status (the
@@ -353,6 +358,13 @@ export class TelegramWebhookService {
           },
           select: { id: true },
         });
+        // Every customer who writes is a lead (owner 2026-11-17); opening the
+        // bot (/start, maybe with a link code) is not writing.
+        if (!isStartCommand(update.text))
+          await this.leads.ensureForCustomerMessage(tx, {
+            tenantId: channel.tenantId,
+            conversationId: conversation.id,
+          });
 
         await tx.inboundEvent.update({
           where: { id: inboundEvent.id },

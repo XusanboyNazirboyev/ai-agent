@@ -161,5 +161,154 @@
       "handover": null,
       "intent": "language_question"
     }
+  },
+  {
+    "id": "edu-uz-latn-o10",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "Owner test 2026-11-17: 'write that course info in Russian' switches to Russian and lists the courses",
+    "input": {
+      "text": "endi shu kurslar haqidagi malumotni ruschada yozib ber",
+      "conversationLocale": "uz-Latn",
+      "history": [
+        {
+          "role": "customer",
+          "text": "qanaqa kurslar bor"
+        },
+        {
+          "role": "agent",
+          "text": "Hozir bizda bor variantlar:\n• IELTS Preparation\n• General English\nQaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "details",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o11",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "Owner test 2026-11-17: 'answer me about the courses in Russian' switches to Russian and lists the courses",
+    "input": {
+      "text": "yaxshi menga kurslar haqidagi malumotni rus tilida javob ber",
+      "conversationLocale": "uz-Latn",
+      "history": [
+        {
+          "role": "customer",
+          "text": "qaysi tillarni bilasan"
+        },
+        {
+          "role": "agent",
+          "text": "Men o‘zbek (lotin va kirill yozuvida), rus va ingliz tillarida yozaman. Qaysi fan yoki kurs sizni qiziqtiradi?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "catalog_overview",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o12",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "Owner test 2026-11-17: 'make that Russian' after a course list lists it again in Russian",
+    "input": {
+      "text": "shuni rus tilida bo'lsin",
+      "conversationLocale": "uz-Latn",
+      "history": [
+        {
+          "role": "customer",
+          "text": "qanaqa kurslar bor"
+        },
+        {
+          "role": "agent",
+          "text": "Hozir bizda bor variantlar:\n• IELTS Preparation\n• General English\nQaysi fan yoki kurs bo'yicha o'qimoqchisiz?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "language_question",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o13",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "Owner test 2026-11-17: the misspelled 'inglizcha gapr' after a switch to Russian switches to English",
+    "input": {
+      "text": "inglizcha gapr",
+      "conversationLocale": "ru",
+      "history": [
+        {
+          "role": "customer",
+          "text": "ruscha gapir"
+        },
+        {
+          "role": "agent",
+          "text": "Хорошо, теперь пишу по-русски. Чем могу помочь?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "language_question",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "handover": null
+    }
   }
 ]

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { LeadService } from '../../leads/lead.service.js';
 import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import { runWithTenant } from '../../persistence/tenant-context.js';
 import {
@@ -35,14 +36,17 @@ export type MetaChannelType = 'instagram' | 'facebook';
 export class InstagramWebhookService {
   /** Finds the tenant a webhook is for, across tenants (RLS plan S5). */
   private readonly router: PrismaClient;
+  private readonly leads: LeadService;
 
   constructor(
     private readonly prisma: PrismaService,
     // Optional only so specs can build the service by hand; Nest always
     // provides it, next to PrismaService, from PersistenceModule.
     @Optional() privileged?: PrivilegedDatabase,
+    @Optional() leads?: LeadService,
   ) {
     this.router = privileged?.db ?? prisma;
+    this.leads = leads ?? new LeadService(prisma);
   }
 
   /**
@@ -217,6 +221,13 @@ export class InstagramWebhookService {
             createdAt: event.receivedAt,
           },
           select: { id: true, sequence: true },
+        });
+        // Every customer who writes a direct message is a lead (owner
+        // 2026-11-17). Public comments are not (praise and emoji would
+        // fill the sales funnel).
+        await this.leads.ensureForCustomerMessage(tx, {
+          tenantId: channel.tenantId,
+          conversationId: conversation.id,
         });
 
         await tx.inboundEvent.update({
