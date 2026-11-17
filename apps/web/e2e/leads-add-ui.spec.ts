@@ -273,11 +273,9 @@ test('accordion on settings/pipeline as OWNER of tenant A: aria-expanded/control
     }
   }
 
-  if (count >= 2) {
-    expect(oneCollapsed).toBe(true);
-  } else {
-    expect(oneExpanded).toBe(true);
-  }
+  // Owner 2026-11-17: every pipeline card starts closed, a single one too.
+  expect(oneCollapsed).toBe(true);
+  expect(oneExpanded).toBe(false);
 
   await toggles.first().focus();
   await page.keyboard.press('Enter');
