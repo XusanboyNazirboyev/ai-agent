@@ -1,0 +1,42 @@
+[
+  {
+    "id": "edu-ru-o01",
+    "pack": "education",
+    "locale": "ru",
+    "category": "conversational",
+    "description": "Owner 2026-11-17: Russian with a typo after English (\"что ты делаещ\") is answered in Russian",
+    "input": {
+      "text": "что ты делаещ",
+      "conversationLocale": "en",
+      "history": [
+        {
+          "role": "customer",
+          "text": "what is your name"
+        },
+        {
+          "role": "agent",
+          "text": "I'm the learning centre's assistant. Which subject or course are you interested in?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "small_talk",
+        "language": "ru",
+        "script": "Cyrl"
+      },
+      {
+        "kind": "respond",
+        "text": "Я AI-ассистент учебного центра и помогаю подобрать курс."
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "outcome": "ANSWERED",
+      "handover": null
+    }
+  }
+]

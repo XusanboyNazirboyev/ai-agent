@@ -62,6 +62,8 @@ import {
   extractionSystemPrompt,
   extractionUserMessage,
   regenerationMessage,
+  smallTalkSystemPrompt,
+  smallTalkUserMessage,
   responseSystemPrompt,
   responseUserMessage,
   schedulingSystemPrompt,
@@ -802,6 +804,67 @@ export async function runAgentTurn(
     );
   }
 
+  // Every customer-facing draft passes this guardrail and display gate (also
+  // the code-rendered fallback below).
+  // ADR 041 amendment (owner 2026-11-17: "bir xil javob beryapti"): small
+  // talk is worded by the model for this very message ("what are you
+  // doing?" is not "how are you?"), in one or two sentences without any
+  // facts, and checked by the same guardrail; the template is the fallback
+  // when the model fails, is out of budget or the draft is refused.
+  const smallTalkLead = async (): Promise<string | undefined> => {
+    try {
+      stopwatch.countRound();
+      const reply = await stopwatch.time('respond', () =>
+        llm.withTools({
+          tier: 'FAST',
+          purpose: 'respond',
+          system: smallTalkSystemPrompt(pack, locale()),
+          messages: [
+            {
+              role: 'user',
+              text: smallTalkUserMessage(input.history, input.customerText),
+            },
+          ],
+          tools: [],
+          maxOutputTokens: deps.maxOutputTokens.respond,
+        }),
+      );
+      if (reply.stopReason !== 'end' || !reply.text.trim()) return undefined;
+      return guard(reply.text).rendered?.trim() || undefined;
+    } catch (error: unknown) {
+      if (error instanceof BudgetExhaustedError || isLlmError(error))
+        return undefined;
+      throw error;
+    }
+  };
+  const guard = (text: string): ReturnType<typeof checkDraft> =>
+    stopwatch.timeSync('guardrail', () =>
+      checkDraft(text, {
+        facts,
+        locale: locale(),
+        customerTexts: [
+          input.customerText,
+          ...input.history
+            .filter((h) => h.role === 'customer')
+            .map((h) => h.text),
+        ],
+        timeZone: input.timeZone,
+        now: now(),
+        evidence: {
+          tenantId: deps.scope.tenantId,
+          conversationId: deps.scope.conversationId,
+          policy: displayPolicyFor(
+            // Strictest policy when no connector is wired.
+            deps.connector?.capabilities ?? {
+              liveQuote: true,
+              availability: true,
+            },
+            deps.displayPolicy,
+          ),
+        },
+      }),
+    );
+
   // ADR 041: "what can you do", small talk and mild frustration are answered
   // by code (no facts), followed by the next missing question. The customer
   // is talking, so these turns are progress and never count toward STUCK.
@@ -818,7 +881,7 @@ export async function runAgentTurn(
       intent === 'capabilities'
         ? (pack.capabilities[localeId] ?? locale().templates.capabilities)
         : intent === 'small_talk'
-          ? locale().templates.smallTalk
+          ? ((await smallTalkLead()) ?? locale().templates.smallTalk)
           : locale().templates.frustration;
     const next = firstMissing(pack, slots, 'search');
     const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
@@ -1028,34 +1091,6 @@ export async function runAgentTurn(
 
   // 6. Guardrail (also for the code-rendered fallback below), one
   // regeneration, then a safe code-rendered fallback.
-  const guard = (text: string): ReturnType<typeof checkDraft> =>
-    stopwatch.timeSync('guardrail', () =>
-      checkDraft(text, {
-        facts,
-        locale: locale(),
-        customerTexts: [
-          input.customerText,
-          ...input.history
-            .filter((h) => h.role === 'customer')
-            .map((h) => h.text),
-        ],
-        timeZone: input.timeZone,
-        now: now(),
-        evidence: {
-          tenantId: deps.scope.tenantId,
-          conversationId: deps.scope.conversationId,
-          policy: displayPolicyFor(
-            // Strictest policy when no connector is wired (cannot happen here:
-            // a draft exists only after a connector search).
-            deps.connector?.capabilities ?? {
-              liveQuote: true,
-              availability: true,
-            },
-            deps.displayPolicy,
-          ),
-        },
-      }),
-    );
   const quoteMissing = firstMissing(pack, slots, 'quote');
   const nextQuestion = quoteMissing?.questions[localeId];
   const fallback = (extra: Partial<AgentTurnResult> = {}): AgentTurnResult => {

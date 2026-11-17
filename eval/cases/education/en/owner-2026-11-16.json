@@ -60,5 +60,38 @@
         "IELTS"
       ]
     }
+  },
+  {
+    "id": "edu-en-o03",
+    "pack": "education",
+    "locale": "en",
+    "category": "conversational",
+    "description": "Owner 2026-11-17: \"what are you doing\" gets an answer to that, not the canned \"Thanks, all good!\"",
+    "input": {
+      "text": "what are you doing",
+      "conversationLocale": "en"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "small_talk",
+        "language": "en",
+        "script": "Latn"
+      },
+      {
+        "kind": "respond",
+        "text": "I'm the learning centre's AI assistant, helping people choose a course."
+      }
+    ],
+    "expect": {
+      "locale": "en",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "handover": null,
+      "replyExcludes": [
+        "Thanks, all good"
+      ]
+    }
   }
 ]

@@ -21,3 +21,9 @@
 - Wording added in ru, uz-Latn and uz-Cyrl is not native-reviewed (D18).
 - A pack without `capabilities` uses the generic locale text; packs should add one.
 - Answers still contain no facts; capability texts must stay free of prices, dates and numbers (tested).
+
+## Amendment (2026-11-17): small talk is worded by the model
+- **Found (owner's test chat):** "what are you doing" and "что ты делаешь" both got the fixed "Thanks, all good!" (an answer to "how are you"), the same text every time, and the Russian one in English (the word list read it as LOW).
+- **Decision:** a `small_talk` turn asks the FAST model for one or two sentences that answer this very message (`smallTalkSystemPrompt`: no question, no digits, prices, dates, availability or promises; says it is an AI assistant when asked who it is). The draft passes the same guardrail and display gate as every reply; the code still appends the next missing question. The template stays the fallback when the model fails, is out of budget or the draft is refused. Capabilities and frustration stay code-rendered.
+- Everyday Russian words were added to the language heuristic ("что", "ты", "как", "кто", "дела", ...).
+- **Checked:** `conversational-turns.spec.ts` (worded reply; a draft with a price falls back to the template); eval `edu-en-o03`, `edu-ru-o01`; live on gemini-3.8-flash the seven owner cases 7/7, 12 calls, $0.012.

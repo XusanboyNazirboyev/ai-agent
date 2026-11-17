@@ -39,7 +39,46 @@ describe('conversational turns (ADR 041)', () => {
     expect(result.reply).not.toMatch(/\d/u);
   });
 
-  it('answers small talk briefly and asks the next question', async () => {
+  it('words small talk for the message itself (owner 2026-11-17: the same answer every time)', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({}, 'small_talk'),
+        {
+          kind: 'tools',
+          text: "Mijozlarimizga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman.",
+        },
+      ]),
+      text: 'nima qilyapsan?',
+      input: {
+        conversationLocale: 'uz-Latn',
+        progress: { priorTurns: [asked('subject')] },
+      },
+    });
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.reply).toBe(
+      `Mijozlarimizga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman. ${subjectQuestion}`,
+    );
+  });
+
+  it('falls back to the template when the small-talk draft states a fact', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({}, 'small_talk'),
+        {
+          kind: 'tools',
+          text: 'Yaxshi! Kurslarimiz 100 dollardan boshlanadi.',
+        },
+      ]),
+      text: 'qalaysan',
+      input: {
+        conversationLocale: 'uz-Latn',
+        progress: { priorTurns: [asked('subject')] },
+      },
+    });
+    expect(result.reply).toBe(`Rahmat, yaxshi! ${subjectQuestion}`);
+  });
+
+  it('answers small talk with the template when the model is not available', async () => {
     const { result } = await runTurn({
       provider: new ScriptedLlmProvider([extraction({}, 'small_talk')]),
       text: 'nma gap',
