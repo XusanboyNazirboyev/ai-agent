@@ -499,9 +499,11 @@ describe('agent mode LIVE (local development policy)', () => {
     ],
     [
       'GUARDRAIL',
+      // A price question: an invented price twice hands over (ADR 013
+      // amendment 3); other questions get the code-rendered options instead.
       (call: ScriptRequest): ScriptStep =>
         call.type === 'structured'
-          ? extraction({ subject: 'IELTS' })
+          ? extraction({ subject: 'IELTS' }, 'price')
           : { kind: 'tools', text: 'Narxi 99 dollar' },
       undefined,
     ],
