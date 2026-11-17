@@ -62,7 +62,7 @@ import {
   extractionSystemPrompt,
   extractionUserMessage,
   regenerationMessage,
-  smallTalkSystemPrompt,
+  conversationalSystemPrompt,
   smallTalkUserMessage,
   responseSystemPrompt,
   responseUserMessage,
@@ -806,19 +806,27 @@ export async function runAgentTurn(
 
   // Every customer-facing draft passes this guardrail and display gate (also
   // the code-rendered fallback below).
-  // ADR 041 amendment (owner 2026-11-17: "bir xil javob beryapti"): small
-  // talk is worded by the model for this very message ("what are you
-  // doing?" is not "how are you?"), in one or two sentences without any
-  // facts, and checked by the same guardrail; the template is the fallback
-  // when the model fails, is out of budget or the draft is refused.
-  const smallTalkLead = async (): Promise<string | undefined> => {
+  // ADR 073 A1/A2 (owner 2026-11-17: "xuddi inson bilan gaplashgandek"):
+  // replies that carry no hard fact (small talk, what the assistant can do,
+  // mild frustration, a request outside the business) are worded by the model
+  // for this very message, with the next question asked in its own words.
+  // The code still decides what to convey and which question comes next;
+  // the draft passes the same guardrail and display gate, and the code
+  // template is the fallback when the model fails, is out of budget, or the
+  // draft is refused or identical to the previous bot message.
+  const conversationalReply = async (brief: {
+    readonly kind:
+      'small_talk' | 'capabilities' | 'frustration' | 'out_of_scope';
+    readonly convey: string;
+    readonly ask: string;
+  }): Promise<string | undefined> => {
     try {
       stopwatch.countRound();
       const reply = await stopwatch.time('respond', () =>
         llm.withTools({
           tier: 'FAST',
           purpose: 'respond',
-          system: smallTalkSystemPrompt(pack, locale()),
+          system: conversationalSystemPrompt(pack, locale(), brief),
           messages: [
             {
               role: 'user',
@@ -830,7 +838,10 @@ export async function runAgentTurn(
         }),
       );
       if (reply.stopReason !== 'end' || !reply.text.trim()) return undefined;
-      return guard(reply.text).rendered?.trim() || undefined;
+      const text = guard(reply.text).rendered?.trim();
+      const last = [...input.history].reverse().find((h) => h.role === 'agent');
+      if (!text || (last && last.text.trim() === text)) return undefined;
+      return text;
     } catch (error: unknown) {
       if (error instanceof BudgetExhaustedError || isLlmError(error))
         return undefined;
@@ -881,11 +892,18 @@ export async function runAgentTurn(
       intent === 'capabilities'
         ? (pack.capabilities[localeId] ?? locale().templates.capabilities)
         : intent === 'small_talk'
-          ? ((await smallTalkLead()) ?? locale().templates.smallTalk)
+          ? locale().templates.smallTalk
           : locale().templates.frustration;
     const next = firstMissing(pack, slots, 'search');
     const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
-    return finish(`${lead} ${tail}`.trim(), 'ANSWERED', {
+    const worded = await conversationalReply({
+      kind: intent,
+      // Small talk answers the message itself; the template is only a
+      // fallback, never something to convey.
+      convey: intent === 'small_talk' ? '' : lead,
+      ask: tail,
+    });
+    return finish(worded ?? `${lead} ${tail}`.trim(), 'ANSWERED', {
       askedSlot: intent === 'frustration' ? FRUSTRATION_MARK : next?.key,
     });
   }
@@ -901,13 +919,19 @@ export async function runAgentTurn(
     const what = pack.capabilities[localeId] ?? locale().templates.capabilities;
     const next = firstMissing(pack, slots, 'search');
     const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
-    return finish(
-      again
+    const template = again
+      ? `${lead} ${locale().templates.offerOperator}`
+      : `${lead} ${what} ${tail}`.trim();
+    const worded = await conversationalReply({
+      kind: 'out_of_scope',
+      convey: again
         ? `${lead} ${locale().templates.offerOperator}`
-        : `${lead} ${what} ${tail}`.trim(),
-      'ANSWERED',
-      { askedSlot: OUT_OF_SCOPE_MARK },
-    );
+        : `${lead} ${what}`,
+      ask: again ? '' : tail,
+    });
+    return finish(worded ?? template, 'ANSWERED', {
+      askedSlot: OUT_OF_SCOPE_MARK,
+    });
   }
 
   // A question about what the law or an authority requires is answered only

@@ -45,7 +45,7 @@ describe('conversational turns (ADR 041)', () => {
         extraction({}, 'small_talk'),
         {
           kind: 'tools',
-          text: "Mijozlarimizga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman.",
+          text: "Mijozlarga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman. Qaysi fanni o'rganmoqchisiz?",
         },
       ]),
       text: 'nima qilyapsan?',
@@ -55,9 +55,32 @@ describe('conversational turns (ADR 041)', () => {
       },
     });
     expect(result.outcome).toBe('ANSWERED');
+    // The model asks the next question in its own words; the slot is still set.
     expect(result.reply).toBe(
-      `Mijozlarimizga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman. ${subjectQuestion}`,
+      "Mijozlarga kurs tanlashda yordam beryapman, men o'quv markazining AI yordamchisiman. Qaysi fanni o'rganmoqchisiz?",
     );
+    expect(result.askedSlot).toBe('subject');
+  });
+
+  it('never sends the previous bot message again verbatim', async () => {
+    const repeated = "Rahmat, yaxshi! Qaysi fanni o'rganmoqchisiz?";
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction({}, 'small_talk'),
+        { kind: 'tools', text: repeated },
+      ]),
+      text: 'nima gap',
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [
+          { role: 'customer', text: 'qalaysan' },
+          { role: 'agent', text: repeated },
+        ],
+        progress: { priorTurns: [asked('subject')] },
+      },
+    });
+    // The worded draft equals the last bot message: the template is used.
+    expect(result.reply).toBe(`Rahmat, yaxshi! ${subjectQuestion}`);
   });
 
   it('falls back to the template when the small-talk draft states a fact', async () => {

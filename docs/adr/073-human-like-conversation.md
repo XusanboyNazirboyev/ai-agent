@@ -1,6 +1,6 @@
 # ADR 073 — Conversation that feels like talking to a person, and an agent that gets better at its own business
 
-Status: proposed on 2026-11-17 after the owner's requests: "mijoz AI agent bilan gaplashganida xuddi inson bilan gaplashgandek bo'lishi kerak" and "AI agentni shunday qurginki, u o'zini o'zi aynan o'sha ishlayotgan yo'nalishda kuchaytirib ketaversin". Builds on D1/D4/D5 (facts only from tools, rendered by code), ADR 013 (guardrail), ADR 041 (conversational turns), ADR 063 (conversation insights, proposed).
+Status: A1 and A2 built on 2026-11-17 (the rest proposed); proposed on 2026-11-17 after the owner's requests: "mijoz AI agent bilan gaplashganida xuddi inson bilan gaplashgandek bo'lishi kerak" and "AI agentni shunday qurginki, u o'zini o'zi aynan o'sha ishlayotgan yo'nalishda kuchaytirib ketaversin". Builds on D1/D4/D5 (facts only from tools, rendered by code), ADR 013 (guardrail), ADR 041 (conversational turns), ADR 063 (conversation insights, proposed).
 
 ## Context (checked in the code on 2026-11-17)
 - Many customer-facing sentences are fixed templates: capabilities, frustration, out of scope, no results, offer an operator, options intro, language switched (12 template uses in `agent-turn.ts`), and every turn that needs a detail ends with the pack's fixed slot question (5 uses). A customer who chats gets the same sentence again ("Thanks, all good! Which subject or course are you interested in?" twice in a row on 2026-11-17).
@@ -19,6 +19,11 @@ Status: proposed on 2026-11-17 after the owner's requests: "mijoz AI agent bilan
 6. **ADR 063 is the base:** S1 capture what customers ask and where the agent fails (topic, outcome, language; no personal data), S2 a weekly report for OWNER/ADMIN, S3 proposed knowledge (FAQ answers, search synonyms) from repeated questions, S4 faster answers for the most common questions.
 7. **How much it may change by itself (owner decision 2026-11-17: "ha roziman").** Search synonyms and spelling variants ("aylts" → IELTS; they only help find catalog items, facts still come from the CRM) are learned and applied automatically and can be undone by the tenant. FAQ answers, prices, policies and prompt changes always need one click of approval from the tenant OWNER/ADMIN, because a wrong learned answer would be repeated to every customer.
    - Checked 2026-11-17: the extraction model already maps "aylts kursi bormi?" to IELTS and finds the course (live, eval `edu-uz-latn-o04`). Learned variants matter for tenant-specific names the model cannot know.
+
+## Built (2026-11-17)
+- A1/A2 for small talk, "what can you do", mild frustration and out-of-scope requests: `conversationalReply` in `agent-turn.ts` asks the FAST model (`conversationalSystemPrompt`) to answer this message and ask the code-chosen next question in its own words; the slot bookkeeping is unchanged. The draft passes the guardrail; a refused draft, a model failure, or a draft identical to the previous bot message falls back to the template. Small talk gets no canned line to convey (it was copied back as "Thanks, all good").
+- Checked: `conversational-turns.spec.ts` (worded reply asks the question itself, a fact in the draft falls back, a verbatim repeat of the last bot message falls back); live on gemini-3.8-flash all conversational, out-of-scope and owner cases 16/16, 31 calls, $0.029.
+- Not yet: catalog answers and slot questions after a search still use the response prompt's own wording rules; "never the same question twice" for those turns; insights (B).
 
 ## Order
 A1 (model-worded replies with fallback) and A2 (asked, not pasted questions) first: they change every conversation. Then B S1+S2 (insights and report), then A4 price prefetch (with owner approval), then B S3/S4. Each step ships with eval cases and a live run.
