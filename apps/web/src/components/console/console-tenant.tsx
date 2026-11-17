@@ -72,7 +72,7 @@ export function ConsoleTenant(): ReactNode {
         actions={
           <TenantActions
             tenant={tenant}
-            onDeleted={() => router.push('/console/tenants')}
+            onDeleted={() => router.push('/console')}
           />
         }
       >

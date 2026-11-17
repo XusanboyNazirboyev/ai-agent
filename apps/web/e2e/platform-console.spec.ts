@@ -292,7 +292,7 @@ test('console: edit a customer, archive it, then delete it for good', async ({
     .id;
 
   // The list row carries the same actions as the customer page.
-  await page.goto('/console/tenants');
+  await page.goto('/console');
   await page.getByTestId('tenant-search').fill(slug);
   const row = page.locator(`[data-testid="tenant-row"][data-slug="${slug}"]`);
   await expect(row.getByTestId('tenant-edit')).toBeVisible();
@@ -329,7 +329,7 @@ test('console: edit a customer, archive it, then delete it for good', async ({
   await expect(remove.getByTestId('tenant-delete-confirm')).toBeDisabled();
   await remove.getByTestId('tenant-delete-slug').fill(slug);
   await remove.getByTestId('tenant-delete-confirm').click();
-  await expect(page).toHaveURL(/\/console\/tenants$/u);
+  await expect(page).toHaveURL(/\/console$/u);
   await page.getByTestId('tenant-search').fill(slug);
   await expect(
     page.locator(`[data-testid="tenant-row"][data-slug="${slug}"]`),
