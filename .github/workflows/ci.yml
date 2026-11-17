@@ -276,6 +276,10 @@ jobs:
           done
           aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
             --query StandardOutputContent --output text | grep -vE 'Pulling|Pulled|Waiting|Download|Extract|Verifying' | tail -n 15
+          if [ "$status" != Success ]; then
+            aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
+              --query StandardErrorContent --output text | tail -n 20
+          fi
           test "$status" = Success
       - name: The site answers
         run: |

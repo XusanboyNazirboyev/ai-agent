@@ -55,10 +55,21 @@ dc() {
   docker compose --env-file .env.production \
     -f docker-compose.prod.yml -f docker-compose.local-db.yml "$@"
 }
-dc pull --quiet
-dc up -d --wait postgres redis
-dc run --rm migrate
-dc up -d --wait
+# Room for the new images first: stopped containers and images no running
+# container uses (the release now serving stays; older tags can be pulled
+# again from ghcr.io). A full disk stopped deploys on 2026-11-04 and again on
+# 2026-11-17, before the cleanup below this block could run.
+echo "disk before: $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
+docker container prune -f >/dev/null 2>&1 || true
+docker image prune -af >/dev/null 2>&1 || true
+docker builder prune -af >/dev/null 2>&1 || true
+echo "disk after cleanup: $(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
+
+# stderr goes to stdout so the CI log shows why a step failed.
+dc pull --quiet 2>&1
+dc up -d --wait postgres redis 2>&1
+dc run --rm migrate 2>&1
+dc up -d --wait 2>&1
 
 # The disk holds about two releases: keep this tag and the one before it
 # (rollback); a migrate image is needed only while migrating. Every tag can be
