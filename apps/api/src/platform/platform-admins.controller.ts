@@ -11,9 +11,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import { MfaService } from '../auth/mfa.service.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   generateInviteToken,
   hashInviteToken,
@@ -59,11 +59,16 @@ async function lockAdmins(tx: Prisma.TransactionClient): Promise<void> {
 @PlatformAccessLevel('owner')
 @UseGuards(PlatformSessionGuard)
 export class PlatformAdminsController {
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     private readonly sessions: PlatformSessionService,
     private readonly mfa: MfaService,
-  ) {}
+  ) {
+    this.prisma = privileged.db;
+  }
 
   @Get()
   async list(): Promise<{ admins: unknown[] }> {

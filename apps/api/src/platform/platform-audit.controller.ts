@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { z } from 'zod';
-import { PrismaService } from '../persistence/prisma.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { parseBody } from './platform-http.js';
 import { PlatformSessionGuard } from './platform-session.guard.js';
 
@@ -14,7 +15,12 @@ const AuditQuery = z.object({
 @Controller('api/v1/platform/audit')
 @UseGuards(PlatformSessionGuard)
 export class PlatformAuditController {
-  constructor(private readonly prisma: PrismaService) {}
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
+  constructor(privileged: PrivilegedDatabase) {
+    this.prisma = privileged.db;
+  }
 
   @Get()
   async list(@Query() query: unknown): Promise<{

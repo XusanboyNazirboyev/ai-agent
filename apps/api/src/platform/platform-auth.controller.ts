@@ -16,7 +16,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { LoginRateLimiter } from '../webinbox/auth.controller.js';
 import {
   loginClientAddress,
@@ -71,12 +72,16 @@ interface Reply {
 export class PlatformAuthController {
   private readonly limiter: LoginRateLimiter;
 
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
   constructor(
     private readonly sessions: PlatformSessionService,
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly mfa: MfaService,
   ) {
+    this.prisma = privileged.db;
     const limit = Number(
       this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
     );

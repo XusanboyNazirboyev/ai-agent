@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { MfaError, MfaService, type MfaSubject } from '../auth/mfa.service.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { hashPassword, verifyPassword } from '../webinbox/password.js';
 import {
   DEFAULT_SESSION_POLICY,
@@ -58,13 +59,18 @@ const MAX_RACE_RETRIES = 20;
 export class PlatformSessionService {
   private dummyHash: Promise<string> | undefined;
 
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     @Optional()
     @Inject(SESSION_POLICY)
     readonly policy: SessionPolicy = DEFAULT_SESSION_POLICY,
     @Optional() private readonly mfa?: MfaService,
-  ) {}
+  ) {
+    this.prisma = privileged.db;
+  }
 
   private dummy(): Promise<string> {
     this.dummyHash ??= hashPassword('not-a-real-password', this.policy.scrypt);

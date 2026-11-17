@@ -11,8 +11,8 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { TenantAccessService } from '../access/tenant-access.service.js';
-import type { Prisma } from '../generated/prisma/client.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { recordPlatformAudit } from './platform-audit.js';
 import {
   conflict,
@@ -86,10 +86,15 @@ const PLAN_VIEW = {
 @Controller('api/v1/platform/tenants/:id')
 @UseGuards(PlatformSessionGuard)
 export class PlatformBillingController {
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     private readonly access: TenantAccessService,
-  ) {}
+  ) {
+    this.prisma = privileged.db;
+  }
 
   @Get('subscription')
   async history(

@@ -21,6 +21,14 @@ const ALLOWED = new Map([
   // S5: a webhook names the account; one lookup finds its tenant.
   ['channels/telegram/telegram-webhook.service.ts', 'route an update'],
   ['channels/instagram/instagram-webhook.service.ts', 'route a Meta event'],
+  // S5b: the platform console works across tenants by design (ADR 047).
+  ['platform/platform-auth.controller.ts', 'platform sign-in'],
+  ['platform/platform-session.service.ts', 'platform sessions'],
+  ['platform/platform-tenants.controller.ts', 'tenants list, edit, delete'],
+  ['platform/platform-billing.controller.ts', 'subscriptions, payments'],
+  ['platform/platform-plans.controller.ts', 'plans'],
+  ['platform/platform-admins.controller.ts', 'platform admins'],
+  ['platform/platform-audit.controller.ts', 'platform audit log'],
 ]);
 
 function sources(dir: string): string[] {

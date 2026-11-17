@@ -6,6 +6,7 @@ import { MfaService } from '../auth/mfa.service.js';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { hashPassword } from '../webinbox/password.js';
 import { PlatformSessionService } from './platform-session.service.js';
 
@@ -37,7 +38,7 @@ describe('platform sign-in without the keyring', () => {
     });
     const prisma = db as unknown as PrismaService;
     const sessions = new PlatformSessionService(
-      prisma,
+      { db: prisma } as unknown as PrivilegedDatabase,
       undefined,
       new MfaService(prisma),
     );
