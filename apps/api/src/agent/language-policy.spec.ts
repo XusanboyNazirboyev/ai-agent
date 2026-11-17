@@ -494,6 +494,57 @@ describe('explicit language requests', () => {
     expect(result.reply).toBe(LOCALES.get('uz-Latn').templates.languageMirror);
   });
 
+  it('answers a weakly read message in the language the model and the heuristic agree on (owner 2026-11-17)', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'fizika' }, 'search', 'uz', 'Latn'),
+    ]);
+    const { result } = await runTurn({
+      provider,
+      // No listed word: the heuristic has no guess, the model says Uzbek.
+      text: 'fizika chi?',
+      input: {
+        conversationLocale: 'en',
+        history: [
+          { role: 'customer', text: 'Salom, menga kurs kerak' },
+          { role: 'customer', text: 'inglizcha gapir' },
+        ],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+  });
+
+  it('keeps the heuristic when it contradicts the model', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'matematika' }, 'search', 'uz', 'Latn'),
+    ]);
+    const { result } = await runTurn({
+      provider,
+      // Half English, half Uzbek: the heuristic leans English (MEDIUM).
+      text: 'nope tell me yourself\nmenga matematika kursi kerak',
+      input: {
+        conversationLocale: 'en',
+        history: [{ role: 'customer', text: 'inglizcha gapir' }],
+      },
+    });
+    expect(result.locale).toBe('en');
+  });
+
+  it('does not switch on the model alone when the text names no language', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'Sizga {{F1}} kursi mos keladi.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS?',
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [{ role: 'customer', text: 'Salom, menga kurs kerak' }],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+  });
+
   it('follows a clear message in another language after a request', async () => {
     const provider = new ScriptedLlmProvider([
       extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),

@@ -646,6 +646,26 @@ export async function runAgentTurn(
         if (match && input.supportedLocales.includes(match.id))
           localeId = match.id;
       }
+      // Owner 2026-11-17: "men qaysi tilda yozsam, o'sha tilda javob berishi
+      // kerak". Inside a conversation a message the heuristic reads only
+      // weakly (short, mixed) is answered in the language the extraction
+      // model names, when the heuristic guesses that same language or none,
+      // in the same script; never against the heuristic, never for a message
+      // without a lower-case word (an acronym says nothing about language),
+      // and never instead of an explicit request.
+      if (
+        requested === undefined &&
+        !mirror &&
+        languageAssessment.confidenceClass !== 'HIGH' &&
+        modelLocale !== undefined &&
+        modelLocale !== localeId &&
+        input.supportedLocales.includes(modelLocale) &&
+        (language.language === lang || language.language === 'unknown') &&
+        language.script === script &&
+        /\p{Ll}{3}/u.test(input.customerText)
+      ) {
+        localeId = modelLocale;
+      }
     } else {
       extractionFailure = result.failure;
       if (result.failure === 'refusal') return handover('GUARDRAIL');

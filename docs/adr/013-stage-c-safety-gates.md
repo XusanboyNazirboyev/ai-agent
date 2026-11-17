@@ -52,3 +52,9 @@ Detection accuracy per locale, native-speaker review, and a live eval of the liv
 - **Checked:** new tests in `language-policy.spec.ts`, `agent-turn.spec.ts` and `agent-components.spec.ts`; the scripted eval keeps its `GUARDRAIL` expectations for price questions; API unit suite 2856 passed, 15 skipped; `live-eval-runner.spec.ts` fails locally on the unchanged code too (local model env), not in CI.
 - **Live check (2026-11-17):** the four owner cases (`eval/cases/education/*/owner-2026-11-16.json`) pass on the staging model `gemini-3.8-flash` (`pnpm eval:live`, LIVE_EVAL_FILTER=-o0): 4/4, 6 model calls, $0.0071.
 - **Not verified:** the new template wording is not native-reviewed (D18).
+
+## Amendment 4 (2026-11-17): the model's language call inside a conversation
+- **Owner requirement (2026-11-17):** "men qaysi tilda yozsam, o'sha tilda javob berishi kerak" (answer in whatever language I write in).
+- **Gap:** the extraction model's language/script call changed the reply locale only on a conversation's first message. Inside a conversation a message the word-list heuristic reads weakly or not at all ("fizika chi?") kept the previous (or requested) language.
+- **Decision:** when the heuristic does not rate the message HIGH, the reply follows the extraction model's supported locale if the heuristic guesses the same language or none, in the same script, and the message has a lower-case word. Never against the heuristic (a half-English, half-Uzbek message the heuristic reads as English stays English), never for an acronym-only message ("IELTS?"), never instead of an explicit request or a mirror request in the same message.
+- **Checked:** `language-policy.spec.ts` (3 new tests); scripted eval 388/388 with `edu-uz-latn-o03`; live on gemini-3.8-flash, the five owner cases 5/5, 7 calls, $0.009.

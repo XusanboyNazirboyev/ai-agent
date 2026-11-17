@@ -88,5 +88,41 @@
         "javob beraman"
       ]
     }
+  },
+  {
+    "id": "edu-uz-latn-o03",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner 2026-11-17: a short Uzbek message without a listed word, after English, is answered in Uzbek (the model names the language, the heuristic has no guess)",
+    "input": {
+      "text": "fizika chi?",
+      "conversationLocale": "en",
+      "history": [
+        {
+          "role": "customer",
+          "text": "inglizcha gapir"
+        },
+        {
+          "role": "agent",
+          "text": "Sure, I'll write in English from now on. How can I help you?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "fizika"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn"
+    }
   }
 ]
