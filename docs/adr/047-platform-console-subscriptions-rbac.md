@@ -59,3 +59,13 @@ Unit tests for access decisions, scan transitions, invite tokens and role rules;
 - **Telegram:** before the delete, each Telegram bot of the tenant gets `deleteWebhook` (best effort; counted as removed or failed in the response and the audit), so a deleted tenant's bots stop calling the server. Instagram accounts are not unsubscribed: their events then route to no tenant.
 - **Not undoable:** there is no soft-delete or grace period; archive is the reversible step, and the UI asks for the slug typed again.
 - **Checked:** unit tests for the deletion order; integration tests on the real database (edit with audit, delete refused while active, for SUPPORT and for a wrong slug, then all rows of the tenant gone including a self-referencing person merge, another tenant untouched, audit kept with a NULL tenant); an e2e test for edit, archive and delete in the console.
+
+## Amendment (2026-11-17): password reset links
+- **Owner question:** "agar mijoz o'z akkaunt parolini eslay olmasa qanday qaytaradi?" There was no way: no reset, no e-mail, and a new invite to the same address is refused (`EMAIL_TAKEN`).
+- **Decision:** a one-time link, made by a person who may manage the account and sent by hand like an invite (no e-mail provider is chosen yet):
+  - Console: customer page → Team → "Password link" for any active person (`POST /api/v1/platform/tenants/:id/operators/:operatorId/password-reset`, PLATFORM_OWNER; platform audit `operator.password_reset_issued`).
+  - Tenant: Settings → Team, OWNER/ADMIN with the team-change rules (not for yourself, an ADMIN not for an OWNER) (`POST /api/v1/team/operators/:id/password-reset`; tenant audit).
+  - Table `operator_password_resets` (additive migration `20261127090000`): token SHA-256 only, 24 h, one use; a new link retires the earlier ones.
+  - `/reset/[token]` page: `GET/POST /api/v1/auth/password-resets/:token` (rate limited like invites). Setting the password clears a lockout and revokes every session of that person; it does not sign in, and MFA stays as it was.
+- **Not done:** self-service "Forgot password" by e-mail waits for the e-mail provider decision; it would issue the same kind of link.
+- **Checked:** integration test of the whole flow (SUPPORT and self refused, earlier link retired, old sessions revoked, old password refused, new one works, link spent, audit on both sides); e2e from the console button to signing in with the new password; `inviteUrl` accepts `/reset/…` paths only on this origin.

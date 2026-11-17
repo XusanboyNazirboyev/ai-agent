@@ -11,6 +11,7 @@ import type { TenantDetail } from '@/lib/platform-types';
 import { TEAM_ROLES } from '@/lib/roles';
 import type { CreatedInvite, PendingInvite, Role } from '@/lib/types';
 import { InviteLinkBox } from '../invite-link-box';
+import { PasswordResetLink } from '../password-reset-link';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/confirm-dialog';
@@ -205,6 +206,13 @@ function TeamCard(props: {
               {operator.isActive ? null : (
                 <Badge tone="warning">{t('team.inactive')}</Badge>
               )}
+              {canWrite && operator.isActive ? (
+                <PasswordResetLink
+                  via="platform"
+                  name={operator.displayName}
+                  endpoint={`/api/v1/platform/tenants/${props.tenantId}/operators/${operator.id}/password-reset`}
+                />
+              ) : null}
             </span>
           </li>
         ))}

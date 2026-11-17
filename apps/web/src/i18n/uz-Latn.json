@@ -1539,5 +1539,17 @@
   "errors.cannedLimit": "Bu ishxonada tezkor javoblar soni chegaraga yetdi (200). Avval bittasini o‘chiring.",
   "view.chatTags": "Suhbat teglari",
   "list.filterTag": "Teg",
-  "list.anyTag": "Istalgan teg"
+  "list.anyTag": "Istalgan teg",
+  "passwordReset.button": "Parol havolasi",
+  "passwordReset.title": "{name} uchun parolni tiklash havolasi",
+  "passwordReset.body": "Havola 24 soat amal qiladi va bir marta ishlaydi. Uni shu odamga o‘zingiz yuboring (masalan, Telegram orqali). Yangi havola avvalgisini bekor qiladi.",
+  "passwordReset.create": "Havola yaratish",
+  "reset.title": "Yangi parol",
+  "reset.subtitle": "{name}, {tenant} uchun yangi parol o‘rnating.",
+  "reset.submit": "Parolni saqlash",
+  "reset.done": "Parol yangilandi. Endi yangi parol bilan tizimga kiring.",
+  "reset.toLogin": "Kirish sahifasiga o‘tish",
+  "team.errors.RESET_INVALID": "Havola yaroqsiz: u ishlatilgan, yangisi bilan almashtirilgan yoki muddati tugagan. Yangisini so‘rang.",
+  "team.errors.OPERATOR_INACTIVE": "Bu xodim o‘chirib qo‘yilgan. Avval uni qayta faollashtiring.",
+  "passwordReset.created": "{email} uchun parol havolasi tayyor."
 }

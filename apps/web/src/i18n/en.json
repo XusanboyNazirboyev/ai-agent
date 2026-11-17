@@ -1539,5 +1539,17 @@
   "errors.cannedLimit": "This workspace has the most quick replies allowed (200). Delete one first.",
   "view.chatTags": "Chat tags",
   "list.filterTag": "Tag",
-  "list.anyTag": "Any tag"
+  "list.anyTag": "Any tag",
+  "passwordReset.button": "Password link",
+  "passwordReset.title": "Password reset link for {name}",
+  "passwordReset.body": "The link works once and for 24 hours. Send it to this person yourself (for example in Telegram). A new link cancels the previous one.",
+  "passwordReset.create": "Create link",
+  "reset.title": "New password",
+  "reset.subtitle": "{name}, set a new password for {tenant}.",
+  "reset.submit": "Save password",
+  "reset.done": "Your password is updated. Sign in with the new password now.",
+  "reset.toLogin": "Go to sign in",
+  "team.errors.RESET_INVALID": "This link no longer works: it was used, replaced by a newer one or has expired. Ask for a new one.",
+  "team.errors.OPERATOR_INACTIVE": "This person is deactivated. Reactivate them first.",
+  "passwordReset.created": "The password link for {email} is ready."
 }

@@ -18,6 +18,7 @@ import { SettingsSubPage } from './settings-section-nav';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { PasswordResetLink } from './password-reset-link';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { ErrorNote, QueryState } from './ui/error-note';
 import { fieldClass } from './ui/fields';
@@ -219,6 +220,13 @@ export function TeamPage(): ReactNode {
                         <Badge>{t(`role.${member.role}`)}</Badge>
                       </span>
                     )}
+                    {editable && member.isActive ? (
+                      <PasswordResetLink
+                        via="tenant"
+                        name={member.displayName}
+                        endpoint={`/api/v1/team/operators/${member.id}/password-reset`}
+                      />
+                    ) : null}
                     {editable ? (
                       <Button
                         size="sm"

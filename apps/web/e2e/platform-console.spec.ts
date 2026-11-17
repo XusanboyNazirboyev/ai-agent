@@ -340,6 +340,80 @@ test('console: edit a customer, archive it, then delete it for good', async ({
   await context.close();
 });
 
+test('console: a password link lets a customer set a new password and sign in', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const f = fixtures();
+  const run = randomUUID().slice(0, 8);
+  const email = `reset-${run}@example.test`;
+  const { page, context } = await consoleSession(
+    browser,
+    f.platform.owner.email,
+  );
+  const csrf = (await context.cookies()).find(
+    (cookie) => cookie.name === 'ac_platform_csrf',
+  )?.value;
+  const options = (await (
+    await page.request.get('/api/v1/platform/tenants/options')
+  ).json()) as { packs: string[] };
+  const created = await page.request.post('/api/v1/platform/tenants', {
+    headers: { 'x-csrf-token': csrf ?? '' },
+    data: {
+      slug: `reset-${run}`,
+      name: `Reset ${run}`,
+      pack: options.packs[0],
+      defaultLocale: 'uz-Latn',
+      timezone: 'Asia/Tashkent',
+      ownerEmail: email,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const body = (await created.json()) as {
+    tenant: { id: string };
+    invite: { token: string };
+  };
+  const customer = await freshContext(browser);
+  expect(
+    (
+      await customer.page.request.post(
+        `/api/v1/auth/invites/${body.invite.token}/accept`,
+        { data: { displayName: 'Owner', password: 'forgotten password 1' } },
+      )
+    ).status(),
+  ).toBe(200);
+  await customer.context.close();
+
+  await page.goto(`/console/tenants/${body.tenant.id}`);
+  await page.getByTestId('password-reset-open').first().click();
+  const dialog = page.getByTestId('password-reset-dialog');
+  await dialog.getByTestId('password-reset-create').click();
+  await expect(dialog.getByTestId('invite-url')).toHaveValue(/\/reset\//u);
+  await expect(dialog).toContainText(email);
+  const link = await dialog.getByTestId('invite-url').inputValue();
+  await dialog.getByTestId('dialog-done').click();
+
+  const person = await freshContext(browser);
+  await person.page.goto(new URL(link).pathname);
+  await expect(person.page.getByTestId('reset-form')).toContainText(email);
+  await person.page.getByTestId('reset-password').fill('brand new password');
+  await person.page.getByTestId('reset-repeat').fill('brand new password');
+  await person.page.getByTestId('reset-submit').click();
+  await expect(person.page.getByTestId('reset-done')).toBeVisible();
+  expect(
+    (
+      await person.page.request.post('/api/v1/auth/login', {
+        data: { email, password: 'brand new password' },
+      })
+    ).status(),
+  ).toBe(200);
+  // The link works once.
+  await person.page.goto(new URL(link).pathname);
+  await expect(person.page.getByTestId('reset-invalid')).toBeVisible();
+  await person.context.close();
+  await context.close();
+});
+
 test('PLATFORM_SUPPORT sees the console read-only and the API refuses its writes', async ({
   browser,
 }) => {

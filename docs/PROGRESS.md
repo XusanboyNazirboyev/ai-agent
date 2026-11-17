@@ -31,7 +31,7 @@ Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing tha
 ### Open work
 - **Console gaps for selling subscriptions (owner 2026-11-17: "consoleda kamchiliklar bo'lsa o'zing to'g'irla"), next session, in this order:**
   1. Plan limits `maxChannelAccounts` and `monthlyLlmBudgetUsd` are saved on plans but enforced nowhere (only `maxOperators` is, in `OperatorInviteService.seatLimit`). Enforce the channel limit when a Telegram/Instagram/Messenger account would become ACTIVE (`webinbox/*-connect.controller.ts`, refuse `CHANNEL_LIMIT`), and use the plan's AI budget as the tenant's monthly LLM budget (today only `LLM_TENANT_MONTHLY_BUDGET_USD`, `agent/llm.factory.ts` `budgetLimits`). Show used/limit on the customer page.
-  2. No password reset for a tenant user: a customer who forgets the password is stuck. Console action on an operator: one-time reset link (like invites: token hash, 72 h, audit), plus the same for the tenant OWNER from Settings → Team.
+  2. ~~No password reset~~ done 2026-11-17: one-time reset links from the console and the Team page (ADR 047 amendment).
   3. Expiry visibility: list filter/sort by subscription state and "ends within 7 days"; a reminder to the tenant (inbox event / banner) a few days before the period ends (today only at PAST_DUE and EXPIRED).
   4. Known, blocked on owner inputs: Click payments (ADR 047 §6); invite links are copied by hand (no e-mail sending).
 

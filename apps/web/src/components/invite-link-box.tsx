@@ -16,6 +16,9 @@ export function InviteLinkBox(props: {
   path: string;
   expiresAt: string;
   email: string;
+  /** Header and field label; the invite wording by default. */
+  title?: string;
+  label?: string;
 }): ReactNode {
   const { t, formatDateTime } = useI18n();
   const [origin, setOrigin] = useState('');
@@ -47,10 +50,10 @@ export function InviteLinkBox(props: {
           name="check"
           className="mt-0.5 h-4 w-4 shrink-0 text-success-fg"
         />
-        {t('invite.created', { email: props.email })}
+        {props.title ?? t('invite.created', { email: props.email })}
       </p>
       <label htmlFor={fieldId} className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">{t('invite.link')}</span>
+        <span className="font-medium">{props.label ?? t('invite.link')}</span>
         <input
           id={fieldId}
           ref={input}
