@@ -11,8 +11,14 @@ test.describe('Assistant page', () => {
     const current = admin.page.getByTestId('bot-current');
     await expect(current).toHaveAttribute('data-mode', 'OFF');
 
-    await admin.page.getByTestId('bot-mode-SHADOW').click({ force: true });
-    await expect(current).toHaveAttribute('data-mode', 'SHADOW');
+    // The first click can land before hydration on a slow CI runner (it was
+    // lost once in CI on 2026-11-17): retry it until the state changes.
+    await expect(async () => {
+      await admin.page.getByTestId('bot-mode-SHADOW').click({ force: true });
+      await expect(current).toHaveAttribute('data-mode', 'SHADOW', {
+        timeout: 2_000,
+      });
+    }).toPass({ timeout: 15_000 });
 
     // "On" asks first; cancelling changes nothing.
     await admin.page.getByTestId('bot-mode-LIVE').click({ force: true });
