@@ -26,6 +26,10 @@ import {
   type PendingInvite,
 } from '../team/operator-invite.service.js';
 import {
+  PasswordResetError,
+  PasswordResetService,
+} from '../team/password-reset.service.js';
+import {
   canManageTeam,
   checkInvite,
   checkOperatorChange,
@@ -85,6 +89,25 @@ export function inviteHttpError(error: unknown): unknown {
   }
 }
 
+/** HTTP answer for a password reset refusal (ADR 047 amendment 2026-11-17). */
+export function passwordResetHttpError(error: unknown): unknown {
+  if (!(error instanceof PasswordResetError)) return error;
+  const body = {
+    code: error.code,
+    message: 'Password reset refused',
+    i18nKey: `team.errors.${error.code}`,
+  };
+  switch (error.code) {
+    case 'RESET_INVALID':
+    case 'NOT_FOUND':
+      return new NotFoundException(body);
+    case 'TENANT_SUSPENDED':
+      return new ForbiddenException(body);
+    default:
+      return new ConflictException(body);
+  }
+}
+
 /**
  * Tenant Team page (ADR 047 §5), OWNER and ADMIN only. Rules live in
  * `team-rules.ts`; the seat limit (`maxOperators`) in the invite service.
@@ -96,6 +119,7 @@ export class TeamController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invites: OperatorInviteService,
+    private readonly resets: PasswordResetService,
   ) {}
 
   private manager(request: InboxRequest): {
@@ -199,6 +223,51 @@ export class TeamController {
       await this.audit(actor, 'team.invite_revoked', 'operator_invite', id, {
         role: invite.role,
       });
+  }
+
+  /**
+   * A one-time link for a team member who forgot the password (ADR 047
+   * amendment 2026-11-17). The same rules as changing that person: not for
+   * yourself, and an ADMIN cannot do it for an OWNER.
+   */
+  @Post('operators/:id/password-reset')
+  async passwordReset(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ): Promise<{ path: string; expiresAt: Date; email: string }> {
+    const actor = this.manager(request);
+    if (actor.operatorId === id) throw violation('SELF_EDIT');
+    const target = await this.prisma.operator.findFirst({
+      where: { tenantId: actor.tenantId, id },
+      select: { role: true },
+    });
+    if (!target)
+      throw passwordResetHttpError(new PasswordResetError('NOT_FOUND'));
+    if (target.role === 'OWNER' && actor.role !== 'OWNER')
+      throw violation('OWNER_ONLY');
+    let issued;
+    try {
+      issued = await this.prisma.$transaction((tx) =>
+        this.resets.issue(
+          {
+            tenantId: actor.tenantId,
+            operatorId: id,
+            createdByOperatorId: actor.operatorId,
+          },
+          tx,
+        ),
+      );
+    } catch (error) {
+      throw passwordResetHttpError(error);
+    }
+    await this.audit(actor, 'operator.password_reset_issued', 'operator', id, {
+      expiresAt: issued.expiresAt.toISOString(),
+    });
+    return {
+      path: `/reset/${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
   }
 
   @Patch('operators/:id')

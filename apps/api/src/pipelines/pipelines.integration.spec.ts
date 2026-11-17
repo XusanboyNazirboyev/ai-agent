@@ -13,6 +13,7 @@ import type { PrismaService } from '../persistence/prisma.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
 import { OperatorInviteService } from '../team/operator-invite.service.js';
+import { PasswordResetService } from '../team/password-reset.service.js';
 import { LeadPipelineController } from '../webinbox/lead-pipeline.controller.js';
 import { LeadsController } from '../webinbox/leads.controller.js';
 import { PipelinesController } from '../webinbox/pipelines.controller.js';
@@ -39,7 +40,11 @@ const leadsApi = new LeadPipelineController(
   new LeadArchiveService(prisma),
 );
 const board = new LeadsController(prisma);
-const team = new TeamController(prisma, new OperatorInviteService(prisma));
+const team = new TeamController(
+  prisma,
+  new OperatorInviteService(prisma),
+  new PasswordResetService(prisma),
+);
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';

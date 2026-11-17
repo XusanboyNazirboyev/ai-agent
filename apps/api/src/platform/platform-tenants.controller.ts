@@ -29,7 +29,11 @@ import {
   type PendingInvite,
 } from '../team/operator-invite.service.js';
 import { TEAM_ROLES, type TeamRole } from '../team/team-rules.js';
-import { inviteHttpError } from '../webinbox/team.controller.js';
+import { PasswordResetService } from '../team/password-reset.service.js';
+import {
+  inviteHttpError,
+  passwordResetHttpError,
+} from '../webinbox/team.controller.js';
 import { recordPlatformAudit } from './platform-audit.js';
 import {
   conflict,
@@ -159,6 +163,7 @@ export class PlatformTenantsController {
     private readonly access: TenantAccessService,
     private readonly secrets: ChannelSecretStore,
     private readonly telegram: TelegramManagement,
+    private readonly resets: PasswordResetService,
   ) {
     this.prisma = privileged.db;
   }
@@ -545,6 +550,47 @@ export class PlatformTenantsController {
       }
     }
     return { removed, failed };
+  }
+
+  /**
+   * A one-time password reset link for one of the tenant's people (ADR 047
+   * amendment 2026-11-17), sent by hand like an invite. 24 hours, one use.
+   */
+  @Post(':id/operators/:operatorId/password-reset')
+  async passwordReset(
+    @Req() request: PlatformRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('operatorId', new ParseUUIDPipe()) operatorId: string,
+  ): Promise<{ path: string; expiresAt: Date; email: string }> {
+    let issued;
+    try {
+      issued = await this.prisma.$transaction(async (tx) => {
+        const created = await this.resets.issue(
+          {
+            tenantId: id,
+            operatorId,
+            createdByPlatformAdminId: request.platform!.adminId,
+          },
+          tx,
+        );
+        await recordPlatformAudit(tx, {
+          actorAdminId: request.platform!.adminId,
+          action: 'operator.password_reset_issued',
+          tenantId: id,
+          entityType: 'operator',
+          entityId: operatorId,
+          summary: { expiresAt: created.expiresAt.toISOString() },
+        });
+        return created;
+      });
+    } catch (error) {
+      throw passwordResetHttpError(error);
+    }
+    return {
+      path: `/reset/${issued.token}`,
+      expiresAt: issued.expiresAt,
+      email: issued.email,
+    };
   }
 
   @Get(':id/invites')

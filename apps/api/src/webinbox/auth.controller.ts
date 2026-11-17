@@ -23,7 +23,8 @@ import { loginClientAddress, type AddressedRequest } from './client-address.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { OperatorInviteService } from '../team/operator-invite.service.js';
-import { inviteHttpError } from './team.controller.js';
+import { PasswordResetService } from '../team/password-reset.service.js';
+import { inviteHttpError, passwordResetHttpError } from './team.controller.js';
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
@@ -47,6 +48,8 @@ const AcceptBody = z.object({
     .pipe(z.string().min(1).max(160)),
   password: z.string().min(10).max(200),
 });
+
+const ResetBody = z.object({ password: z.string().min(10).max(200) });
 
 const LoginBody = z.object({
   email: z.string().min(3).max(254),
@@ -88,6 +91,7 @@ export class AuthController {
     @Optional() private readonly access?: TenantAccessService,
     @Optional() private readonly invites?: OperatorInviteService,
     @Optional() private readonly mfa?: MfaService,
+    @Optional() private readonly resets?: PasswordResetService,
   ) {
     const limit = Number(
       this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
@@ -353,6 +357,59 @@ export class AuthController {
       parsed.data.password,
     );
     return this.sessionReply(result, reply);
+  }
+
+  /** What the password reset page shows (ADR 047 amendment 2026-11-17). */
+  @Get('password-resets/:token')
+  async passwordResetPreview(
+    @Param('token') token: string,
+    @Req() request: AddressedRequest,
+    @Res({ passthrough: true }) reply: Reply,
+  ): Promise<unknown> {
+    if (!this.allowAttempt(request)) throw this.rateLimited();
+    reply.setHeader('Cache-Control', 'no-store');
+    try {
+      return await this.resetService().preview(token);
+    } catch (error) {
+      throw passwordResetHttpError(error);
+    }
+  }
+
+  /**
+   * Sets a new password with a one-time link. The person is signed out
+   * everywhere and signs in again with the new password (and MFA, if on).
+   */
+  @Post('password-resets/:token')
+  @HttpCode(200)
+  async completePasswordReset(
+    @Param('token') token: string,
+    @Body() body: unknown,
+    @Req() request: AddressedRequest,
+  ): Promise<{ ok: true }> {
+    if (!this.allowAttempt(request)) throw this.rateLimited();
+    const parsed = ResetBody.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'INVALID_BODY',
+        message: 'Invalid body',
+        i18nKey: 'errors.invalidBody',
+      });
+    try {
+      await this.resetService().complete(token, parsed.data.password);
+    } catch (error) {
+      throw passwordResetHttpError(error);
+    }
+    return { ok: true };
+  }
+
+  private resetService(): PasswordResetService {
+    if (!this.resets)
+      throw new ServiceUnavailableException({
+        code: 'NOT_CONFIGURED',
+        message: 'Password reset is not available',
+        i18nKey: 'errors.unavailable',
+      });
+    return this.resets;
   }
 
   @Get('me')

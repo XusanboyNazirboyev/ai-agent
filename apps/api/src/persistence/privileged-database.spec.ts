@@ -18,6 +18,7 @@ const ALLOWED = new Map([
   ['webinbox/session.service.ts', 'login by e-mail, session by cookie hash'],
   ['auth/mfa.service.ts', 'second factor of a person not yet signed in'],
   ['team/operator-invite.service.ts', 'invite found by its token alone'],
+  ['team/password-reset.service.ts', 'reset link found by its token alone'],
   // S5: a webhook names the account; one lookup finds its tenant.
   ['channels/telegram/telegram-webhook.service.ts', 'route an update'],
   ['channels/instagram/instagram-webhook.service.ts', 'route a Meta event'],

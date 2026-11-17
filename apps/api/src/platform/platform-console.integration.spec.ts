@@ -917,3 +917,102 @@ describe('editing and deleting a tenant (ADR 047 amendment 2026-11-17)', () => {
     ).toBe(404);
   });
 });
+
+describe('password reset links (ADR 047 amendment 2026-11-17)', () => {
+  it('a one-time link sets a new password, signs out and retires earlier links', async () => {
+    const platform = await platformLogin(OWNER_EMAIL);
+    const slug = `reset-${suffix}`;
+    const email = `reset-owner-${suffix}@example.test`;
+    const created = await call('POST', '/api/v1/platform/tenants', {
+      session: platform,
+      body: {
+        slug,
+        name: 'Reset tenant',
+        pack: PACK,
+        defaultLocale: 'uz-Latn',
+        timezone: 'Asia/Tashkent',
+        ownerEmail: email,
+      },
+    });
+    expect(created.status).toBe(201);
+    const tenantId = String((created.body.tenant as { id: string }).id);
+    const invite = created.body.invite as { token: string };
+    const owner = await accept(invite.token, 'Owner', 'old owner password');
+    const operatorId = (
+      await db.operator.findFirstOrThrow({ where: { tenantId } })
+    ).id;
+    const issue = (): Promise<Result> =>
+      call(
+        'POST',
+        `/api/v1/platform/tenants/${tenantId}/operators/${operatorId}/password-reset`,
+        { session: platform },
+      );
+
+    // SUPPORT cannot issue one; the owner of the tenant cannot for themselves.
+    const support = await platformLogin(SUPPORT_EMAIL);
+    expect(
+      (
+        await call(
+          'POST',
+          `/api/v1/platform/tenants/${tenantId}/operators/${operatorId}/password-reset`,
+          { session: support },
+        )
+      ).status,
+    ).toBe(403);
+    const self = await call(
+      'POST',
+      `/api/v1/team/operators/${operatorId}/password-reset`,
+      { session: owner },
+    );
+    expect(self.status).toBe(403);
+    expect(self.body.code).toBe('SELF_EDIT');
+
+    const first = await issue();
+    expect(first.status).toBe(201);
+    const second = await issue();
+    const firstToken = String(first.body.path).replace('/reset/', '');
+    const token = String(second.body.path).replace('/reset/', '');
+    expect(second.body.email).toBe(email);
+    // A new link retires the previous one.
+    expect(
+      (await call('GET', `/api/v1/auth/password-resets/${firstToken}`)).status,
+    ).toBe(404);
+    const preview = await call('GET', `/api/v1/auth/password-resets/${token}`);
+    expect(preview.status).toBe(200);
+    expect(preview.body).toMatchObject({ email, tenantName: 'Reset tenant' });
+
+    expect(
+      (
+        await call('POST', `/api/v1/auth/password-resets/${token}`, {
+          body: { password: 'short' },
+        })
+      ).status,
+    ).toBe(400);
+    const done = await call('POST', `/api/v1/auth/password-resets/${token}`, {
+      body: { password: 'new owner password' },
+    });
+    expect(done.status).toBe(200);
+    // Signed out everywhere; only the new password works; the link is spent.
+    expect(
+      (await call('GET', '/api/v1/auth/me', { session: owner })).status,
+    ).toBe(401);
+    expect((await tenantLogin(email, 'old owner password')).status).toBe(401);
+    expect((await tenantLogin(email, 'new owner password')).status).toBe(200);
+    expect(
+      (
+        await call('POST', `/api/v1/auth/password-resets/${token}`, {
+          body: { password: 'another owner password' },
+        })
+      ).status,
+    ).toBe(404);
+    const audit = await db.platformAuditEvent.count({
+      where: { tenantId, action: 'operator.password_reset_issued' },
+    });
+    expect(audit).toBe(2);
+    expect(
+      await db.auditEvent.count({
+        where: { tenantId, action: 'operator.password_reset' },
+      }),
+    ).toBe(1);
+  });
+});
