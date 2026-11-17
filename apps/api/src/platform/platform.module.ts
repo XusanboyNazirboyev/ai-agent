@@ -11,6 +11,8 @@ import { PlatformPlansController } from './platform-plans.controller.js';
 import { PlatformSessionGuard } from './platform-session.guard.js';
 import { PlatformSessionService } from './platform-session.service.js';
 import { PlatformTenantsController } from './platform-tenants.controller.js';
+import { TelegramManagement } from '../channels/telegram/telegram-management.js';
+import { SecretsModule } from '../secrets/secrets.module.js';
 
 /**
  * Platform console API (ADR 047): `/api/v1/platform/**`, its own principal,
@@ -18,7 +20,13 @@ import { PlatformTenantsController } from './platform-tenants.controller.js';
  * `app.module.ts` imports this directory (asserted by a unit test).
  */
 @Module({
-  imports: [PersistenceModule, AccessModule, TeamModule, MfaModule],
+  imports: [
+    PersistenceModule,
+    AccessModule,
+    TeamModule,
+    MfaModule,
+    SecretsModule,
+  ],
   controllers: [
     PlatformAuthController,
     PlatformTenantsController,
@@ -27,6 +35,6 @@ import { PlatformTenantsController } from './platform-tenants.controller.js';
     PlatformAdminsController,
     PlatformAuditController,
   ],
-  providers: [PlatformSessionService, PlatformSessionGuard],
+  providers: [PlatformSessionService, PlatformSessionGuard, TelegramManagement],
 })
 export class PlatformModule {}

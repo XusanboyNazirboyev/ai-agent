@@ -17,7 +17,11 @@ import { z } from 'zod';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import { TelegramManagement } from '../channels/telegram/telegram-management.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import { ChannelSecretStore } from '../secrets/channel-secret-store.js';
 import {
   InviteError,
   OperatorInviteService,
@@ -38,6 +42,7 @@ import {
   type PlatformRequest,
 } from './platform-session.guard.js';
 import { addDays, monthStartUtc, nanoToUsd } from './subscription-math.js';
+import { eraseTenantData } from './tenant-erasure.js';
 
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/u;
 const OPEN = ['TRIAL', 'ACTIVE', 'PAST_DUE'] as const;
@@ -68,13 +73,38 @@ const CreateTenant = z.object({
   trialDays: z.number().int().min(1).max(365).optional(),
 });
 
+const Locale = z
+  .string()
+  .refine((value) =>
+    INITIAL_LOCALE_PACKS.some((locale) => (locale.id as string) === value),
+  );
+
 const PatchTenant = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
     status: z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED']).optional(),
+    defaultLocale: Locale.optional(),
+    timezone: z.string().max(64).refine(isTimeZone).optional(),
+    pack: z
+      .string()
+      .refine((value) => DOMAIN_PACKS.has(value))
+      .optional(),
     reason: z.string().trim().min(3).max(500),
   })
-  .refine((body) => body.name !== undefined || body.status !== undefined);
+  .refine(
+    (body) =>
+      body.name !== undefined ||
+      body.status !== undefined ||
+      body.defaultLocale !== undefined ||
+      body.timezone !== undefined ||
+      body.pack !== undefined,
+  );
+
+/** Deleting asks for the slug typed again and a reason (ADR 047 amendment). */
+const DeleteTenant = z.object({
+  confirmSlug: z.string().trim().max(80),
+  reason: z.string().trim().min(3).max(500),
+});
 
 const InviteBody = z.object({
   email: z.string().min(3).max(254),
@@ -91,6 +121,10 @@ export interface TenantRow {
   slug: string;
   name: string;
   status: string;
+  defaultLocale: string;
+  timezone: string;
+  packKey: string;
+  packVersion: string;
   createdAt: Date;
   subscription: {
     id: string;
@@ -116,11 +150,18 @@ export interface TenantRow {
 @Controller('api/v1/platform/tenants')
 @UseGuards(PlatformSessionGuard)
 export class PlatformTenantsController {
+  /** RLS plan S5b: the console reads across tenants on the privileged connection. */
+  private readonly prisma: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     private readonly invites: OperatorInviteService,
     private readonly access: TenantAccessService,
-  ) {}
+    private readonly secrets: ChannelSecretStore,
+    private readonly telegram: TelegramManagement,
+  ) {
+    this.prisma = privileged.db;
+  }
 
   @Get()
   async list(@Query() query: unknown): Promise<{ tenants: TenantRow[] }> {
@@ -144,6 +185,10 @@ export class PlatformTenantsController {
         slug: true,
         name: true,
         status: true,
+        defaultLocale: true,
+        timezone: true,
+        packKey: true,
+        packVersion: true,
         createdAt: true,
       },
     });
@@ -330,11 +375,21 @@ export class PlatformTenantsController {
     @Body() body: unknown,
   ): Promise<{ id: string; name: string; status: string }> {
     const input = parseBody(PatchTenant, body);
+    const pack =
+      input.pack !== undefined ? DOMAIN_PACKS.get(input.pack)! : undefined;
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
       const before = await tx.tenant.findUnique({
         where: { id },
-        select: { name: true, status: true },
+        select: {
+          name: true,
+          status: true,
+          defaultLocale: true,
+          supportedLocales: true,
+          timezone: true,
+          packKey: true,
+          packVersion: true,
+        },
       });
       if (!before) return undefined;
       const tenant = await tx.tenant.update({
@@ -342,6 +397,21 @@ export class PlatformTenantsController {
         data: {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.defaultLocale !== undefined
+            ? {
+                defaultLocale: input.defaultLocale,
+                ...(before.supportedLocales.includes(input.defaultLocale)
+                  ? {}
+                  : {
+                      supportedLocales: [
+                        ...before.supportedLocales,
+                        input.defaultLocale,
+                      ],
+                    }),
+              }
+            : {}),
+          ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+          ...(pack ? { packKey: pack.key, packVersion: pack.version } : {}),
         },
         select: { id: true, name: true, status: true },
       });
@@ -362,6 +432,24 @@ export class PlatformTenantsController {
           fromStatus: before.status,
           toStatus: tenant.status,
           renamed: input.name !== undefined && input.name !== before.name,
+          ...(input.defaultLocale !== undefined &&
+          input.defaultLocale !== before.defaultLocale
+            ? {
+                fromLocale: before.defaultLocale,
+                toLocale: input.defaultLocale,
+              }
+            : {}),
+          ...(input.timezone !== undefined && input.timezone !== before.timezone
+            ? { fromTimezone: before.timezone, toTimezone: input.timezone }
+            : {}),
+          ...(pack &&
+          `${pack.key}@${pack.version}` !==
+            `${before.packKey}@${before.packVersion}`
+            ? {
+                fromPack: `${before.packKey}@${before.packVersion}`,
+                toPack: `${pack.key}@${pack.version}`,
+              }
+            : {}),
         },
       });
       return tenant;
@@ -369,6 +457,94 @@ export class PlatformTenantsController {
     if (!updated) throw notFound();
     this.access.invalidate(id);
     return updated;
+  }
+
+  /**
+   * Deletes an ARCHIVED tenant and everything it owns (ADR 047 amendment
+   * 2026-11-17). The caller types the slug again and gives a reason; the
+   * platform audit log keeps who, when, why and how much. Telegram bots are
+   * told to stop calling first, best effort: a bot that cannot be reached is
+   * reported, not a reason to keep the data.
+   */
+  @Delete(':id')
+  async remove(
+    @Req() request: PlatformRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown,
+  ): Promise<{
+    deleted: true;
+    tables: number;
+    rows: number;
+    telegram: { removed: number; failed: number };
+  }> {
+    const input = parseBody(DeleteTenant, body);
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      select: { slug: true, status: true },
+    });
+    if (!tenant) throw notFound();
+    if (tenant.status !== 'ARCHIVED') throw conflict('TENANT_NOT_ARCHIVED');
+    if (input.confirmSlug !== tenant.slug)
+      throw conflict('CONFIRMATION_MISMATCH');
+    const telegram = await this.releaseTelegramBots(id);
+    const erased = await this.prisma.$transaction(
+      async (tx) => {
+        const locked = await tx.$queryRaw<{ status: string }[]>`
+          SELECT status::text AS status FROM tenants WHERE id = ${id}::uuid FOR UPDATE`;
+        if (locked[0]?.status !== 'ARCHIVED') return undefined;
+        const result = await eraseTenantData(tx, id);
+        await tx.tenant.delete({ where: { id } });
+        await recordPlatformAudit(tx, {
+          actorAdminId: request.platform!.adminId,
+          action: 'tenant.deleted',
+          tenantId: null,
+          entityType: 'tenant',
+          entityId: id,
+          summary: {
+            reason: input.reason,
+            slug: tenant.slug,
+            tables: result.tables,
+            rows: result.rows,
+            telegramRemoved: telegram.removed,
+            telegramFailed: telegram.failed,
+          },
+        });
+        return result;
+      },
+      { maxWait: 10_000, timeout: 120_000 },
+    );
+    if (!erased) throw conflict('TENANT_NOT_ARCHIVED');
+    this.access.invalidate(id);
+    return { deleted: true, ...erased, telegram };
+  }
+
+  /** Best effort: the deleted tenant's Telegram bots stop calling this server. */
+  private async releaseTelegramBots(
+    tenantId: string,
+  ): Promise<{ removed: number; failed: number }> {
+    const accounts = await this.prisma.channelAccount.findMany({
+      where: { tenantId, channelType: 'telegram' },
+      select: { id: true },
+    });
+    let removed = 0;
+    let failed = 0;
+    for (const account of accounts) {
+      try {
+        if (!this.secrets.configured) throw new Error('secrets not configured');
+        const token = await runWithTenant(tenantId, () =>
+          this.secrets.get(
+            { tenantId, channelAccountId: account.id },
+            'bot_token',
+          ),
+        );
+        if (!token) continue;
+        await this.telegram.deleteWebhook(token);
+        removed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    return { removed, failed };
   }
 
   @Get(':id/invites')

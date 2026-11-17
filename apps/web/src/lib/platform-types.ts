@@ -41,6 +41,10 @@ export interface TenantRow {
   slug: string;
   name: string;
   status: TenantStatus;
+  defaultLocale: string;
+  timezone: string;
+  packKey: string;
+  packVersion: string;
   createdAt: string;
   subscription: TenantSubscriptionSummary | null;
   usage: TenantUsage;

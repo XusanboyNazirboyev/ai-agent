@@ -2,12 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
 import { formatDate, formatUsd } from '@/lib/money';
-import type { TenantDetail, TenantStatus } from '@/lib/platform-types';
+import type { TenantDetail } from '@/lib/platform-types';
 import { TEAM_ROLES } from '@/lib/roles';
 import type { CreatedInvite, PendingInvite, Role } from '@/lib/types';
 import { InviteLinkBox } from '../invite-link-box';
@@ -18,53 +18,26 @@ import { ErrorNote, QueryState } from '../ui/error-note';
 import { fieldClass } from '../ui/fields';
 import { FormDialog } from '../ui/form-dialog';
 import { Icon } from '../ui/icons';
-import { ReasonDialog } from '../ui/reason-dialog';
 import { Select } from '../ui/select';
 import { Card, Field, TenantStatusBadge } from './console-format';
 import { useConsole } from './console-shell';
 import { useLocaleName } from './new-customer-dialog';
+import { TenantActions } from './tenant-actions';
 import { PaymentsCard, SubscriptionCard } from './tenant-billing';
-
-type StatusAction = 'suspend' | 'reactivate' | 'archive';
-
-const TARGET: Record<StatusAction, TenantStatus> = {
-  suspend: 'SUSPENDED',
-  reactivate: 'ACTIVE',
-  archive: 'ARCHIVED',
-};
 
 /** One customer: summary, usage, status, subscription, payments, invites. */
 export function ConsoleTenant(): ReactNode {
   const { t, locale } = useI18n();
-  const { canWrite } = useConsole();
   const localeName = useLocaleName();
   const params = useParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
-  const queryClient = useQueryClient();
-  const [action, setAction] = useState<StatusAction | null>(null);
+  const router = useRouter();
 
   const query = useQuery({
     queryKey: ['platform', 'tenant', id],
     queryFn: () => platformApi<TenantDetail>(`/api/v1/platform/tenants/${id}`),
     enabled: id.length > 0,
   });
-  const status = useMutation({
-    mutationFn: (input: { status: TenantStatus; reason: string }) =>
-      platformApi(`/api/v1/platform/tenants/${id}`, {
-        method: 'PATCH',
-        body: input,
-      }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ['platform', 'tenant', id],
-      });
-      void queryClient.invalidateQueries({ queryKey: ['platform', 'tenants'] });
-      setAction(null);
-    },
-  });
-  useEffect(() => {
-    if (action === null) status.reset();
-  }, [action]);
 
   const back = (
     <Link
@@ -89,12 +62,6 @@ export function ConsoleTenant(): ReactNode {
 
   const detail = query.data;
   const tenant = detail.tenant;
-  const actions: StatusAction[] =
-    tenant.status === 'ACTIVE'
-      ? ['suspend', 'archive']
-      : tenant.status === 'SUSPENDED'
-        ? ['reactivate', 'archive']
-        : ['reactivate'];
 
   return (
     <div className="flex flex-col gap-4" data-testid="tenant-detail">
@@ -103,19 +70,10 @@ export function ConsoleTenant(): ReactNode {
         title={tenant.name}
         testId="tenant-summary"
         actions={
-          canWrite
-            ? actions.map((item) => (
-                <Button
-                  key={item}
-                  size="sm"
-                  variant={item === 'reactivate' ? 'primary' : 'danger'}
-                  data-testid={`tenant-${item}`}
-                  onClick={() => setAction(item)}
-                >
-                  {t(`console.tenant.${item}`)}
-                </Button>
-              ))
-            : undefined
+          <TenantActions
+            tenant={tenant}
+            onDeleted={() => router.push('/console/tenants')}
+          />
         }
       >
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
@@ -172,23 +130,6 @@ export function ConsoleTenant(): ReactNode {
       </div>
 
       <TeamCard tenantId={id} detail={detail} />
-
-      {canWrite ? (
-        <ReasonDialog
-          open={action !== null}
-          testId="status-dialog"
-          title={action ? t(`console.tenant.${action}Title`) : ''}
-          body={action ? t(`console.tenant.${action}Body`) : ''}
-          confirmLabel={action ? t(`console.tenant.${action}`) : ''}
-          tone={action === 'reactivate' ? 'primary' : 'danger'}
-          busy={status.isPending}
-          error={status.error}
-          onConfirm={(reason) => {
-            if (action) status.mutate({ status: TARGET[action], reason });
-          }}
-          onCancel={() => setAction(null)}
-        />
-      ) : null}
     </div>
   );
 }

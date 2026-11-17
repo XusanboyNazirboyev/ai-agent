@@ -259,6 +259,87 @@ test('an expired subscription shows the banner and the read-only subscription pa
   await context.close();
 });
 
+test('console: edit a customer, archive it, then delete it for good', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const f = fixtures();
+  const run = randomUUID().slice(0, 8);
+  const slug = `erase-${run}`;
+  const { page, context } = await consoleSession(
+    browser,
+    f.platform.owner.email,
+  );
+  const csrf = (await context.cookies()).find(
+    (cookie) => cookie.name === 'ac_platform_csrf',
+  )?.value;
+  const options = (await (
+    await page.request.get('/api/v1/platform/tenants/options')
+  ).json()) as { packs: string[] };
+  const created = await page.request.post('/api/v1/platform/tenants', {
+    headers: { 'x-csrf-token': csrf ?? '' },
+    data: {
+      slug,
+      name: `Erase ${run}`,
+      pack: options.packs[0],
+      defaultLocale: 'uz-Latn',
+      timezone: 'Asia/Tashkent',
+      ownerEmail: `erase-${run}@example.test`,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const tenantId = ((await created.json()) as { tenant: { id: string } }).tenant
+    .id;
+
+  // The list row carries the same actions as the customer page.
+  await page.goto('/console/tenants');
+  await page.getByTestId('tenant-search').fill(slug);
+  const row = page.locator(`[data-testid="tenant-row"][data-slug="${slug}"]`);
+  await expect(row.getByTestId('tenant-edit')).toBeVisible();
+
+  await page.goto(`/console/tenants/${tenantId}`);
+  await page.getByTestId('tenant-edit').click();
+  const edit = page.getByTestId('tenant-edit-dialog');
+  await expect(edit).toBeVisible();
+  await expect(edit.getByTestId('tenant-edit-save')).toBeDisabled();
+  await edit.getByTestId('tenant-edit-name').fill(`Renamed ${run}`);
+  await edit.getByTestId('tenant-edit-timezone').fill('Europe/Istanbul');
+  await edit.getByTestId('tenant-edit-reason').fill('owner asked');
+  await edit.getByTestId('tenant-edit-save').click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByTestId('tenant-summary')).toContainText(
+    `Renamed ${run}`,
+  );
+  await expect(page.getByTestId('tenant-summary')).toContainText(
+    'Europe/Istanbul',
+  );
+
+  // Delete is offered only for an archived customer.
+  await expect(page.getByTestId('tenant-delete')).toHaveCount(0);
+  await page.getByTestId('tenant-archive').click();
+  const status = page.getByTestId('status-dialog');
+  await status.getByTestId('reason-input').fill('test customer');
+  await status.getByTestId('reason-confirm').click();
+  await expect(status).toBeHidden();
+  await page.getByTestId('tenant-delete').click();
+  const remove = page.getByTestId('tenant-delete-dialog');
+  await expect(remove).toContainText(slug);
+  await remove.getByTestId('tenant-delete-slug').fill(`${slug}x`);
+  await remove.getByTestId('tenant-delete-reason').fill('test customer');
+  await expect(remove.getByTestId('tenant-delete-confirm')).toBeDisabled();
+  await remove.getByTestId('tenant-delete-slug').fill(slug);
+  await remove.getByTestId('tenant-delete-confirm').click();
+  await expect(page).toHaveURL(/\/console\/tenants$/u);
+  await page.getByTestId('tenant-search').fill(slug);
+  await expect(
+    page.locator(`[data-testid="tenant-row"][data-slug="${slug}"]`),
+  ).toHaveCount(0);
+  expect(
+    (await page.request.get(`/api/v1/platform/tenants/${tenantId}`)).status(),
+  ).toBe(404);
+  await context.close();
+});
+
 test('PLATFORM_SUPPORT sees the console read-only and the API refuses its writes', async ({
   browser,
 }) => {
@@ -276,6 +357,7 @@ test('PLATFORM_SUPPORT sees the console read-only and the API refuses its writes
   await expect(page.getByTestId('tenant-summary')).toBeVisible();
   await expect(page.getByTestId('subscription-card')).toBeVisible();
   for (const id of [
+    'tenant-edit',
     'tenant-suspend',
     'tenant-archive',
     'payment-record',

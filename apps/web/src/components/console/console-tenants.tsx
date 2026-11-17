@@ -13,6 +13,7 @@ import { fieldClass } from '../ui/fields';
 import { Icon } from '../ui/icons';
 import { Select } from '../ui/select';
 import { Field, SubscriptionBadge, TenantStatusBadge } from './console-format';
+import { TenantActions } from './tenant-actions';
 import { useConsole } from './console-shell';
 import { NewCustomerDialog } from './new-customer-dialog';
 
@@ -142,6 +143,7 @@ export function ConsoleTenants(): ReactNode {
                 {formatUsd(tenant.usage.llmCostUsd, locale)}
               </Field>
             </dl>
+            <TenantActions tenant={tenant} />
           </li>
         ))}
       </ul>

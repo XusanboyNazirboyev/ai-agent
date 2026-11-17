@@ -731,3 +731,189 @@ describe('platform admins', () => {
     ).toBe(3);
   });
 });
+
+describe('editing and deleting a tenant (ADR 047 amendment 2026-11-17)', () => {
+  const slug = `erase-${suffix}`;
+  let platform: Session;
+  let tenantId = '';
+
+  it('edits the name, default locale, time zone and pack, with an audit entry', async () => {
+    platform = await platformLogin(OWNER_EMAIL);
+    const created = await call('POST', '/api/v1/platform/tenants', {
+      session: platform,
+      body: {
+        slug,
+        name: 'To be erased',
+        pack: PACK,
+        defaultLocale: 'uz-Latn',
+        timezone: 'Asia/Tashkent',
+        ownerEmail: `erase-owner-${suffix}@example.test`,
+      },
+    });
+    expect(created.status).toBe(201);
+    tenantId = String((created.body.tenant as { id: string }).id);
+
+    const otherPack = [...DOMAIN_PACKS.keys()].at(-1) as string;
+    const bad = await call('PATCH', `/api/v1/platform/tenants/${tenantId}`, {
+      session: platform,
+      body: { timezone: 'Mars/Olympus', reason: 'typo' },
+    });
+    expect(bad.status).toBe(400);
+    const edited = await call('PATCH', `/api/v1/platform/tenants/${tenantId}`, {
+      session: platform,
+      body: {
+        name: 'Renamed tenant',
+        defaultLocale: 'en',
+        timezone: 'Europe/Istanbul',
+        pack: otherPack,
+        reason: 'owner asked',
+      },
+    });
+    expect(edited.status).toBe(200);
+    const stored = await db.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+    });
+    expect(stored).toMatchObject({
+      name: 'Renamed tenant',
+      defaultLocale: 'en',
+      timezone: 'Europe/Istanbul',
+    });
+    expect(`${stored.packKey}@${stored.packVersion}`).toBe(otherPack);
+    const audit = await db.platformAuditEvent.findFirstOrThrow({
+      where: { tenantId, action: 'tenant.updated' },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(audit.safeSummary).toMatchObject({
+      renamed: true,
+      fromLocale: 'uz-Latn',
+      toLocale: 'en',
+      toTimezone: 'Europe/Istanbul',
+      toPack: otherPack,
+    });
+  });
+
+  it('deletes only an archived tenant whose slug is typed, with everything it owns', async () => {
+    // Rows in several tenant-owned tables, including a person merged into
+    // another one (a RESTRICT key of a table to itself).
+    const account = await db.channelAccount.create({
+      data: {
+        tenantId,
+        channelType: 'test',
+        externalAccountId: `erase-${suffix}`,
+      },
+    });
+    const contact = await db.contact.create({
+      data: {
+        tenantId,
+        channelAccountId: account.id,
+        providerUserId: `erase-user-${suffix}`,
+      },
+    });
+    const conversation = await db.conversation.create({
+      data: {
+        tenantId,
+        channelAccountId: account.id,
+        contactId: contact.id,
+        providerChatId: `erase-chat-${suffix}`,
+      },
+    });
+    await db.message.create({
+      data: {
+        tenantId,
+        conversationId: conversation.id,
+        channelAccountId: account.id,
+        authorType: 'CUSTOMER',
+        direction: 'INBOUND',
+        text: 'salom',
+        sequence: 1,
+        providerChatId: `erase-chat-${suffix}`,
+      },
+    });
+    const survivor = await db.person.create({ data: { tenantId } });
+    await db.person.create({
+      data: { tenantId, mergedIntoId: survivor.id },
+    });
+    const other = await db.tenant.findFirstOrThrow({
+      where: { id: { not: tenantId } },
+      select: { id: true },
+    });
+    const otherContacts = await db.contact.count({
+      where: { tenantId: other.id },
+    });
+
+    const path = `/api/v1/platform/tenants/${tenantId}`;
+    const active = await call('DELETE', path, {
+      session: platform,
+      body: { confirmSlug: slug, reason: 'test tenant' },
+    });
+    expect(active.status).toBe(409);
+    expect(active.body.code).toBe('TENANT_NOT_ARCHIVED');
+    await call('PATCH', path, {
+      session: platform,
+      body: { status: 'ARCHIVED', reason: 'test tenant' },
+    });
+    const support = await platformLogin(SUPPORT_EMAIL);
+    expect(
+      (
+        await call('DELETE', path, {
+          session: support,
+          body: { confirmSlug: slug, reason: 'test tenant' },
+        })
+      ).status,
+    ).toBe(403);
+    const typo = await call('DELETE', path, {
+      session: platform,
+      body: { confirmSlug: `${slug}x`, reason: 'test tenant' },
+    });
+    expect(typo.status).toBe(409);
+    expect(typo.body.code).toBe('CONFIRMATION_MISMATCH');
+
+    const deleted = await call('DELETE', path, {
+      session: platform,
+      body: { confirmSlug: slug, reason: 'test tenant' },
+    });
+    expect(deleted.status).toBe(200);
+    expect(deleted.body).toMatchObject({
+      deleted: true,
+      telegram: { removed: 0, failed: 0 },
+    });
+    expect(Number(deleted.body.rows)).toBeGreaterThanOrEqual(6);
+
+    expect(await db.tenant.count({ where: { id: tenantId } })).toBe(0);
+    for (const count of await Promise.all([
+      db.contact.count({ where: { tenantId } }),
+      db.message.count({ where: { tenantId } }),
+      db.person.count({ where: { tenantId } }),
+      db.operatorInvite.count({ where: { tenantId } }),
+      db.channelAccount.count({ where: { tenantId } }),
+    ]))
+      expect(count).toBe(0);
+    expect(await db.contact.count({ where: { tenantId: other.id } })).toBe(
+      otherContacts,
+    );
+    // The platform audit keeps the history; its tenant reference is cleared.
+    const trail = await db.platformAuditEvent.findMany({
+      where: { entityId: tenantId },
+      select: { action: true, tenantId: true, safeSummary: true },
+    });
+    expect(trail.map((entry) => entry.action)).toEqual(
+      expect.arrayContaining([
+        'tenant.created',
+        'tenant.updated',
+        'tenant.deleted',
+      ]),
+    );
+    expect(trail.every((entry) => entry.tenantId === null)).toBe(true);
+    expect(
+      trail.find((entry) => entry.action === 'tenant.deleted')?.safeSummary,
+    ).toMatchObject({ slug, reason: 'test tenant' });
+    expect(
+      (
+        await call('DELETE', path, {
+          session: platform,
+          body: { confirmSlug: slug, reason: 'again' },
+        })
+      ).status,
+    ).toBe(404);
+  });
+});
