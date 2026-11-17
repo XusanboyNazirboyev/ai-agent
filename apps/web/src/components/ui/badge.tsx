@@ -22,6 +22,8 @@ export function Badge(props: {
   tone?: Tone;
   dot?: boolean;
   className?: string;
+  /** Hover text that explains the chip. */
+  title?: string;
   'data-testid'?: string;
   children: ReactNode;
 }): ReactNode {
@@ -29,6 +31,7 @@ export function Badge(props: {
   return (
     <span
       data-testid={props['data-testid']}
+      title={props.title}
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${TONE[tone]} ${props.className ?? ''}`}
     >
       {props.dot ? (

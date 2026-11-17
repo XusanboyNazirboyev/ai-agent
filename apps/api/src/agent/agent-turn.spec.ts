@@ -239,11 +239,12 @@ describe('agent turn: grounded answers', () => {
       provider,
       text: 'Astrofizika onlayn kursi bormi?',
     });
-    expect(result).toMatchObject({
-      outcome: 'NO_RESULTS',
-      handover: 'NO_DATA',
-    });
+    // ADR 073: the first time, the real catalog is listed instead of a
+    // hand-over (a third, unfiltered search_catalog call).
+    expect(result.outcome).toBe('NO_RESULTS');
+    expect(result.handover).toBeUndefined();
     expect(result.tools.map((t) => t.name)).toEqual([
+      'search_catalog',
       'search_catalog',
       'search_catalog',
     ]);

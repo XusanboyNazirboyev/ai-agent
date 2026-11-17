@@ -170,7 +170,9 @@ function ListRow(props: {
       ) : null}
       {stage && stage.kind === 'OPEN' ? (
         <Badge tone={tone} dot={tone !== 'neutral'} data-testid="lead-list-age">
-          <span aria-hidden="true">{t('leads.ageDays', { days })}</span>
+          <span aria-hidden="true">
+            {days === 0 ? t('leads.ageToday') : t('leads.ageDays', { days })}
+          </span>
           <span className="sr-only">{t('leads.ageLabel', { days })}</span>
         </Badge>
       ) : null}

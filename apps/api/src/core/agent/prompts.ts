@@ -45,7 +45,11 @@ const INTENT_HELP: Readonly<Record<(typeof INTENTS)[number], string>> = {
   regulated_info:
     'asks about legal, regulatory or official-requirement rules (what the law or an authority requires)',
   capabilities:
-    'asks what the assistant or the business can help with or offers, or who they are writing to (not whether it is a bot)',
+    'asks in general what the assistant can do or help with, or who they are writing to (not whether it is a bot, not which items exist, not which languages)',
+  catalog_overview:
+    'asks which items the business has: a list, an overview, how many or what kinds there are, without naming or describing one item',
+  language_question:
+    'asks which languages the assistant speaks or whether it can answer in a particular language',
   small_talk:
     'small talk or a casual question to the assistant (how are you, what is up) with no request',
   frustration:
@@ -66,6 +70,8 @@ function intentExamples(
     'small_talk',
     'frustration',
     'complaint',
+    'catalog_overview',
+    'language_question',
   ] as const) {
     const examples = locales
       .filter((locale) => pack.locales.includes(locale.id))
@@ -142,7 +148,11 @@ export function conversationalSystemPrompt(
   locale: LocalePack,
   brief: {
     readonly kind:
-      'small_talk' | 'capabilities' | 'frustration' | 'out_of_scope';
+      | 'small_talk'
+      | 'capabilities'
+      | 'frustration'
+      | 'out_of_scope'
+      | 'language_question';
     readonly convey: string;
     readonly ask: string;
   },
@@ -156,6 +166,8 @@ export function conversationalSystemPrompt(
       'The customer is unhappy with your answers. Apologise briefly and sincerely, without excuses.',
     out_of_scope:
       'The customer asks for something this business does not offer. Say so kindly, then what you can help with, using only what is listed below.',
+    language_question:
+      'The customer asks which languages you speak or whether you can answer in a particular language. Answer their exact question using only the languages listed below; never claim another language.',
   }[brief.kind];
   return [
     pack.prompt.businessRole,

@@ -1,0 +1,165 @@
+[
+  {
+    "id": "edu-uz-latn-o05",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-17: 'what courses are there' lists the catalog instead of the capabilities text",
+    "input": {
+      "text": "qanaqa kurslar bor"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "catalog_overview",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "handover": null,
+      "intent": "catalog_overview",
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o06",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-17: asking again for the courses after a capabilities answer lists them",
+    "input": {
+      "text": "kurslar haqida malumot ber . markazda nechta kurs bor qanaqa yo'nalishda kurslar bor . shular haqida malumot ber",
+      "history": [
+        {
+          "role": "customer",
+          "text": "qanaqa kurslar bor"
+        },
+        {
+          "role": "agent",
+          "text": "Markazimiz maslahatchisi sifatida sizga o‘quv yo‘nalishlari, to‘lovlar, mashg‘ulotlar jadvali hamda bo‘sh o‘rinlar haqida ma’lumot berib, guruhlarga a’zo bo‘lishingizga ko‘maklashaman. Sizga yana qanday masalada yordam bera olaman?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "catalog_overview",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "handover": null,
+      "intent": "catalog_overview",
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o07",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-17: a course the catalog does not have gets the real list and the question, not a hand-over",
+    "input": {
+      "text": "matem kursi bormi"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "matematika"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "NO_RESULTS",
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o08",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-17: 'which languages do you know' is answered with the reply languages",
+    "input": {
+      "text": "qaysi tillarni bilasan"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "language_question",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "handover": null,
+      "intent": "language_question",
+      "replyIncludes": [
+        "rus"
+      ]
+    }
+  },
+  {
+    "id": "edu-uz-latn-o09",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "conversational",
+    "description": "Owner test 2026-11-17: 'if I write in German will you answer' is answered (German is not a reply language)",
+    "input": {
+      "text": "yaxshi senga nemis tilida javob bersam javob berasanmi",
+      "history": [
+        {
+          "role": "customer",
+          "text": "qaysi tillarni bilasan"
+        },
+        {
+          "role": "agent",
+          "text": "Men o‘zbek (lotin va kirill yozuvida), rus va ingliz tillarida yozaman. Qaysi fan yoki kurs sizni qiziqtiradi?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "language_question",
+        "language": "uz",
+        "script": "Latn"
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "outcome": "ANSWERED",
+      "handover": null,
+      "intent": "language_question"
+    }
+  }
+]

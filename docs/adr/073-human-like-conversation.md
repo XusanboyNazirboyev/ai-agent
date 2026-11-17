@@ -25,6 +25,15 @@ Status: A1 and A2 built on 2026-11-17 (the rest proposed); proposed on 2026-11-1
 - Checked: `conversational-turns.spec.ts` (worded reply asks the question itself, a fact in the draft falls back, a verbatim repeat of the last bot message falls back); live on gemini-3.8-flash all conversational, out-of-scope and owner cases 16/16, 31 calls, $0.029.
 - Not yet: catalog answers and slot questions after a search still use the response prompt's own wording rules; "never the same question twice" for those turns; insights (B).
 
+## Amendment (2026-11-17, later): the owner's test chat, second round
+- **Seen in the test chat:** "qanaqa kurslar bor" and "kurslar haqida malumot ber, markazda nechta kurs bor" got the "what I can do" text twice (the extraction model read them as `capabilities`; the Uzbek example "qanaqa xizmatlar bor?" pulled them there); "matem kursi bormi" (no such course) went straight to a person; "qaysi tillarni bilasan" and "nemis tilida yozsam javob berasanmi" got the capabilities text.
+- **Built:**
+  - New intent `catalog_overview` ("which items are there, a list, how many, what kinds"): the code lists up to 8 catalog titles (title facts rendered by code, guardrail as for the option list) after the locale's `catalogIntro`, then asks the next missing question. A message that names an item (a title slot) searches as before; other details it gives (e.g. "markazda" read as a format) are kept and do not stop the list. Same language check as before facts.
+  - New intent `language_question`: answered from the locale's new `languagesSpoken` line (Uzbek Latin and Cyrillic, Russian, English; other languages not supported), worded by the model with that line as the only source, the template as fallback.
+  - `capabilities` is now described as the general "what can you do / who are you", explicitly not a list of items or languages; both new intents have per-locale examples that are not eval texts.
+  - **Nothing found:** the first time the reply says so, lists what the catalog has, asks the title question again and offers a person, without a hand-over (`NO_RESULTS`, asked slot `search:no_results`); a second empty search in a row, or a catalog that cannot be listed, hands over with `NO_DATA` as before. The eight `empty_results` eval cases now expect the real catalog in the reply and no hand-over.
+- **Checked:** unit tests (`catalog-overview-turns.spec.ts`: list, named item, first and second empty search, languages fallback, every locale's lines, extraction prompt); scripted eval 396/396; live on Gemini (`builtin:gemini-primary`, reasoning low) the owner cases o01 to o09, 9/9, 13 calls, $0.017 (the live report keeps pass/fail per criterion, not the reply text).
+
 ## Order
 A1 (model-worded replies with fallback) and A2 (asked, not pasted questions) first: they change every conversation. Then B S1+S2 (insights and report), then A4 price prefetch (with owner approval), then B S3/S4. Each step ships with eval cases and a live run.
 

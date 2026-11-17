@@ -1,4 +1,5 @@
 import { normalizeForMatching, type DomainPack } from '@agentcore/shared';
+import type { CatalogItem } from '../../connectors/contracts/canonical.js';
 import type { CrmConnector } from '../../connectors/interfaces/crm-connector.js';
 import {
   BudgetExhaustedError,
@@ -238,6 +239,8 @@ const CONVERSATIONAL_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   'ai_question',
   'capabilities',
   'small_talk',
+  'catalog_overview',
+  'language_question',
 ]);
 
 /**
@@ -252,6 +255,7 @@ const COMMENT_REPLY_INTENTS: ReadonlySet<Intent> = new Set<Intent>([
   'availability',
   'booking_interest',
   'capabilities',
+  'catalog_overview',
   'regulated_info',
 ]);
 
@@ -267,6 +271,16 @@ export const FRUSTRATION_MARK = 'apology:frustration';
 
 /** Stored as the turn's asked slot so a second out-of-scope request in a row is seen (ADR 072). */
 export const OUT_OF_SCOPE_MARK = 'scope:outside';
+
+/**
+ * Stored as the turn's asked slot when a search found nothing and other
+ * catalog items were offered instead (ADR 073): a second empty search in a
+ * row goes to a person.
+ */
+export const NO_RESULTS_MARK = 'search:no_results';
+
+/** How many catalog titles a "what do you have?" answer lists at most. */
+const OVERVIEW_LIMIT = 8;
 
 const HANDOVER_INTENTS: Partial<Record<Intent, HandoverReason>> = {
   human_request: 'CUSTOMER_REQUEST',
@@ -816,7 +830,11 @@ export async function runAgentTurn(
   // draft is refused or identical to the previous bot message.
   const conversationalReply = async (brief: {
     readonly kind:
-      'small_talk' | 'capabilities' | 'frustration' | 'out_of_scope';
+      | 'small_talk'
+      | 'capabilities'
+      | 'frustration'
+      | 'out_of_scope'
+      | 'language_question';
     readonly convey: string;
     readonly ask: string;
   }): Promise<string | undefined> => {
@@ -875,6 +893,60 @@ export async function runAgentTurn(
         },
       }),
     );
+
+  // Catalog titles as fact references rendered by code (AUD-10): a title
+  // that states a price or availability is left out.
+  const titleLines = (items: readonly CatalogItem[], max: number): string[] =>
+    items.slice(0, max).flatMap((item) => {
+      if (titleCarriesHardFact(item.title, locale())) return [];
+      const fact = [...facts.list()]
+        .reverse()
+        .find(
+          (f) =>
+            f.value.kind === 'title' &&
+            f.value.text === item.title &&
+            f.provenance.sourceEntityId === item.sourceEntityId,
+        );
+      return fact ? [`• {{${fact.id}}}`] : [];
+    });
+  // ADR 073: the catalog without a filter, as a guarded list between a lead
+  // and a closing line. Undefined when the catalog cannot be listed or the
+  // guardrail refuses it; the caller then keeps its previous behaviour.
+  const catalogList = async (
+    lead: readonly string[],
+    close: readonly string[],
+  ): Promise<{ text: string; references: string[] } | undefined> => {
+    if (!tools || !tools.available().includes('search_catalog'))
+      return undefined;
+    const listed = await stopwatch.time('search', () =>
+      tools.browseCatalog(Math.max(pack.maxOptionsShown, OVERVIEW_LIMIT)),
+    );
+    if (!listed.ok) return undefined;
+    const lines = titleLines(listed.items, OVERVIEW_LIMIT);
+    if (lines.length === 0) return undefined;
+    const checked = guard(
+      [...lead, ...lines, ...close].filter((line) => line).join('\n'),
+    );
+    return checked.rendered
+      ? { text: checked.rendered, references: [...(checked.references ?? [])] }
+      : undefined;
+  };
+
+  // ADR 073: "which languages do you speak / can I write in X" is answered
+  // from the locale's list of reply languages, worded by the model.
+  if (intent === 'language_question') {
+    const spokenLine = locale().templates.languagesSpoken;
+    const next = firstMissing(pack, slots, 'search');
+    const tail = next?.questions[localeId] ?? locale().templates.anythingElse;
+    const worded = await conversationalReply({
+      kind: 'language_question',
+      convey: spokenLine,
+      ask: tail,
+    });
+    return finish(worded ?? `${spokenLine} ${tail}`.trim(), 'ANSWERED', {
+      askedSlot: next?.key,
+    });
+  }
 
   // ADR 041: "what can you do", small talk and mild frustration are answered
   // by code (no facts), followed by the next missing question. The customer
@@ -947,6 +1019,47 @@ export async function runAgentTurn(
     tools !== undefined &&
     !tools.available().includes('search_catalog') &&
     tools.available().includes('knowledge_search');
+  // ADR 073: "what do you have?" lists the catalog (titles rendered by code)
+  // and then asks the next question, instead of asking for a detail the
+  // customer just said they do not know yet. A message that named an item
+  // (a title slot) searches by it as usual; other details ("markazda" read
+  // as a format) are kept for later and do not stop the list.
+  const namedItem = Object.entries(slots).some(
+    ([key, entry]) =>
+      before[key]?.value !== entry.value &&
+      pack.slots.find((slot) => slot.key === key)?.searchFilter?.kind ===
+        'title',
+  );
+  if (
+    intent === 'catalog_overview' &&
+    !namedItem &&
+    !regulated &&
+    !schedulingTurn &&
+    !knowledgeTurn
+  ) {
+    const unsureLanguage = languageStop(
+      decideBeforeFacts(
+        languageAssessment,
+        spoken,
+        localeId,
+        locales,
+        modelLocale,
+        languagePolicy,
+      ),
+    );
+    if (unsureLanguage) return unsureLanguage;
+    const next = firstMissing(pack, slots, 'search');
+    const listed = await catalogList(
+      [locale().templates.catalogIntro],
+      [next?.questions[localeId] ?? locale().templates.anythingElse],
+    );
+    if (listed)
+      return finish(listed.text, 'ANSWERED', {
+        askedSlot: next?.key,
+        shownFactIds: listed.references,
+      });
+  }
+
   const missing =
     regulated || schedulingTurn || knowledgeTurn
       ? undefined
@@ -1106,6 +1219,30 @@ export async function runAgentTurn(
     );
   }
   if (!schedulingTurn && !knowledgeOutcome && search.items.length === 0) {
+    // ADR 073: the first time, nothing found is said together with what the
+    // catalog does have and the question again, so the customer can choose;
+    // the second empty search in a row (or nothing to list) goes to a person.
+    const again =
+      input.progress?.priorTurns.at(-1)?.askedSlot === NO_RESULTS_MARK;
+    const titleSlot = pack.slots.find(
+      (slot) =>
+        slot.requiredFor.includes('search') &&
+        slot.searchFilter?.kind === 'title',
+    );
+    const alternatives = again
+      ? undefined
+      : await catalogList(
+          [locale().templates.noResults, locale().templates.catalogIntro],
+          [
+            titleSlot?.questions[localeId] ?? '',
+            locale().templates.offerOperator,
+          ],
+        );
+    if (alternatives)
+      return finish(alternatives.text, 'NO_RESULTS', {
+        askedSlot: NO_RESULTS_MARK,
+        shownFactIds: alternatives.references,
+      });
     return finish(
       `${locale().templates.noResults} ${locale().templates.offerOperator}`,
       'NO_RESULTS',
@@ -1123,18 +1260,7 @@ export async function runAgentTurn(
     // through the same guardrail and display gate as a model draft; a title
     // that states a price or availability is left out.
     const lines = search.ok
-      ? search.items.slice(0, pack.maxOptionsShown).flatMap((item) => {
-          if (titleCarriesHardFact(item.title, locale())) return [];
-          const fact = [...facts.list()]
-            .reverse()
-            .find(
-              (f) =>
-                f.value.kind === 'title' &&
-                f.value.text === item.title &&
-                f.provenance.sourceEntityId === item.sourceEntityId,
-            );
-          return fact ? [`• {{${fact.id}}}`] : [];
-        })
+      ? titleLines(search.items, pack.maxOptionsShown)
       : [];
     const checked =
       lines.length > 0

@@ -75,6 +75,16 @@ export interface LocaleTemplates {
    */
   readonly languageMirror: string;
   /**
+   * Answers "which languages do you speak / can I write in X": names every
+   * language the assistant replies in, and says others are not supported.
+   */
+  readonly languagesSpoken: string;
+  /**
+   * Introduces a code-rendered list of catalog titles when the customer asks
+   * what there is, or when a search found nothing and other items exist.
+   */
+  readonly catalogIntro: string;
+  /**
    * Sent once when no operator has picked up a handover within the SLA and
    * the operators were reached. It must not promise a time or a reply.
    */
@@ -220,7 +230,12 @@ export interface LocalePack {
   readonly intentExamples?: Readonly<
     Partial<
       Record<
-        'capabilities' | 'small_talk' | 'frustration' | 'complaint',
+        | 'capabilities'
+        | 'small_talk'
+        | 'frustration'
+        | 'complaint'
+        | 'catalog_overview'
+        | 'language_question',
         readonly string[]
       >
     >

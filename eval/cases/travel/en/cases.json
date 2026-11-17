@@ -152,7 +152,7 @@
   "pack": "travel",
   "locale": "en",
   "category": "empty_results",
-  "description": "A destination the catalog does not have: honest no-results",
+  "description": "Nonexistent item: honest no-results, the real catalog listed by code from the tool, the question again and an operator offer; no hand-over the first time (ADR 073)",
   "input": {
    "text": "Do you have a tour to Mars?"
   },
@@ -171,9 +171,8 @@
    "locale": "en",
    "replyScript": "Latn",
    "outcome": "NO_RESULTS",
-   "handover": "NO_DATA",
-   "replyExcludes": [
-    "Antalya 7 nights",
+   "handover": null,
+   "replyIncludes": [
     "Istanbul"
    ]
   }

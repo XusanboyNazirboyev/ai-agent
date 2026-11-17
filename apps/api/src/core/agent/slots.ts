@@ -38,6 +38,8 @@ export const INTENTS = [
   'small_talk',
   'frustration',
   'out_of_scope',
+  'catalog_overview',
+  'language_question',
   'other',
 ] as const;
 export type Intent = (typeof INTENTS)[number];

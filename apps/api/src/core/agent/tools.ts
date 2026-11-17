@@ -652,6 +652,17 @@ export class AgentTools {
     return this.runSearch({ ...query, title: variant });
   }
 
+  /**
+   * Code-initiated listing of the catalog without any filter: "what do you
+   * have?", or alternatives after a search found nothing.
+   */
+  browseCatalog(limit: number): Promise<ToolOutcome> {
+    return this.runSearch({
+      itemType: this.context.pack.catalogItemType,
+      limit,
+    });
+  }
+
   private runSearch(query: CanonicalQuery): Promise<ToolOutcome> {
     return this.execute(
       'search_catalog',

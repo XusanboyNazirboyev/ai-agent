@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/i18n';
+import { isStartCommand } from '@/lib/bot-command';
 import { api, errorKey } from '@/lib/api';
 import { shortTime } from '@/lib/inbox-row';
 import { isUnread } from '@/lib/seen';
@@ -335,10 +336,16 @@ function ConversationRow(props: {
         {t('list.sla')}
       </Badge>,
     );
+  // The assistant's lead score, labelled as such: a tenant may name sales
+  // stages "warm" or "cold" too, and the two must not read as one thing.
   if (item.leadScore === 'HOT' || item.leadScore === 'WARM')
     chips.push(
-      <Badge key="score" tone={SCORE_TONE[item.leadScore]}>
-        {t(`score.${item.leadScore}`)}
+      <Badge
+        key="score"
+        tone={SCORE_TONE[item.leadScore]}
+        title={t('list.scoreHint')}
+      >
+        {t('list.scoreChip', { score: t(`score.${item.leadScore}`) })}
       </Badge>,
     );
   // Chat tags (ADR 071): the first two, then "+N" so the row stays one line.
@@ -397,7 +404,11 @@ function ConversationRow(props: {
                 </>
               ) : null}
               {/* Customer text is untrusted: plain text only, never HTML. */}
-              {last ? last.text : t('list.noMessages')}
+              {last
+                ? isStartCommand(last.text)
+                  ? t('message.botStarted')
+                  : last.text
+                : t('list.noMessages')}
             </span>
             {unread ? (
               <span

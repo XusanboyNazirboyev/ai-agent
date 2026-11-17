@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/i18n';
+import { isStartCommand } from '@/lib/bot-command';
 import { composerReplies, useCannedResponses } from '@/lib/canned';
 import { FormDialog } from './ui/form-dialog';
 import { fieldClass } from './ui/fields';
@@ -543,7 +544,11 @@ export function ConversationViewPane(props: {
                       </p>
                     ) : null}
                     {/* Customer text is untrusted: plain text only, never HTML. */}
-                    {message.text ? (
+                    {message.text && isStartCommand(message.text) ? (
+                      <p className="text-muted italic">
+                        {t('message.botStarted')}
+                      </p>
+                    ) : message.text ? (
                       <p className="break-words whitespace-pre-wrap">
                         {message.text}
                       </p>

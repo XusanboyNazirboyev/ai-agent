@@ -163,7 +163,7 @@
     "pack": "education",
     "locale": "en",
     "category": "empty_results",
-    "description": "Nonexistent course: honest no-results with operator offer, no invented items",
+    "description": "Nonexistent item: honest no-results, the real catalog listed by code from the tool, the question again and an operator offer; no hand-over the first time (ADR 073)",
     "input": {
       "text": "Do you have an astrophysics course?"
     },
@@ -182,10 +182,9 @@
       "locale": "en",
       "replyScript": "Latn",
       "outcome": "NO_RESULTS",
-      "handover": "NO_DATA",
-      "replyExcludes": [
-        "IELTS",
-        "General English"
+      "handover": null,
+      "replyIncludes": [
+        "IELTS"
       ]
     }
   },

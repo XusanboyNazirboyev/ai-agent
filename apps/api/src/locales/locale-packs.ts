@@ -49,6 +49,14 @@ export const UZ_LATN: LocalePack = {
       'kim bilan yozishyapman?',
     ],
     small_talk: ['qalaysiz?', 'ishlar yaxshimi?'],
+    catalog_overview: [
+      "qanday yo'nalishlaringiz bor?",
+      "ro'yxatini tashlab bering",
+    ],
+    language_question: [
+      'qaysi tillarda gaplashasiz?',
+      'ruscha yozsam tushunasizmi?',
+    ],
     frustration: [
       'tushunmayapsiz',
       'nega javob bermayapsiz?',
@@ -69,6 +77,9 @@ export const UZ_LATN: LocalePack = {
       "Albatta, endi o'zbek tilida yozaman. Sizga qanday yordam bera olaman?",
     languageMirror:
       "Albatta! Qaysi tilda yozsangiz, o'sha tilda javob beraman. Sizga qanday yordam bera olaman?",
+    languagesSpoken:
+      "Men o'zbek (lotin va kirill yozuvida), rus va ingliz tillarida yozaman. Boshqa tillarda hozircha javob bera olmayman.",
+    catalogIntro: 'Hozir bizda bor variantlar:',
     languageClarification:
       "Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.",
     operatorDelayNotice:
@@ -264,6 +275,14 @@ export const UZ_CYRL: LocalePack = {
       'ким билан ёзишяпман?',
     ],
     small_talk: ['қалайсиз?', 'ишлар яхшими?'],
+    catalog_overview: [
+      'қандай йўналишларингиз бор?',
+      'рўйхатини ташлаб беринг',
+    ],
+    language_question: [
+      'қайси тилларда гаплашасиз?',
+      'русча ёзсам тушунасизми?',
+    ],
     frustration: [
       'тушунмаяпсиз',
       'нега жавоб бермаяпсиз?',
@@ -284,6 +303,9 @@ export const UZ_CYRL: LocalePack = {
       'Албатта, энди ўзбек тилида ёзаман. Сизга қандай ёрдам бера оламан?',
     languageMirror:
       'Албатта! Қайси тилда ёзсангиз, ўша тилда жавоб бераман. Сизга қандай ёрдам бера оламан?',
+    languagesSpoken:
+      'Мен ўзбек (лотин ва кирилл ёзувида), рус ва инглиз тилларида ёзаман. Бошқа тилларда ҳозирча жавоб бера олмайман.',
+    catalogIntro: 'Ҳозир бизда бор вариантлар:',
     languageClarification:
       'Илтимос, ўзбек, рус ёки инглиз тилида ёзинг. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.',
     operatorDelayNotice:
@@ -471,6 +493,11 @@ export const RU: LocalePack = {
       'с кем я переписываюсь?',
     ],
     small_talk: ['как жизнь?', 'что нового?'],
+    catalog_overview: ['что у вас вообще есть?', 'покажите весь список'],
+    language_question: [
+      'на каких языках вы общаетесь?',
+      'можно писать по-английски?',
+    ],
     frustration: [
       'вы меня не понимаете',
       'почему вы не отвечаете нормально?',
@@ -491,6 +518,9 @@ export const RU: LocalePack = {
     languageSwitched: 'Хорошо, теперь пишу по-русски. Чем могу помочь?',
     languageMirror:
       'Конечно! Буду отвечать на том языке, на котором вы пишете. Чем могу помочь?',
+    languagesSpoken:
+      'Я пишу на узбекском (латиница и кириллица), русском и английском. На других языках пока не отвечаю.',
+    catalogIntro: 'Сейчас у нас есть:',
     languageClarification:
       "Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.",
     operatorDelayNotice:
@@ -673,6 +703,11 @@ export const EN: LocalePack = {
   intentExamples: {
     capabilities: ['what do you offer?', 'who am I talking to?'],
     small_talk: ["how's it going?", "what's up?"],
+    catalog_overview: ['what do you have?', 'show me the full list'],
+    language_question: [
+      'what languages do you speak?',
+      'can I write in Spanish?',
+    ],
     frustration: [
       "you don't get it",
       "why can't you answer properly?",
@@ -693,6 +728,9 @@ export const EN: LocalePack = {
       "Sure, I'll write in English from now on. How can I help you?",
     languageMirror:
       "Of course! I'll reply in the language you write in. How can I help you?",
+    languagesSpoken:
+      "I write in Uzbek (Latin and Cyrillic), Russian and English. I can't reply in other languages yet.",
+    catalogIntro: 'Here is what we have now:',
     languageClarification:
       "Please write in Uzbek, Russian or English. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском.",
     operatorDelayNotice:
