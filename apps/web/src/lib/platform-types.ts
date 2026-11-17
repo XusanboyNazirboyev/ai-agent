@@ -65,6 +65,13 @@ export interface TenantDetail {
   access: TenantAccess;
   subscription: TenantSubscriptionSummary | null;
   usage: TenantUsage;
+  /** What the open plan allows; null = no limit (ADR 047). */
+  limits: {
+    maxOperators: number | null;
+    maxChannelAccounts: number | null;
+    /** The AI budget the assistant enforces: the plan's, else the server's. */
+    monthlyLlmBudgetUsd: number | null;
+  };
   operators: {
     id: string;
     displayName: string;

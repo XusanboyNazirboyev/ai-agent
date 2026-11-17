@@ -4,7 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
-import { formatMoney, minorDigits, parseMoneyInput } from '@/lib/money';
+import {
+  formatMoney,
+  formatUsd,
+  minorDigits,
+  parseMoneyInput,
+} from '@/lib/money';
 import type { Plan, PlanLimits } from '@/lib/platform-types';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -35,6 +40,15 @@ function optionalInt(text: string): number | undefined | null {
     : null;
 }
 
+/** A USD amount up to the API's maximum; '' is "use the server default". */
+function optionalUsd(text: string): number | undefined | null {
+  if (text.trim() === '') return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 && value <= 1_000_000
+    ? value
+    : null;
+}
+
 /** Subscription plans (ADR 047 §2): prices are typed here, never seeded. */
 export function ConsolePlans(): ReactNode {
   const { t, locale } = useI18n();
@@ -49,6 +63,7 @@ export function ConsolePlans(): ReactNode {
   const [period, setPeriod] = useState('30');
   const [maxOperators, setMaxOperators] = useState('');
   const [maxChannels, setMaxChannels] = useState('');
+  const [aiBudget, setAiBudget] = useState('');
   const [invalid, setInvalid] = useState(false);
 
   const query = useQuery({
@@ -101,6 +116,11 @@ export function ConsolePlans(): ReactNode {
         ? String(plan.limits.maxChannelAccounts)
         : '',
     );
+    setAiBudget(
+      plan?.limits?.monthlyLlmBudgetUsd !== undefined
+        ? String(plan.limits.monthlyLlmBudgetUsd)
+        : '',
+    );
   }, [editing]);
 
   const isNew = editing === 'new';
@@ -110,6 +130,7 @@ export function ConsolePlans(): ReactNode {
   const periodDays = Number(period);
   const operators = optionalInt(maxOperators);
   const channels = optionalInt(maxChannels);
+  const budget = optionalUsd(aiBudget);
   const valid =
     (!isNew || CODE.test(code)) &&
     name.trim().length > 0 &&
@@ -118,7 +139,8 @@ export function ConsolePlans(): ReactNode {
     periodDays >= 1 &&
     periodDays <= 3660 &&
     operators !== null &&
-    channels !== null;
+    channels !== null &&
+    budget !== null;
 
   function submit(): void {
     if (!valid || priceMinor === undefined) {
@@ -131,10 +153,13 @@ export function ConsolePlans(): ReactNode {
     const limits: PlanLimits = { ...previous };
     delete limits.maxOperators;
     delete limits.maxChannelAccounts;
+    delete limits.monthlyLlmBudgetUsd;
     if (operators !== undefined && operators !== null)
       limits.maxOperators = operators;
     if (channels !== undefined && channels !== null)
       limits.maxChannelAccounts = channels;
+    if (budget !== undefined && budget !== null)
+      limits.monthlyLlmBudgetUsd = budget;
     save.mutate({
       ...(isNew ? { code, currency } : {}),
       name: name.trim(),
@@ -203,6 +228,11 @@ export function ConsolePlans(): ReactNode {
               <Field label={t('console.plans.maxChannels')}>
                 {plan.limits?.maxChannelAccounts ??
                   t('console.plans.unlimited')}
+              </Field>
+              <Field label={t('console.plans.aiBudget')}>
+                {plan.limits?.monthlyLlmBudgetUsd !== undefined
+                  ? formatUsd(plan.limits.monthlyLlmBudgetUsd, locale)
+                  : t('console.plans.serverDefault')}
               </Field>
             </dl>
             {canWrite ? (
@@ -355,7 +385,7 @@ export function ConsolePlans(): ReactNode {
                   className={fieldClass}
                 />
               </label>
-              <label className="flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
                 {t('console.plans.maxChannels')}
                 <input
                   data-testid="plan-max-channels"
@@ -366,8 +396,24 @@ export function ConsolePlans(): ReactNode {
                   onChange={(e) => setMaxChannels(e.target.value)}
                   className={fieldClass}
                 />
+              </label>
+              <p className="text-xs text-muted sm:col-span-2">
+                {t('console.plans.limitHint')}
+              </p>
+              <label className="flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
+                {t('console.plans.aiBudget')}
+                <input
+                  data-testid="plan-ai-budget"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={aiBudget}
+                  onChange={(e) => setAiBudget(e.target.value)}
+                  className={fieldClass}
+                />
                 <span className="text-xs font-normal text-muted">
-                  {t('console.plans.limitHint')}
+                  {t('console.plans.aiBudgetHint')}
                 </span>
               </label>
             </div>

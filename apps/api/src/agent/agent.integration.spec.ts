@@ -265,6 +265,74 @@ describe('AgentConversationService', () => {
     expect(provider.calls).toHaveLength(0);
   });
 
+  it("enforces the plan's monthly AI budget when the server sets none (ADR 047)", async () => {
+    const ids = await fixture();
+    const plan = await prisma.subscriptionPlan.create({
+      data: {
+        code: `ai-budget-${randomUUID()}`,
+        name: 'Small AI budget',
+        priceMinor: 0n,
+        periodDays: 30,
+        limits: { monthlyLlmBudgetUsd: 0.1 },
+      },
+    });
+    const now = new Date();
+    await prisma.tenantSubscription.create({
+      data: {
+        tenantId: ids.tenantId,
+        planId: plan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: now,
+        currentPeriodEnd: new Date(now.getTime() + 30 * 86_400_000),
+      },
+    });
+    try {
+      await prisma.llmUsageRecord.create({
+        data: {
+          tenantId: ids.tenantId,
+          conversationId: ids.conversationId,
+          turnKey: 'earlier',
+          callIndex: 0,
+          purpose: 'respond',
+          tier: 'STRONG',
+          provider: 'anthropic',
+          model: 'claude-haiku-5-5',
+          responseId: `msg_${randomUUID()}`,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWrite5mTokens: 0,
+          cacheWrite1hTokens: 0,
+          // Under the conversation budget (0.25), over the plan's month (0.1).
+          costNano: 150_000_000n,
+          reservedNano: 150_000_000n,
+          pricingVersion: 'anthropic-2026-10-23',
+          durationMs: 1,
+          attempts: 1,
+          outcome: 'ok',
+        },
+      });
+      const provider = new ScriptedLlmProvider([extraction({})]);
+      const result = await service(provider, {
+        LLM_TENANT_MONTHLY_BUDGET_USD: undefined,
+      }).handleCustomerMessage({
+        ...ids,
+        turnKey: 'msg-plan-budget',
+        text: 'IELTS kerak',
+      });
+      expect(result).toMatchObject({
+        handover: 'BUDGET_EXCEEDED',
+        budgetStop: 'TENANT_MONTHLY_LIMIT',
+      });
+      expect(provider.calls).toHaveLength(0);
+    } finally {
+      await prisma.tenantSubscription.deleteMany({
+        where: { planId: plan.id },
+      });
+      await prisma.subscriptionPlan.delete({ where: { id: plan.id } });
+    }
+  });
+
   it('rejects an invalid usage row in the database', async () => {
     const ids = await fixture();
     await expect(

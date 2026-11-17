@@ -414,6 +414,75 @@ describe('connecting a Telegram bot from the web', () => {
     expect(fresh.everEnabled).toBe(false);
   });
 
+  it("refuses to enable more accounts than the plan's maxChannelAccounts, before calling Telegram (ADR 047)", async () => {
+    const { bots, telegram, controller } = setup();
+    const t = await tenant();
+    const plan = await db.subscriptionPlan.create({
+      data: {
+        code: `limit-${randomUUID()}`,
+        name: 'One channel',
+        priceMinor: 0n,
+        periodDays: 30,
+        limits: { maxChannelAccounts: 1 },
+      },
+    });
+    const now = new Date();
+    await db.tenantSubscription.create({
+      data: {
+        tenantId: t.tenantId,
+        planId: plan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: now,
+        currentPeriodEnd: new Date(now.getTime() + 30 * 86_400_000),
+      },
+    });
+    try {
+      bots.set(TOKEN(RUN + 901), { id: RUN + 901, username: 'first_bot' });
+      bots.set(TOKEN(RUN + 902), { id: RUN + 902, username: 'second_bot' });
+      const first = await controller.connect(t.request, {
+        botToken: TOKEN(RUN + 901),
+      });
+      const second = await controller.connect(t.request, {
+        botToken: TOKEN(RUN + 902),
+      });
+      await controller.enable(t.request, first.id);
+      const webhooks = (): number =>
+        telegram.calls.filter((c) => c.method === 'setWebhook').length;
+      const before = webhooks();
+
+      await expect(
+        controller.enable(t.request, second.id),
+      ).rejects.toMatchObject({
+        response: { code: 'CHANNEL_LIMIT' },
+        status: 409,
+      });
+      expect(webhooks()).toBe(before);
+      expect(
+        (
+          await db.channelAccount.findUniqueOrThrow({
+            where: { id: second.id },
+          })
+        ).status,
+      ).toBe('DISABLED');
+
+      // Enabling the account that already holds the slot is not a new one.
+      await controller.enable(t.request, first.id);
+      // Freeing the slot lets the other account in.
+      await controller.disable(t.request, first.id);
+      await controller.enable(t.request, second.id);
+      expect(
+        (
+          await db.channelAccount.findUniqueOrThrow({
+            where: { id: second.id },
+          })
+        ).status,
+      ).toBe('ACTIVE');
+    } finally {
+      await db.tenantSubscription.deleteMany({ where: { planId: plan.id } });
+      await db.subscriptionPlan.delete({ where: { id: plan.id } });
+    }
+  });
+
   it('operator group id, roles, tenant scope, missing key and rate limit', async () => {
     const { bots, controller } = setup();
     const t = await tenant();

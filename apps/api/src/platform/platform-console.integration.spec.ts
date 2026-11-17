@@ -432,6 +432,14 @@ describe('tenant lifecycle from the console', () => {
       inboundMessages: 0,
       llmCostUsd: 0,
     });
+    // The customer page shows what the open plan allows (null = no limit).
+    const detail = await call('GET', `/api/v1/platform/tenants/${tenantId}`, {
+      session: platform,
+    });
+    expect(detail.body.limits).toMatchObject({
+      maxOperators: 2,
+      maxChannelAccounts: null,
+    });
     const audit = await call(
       'GET',
       `/api/v1/platform/audit?tenantId=${tenantId}`,

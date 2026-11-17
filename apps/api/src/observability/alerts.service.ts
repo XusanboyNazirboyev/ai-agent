@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
 import { monthStart } from '../agent/llm-budget-ledger.js';
 import type { AppEnvironment } from '../config/environment.js';
-import { usdToNano } from '../core/llm/pricing.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import { PrismaService } from '../persistence/prisma.service.js';
@@ -25,7 +25,8 @@ const HOUR_MS = 3_600_000;
  * Per tenant, through the tenant's Telegram operator group (outbox event
  * `alert.operator`, so delivery retries like the digest):
  * - the month-to-date LLM spend reached ALERT_BUDGET_PERCENT of
- *   LLM_TENANT_MONTHLY_BUDGET_USD (once per tenant and UTC month);
+ *   the tenant's monthly AI budget (the plan's, else
+ *   LLM_TENANT_MONTHLY_BUDGET_USD; once per tenant and UTC month);
  * - at least ALERT_CRM_FAILURES_PER_HOUR leads failed CRM sync in the last
  *   hour (once per tenant and UTC hour).
  * The outbox idempotency key makes repeated or concurrent scans harmless.
@@ -67,11 +68,12 @@ export class AlertsService implements ScheduledScan {
   }
 
   private async budget(tenantId: string, now: Date): Promise<number> {
-    const capUsd = this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', {
-      infer: true,
-    });
-    if (capUsd === undefined) return 0;
-    const capNano = BigInt(usdToNano(capUsd));
+    const cap = monthlyLlmBudgetNano(
+      await openPlanLimits(this.prisma, tenantId),
+      this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', { infer: true }),
+    );
+    if (cap === undefined) return 0;
+    const capNano = BigInt(cap);
     if (capNano <= 0n) return 0;
     const start = monthStart(now);
     const spent = await this.prisma.llmUsageRecord.aggregate({

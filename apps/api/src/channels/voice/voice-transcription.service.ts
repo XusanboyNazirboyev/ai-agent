@@ -1,5 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  monthlyLlmBudgetNano,
+  openPlanLimits,
+} from '../../access/plan-limits.js';
 import type { AppEnvironment } from '../../config/environment.js';
 import type { LlmUsageEntry } from '../../core/llm/metered-llm.js';
 import { usdToNano } from '../../core/llm/pricing.js';
@@ -285,9 +289,10 @@ export class VoiceTranscriptionService {
   ): Promise<TranscriptionResult | { ok: false; code: string }> {
     if (!this.ledger) return this.stt.transcribe(clip);
     // The same caps as model calls: tenant month and conversation lifetime.
-    const monthly = this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', {
-      infer: true,
-    });
+    const monthlyCapNano = monthlyLlmBudgetNano(
+      await openPlanLimits(this.prisma, tenantId),
+      this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', { infer: true }),
+    );
     const conversation = this.config.get('LLM_CONVERSATION_BUDGET_USD', {
       infer: true,
     });
@@ -304,7 +309,7 @@ export class VoiceTranscriptionService {
       baseInvocationId: `${turnKey}:0`,
       worstCaseNano,
       worstCaseTokens: 0,
-      ...(monthly ? { monthlyCapNano: usdToNano(monthly) } : {}),
+      ...(monthlyCapNano !== undefined ? { monthlyCapNano } : {}),
       ...(conversation ? { conversationCapNano: usdToNano(conversation) } : {}),
     });
     if (!reservation.granted) return { ok: false, code: 'BUDGET_EXHAUSTED' };

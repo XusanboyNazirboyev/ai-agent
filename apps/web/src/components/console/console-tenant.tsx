@@ -113,8 +113,31 @@ export function ConsoleTenant(): ReactNode {
           <Field label={t('console.usage.inbound')}>
             {detail.usage.inboundMessages}
           </Field>
-          <Field label={t('console.usage.llmCost')}>
-            {formatUsd(detail.usage.llmCostUsd, locale)}
+          <Field label={t('console.usage.llmCost')} testId="usage-ai">
+            {usedOf(
+              formatUsd(detail.usage.llmCostUsd, locale),
+              detail.limits.monthlyLlmBudgetUsd === null
+                ? null
+                : formatUsd(detail.limits.monthlyLlmBudgetUsd, locale),
+            )}
+          </Field>
+          <Field label={t('console.usage.operators')} testId="usage-operators">
+            {usedOf(
+              String(detail.operators.filter((row) => row.isActive).length),
+              detail.limits.maxOperators === null
+                ? null
+                : String(detail.limits.maxOperators),
+            )}
+          </Field>
+          <Field label={t('console.usage.channels')} testId="usage-channels">
+            {usedOf(
+              String(
+                detail.channels.filter((row) => row.status === 'ACTIVE').length,
+              ),
+              detail.limits.maxChannelAccounts === null
+                ? null
+                : String(detail.limits.maxChannelAccounts),
+            )}
           </Field>
         </dl>
       </Card>
@@ -133,6 +156,11 @@ export function ConsoleTenant(): ReactNode {
       <TeamCard tenantId={id} detail={detail} />
     </div>
   );
+}
+
+/** "used / limit"; without a limit only the used amount. */
+function usedOf(used: string, limit: string | null): string {
+  return limit === null ? used : `${used} / ${limit}`;
 }
 
 function TeamCard(props: {

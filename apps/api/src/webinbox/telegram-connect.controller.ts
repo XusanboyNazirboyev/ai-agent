@@ -30,6 +30,7 @@ import {
 } from '../channels/telegram/telegram-management.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { activateChannelAccount, channelSlotFree } from './channel-limit.js';
 import {
   ChannelSecretStore,
   SecretsNotConfiguredError,
@@ -81,6 +82,8 @@ const REFUSAL: Record<string, { status: number; i18nKey: string }> = {
   BOT_NOT_ENABLED: { status: 409, i18nKey: 'errors.botNotEnabled' },
   NO_BOT_USERNAME: { status: 409, i18nKey: 'errors.noBotUsername' },
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
+  // The plan's maxChannelAccounts is reached (ADR 047).
+  CHANNEL_LIMIT: { status: 409, i18nKey: 'errors.CHANNEL_LIMIT' },
 };
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
@@ -297,6 +300,10 @@ export class TelegramConnectController {
     if (!parsed.success) throw refuse('INVALID_BODY');
     this.requireSecrets();
     await this.account(who.tenantId, id);
+    // Checked again under a lock below; this one avoids a webhook call that
+    // would be refused anyway.
+    if (!(await channelSlotFree(this.prisma, who.tenantId, id)))
+      throw refuse('CHANNEL_LIMIT');
     const before = await enabledBefore(this.prisma, who.tenantId, [id]);
     const firstEnable = !before.has(id);
     const dropPendingUpdates = parsed.data.dropPendingUpdates ?? firstEnable;
@@ -316,10 +323,8 @@ export class TelegramConnectController {
         { dropPendingUpdates },
       ),
     );
-    await this.prisma.channelAccount.update({
-      where: { id },
-      data: { status: 'ACTIVE' },
-    });
+    if (!(await activateChannelAccount(this.prisma, who.tenantId, id)))
+      throw refuse('CHANNEL_LIMIT');
     await this.audit(who, TELEGRAM_ENABLED_ACTION, id, {
       dropPendingUpdates,
       firstEnable,

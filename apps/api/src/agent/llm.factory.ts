@@ -243,7 +243,18 @@ export function providerTrusted(environment: LlmEnvironment): boolean {
   return environment.LLM_TRUSTED_PROVIDERS.includes(environment.LLM_PROVIDER);
 }
 
-export function budgetLimits(environment: LlmEnvironment): BudgetLimits {
+/**
+ * `tenantMonthlyBudgetNano` is the tenant's cap (the plan's, see
+ * `monthlyLlmBudgetNano` in access/plan-limits); left out, the server
+ * default `LLM_TENANT_MONTHLY_BUDGET_USD` applies (unset: no cap).
+ */
+export function budgetLimits(
+  environment: LlmEnvironment,
+  tenantMonthlyBudgetNano:
+    number | undefined = environment.LLM_TENANT_MONTHLY_BUDGET_USD
+    ? usdToNano(environment.LLM_TENANT_MONTHLY_BUDGET_USD)
+    : undefined,
+): BudgetLimits {
   return {
     maxTurnCostNano: usdToNano(environment.LLM_TURN_BUDGET_USD),
     maxConversationCostNano: usdToNano(environment.LLM_CONVERSATION_BUDGET_USD),
@@ -254,12 +265,8 @@ export function budgetLimits(environment: LlmEnvironment): BudgetLimits {
     maxInputBytesPerCall: environment.LLM_MAX_INPUT_BYTES,
     maxTurnTokens: environment.LLM_TURN_TOKEN_BUDGET,
     maxConversationTokens: environment.LLM_CONVERSATION_TOKEN_BUDGET,
-    ...(environment.LLM_TENANT_MONTHLY_BUDGET_USD
-      ? {
-          tenantMonthlyBudgetNano: usdToNano(
-            environment.LLM_TENANT_MONTHLY_BUDGET_USD,
-          ),
-        }
+    ...(tenantMonthlyBudgetNano !== undefined
+      ? { tenantMonthlyBudgetNano }
       : {}),
   };
 }

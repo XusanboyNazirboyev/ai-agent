@@ -15,6 +15,9 @@ import {
 import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 import { z } from 'zod';
 import { TenantAccessService } from '../access/tenant-access.service.js';
+import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
@@ -151,6 +154,10 @@ export interface TenantRow {
  * reads across tenants (rule 3 exception); nothing outside `src/platform`
  * imports it.
  */
+function budgetUsd(nano: number | undefined): number | null {
+  return nano === undefined ? null : nano / 1_000_000_000;
+}
+
 @Controller('api/v1/platform/tenants')
 @UseGuards(PlatformSessionGuard)
 export class PlatformTenantsController {
@@ -164,6 +171,7 @@ export class PlatformTenantsController {
     private readonly secrets: ChannelSecretStore,
     private readonly telegram: TelegramManagement,
     private readonly resets: PasswordResetService,
+    private readonly config: ConfigService<AppEnvironment, true>,
   ) {
     this.prisma = privileged.db;
   }
@@ -240,7 +248,7 @@ export class PlatformTenantsController {
     });
     if (!tenant) throw notFound();
     const now = new Date();
-    const [usage, subscriptions, access, operators, channels] =
+    const [usage, subscriptions, access, operators, channels, planLimits] =
       await Promise.all([
         this.usage([id], now),
         this.currentSubscriptions([id]),
@@ -262,6 +270,7 @@ export class PlatformTenantsController {
           select: { id: true, channelType: true, status: true },
           take: 50,
         }),
+        openPlanLimits(this.prisma, id),
       ]);
     return {
       tenant,
@@ -275,6 +284,18 @@ export class PlatformTenantsController {
         conversations: 0,
         inboundMessages: 0,
         llmCostUsd: 0,
+      },
+      // What the open plan allows; null = no limit. The AI budget is the one
+      // the agent enforces (the plan's, else the server default).
+      limits: {
+        maxOperators: planLimits.maxOperators ?? null,
+        maxChannelAccounts: planLimits.maxChannelAccounts ?? null,
+        monthlyLlmBudgetUsd: budgetUsd(
+          monthlyLlmBudgetNano(
+            planLimits,
+            this.config.get('LLM_TENANT_MONTHLY_BUDGET_USD', { infer: true }),
+          ),
+        ),
       },
       operators,
       channels,

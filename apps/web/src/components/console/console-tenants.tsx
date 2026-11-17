@@ -7,6 +7,12 @@ import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
 import { formatDate, formatUsd } from '@/lib/money';
 import type { TenantRow, TenantStatus } from '@/lib/platform-types';
+import {
+  filterBySubscription,
+  SUBSCRIPTION_FILTERS,
+  type SubscriptionFilter,
+} from '@/lib/subscription-filter';
+import { useNow } from '@/lib/use-now';
 import { Button } from '../ui/button';
 import { EmptyState, QueryState } from '../ui/error-note';
 import { fieldClass } from '../ui/fields';
@@ -25,6 +31,8 @@ export function ConsoleTenants(): ReactNode {
   const { canWrite } = useConsole();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'' | TenantStatus>('');
+  const [subscription, setSubscription] = useState<'' | SubscriptionFilter>('');
+  const now = useNow(60 * 60_000);
   const [creating, setCreating] = useState(false);
   const q = useDeferredValue(search.trim());
 
@@ -39,7 +47,12 @@ export function ConsoleTenants(): ReactNode {
       );
     },
   });
-  const tenants = query.data?.tenants ?? [];
+  // At most 500 rows come back, so the subscription filter runs here.
+  const tenants = filterBySubscription(
+    query.data?.tenants ?? [],
+    subscription,
+    now,
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,6 +86,26 @@ export function ConsoleTenants(): ReactNode {
             </option>
           ))}
         </Select>
+        <Select
+          aria-label={t('console.tenants.subscriptionFilter')}
+          data-testid="tenant-subscription-filter"
+          value={subscription}
+          onChange={(e) =>
+            setSubscription(e.target.value as '' | SubscriptionFilter)
+          }
+          className="sm:w-56"
+        >
+          <option value="">{t('console.tenants.allSubscriptions')}</option>
+          {SUBSCRIPTION_FILTERS.map((id) => (
+            <option key={id} value={id}>
+              {id === 'ENDS_SOON'
+                ? t('console.tenants.endsSoon')
+                : id === 'NONE'
+                  ? t('console.noSubscription')
+                  : t(`subscriptionStatus.${id}`)}
+            </option>
+          ))}
+        </Select>
         {canWrite ? (
           <Button
             variant="primary"
@@ -94,7 +127,7 @@ export function ConsoleTenants(): ReactNode {
         <EmptyState
           icon="users"
           text={
-            q || status
+            q || status || subscription
               ? t('console.tenants.emptyFiltered')
               : t('console.tenants.empty')
           }

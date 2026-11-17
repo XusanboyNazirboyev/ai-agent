@@ -29,6 +29,7 @@ import {
 import type { AppEnvironment } from '../config/environment.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { activateChannelAccount, channelSlotFree } from './channel-limit.js';
 import {
   ChannelSecretStore,
   SecretsNotConfiguredError,
@@ -89,6 +90,8 @@ const REFUSAL = {
     status: 400,
     i18nKey: 'errors.SEVERAL_FACEBOOK_PAGES',
   },
+  // The plan's maxChannelAccounts is reached (ADR 047).
+  CHANNEL_LIMIT: { status: 409, i18nKey: 'errors.CHANNEL_LIMIT' },
 } as const;
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
@@ -325,6 +328,10 @@ export class FacebookConnectController {
   ): Promise<ChannelAccountSummary> {
     const who = this.admit(request);
     const account = await this.account(who.tenantId, id);
+    // Checked again under a lock when activating; this one avoids a Meta
+    // call that would be refused anyway.
+    if (!(await channelSlotFree(this.prisma, who.tenantId, id)))
+      throw refuse('CHANNEL_LIMIT');
     if (
       !this.config.get('INSTAGRAM_APP_SECRET', { infer: true }) ||
       !this.config.get('INSTAGRAM_VERIFY_TOKEN', { infer: true })
@@ -350,10 +357,8 @@ export class FacebookConnectController {
         WEBHOOK_FIELDS,
       ),
     );
-    await this.prisma.channelAccount.updateMany({
-      where: { id, tenantId: who.tenantId },
-      data: { status: 'ACTIVE' },
-    });
+    if (!(await activateChannelAccount(this.prisma, who.tenantId, id)))
+      throw refuse('CHANNEL_LIMIT');
     await this.audit(who, 'channel.facebook_enabled', id, {
       fields: WEBHOOK_FIELDS.join(','),
     });

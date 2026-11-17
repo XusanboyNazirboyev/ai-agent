@@ -23,6 +23,7 @@ import { usePreferences } from '@/lib/preferences';
 import { canManageTeam } from '@/lib/roles';
 import type { ConversationPage, Me, Role, TenantAccess } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
+import { accessNotice } from '@/lib/access-notice';
 import { LocaleSwitcher } from './locale-switcher';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
@@ -380,28 +381,30 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
 /**
  * Subscription state from `GET /me` (ADR 047 §3): expired means the assistant
  * is paused while people can still answer by hand; past due (a grace date
- * while still `ok`) warns before that happens.
+ * while still `ok`) warns before that happens; "ends soon" reminds managers
+ * in the last days of a running period.
  */
 export function AccessBanner(props: {
   access: TenantAccess | undefined;
   manager: boolean;
 }): ReactNode {
   const { t, locale } = useI18n();
+  const now = useNow(60 * 60_000);
   const access = props.access;
-  if (!access) return null;
-  const expired = access.state === 'SUBSCRIPTION_EXPIRED';
-  const pastDue = access.state === 'ok' && access.graceUntil !== null;
-  if (!expired && !pastDue) return null;
-  const date = access.graceUntil
+  const notice = accessNotice(access, props.manager, now);
+  if (!access || !notice) return null;
+  const expired = notice === 'expired';
+  const shown = notice === 'ending-soon' ? access.periodEnd : access.graceUntil;
+  const date = shown
     ? new Intl.DateTimeFormat(locale === 'uz-Latn' ? 'uz-Latn' : locale, {
         dateStyle: 'medium',
-      }).format(new Date(access.graceUntil))
+      }).format(new Date(shown))
     : '';
   return (
     <div
-      role="alert"
+      role={notice === 'ending-soon' ? 'status' : 'alert'}
       data-testid="access-banner"
-      data-state={expired ? 'expired' : 'past-due'}
+      data-state={notice}
       className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm font-medium ${
         expired
           ? 'bg-danger-soft text-danger-fg'
@@ -411,7 +414,11 @@ export function AccessBanner(props: {
       <span className="flex min-w-0 items-start gap-2">
         <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
         <span>
-          {expired ? t('banner.expired') : t('banner.pastDue', { date })}
+          {expired
+            ? t('banner.expired')
+            : notice === 'ending-soon'
+              ? t('banner.endingSoon', { date })
+              : t('banner.pastDue', { date })}
         </span>
       </span>
       {props.manager ? (

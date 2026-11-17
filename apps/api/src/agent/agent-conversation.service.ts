@@ -42,6 +42,7 @@ import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { budgetLimits, llmEnvironment } from './llm.factory.js';
+import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
 import type { BudgetLedger } from '../core/llm/budget-ledger.js';
 import type { EmbeddingProvider } from '../core/knowledge/embedding.js';
 import { EMBEDDING_PROVIDER } from '../knowledge/embedding.factory.js';
@@ -312,6 +313,7 @@ export class AgentConversationService implements OnModuleInit {
       conversationTokens,
       conversationExposure,
       monthExposure,
+      planLimits,
     ] = await Promise.all([
       sandbox
         ? Promise.resolve(null)
@@ -339,6 +341,7 @@ export class AgentConversationService implements OnModuleInit {
       this.usage.conversationTokens(tenantId, conversationId),
       this.ledger.conversationExposure(tenantId, conversationId),
       this.ledger.tenantMonthExposureNano(tenantId),
+      openPlanLimits(this.prisma, tenantId),
     ]);
     const slots = sandbox ? sandbox.slots : slotState(slotRow?.slots);
     const history: HistoryEntry[] = sandbox
@@ -351,14 +354,23 @@ export class AgentConversationService implements OnModuleInit {
         }));
 
     const environment = llmEnvironment(this.config);
-    const budget = new TurnBudget(budgetLimits(environment), {
-      conversationSpentNano: conversationSpent,
-      tenantMonthSpentNano: monthSpent,
-      conversationTokensUsed: conversationTokens,
-      conversationExposureNano: conversationExposure.nano,
-      conversationExposureTokens: conversationExposure.tokens,
-      tenantMonthExposureNano: monthExposure,
-    });
+    const budget = new TurnBudget(
+      budgetLimits(
+        environment,
+        monthlyLlmBudgetNano(
+          planLimits,
+          environment.LLM_TENANT_MONTHLY_BUDGET_USD,
+        ),
+      ),
+      {
+        conversationSpentNano: conversationSpent,
+        tenantMonthSpentNano: monthSpent,
+        conversationTokensUsed: conversationTokens,
+        conversationExposureNano: conversationExposure.nano,
+        conversationExposureTokens: conversationExposure.tokens,
+        tenantMonthExposureNano: monthExposure,
+      },
+    );
     const deadline = new AbortController();
     const entries: LlmUsageEntry[] = [];
     // The turn keeps every usage entry, persisted or not.

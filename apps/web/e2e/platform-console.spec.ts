@@ -108,6 +108,8 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   await admin.getByTestId('plan-price-input').fill('150 000');
   await expect(admin.getByTestId('plan-dialog')).toContainText('150,000');
   await admin.getByTestId('plan-max-operators').fill('2');
+  await admin.getByTestId('plan-max-channels').fill('1');
+  await admin.getByTestId('plan-ai-budget').fill('7.5');
   // Check the saved plan from the save response itself: the list (UI and
   // API, at most 200 rows, oldest first) can miss a new plan once leftover
   // runs have filled it, and a GET right after the click could race the save.
@@ -125,6 +127,11 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
     code: `start-${run}`,
     // 150 000 som typed, stored in tiyin (minor units, 2 decimals).
     priceMinor: 15_000_000,
+    limits: {
+      maxOperators: 2,
+      maxChannelAccounts: 1,
+      monthlyLlmBudgetUsd: 7.5,
+    },
   });
   await expect(admin.getByTestId('plan-dialog')).toBeHidden();
 
@@ -203,8 +210,13 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   );
   await owner.page.keyboard.press('Escape');
 
-  // Suspension signs the owner out and refuses login with a clear message.
+  // The customer page shows use against the plan's limits.
   await admin.goto(`/console/tenants/${tenantId}`);
+  await expect(admin.getByTestId('usage-operators')).toContainText('2 / 2');
+  await expect(admin.getByTestId('usage-channels')).toContainText('0 / 1');
+  await expect(admin.getByTestId('usage-ai')).toContainText('/ $7.50');
+
+  // Suspension signs the owner out and refuses login with a clear message.
   await changeStatus(admin, 'suspend', 'e2e: unpaid invoice');
   await expect(admin.getByTestId('tenant-status')).toContainText('Suspended');
   await owner.context.close();
