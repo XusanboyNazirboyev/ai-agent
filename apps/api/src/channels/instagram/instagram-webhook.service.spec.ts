@@ -65,6 +65,10 @@ function makeService(options?: {
     outboxEvent: {
       create: vi.fn().mockResolvedValue({ id: 'outbox-1' }),
     },
+    // The conversation already has its lead (owner 2026-11-17 rule).
+    lead: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'lead-1' }),
+    },
     $queryRaw: vi.fn().mockResolvedValue([]),
   };
   const prisma = {

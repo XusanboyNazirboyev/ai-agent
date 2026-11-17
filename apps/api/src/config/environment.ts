@@ -448,6 +448,11 @@ const environmentSchema = postgresEnvironmentSchema
      * operator group and platform `alert.*` log lines. Off until the owner
      * enables them.
      */
+    /** One-time lead backfill of older chats (ADR 057 amendment 2026-11-17). */
+    LEAD_BACKFILL_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
     ALERTS_ENABLED: z
       .enum(['true', 'false'])
       .default('false')

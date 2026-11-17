@@ -52,6 +52,8 @@ export const FAKE_GOOGLE_SHEETS_PORT = 4024;
 
 export const E2E_ENV = {
   SECRETS_MASTER_KEY: SECRETS_KEY,
+  // The fixtures seed their own leads; the one-time backfill would add more.
+  LEAD_BACKFILL_ENABLED: 'false',
   PUBLIC_BASE_URL: 'https://e2e.example.test',
   TELEGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
   INSTAGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_INSTAGRAM_PORT}/v26.0`,

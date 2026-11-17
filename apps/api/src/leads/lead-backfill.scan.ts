@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { LeadService } from './lead.service.js';
@@ -27,7 +29,12 @@ export class LeadBackfillScan implements ScheduledScan {
   constructor(
     private readonly prisma: PrismaService,
     private readonly leads: LeadService,
-  ) {}
+    @Optional() config?: ConfigService<AppEnvironment, true>,
+  ) {
+    // Browser tests seed their own leads and turn this off.
+    this.finished =
+      config?.get('LEAD_BACKFILL_ENABLED', { infer: true }) === false;
+  }
 
   async scanDue(): Promise<number> {
     if (this.finished) return 0;
@@ -56,8 +63,7 @@ export class LeadBackfillScan implements ScheduledScan {
         AND ca.channel_type <> ${MANUAL_CHANNEL_TYPE}
         AND NOT EXISTS (
           SELECT 1 FROM leads l
-          WHERE l.tenant_id = c.tenant_id
-            AND l.idempotency_key = 'lead:' || c.id::text)
+          WHERE l.tenant_id = c.tenant_id AND l.conversation_id = c.id)
         AND NOT EXISTS (
           SELECT 1 FROM audit_events a
           WHERE a.tenant_id = c.tenant_id AND a.action = 'lead.deleted'
@@ -77,14 +83,14 @@ export class LeadBackfillScan implements ScheduledScan {
         // The same lock as intake and the agent turn: one writer per chat.
         await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`agentcore:${tenantId}:${id}`}, 0))) AS lock_result`;
         const before = await tx.lead.count({
-          where: { tenantId, idempotencyKey: `lead:${id}` },
+          where: { tenantId, conversationId: id },
         });
         await this.leads.ensureForCustomerMessage(tx, {
           tenantId,
           conversationId: id,
         });
         const after = await tx.lead.count({
-          where: { tenantId, idempotencyKey: `lead:${id}` },
+          where: { tenantId, conversationId: id },
         });
         return after - before;
       });

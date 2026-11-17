@@ -123,11 +123,9 @@ export class LeadService {
     tx: Tx,
     input: { tenantId: string; conversationId: string },
   ): Promise<void> {
+    // Any lead of the conversation counts, whatever key made it.
     const existing = await tx.lead.findFirst({
-      where: {
-        tenantId: input.tenantId,
-        idempotencyKey: `lead:${input.conversationId}`,
-      },
+      where: { tenantId: input.tenantId, conversationId: input.conversationId },
       select: { id: true },
     });
     if (existing) return;
