@@ -460,15 +460,15 @@ describe('LeadsBoard filters and views', () => {
     ).toBeInTheDocument();
   });
 
-  it('the funnel strip is a disclosure, closed by default', async () => {
+  it('the funnel strip is a disclosure, open by default on desktop', async () => {
     mount();
     await screen.findByTestId('lead-card');
     const toggle = screen.getByTestId('funnel-toggle');
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryAllByTestId('funnel-stage')).toHaveLength(0);
-    fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getAllByTestId('funnel-stage')).toHaveLength(4);
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryAllByTestId('funnel-stage')).toHaveLength(0);
   });
 
   it('shows Export for OWNER and ADMIN only', async () => {

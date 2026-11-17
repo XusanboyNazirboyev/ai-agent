@@ -159,7 +159,9 @@ export function PipelinesSettingsPage(): ReactNode {
                   key={pipeline.id}
                   pipeline={pipeline}
                   manage={manage}
-                  defaultOpen={list.length === 1}
+                  // Owner 2026-11-17: every pipeline starts closed, the
+                  // only one ("Sotuvlar") too.
+                  defaultOpen={false}
                   onRename={() => {
                     setRenameName(pipeline.name ?? '');
                     setRenameTarget(pipeline);

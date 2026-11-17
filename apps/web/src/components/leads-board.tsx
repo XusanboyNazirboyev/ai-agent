@@ -113,9 +113,8 @@ export function LeadsBoard(): ReactNode {
 
   const [view, setView] = useState<'board' | 'list' | 'archive'>('board');
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
-  // The "Sales stages" strip starts closed on every screen (owner
-  // 2026-11-17); the toggle opens it.
-  const [showFunnel, setFunnelOpen] = useState(false);
+  const [funnelOpen, setFunnelOpen] = useState<boolean | null>(null);
+  const showFunnel = funnelOpen ?? !isMobile;
 
   // WON and LOST columns collapse; the choice is remembered per user.
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
