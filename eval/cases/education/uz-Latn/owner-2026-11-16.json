@@ -124,5 +124,41 @@
       "locale": "uz-Latn",
       "replyScript": "Latn"
     }
+  },
+  {
+    "id": "edu-uz-latn-o04",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "typo",
+    "description": "Owner 2026-11-17: \"aylts kursi bormi?\" (phonetic Uzbek spelling of IELTS) is understood and the course is found",
+    "input": {
+      "text": "aylts kursi bormi?"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "IELTS"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Latn"
+      },
+      {
+        "kind": "respond",
+        "text": "Sizga {{F1}} kursi mos keladi."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "handover": null,
+      "slots": {
+        "subject": "IELTS"
+      },
+      "replyIncludes": [
+        "IELTS"
+      ]
+    }
   }
 ]

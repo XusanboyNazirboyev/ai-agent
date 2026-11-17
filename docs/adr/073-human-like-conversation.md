@@ -17,7 +17,8 @@ Status: proposed on 2026-11-17 after the owner's requests: "mijoz AI agent bilan
 
 ### B. An agent that improves at its own business (per tenant)
 6. **ADR 063 is the base:** S1 capture what customers ask and where the agent fails (topic, outcome, language; no personal data), S2 a weekly report for OWNER/ADMIN, S3 proposed knowledge (FAQ answers, search synonyms) from repeated questions, S4 faster answers for the most common questions.
-7. **[OPEN, owner] How much it may change by itself.** ADR 063 says a person approves every learned answer, because a wrong learned answer would be repeated to every customer. Proposed split: search synonyms and spelling variants (they only help find catalog items; facts still come from the CRM) are applied automatically and can be undone; FAQ answers, prices, policies and prompt changes always need one click of approval from the tenant OWNER/ADMIN.
+7. **How much it may change by itself (owner decision 2026-11-17: "ha roziman").** Search synonyms and spelling variants ("aylts" → IELTS; they only help find catalog items, facts still come from the CRM) are learned and applied automatically and can be undone by the tenant. FAQ answers, prices, policies and prompt changes always need one click of approval from the tenant OWNER/ADMIN, because a wrong learned answer would be repeated to every customer.
+   - Checked 2026-11-17: the extraction model already maps "aylts kursi bormi?" to IELTS and finds the course (live, eval `edu-uz-latn-o04`). Learned variants matter for tenant-specific names the model cannot know.
 
 ## Order
 A1 (model-worded replies with fallback) and A2 (asked, not pasted questions) first: they change every conversation. Then B S1+S2 (insights and report), then A4 price prefetch (with owner approval), then B S3/S4. Each step ships with eval cases and a live run.
