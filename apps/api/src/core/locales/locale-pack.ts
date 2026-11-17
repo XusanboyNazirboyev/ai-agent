@@ -70,6 +70,11 @@ export interface LocaleTemplates {
    */
   readonly languageSwitched: string;
   /**
+   * Acknowledges a request to be answered in whatever language the customer
+   * writes in ("o'zbekcha yozsam o'zbekcha yozing"), written in THIS locale.
+   */
+  readonly languageMirror: string;
+  /**
    * Sent once when no operator has picked up a handover within the SLA and
    * the operators were reached. It must not promise a time or a reply.
    */
@@ -226,6 +231,12 @@ export interface LocalePack {
    * `languageRequestVerbs`; a name alone may be what the customer asks about.
    */
   readonly languageRequestNames: readonly string[];
+  /**
+   * Phrases, in THIS locale's language, with which a customer asks to be
+   * answered in the language they write in ("o'sha tilda yozing", "same
+   * language"). Naming two languages with a request verb means the same.
+   */
+  readonly languageMirrorPhrases: readonly string[];
   /**
    * Verb forms, in THIS locale's language, with which a customer asks how to
    * be answered ("gaplashing", "write"), matched as whole words. No generic

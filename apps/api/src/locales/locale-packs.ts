@@ -67,6 +67,8 @@ export const UZ_LATN: LocalePack = {
     outOfScope: "Kechirasiz, bu bo'yicha yordam bera olmayman.",
     languageSwitched:
       "Albatta, endi o'zbek tilida yozaman. Sizga qanday yordam bera olaman?",
+    languageMirror:
+      "Albatta! Qaysi tilda yozsangiz, o'sha tilda javob beraman. Sizga qanday yordam bera olaman?",
     languageClarification:
       "Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.",
     operatorDelayNotice:
@@ -186,6 +188,16 @@ export const UZ_LATN: LocalePack = {
     "to'xtating",
     'eslatma kerak emas',
   ],
+  languageMirrorPhrases: [
+    "o'sha tilda javob",
+    "o'sha tilda yoz",
+    'shu tilda javob',
+    'shu tilda yoz',
+    'qaysi tilda yozsam',
+    'qaysi tilda yozsangiz',
+    "o'zim yozgan tilda",
+    'men yozgan tilda',
+  ],
   languageRequestPhrases: [
     "o'zbekcha yozing",
     "o'zbek tilida yozing",
@@ -270,6 +282,8 @@ export const UZ_CYRL: LocalePack = {
     outOfScope: 'Кечирасиз, бу бўйича ёрдам бера олмайман.',
     languageSwitched:
       'Албатта, энди ўзбек тилида ёзаман. Сизга қандай ёрдам бера оламан?',
+    languageMirror:
+      'Албатта! Қайси тилда ёзсангиз, ўша тилда жавоб бераман. Сизга қандай ёрдам бера оламан?',
     languageClarification:
       'Илтимос, ўзбек, рус ёки инглиз тилида ёзинг. / Пожалуйста, пишите на узбекском, русском или английском. / Please write in Uzbek, Russian or English.',
     operatorDelayNotice:
@@ -383,6 +397,16 @@ export const UZ_CYRL: LocalePack = {
     },
   },
   optOutPhrases: ['/stop', 'стоп', 'тўхтат', 'тўхтатинг', 'эслатма керак эмас'],
+  languageMirrorPhrases: [
+    'ўша тилда жавоб',
+    'ўша тилда ёз',
+    'шу тилда жавоб',
+    'шу тилда ёз',
+    'қайси тилда ёзсам',
+    'қайси тилда ёзсангиз',
+    'ўзим ёзган тилда',
+    'мен ёзган тилда',
+  ],
   languageRequestPhrases: [
     'ўзбекча ёзинг',
     'ўзбек тилида ёзинг',
@@ -465,6 +489,8 @@ export const RU: LocalePack = {
     notUnderstood: 'Извините, я не совсем понял ваш ответ.',
     outOfScope: 'Извините, с этим я помочь не могу.',
     languageSwitched: 'Хорошо, теперь пишу по-русски. Чем могу помочь?',
+    languageMirror:
+      'Конечно! Буду отвечать на том языке, на котором вы пишете. Чем могу помочь?',
     languageClarification:
       "Пожалуйста, пишите на узбекском, русском или английском. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Please write in Uzbek, Russian or English.",
     operatorDelayNotice:
@@ -577,6 +603,13 @@ export const RU: LocalePack = {
     },
   },
   optOutPhrases: ['/stop', 'стоп', 'не пишите', 'отписаться', 'остановить'],
+  languageMirrorPhrases: [
+    'отвечайте на том же языке',
+    'пишите на том же языке',
+    'на каком языке я пишу',
+    'на каком языке пишу',
+    'на языке, на котором я пишу',
+  ],
   languageRequestPhrases: [
     'по-русски',
     'напишите на русском',
@@ -658,6 +691,8 @@ export const EN: LocalePack = {
     outOfScope: "Sorry, I can't help with that.",
     languageSwitched:
       "Sure, I'll write in English from now on. How can I help you?",
+    languageMirror:
+      "Of course! I'll reply in the language you write in. How can I help you?",
     languageClarification:
       "Please write in Uzbek, Russian or English. / Iltimos, o'zbek, rus yoki ingliz tilida yozing. / Пожалуйста, пишите на узбекском, русском или английском.",
     operatorDelayNotice:
@@ -761,11 +796,14 @@ export const EN: LocalePack = {
       afterHoursCallback:
         'We are closed right now. Your request is recorded and an operator will call you back during working hours.',
     },
+    // Phrases name places explicitly: the guardrail treats them as claims, and
+    // a bare "available" or "unknown" is everyday English (owner test
+    // 2026-11-16: a correct IELTS reply was blocked for "available").
     availability: {
-      AVAILABLE: 'available',
+      AVAILABLE: 'places available',
       LIMITED: 'few places left',
       SOLD_OUT: 'sold out',
-      UNKNOWN: 'unknown',
+      UNKNOWN: 'availability not confirmed',
     },
   },
   optOutPhrases: [
@@ -774,6 +812,16 @@ export const EN: LocalePack = {
     'unsubscribe',
     'do not message me',
     'stop messaging',
+  ],
+  languageMirrorPhrases: [
+    'reply in the same language',
+    'answer in the same language',
+    'write in the same language',
+    'whatever language i',
+    'whichever language i',
+    'the language i write',
+    "the language i'm writing",
+    'the language i use',
   ],
   languageRequestPhrases: [
     'write in english',

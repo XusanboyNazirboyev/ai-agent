@@ -255,6 +255,27 @@ describe('facts and guardrail', () => {
       },
     });
 
+  // Owner test 2026-11-16: a correct English reply was blocked because it used
+  // the everyday word "available". Availability phrases are claims only as
+  // whole phrases ("places available", "sold out").
+  it.each([
+    [
+      'Yes, we have the IELTS course. It is available on weekdays and weekends.',
+    ],
+    [
+      'That option is unavailable for online booking, but I can ask a colleague.',
+    ],
+    ['I can check the availability for you.'],
+  ])('accepts everyday English %j', (draft) => {
+    expect(check(draft, EN).violations).not.toContain('UNSOURCED_AVAILABILITY');
+  });
+  it.each([
+    ['Good news: places available in the evening group.'],
+    ['Sorry, that group is sold out.'],
+  ])("still blocks the model's own availability claim %j", (draft) => {
+    expect(check(draft, EN).violations).toContain('UNSOURCED_AVAILABILITY');
+  });
+
   // AUD-10 (main path): a title fact is rendered as written, so a title that
   // states a price or availability is blocked like model text that does.
   it.each([

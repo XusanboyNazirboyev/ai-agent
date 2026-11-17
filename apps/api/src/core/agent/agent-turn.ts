@@ -53,7 +53,7 @@ import {
   decideBeforeFacts,
   decideBeforeModel,
   languageHistory,
-  requestedLocale,
+  languageRequest,
   type LanguageAssessment,
   type LanguageDecision,
   type LanguagePolicy,
@@ -306,6 +306,23 @@ type Draft =
  * the gate accepted 0.45, so a short message the gate called clear stayed in
  * the old locale and was then treated as unclear (ADR 013 amendment).
  */
+/**
+ * Guardrail findings that only mean the model could not word the facts it was
+ * given (an unconfirmed price, its own availability words or digits, a stale
+ * reference, length): a code-rendered option list is still a safe reply.
+ */
+const WORDING_ONLY: ReadonlySet<string> = new Set([
+  'EMPTY',
+  'TOO_LONG',
+  'UNKNOWN_FACT',
+  'STALE_FACT',
+  'FACT_NOT_LIVE',
+  'FACT_PROVENANCE_MISSING',
+  'UNSOURCED_AVAILABILITY',
+  'UNSOURCED_NUMBER',
+  'UNSOURCED_CURRENCY',
+]);
+
 function replyLocale(
   input: AgentTurnInput,
   locales: LocaleRegistry,
@@ -344,20 +361,34 @@ export async function runAgentTurn(
   );
   let localeId = replyLocale(input, locales, languageAssessment);
   // An explicit request ("write in Russian") outranks detection, now and
-  // until the customer asks for another language.
-  const requested = requestedLocale(
+  // until the customer asks for another language, asks to be answered in the
+  // language they write in, or clearly writes in another supported one (D17;
+  // owner 2026-11-16: "o'zbekcha yozsam o'zbekcha, inglizcha bo'lsa
+  // inglizcha").
+  const asked = languageRequest(
     input.customerText,
     locales,
     input.supportedLocales,
   );
+  const requested = asked?.kind === 'locale' ? asked.locale : undefined;
+  const mirror = asked?.kind === 'mirror';
   const past = languageHistory(
     input.history,
     locales,
     languagePolicy,
     input.supportedLocales,
   );
-  const spoken: typeof past = requested ? { ...past, pinned: requested } : past;
-  const pin = requested ?? past.pinned;
+  const wroteOther =
+    languageAssessment.confidenceClass === 'HIGH' &&
+    languageAssessment.localeId !== undefined &&
+    languageAssessment.localeId !== past.pinned;
+  const kept = mirror || wroteOther ? undefined : past.pinned;
+  const spoken: typeof past = requested
+    ? { ...past, pinned: requested }
+    : kept
+      ? past
+      : { established: past.established, unclearStreak: past.unclearStreak };
+  const pin = requested ?? kept;
   if (pin) localeId = pin;
   let modelLocale: LocaleId | undefined;
   let slots: SlotState = input.slots;
@@ -673,6 +704,27 @@ export async function runAgentTurn(
     );
     if (unclear) return unclear;
     return finish(locale().templates.languageSwitched, 'ANSWERED', {
+      slots: input.slots,
+    });
+  }
+  // "Answer in the language I write in": acknowledged by code in the language
+  // of this message; nothing extracted from it is kept.
+  if (mirror) {
+    // The acknowledgement is in the language the message itself is written
+    // in, weak evidence included; a request word proves nothing on its own.
+    localeId = languageAssessment.localeId ?? past.established ?? localeId;
+    const unclear = languageStop(
+      decideBeforeFacts(
+        languageAssessment,
+        spoken,
+        localeId,
+        locales,
+        modelLocale,
+        languagePolicy,
+      ),
+    );
+    if (unclear) return unclear;
+    return finish(locale().templates.languageMirror, 'ANSWERED', {
       slots: input.slots,
     });
   }
@@ -1171,6 +1223,21 @@ export async function runAgentTurn(
       const safe = guard(verified);
       if (safe.rendered) checked = safe;
     }
+  }
+  // The model twice failed to word a reply from the verified facts, but the
+  // catalog did find options: list them (titles only, rendered and checked by
+  // code) instead of handing a plain "do you have X?" to a person (owner test
+  // 2026-11-16). A price question still goes to a person, who can quote it;
+  // so does any other finding (a forbidden or action claim, a leak, the wrong
+  // language).
+  if (
+    !checked.rendered &&
+    intent !== 'price' &&
+    checked.violations.every((violation) => WORDING_ONLY.has(violation))
+  ) {
+    const listed = fallback({ violations: checked.violations, regenerated });
+    if (listed.outcome !== 'FALLBACK' || listed.shownFactIds.length > 0)
+      return listed;
   }
   if (!checked.rendered) {
     return handover('GUARDRAIL', {

@@ -38,3 +38,16 @@ Detection accuracy per locale, native-speaker review, and a live eval of the liv
   - A request that changes the reply language is answered with the new locale's `languageSwitched` template after extraction, unless a handover intent or the facts language gate decides otherwise; nothing extracted from that message is kept.
   - The detector also recognises stretched words ("helloo", "salooom") by comparing words with repeated letters collapsed (4+ letters only).
 - **Known limit:** a question in the same message as the request ("speak English, do you have IELTS?") gets the acknowledgement first; the customer asks again. Wording of the new templates is not native-reviewed (D18).
+
+## Amendment 3 (2026-11-17): the customer's own language wins; worded options before a handover
+- **Found on staging (owner's Telegram test, 2026-11-16):**
+  - "what's up" was not recognised as English (contractions were not in the word list) and got an Uzbek reply.
+  - After "inglizcha gapir", the bot kept English for "menga matematika kursi kerak" (clearly Uzbek) and for "o'zbekcha yozsam o'zbekcha yoz, inglizcha bo'lsa inglizcha" ("if I write Uzbek, answer Uzbek; if English, English"). The second message named two languages, so it was not a request at all and went to catalog search ("no matching option").
+  - "I need course in IELTS. do you have" found the course with offers, but both drafts failed the guardrail (`FACT_NOT_LIVE` for a listed price, `UNSOURCED_AVAILABILITY` for the plain English word "available"), so the turn handed over with "I can't give a reliable answer right now".
+- **Decisions:**
+  - An explicit request still outranks detection, but only until the customer asks for another language, asks to be answered in the language they write in, or writes a message the gate rates HIGH for another supported locale (`languageHistory`, `runAgentTurn`). Owner requirement: answer Uzbek in Uzbek, English in English.
+  - A "mirror" request is a pack's `languageMirrorPhrases` entry ("qaysi tilda yozsam", "reply in the same language") or two languages named with a request verb. It drops the pin and is acknowledged by code with the `languageMirror` template in the language of the message itself.
+  - English availability phrases name places ("places available", "availability not confirmed"), and the guardrail matches availability phrases as whole phrases, so "available", "unavailable" and "availability" in ordinary sentences are not claims. Uzbek and Russian phrases were already specific.
+  - When both drafts fail only on wording (unconfirmed price, own digits, currency or availability words, stale or unknown references, length) and the intent is not `price`, the turn answers with the code-rendered option list (title facts only, same guardrail and display gate, outcome `FALLBACK`) instead of a `GUARDRAIL` handover. A price question, and any other finding (forbidden or action claim, leak, language), still hands over.
+- **Checked:** new tests in `language-policy.spec.ts`, `agent-turn.spec.ts` and `agent-components.spec.ts`; the scripted eval keeps its `GUARDRAIL` expectations for price questions; API unit suite 2856 passed, 15 skipped; `live-eval-runner.spec.ts` fails locally on the unchanged code too (local model env), not in CI.
+- **Not verified:** no live-model run; the new template wording is not native-reviewed (D18).

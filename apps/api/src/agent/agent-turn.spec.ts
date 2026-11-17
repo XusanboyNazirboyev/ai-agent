@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { LlmError } from '../core/llm/llm-provider.js';
 import { usdToNano } from '../core/llm/pricing.js';
-import { UZ_LATN } from '../locales/locale-packs.js';
+import { EN, UZ_LATN } from '../locales/locale-packs.js';
 import {
   ScriptedLlmProvider,
   type ScriptStep,
@@ -525,6 +525,25 @@ describe('agent turn: a listed price is not shown, the retry may ask for a live 
       handover: 'GUARDRAIL',
     });
     expect(result.reply).not.toMatch(/\d{2,}/u);
+  });
+
+  it('lists the options instead of handing over when a search answer cannot be worded (owner test 2026-11-16)', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      listOffers,
+      { kind: 'tools', text: 'Yes, {{F1}} is open: {{F2}}.' },
+      { kind: 'tools', text: 'Yes, {{F1}} is open: {{F2}}.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'I need course in IELTS . do you have',
+    });
+    expect(result.outcome).toBe('FALLBACK');
+    expect(result.handover).toBeUndefined();
+    expect(result.reply).toContain(EN.templates.optionsIntro);
+    expect(result.reply).toContain('IELTS');
+    expect(result.reply).not.toMatch(/\d{2,}/u);
+    expect(result.violations).toContain('FACT_NOT_LIVE');
   });
 
   it('accepts a retry that drops the price instead of quoting', async () => {

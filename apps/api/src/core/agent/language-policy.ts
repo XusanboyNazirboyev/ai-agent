@@ -135,17 +135,36 @@ export function assessLanguage(
   };
 }
 
+/** What a message asks about the reply language, if anything. */
+export type LanguageRequest =
+  /** Answer in this locale from now on ("ingliz tilida gaplash"). */
+  | { readonly kind: 'locale'; readonly locale: LocaleId }
+  /**
+   * Answer in whatever language the customer writes in: a pack's mirror
+   * phrase ("o'sha tilda yozing"), or two languages named with a request verb
+   * ("o'zbekcha yozsam o'zbekcha yoz, inglizcha bo'lsa inglizcha").
+   */
+  | { readonly kind: 'mirror' };
+
 /**
  * Locale a message explicitly asks to be answered in: a pack's request
  * phrase, or one of its language names together with any pack's request
- * verb ("ingliz tilida gaplash"). Two different matches are ambiguous: no
- * request.
+ * verb ("ingliz tilida gaplash"). A mirror request is not a locale.
  */
 export function requestedLocale(
   text: string,
   registry: LocaleRegistry,
   supported: readonly LocaleId[],
 ): LocaleId | undefined {
+  const request = languageRequest(text, registry, supported);
+  return request?.kind === 'locale' ? request.locale : undefined;
+}
+
+export function languageRequest(
+  text: string,
+  registry: LocaleRegistry,
+  supported: readonly LocaleId[],
+): LanguageRequest | undefined {
   const fold = (value: string): string =>
     updatedLatnToLegacy(unifyApostrophes(value)).toLowerCase();
   const haystack = fold(text);
@@ -160,6 +179,8 @@ export function requestedLocale(
   const verb = registry
     .all()
     .some((pack) => pack.languageRequestVerbs.some(word));
+  if (registry.all().some((pack) => pack.languageMirrorPhrases.some(contains)))
+    return { kind: 'mirror' };
   const matches = new Set<LocaleId>();
   for (const pack of registry.all()) {
     if (!supported.includes(pack.id)) continue;
@@ -169,13 +190,16 @@ export function requestedLocale(
     )
       matches.add(pack.id);
   }
-  return matches.size === 1 ? [...matches][0] : undefined;
+  if (matches.size === 1) return { kind: 'locale', locale: [...matches][0]! };
+  return matches.size > 1 && verb ? { kind: 'mirror' } : undefined;
 }
 
 export interface LanguageHistory {
   /**
    * Locale the customer asked for explicitly. It outranks detection until
-   * they ask for another one.
+   * they ask for another one, ask to be answered in the language they write
+   * in, or clearly write in another supported language (D17: the customer's
+   * own language wins; owner 2026-11-16).
    */
   readonly pinned?: LocaleId;
   /** Locale the customer clearly wrote in earlier (latest such message). */
@@ -214,17 +238,19 @@ export function languageHistory(
   let unclearStreak = 0;
   for (const entry of history) {
     if (entry.role !== 'customer') continue;
-    const asked = requestedLocale(entry.text, registry, supported);
+    const asked = languageRequest(entry.text, registry, supported);
     if (asked) {
       // Which language to ANSWER in. It says nothing about which language
       // the customer's own text is in, so it does not establish anything.
-      pinned = asked;
+      pinned = asked.kind === 'locale' ? asked.locale : undefined;
       continue;
     }
     const assessment = assessLanguage(entry.text, registry, policy);
     if (assessment.confidenceClass === 'HIGH' && assessment.localeId) {
       established = assessment.localeId;
       unclearStreak = 0;
+      if (pinned !== undefined && pinned !== assessment.localeId)
+        pinned = undefined;
     } else if (isUnclear(assessment, established)) {
       unclearStreak += 1;
     }

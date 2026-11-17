@@ -119,6 +119,9 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
     'сизда',
     'қайси',
     'нима',
+    // Everyday words (owner test 2026-11-16). Language-request words are not
+    // listed: a request says nothing about the customer's own language.
+    "bo'lsa",
   ]),
   ru: new Set([
     'здравствуйте',
@@ -202,6 +205,35 @@ const WORDS: Readonly<Record<LanguageCode, ReadonlySet<string>>> = {
     'will',
     'should',
     'required',
+    // Chat words and contractions (owner test 2026-11-16: "what's up" was not
+    // recognised and got an Uzbek reply). None is an Uzbek or transliterated
+    // Russian word; language-request words are not listed.
+    "what's",
+    'whats',
+    'up',
+    'tell',
+    'yourself',
+    'your',
+    'this',
+    'that',
+    'about',
+    'know',
+    'help',
+    'good',
+    'morning',
+    'evening',
+    'doing',
+    "i'm",
+    "it's",
+    "don't",
+    'dont',
+    "can't",
+    'nope',
+    'yeah',
+    'sure',
+    'where',
+    'who',
+    'why',
   ]),
 };
 

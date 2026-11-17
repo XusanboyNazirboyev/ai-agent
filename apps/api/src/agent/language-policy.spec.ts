@@ -5,6 +5,7 @@ import {
   decideBeforeFacts,
   decideBeforeModel,
   languageHistory,
+  languageRequest,
   requestedLocale,
   type LanguageHistory,
 } from '../core/agent/language-policy.js';
@@ -388,7 +389,7 @@ describe('explicit language requests', () => {
     const asked = languageHistory(
       [
         { role: 'customer', text: 'Please reply in Russian' },
-        { role: 'customer', text: 'Salom, menga kurs kerak' },
+        { role: 'customer', text: 'IELTS?' },
       ],
       LOCALES,
     );
@@ -436,6 +437,81 @@ describe('explicit language requests', () => {
     expect(result.reply).not.toBe(LOCALES.get('en').templates.languageSwitched);
   });
 
+  it('releases the pin when the customer clearly writes in another language (D17)', () => {
+    // Owner 2026-11-16: "o'zbekcha yozsam o'zbekcha, inglizcha bo'lsa inglizcha".
+    const released = languageHistory(
+      [
+        { role: 'customer', text: 'Please reply in Russian' },
+        { role: 'customer', text: 'Salom, menga kurs kerak' },
+      ],
+      LOCALES,
+    );
+    expect(released.pinned).toBeUndefined();
+    expect(released.established).toBe('uz-Latn');
+  });
+
+  it.each([
+    ["o'zbekcha yozsam o'zbekcha yoz inglizcha bo'lsa inglizcha"],
+    ['Qaysi tilda yozsam, shu tilda javob bering'],
+    ['Please reply in the same language I write in'],
+    ['Отвечайте на том же языке, на каком я пишу'],
+  ])('reads %j as "answer in my language" and drops the pin', (text) => {
+    expect(languageRequest(text, LOCALES, all)).toEqual({ kind: 'mirror' });
+    expect(requestedLocale(text, LOCALES, all)).toBeUndefined();
+    const history = languageHistory(
+      [
+        { role: 'customer', text: 'inglizcha gapir' },
+        { role: 'customer', text },
+      ],
+      LOCALES,
+    );
+    expect(history.pinned).toBeUndefined();
+  });
+
+  it.each([
+    ['Kurs shu tilda o‘tiladimi?'],
+    ['Is the course in the same language?'],
+  ])('does not read %j as a mirror request', (text) => {
+    expect(languageRequest(text, LOCALES, all)).toBeUndefined();
+  });
+
+  it('answers a mirror request in the language it is written in', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({}, 'other', 'uz', 'Latn'),
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: "o'zbekcha yozsam o'zbekcha yoz inglizcha bo'lsa inglizcha",
+      input: {
+        conversationLocale: 'en',
+        history: [
+          { role: 'customer', text: 'Salom, menga kurs kerak' },
+          { role: 'customer', text: 'inglizcha gapir' },
+        ],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+    expect(result.reply).toBe(LOCALES.get('uz-Latn').templates.languageMirror);
+  });
+
+  it('follows a clear message in another language after a request', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),
+      { kind: 'tools', text: 'Sizga {{F1}} kursi mos keladi.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'Salom, menga IELTS kursi kerak',
+      input: {
+        conversationLocale: 'ru',
+        history: [
+          { role: 'customer', text: 'Пожалуйста, напишите на русском' },
+        ],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+  });
+
   it('keeps a pinned locale for later messages in a turn', async () => {
     const provider = new ScriptedLlmProvider([
       extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),
@@ -443,10 +519,11 @@ describe('explicit language requests', () => {
     ]);
     const { result } = await runTurn({
       provider,
-      text: 'Salom, menga IELTS kursi kerak',
+      text: 'IELTS?',
       input: {
         conversationLocale: 'uz-Latn',
         history: [
+          { role: 'customer', text: 'Salom, menga kurs kerak' },
           { role: 'customer', text: 'Пожалуйста, напишите на русском' },
         ],
       },

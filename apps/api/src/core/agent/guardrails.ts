@@ -49,6 +49,20 @@ const LEAK =
   /system prompt|<\/?(?:system|instructions?|tool_result|catalog_context|customer_message)>|\b(?:search_catalog|get_item_details|list_offers|check_availability|get_quote|knowledge_search)\b|\{\{(?!\s*F\d)/iu;
 
 /**
+ * Whether `text` (lower-cased, apostrophes unified) states one of the
+ * locale's availability phrases as whole words: "places available" is a
+ * claim, "unavailable" or "availability" alone is not the phrase.
+ */
+function statesAvailability(text: string, locale: LocalePack): boolean {
+  return Object.values(locale.templates.availability).some((phrase) => {
+    const escaped = unifyApostrophes(phrase)
+      .toLowerCase()
+      .replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    return new RegExp(`(?<![\\p{L}'])${escaped}(?![\\p{L}'])`, 'u').test(text);
+  });
+}
+
+/**
  * AUD-10: a CRM item title is shown as written. A title that carries a
  * currency or an availability phrase would state a price or availability
  * without a typed, live fact, so a code-rendered list leaves it out.
@@ -58,12 +72,7 @@ export function titleCarriesHardFact(
   locale: LocalePack,
 ): boolean {
   const text = unifyApostrophes(title).toLowerCase();
-  return (
-    CURRENCY.test(text) ||
-    Object.values(locale.templates.availability).some((phrase) =>
-      text.includes(unifyApostrophes(phrase).toLowerCase()),
-    )
-  );
+  return CURRENCY.test(text) || statesAvailability(text, locale);
 }
 
 export function checkDraft(
@@ -127,11 +136,7 @@ export function checkDraft(
   if (CURRENCY.test(own)) violations.add('UNSOURCED_CURRENCY');
   const lower = own.toLowerCase();
   // An availability phrase the model typed itself is a claim without a fact.
-  if (
-    Object.values(context.locale.templates.availability).some((phrase) =>
-      lower.includes(unifyApostrophes(phrase).toLowerCase()),
-    )
-  ) {
+  if (statesAvailability(lower, context.locale)) {
     violations.add('UNSOURCED_AVAILABILITY');
   }
   if (
