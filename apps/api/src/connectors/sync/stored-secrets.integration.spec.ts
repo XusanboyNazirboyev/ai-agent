@@ -2,9 +2,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { PrismaConnectorSecretStore } from '../../secrets/connector-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
 import { Bitrix24Connector } from '../bitrix24/bitrix24-connector.js';
@@ -19,12 +22,13 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Stored secret tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the loader and the store on the app
+// role, each call under the tenant its row or owner names.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const REF = 'store:bitrix24_webhook_url';
@@ -54,16 +58,18 @@ function world(): {
       });
     },
   });
-  const store = new PrismaConnectorSecretStore(
-    prisma,
-    new SecretCipher(
-      createKeyring({
-        SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
-      }),
+  const store = tenantScoped(
+    new PrismaConnectorSecretStore(
+      prisma,
+      new SecretCipher(
+        createKeyring({
+          SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
+        }),
+      ),
     ),
   );
   return {
-    loader: new TenantConnectorLoader(prisma, registry, store),
+    loader: tenantScoped(new TenantConnectorLoader(prisma, registry, store)),
     store,
     resolved,
   };
@@ -140,7 +146,7 @@ describe('store: references in connector config (ADR 032)', () => {
     });
     registry.register(bitrix24ConnectorRegistration());
     await expect(
-      new TenantConnectorLoader(prisma, registry).create(a),
+      tenantScoped(new TenantConnectorLoader(prisma, registry)).create(a),
     ).rejects.toMatchObject({ code: 'CONNECTOR_SECRET_MISSING' });
   });
 });

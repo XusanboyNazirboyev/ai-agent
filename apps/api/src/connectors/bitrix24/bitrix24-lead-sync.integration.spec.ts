@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { config as loadEnv } from 'dotenv';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../../generated/prisma/client.js';
 import { LeadSyncService } from '../../leads/lead-sync.service.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { ConnectorRegistry } from '../registry/connector-registry.js';
 import {
   bitrix24ConnectorRegistration,
@@ -30,11 +33,14 @@ if (
   database === process.env.POSTGRES_DATABASE
 )
   throw new Error('requires a dedicated agentcore_* test database');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: fixtures on the owner; the sync on the app role under the
+// tenant it is given, as the lead sync job runs it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
-const prisma = db as unknown as PrismaService;
-afterAll(async () => db.$disconnect());
 
 const PHONE = '+998900000017';
 const SECRET_REF = 'env:CONNECTOR_SECRET_BITRIX24_WEBHOOK_URL';
@@ -58,9 +64,9 @@ function syncWith(portal: FakePortal): LeadSyncService {
         },
       }),
   });
-  return new LeadSyncService(
-    prisma,
-    new TenantConnectorLoader(prisma, registry),
+  return tenantScoped(
+    new LeadSyncService(prisma, new TenantConnectorLoader(prisma, registry)),
+    { tenantArg: 0 },
   );
 }
 
