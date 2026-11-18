@@ -40,6 +40,7 @@ const STRICT_SPECS = [
   'src/webinbox/login-limit.integration.spec.ts',
   'src/webinbox/webinbox.integration.spec.ts',
   'src/handover/operator-api.integration.spec.ts',
+  'src/channels/telegram/operator-group-link.integration.spec.ts',
 ];
 
 export default defineConfig({

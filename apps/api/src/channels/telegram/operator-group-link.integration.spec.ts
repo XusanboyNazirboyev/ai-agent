@@ -3,10 +3,13 @@ import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../../generated/prisma/client.js';
 import type { AppEnvironment } from '../../config/environment.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+} from '../../persistence/testing/test-clients.js';
 import { createGroupLinkCode, groupLinkKey } from './operator-group-link.js';
 import {
   normalizeTelegramUpdate,
@@ -17,23 +20,36 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('requires agentcore_test');
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: fixtures on the owner; the webhook service on the app role
+// under the tenant the route found for the account.
+const prisma = ownerClient();
+const app = appClient();
+afterAll(async () => {
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
-afterAll(async () => prisma.$disconnect());
+const tenantOfAccount = new Map<string, string>();
 
 const MASTER = randomBytes(32).toString('base64');
 const KEY = groupLinkKey(MASTER);
 
 /** `null`: a server without SECRETS_MASTER_KEY. */
-function service(master: string | null = MASTER): TelegramWebhookService {
-  return new TelegramWebhookService(
-    prisma as unknown as PrismaService,
+function service(
+  master: string | null = MASTER,
+): Pick<TelegramWebhookService, 'linkOperatorGroup'> {
+  const webhook = new TelegramWebhookService(
+    app as unknown as PrismaService,
     {
       get: (key: string) =>
         key === 'SECRETS_MASTER_KEY' ? (master ?? undefined) : undefined,
     } as unknown as ConfigService<AppEnvironment, true>,
   );
+  return {
+    // As the webhook route: the update runs under its account's tenant.
+    linkOperatorGroup: (accountId, update) =>
+      runWithTenant(tenantOfAccount.get(accountId)!, () =>
+        webhook.linkOperatorGroup(accountId, update),
+      ),
+  };
 }
 
 async function account(
@@ -59,6 +75,7 @@ async function account(
       status,
     },
   });
+  tenantOfAccount.set(row.id, tenant.id);
   return { tenantId: tenant.id, id: row.id };
 }
 
