@@ -3,9 +3,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import {
   AUDIT_CATEGORIES,
   AuditLogController,
@@ -15,12 +18,15 @@ import {
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Audit log tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const controller = new AuditLogController(db as unknown as PrismaService);
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant, as the session guard sets it.
+const db = ownerClient();
+const app = appClient();
+const controller = tenantScoped(
+  new AuditLogController(app as unknown as PrismaService),
+);
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';

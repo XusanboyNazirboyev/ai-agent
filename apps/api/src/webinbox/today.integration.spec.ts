@@ -3,22 +3,26 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { TodayController } from './today.controller.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Today tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const controller = new TodayController(prisma);
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant, as the session guard sets it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const controller = tenantScoped(new TodayController(prisma));
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -95,7 +99,7 @@ async function waiting(
         idempotencyKey: `h-${id}`,
       },
     });
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE handovers SET sla_due_at = now() + ($1 || ' minutes')::interval WHERE id = $2::uuid`,
       String(slaInMinutes),
       h.id,
@@ -120,13 +124,13 @@ async function lead(
     },
   });
   if (options.hoursAgo !== undefined)
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE leads SET created_at = now() - ($1 || ' hours')::interval WHERE id = $2::uuid`,
       String(options.hoursAgo),
       created.id,
     );
   if (options.archived)
-    await prisma.$executeRawUnsafe(
+    await db.$executeRawUnsafe(
       `UPDATE leads SET archived_at = now() WHERE id = $1::uuid`,
       created.id,
     );

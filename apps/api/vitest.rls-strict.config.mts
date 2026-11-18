@@ -19,6 +19,12 @@ const STRICT_SPECS = [
   'src/tags/tags.integration.spec.ts',
   'src/handover/phase5.integration.spec.ts',
   'src/channels/instagram/instagram-flow.integration.spec.ts',
+  'src/webinbox/inbox-last-message.integration.spec.ts',
+  'src/webinbox/canned-responses.integration.spec.ts',
+  'src/webinbox/audit-log.integration.spec.ts',
+  'src/webinbox/conversation-tags.integration.spec.ts',
+  'src/webinbox/inbox-waiting-order.integration.spec.ts',
+  'src/webinbox/today.integration.spec.ts',
 ];
 
 export default defineConfig({

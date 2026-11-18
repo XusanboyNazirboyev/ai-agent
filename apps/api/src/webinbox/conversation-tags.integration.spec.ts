@@ -3,9 +3,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { TagsService } from '../tags/tags.service.js';
 import { ConversationTagsController } from './conversation-tags.controller.js';
 import { InboxReadService } from './inbox-read.service.js';
@@ -13,15 +16,16 @@ import { InboxReadService } from './inbox-read.service.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Conversation tag tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant, as the session guard sets it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 const tagsService = new TagsService(prisma);
-const controller = new ConversationTagsController(tagsService);
-const inbox = new InboxReadService(prisma);
+const controller = tenantScoped(new ConversationTagsController(tagsService));
+const inbox = tenantScoped(new InboxReadService(prisma));
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -155,7 +159,11 @@ describe('tags on conversations (P1.8, ADR 071)', () => {
     await controller.setTags(w.as('ADMIN'), w.conversationId, {
       tagIds: [vip.id],
     });
-    await tagsService.archive(w.tenantId, w.ops.OWNER, vip.id);
+    await tenantScoped(tagsService, { tenantArg: 0 }).archive(
+      w.tenantId,
+      w.ops.OWNER,
+      vip.id,
+    );
     expect(
       await db.conversationTag.count({ where: { tenantId: w.tenantId } }),
     ).toBe(0);
