@@ -55,6 +55,7 @@ const STRICT_SPECS = [
   'src/followup/follow-up.integration.spec.ts',
   'src/persons/people.integration.spec.ts',
   'src/scheduling/appointment.integration.spec.ts',
+  'src/scheduling/scheduling-agent.integration.spec.ts',
 ];
 
 export default defineConfig({

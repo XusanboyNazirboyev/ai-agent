@@ -24,11 +24,15 @@ import {
   type ScriptRequest,
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { EN } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { AppointmentService } from './appointment.service.js';
 import { SchedulingActionsService } from './scheduling-actions.service.js';
@@ -42,10 +46,12 @@ import { SCHEDULING_TEST_PACK } from './testing/scheduling-test-pack.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('requires agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the agent pipeline on the
+// app role: an update accepted under its account's tenant, each queue job
+// under its tenant, the scheduling port used inside its tenant's turn.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 (DOMAIN_PACKS as Map<string, DomainPack>).set(
   `${SCHEDULING_TEST_PACK.key}@${SCHEDULING_TEST_PACK.version}`,
   SCHEDULING_TEST_PACK,
@@ -53,7 +59,7 @@ const prisma = db as unknown as PrismaService;
 const createdTenants: string[] = [];
 afterAll(async () => {
   await retireOutbox(db, createdTenants);
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const DEV: AgentModePolicy = {
@@ -241,15 +247,17 @@ async function fixture(): Promise<{
     undefined,
     actions,
   );
-  const processor = new TelegramProcessor(
-    prisma,
-    { sendMessage: vi.fn() } as unknown as TelegramSender,
-    pipeline,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    actions,
+  const processor = tenantScoped(
+    new TelegramProcessor(
+      prisma,
+      { sendMessage: vi.fn() } as unknown as TelegramSender,
+      pipeline,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      actions,
+    ),
   );
   const webhook = new TelegramWebhookService(prisma, {
     get: (key: string) =>
@@ -297,7 +305,10 @@ async function say(
     },
   });
   if (normalized.kind !== 'text') throw new Error('expected text');
-  await f.webhook.accept(f.accountId, normalized);
+  // As the webhook route: the update runs under its account's tenant.
+  await runWithTenant(f.tenantId, () =>
+    f.webhook.accept(f.accountId, normalized),
+  );
   const outbox = await db.outboxEvent.findFirstOrThrow({
     where: {
       tenantId: f.tenantId,
@@ -446,16 +457,18 @@ describe('agent scheduling through the real pipeline', () => {
       prisma,
       new AppointmentService(prisma),
     );
-    const portB = await svc.portFor({
-      tenantId: b.tenantId,
-      conversationId: b.conversationId,
-      turnKey: 'x',
-      timeZone: 'Asia/Tashkent',
-    });
-    expect(await portB!.upcoming()).toHaveLength(0);
-    expect(await portB!.prepareCancel(appt.id)).toEqual({
-      ok: false,
-      code: 'NOT_FOUND',
+    await runWithTenant(b.tenantId, async () => {
+      const portB = await svc.portFor({
+        tenantId: b.tenantId,
+        conversationId: b.conversationId,
+        turnKey: 'x',
+        timeZone: 'Asia/Tashkent',
+      });
+      expect(await portB!.upcoming()).toHaveLength(0);
+      expect(await portB!.prepareCancel(appt.id)).toEqual({
+        ok: false,
+        code: 'NOT_FOUND',
+      });
     });
     // another contact of the same tenant cannot touch it either
     const other = await db.contact.create({
@@ -473,13 +486,15 @@ describe('agent scheduling through the real pipeline', () => {
         providerChatId: 'other-chat',
       },
     });
-    const portO = await svc.portFor({
-      tenantId: a.tenantId,
-      conversationId: conv.id,
-      turnKey: 'y',
-      timeZone: 'Asia/Tashkent',
+    await runWithTenant(a.tenantId, async () => {
+      const portO = await svc.portFor({
+        tenantId: a.tenantId,
+        conversationId: conv.id,
+        turnKey: 'y',
+        timeZone: 'Asia/Tashkent',
+      });
+      expect(await portO!.prepareCancel(appt.id)).toMatchObject({ ok: false });
+      expect(await portO!.hold('forged-slot-id')).toMatchObject({ ok: false });
     });
-    expect(await portO!.prepareCancel(appt.id)).toMatchObject({ ok: false });
-    expect(await portO!.hold('forged-slot-id')).toMatchObject({ ok: false });
   });
 });
