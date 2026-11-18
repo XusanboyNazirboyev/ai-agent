@@ -5,14 +5,19 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { TelegramApiError } from '../channels/telegram/telegram-sender.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import type { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { ConnectorUnavailableError } from '../connectors/interfaces/errors.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadService } from '../leads/lead.service.js';
 import { requeueLocalLeads } from '../leads/lead-requeue.js';
 import { ShownOffersService } from '../leads/shown-offers.service.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { UZ_LATN } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
 import { HandoverNotificationService } from './handover-notification.service.js';
@@ -27,12 +32,18 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Phase 5 integration tests require agentcore_test');
 }
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role.
+// Each call runs under the tenant it names (an event, a channel, a first
+// `tenantId` argument), as the outbox worker, the webhook and the request do;
+// the cross-tenant scans get the privileged handle, as in production.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
+const scoped = <T extends object>(service: T): T =>
+  tenantScoped(service, { tenantArg: 0 });
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 /** Records everything the code asks an operator channel to do. */
@@ -230,7 +241,7 @@ describe('operator notification', () => {
       },
     });
     const notifier = new FakeNotifier();
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = scoped(new HandoverNotificationService(prisma, notifier));
     await service.process(
       event(w, 'handover.notify', { handoverId: w.handoverId }),
     );
@@ -263,7 +274,7 @@ describe('operator notification', () => {
   it('records FAILED, never SENT, when no operator chat is configured or the chat rejects', async () => {
     const none = await world({ operatorChatId: null });
     const notifier = new FakeNotifier();
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = scoped(new HandoverNotificationService(prisma, notifier));
     await service.process(
       event(none, 'handover.notify', { handoverId: none.handoverId }),
     );
@@ -315,7 +326,7 @@ describe('operator notification', () => {
   it('forwards customer messages under the card, and waits when the card is not posted yet', async () => {
     const w = await world();
     const notifier = new FakeNotifier();
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = scoped(new HandoverNotificationService(prisma, notifier));
     const message = await db.message.findFirstOrThrow({
       where: { conversationId: w.conversationId },
     });
@@ -340,14 +351,14 @@ describe('SLA', () => {
     const reached = await world();
     const unreached = await world({ operatorChatId: null });
     const notifier = new FakeNotifier();
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = scoped(new HandoverNotificationService(prisma, notifier));
     await service.process(
       event(reached, 'handover.notify', { handoverId: reached.handoverId }),
     );
     await service.process(
       event(unreached, 'handover.notify', { handoverId: unreached.handoverId }),
     );
-    const sla = new HandoverSlaService(prisma);
+    const sla = new HandoverSlaService(prisma, privileged);
     // Explicit batch: overdue handovers of earlier runs in the shared test
     // database must not push this test's own out of the first 50.
     const first = await sla.scan(new Date(), 100_000);
@@ -394,7 +405,7 @@ describe('SLA', () => {
       data: { status: 'TAKEN' },
     });
     expect(
-      await new HandoverSlaService(prisma).scan(new Date()),
+      await new HandoverSlaService(prisma, privileged).scan(new Date()),
     ).toBeGreaterThanOrEqual(0);
     expect(
       await db.outboxEvent.count({
@@ -413,16 +424,18 @@ describe('operator updates from the Telegram group', () => {
   }> => {
     const w = await world();
     const notifier = new FakeNotifier();
-    await new HandoverNotificationService(prisma, notifier).process(
+    await scoped(new HandoverNotificationService(prisma, notifier)).process(
       event(w, 'handover.notify', { handoverId: w.handoverId }),
     );
     return {
       w,
       notifier,
-      handler: new OperatorUpdateHandler(
-        prisma,
-        new HandoverService(prisma),
-        notifier,
+      handler: tenantScoped(
+        new OperatorUpdateHandler(
+          prisma,
+          new HandoverService(prisma),
+          notifier,
+        ),
       ),
       channel: { tenantId: w.tenantId, operatorChatId: '-100777' },
     };
@@ -622,13 +635,15 @@ describe('leads', () => {
     s: Record<string, string | number>,
     intent?: string,
   ): ReturnType<LeadService['rescoreFromTurn']> =>
-    db.$transaction((tx) =>
-      new LeadService(prisma).rescoreFromTurn(tx, {
-        tenantId: w.tenantId,
-        conversationId: w.conversationId,
-        slots: slots(s),
-        ...(intent ? { intent } : {}),
-      }),
+    runWithTenant(w.tenantId, () =>
+      app.$transaction((tx) =>
+        scoped(new LeadService(prisma)).rescoreFromTurn(tx, {
+          tenantId: w.tenantId,
+          conversationId: w.conversationId,
+          slots: slots(s),
+          ...(intent ? { intent } : {}),
+        }),
+      ),
     );
 
   it('creates no lead for a cold conversation, one lead per conversation otherwise', async () => {
@@ -713,15 +728,19 @@ describe('leads', () => {
 
   it('stores a phone only when the contact has none and counts it as evidence', async () => {
     const w = await world({ state: 'BOT_ACTIVE' });
-    const service = new LeadService(prisma);
+    const service = scoped(new LeadService(prisma));
     expect(
-      await db.$transaction((tx) =>
-        service.capturePhone(tx, w.tenantId, w.contactId, '+998901234567'),
+      await runWithTenant(w.tenantId, () =>
+        app.$transaction((tx) =>
+          service.capturePhone(tx, w.tenantId, w.contactId, '+998901234567'),
+        ),
       ),
     ).toBe(true);
     expect(
-      await db.$transaction((tx) =>
-        service.capturePhone(tx, w.tenantId, w.contactId, '+998000000000'),
+      await runWithTenant(w.tenantId, () =>
+        app.$transaction((tx) =>
+          service.capturePhone(tx, w.tenantId, w.contactId, '+998000000000'),
+        ),
       ),
     ).toBe(false);
     expect(
@@ -774,7 +793,9 @@ describe('leads', () => {
     const w = await world({ state: 'BOT_ACTIVE' });
     await withConnector(w);
     const id = await leadFor(w);
-    const sync = new LeadSyncService(prisma, connectorStub(undefined));
+    const sync = scoped(
+      new LeadSyncService(prisma, connectorStub(undefined), privileged),
+    );
     expect(await sync.sync(w.tenantId, id)).toBe('NOT_REQUIRED');
     expect(await db.lead.findFirstOrThrow({ where: { id } })).toMatchObject({
       crmSyncStatus: 'NOT_REQUIRED',
@@ -788,12 +809,15 @@ describe('leads', () => {
     await withConnector(w);
     const id = await leadFor(w);
     const seen: unknown[] = [];
-    const sync = new LeadSyncService(
-      prisma,
-      connectorStub(async (input) => {
-        seen.push(input);
-        return { crmLeadId: 'crm-1' };
-      }),
+    const sync = scoped(
+      new LeadSyncService(
+        prisma,
+        connectorStub(async (input) => {
+          seen.push(input);
+          return { crmLeadId: 'crm-1' };
+        }),
+        privileged,
+      ),
     );
     expect(await sync.sync(w.tenantId, id)).toBe('SYNCED');
     expect(await sync.sync(w.tenantId, id)).toBe('SKIPPED');
@@ -817,19 +841,22 @@ describe('leads', () => {
     await withConnector(w);
     const id = await leadFor(w);
     let healthy = false;
-    const sync = new LeadSyncService(
-      prisma,
-      connectorStub(async () => {
-        // A refused connection: provably not applied, so a retry is safe.
-        // (An outage with an unclear outcome is covered in lead-sync.integration.spec.ts.)
-        if (!healthy)
-          throw new ConnectorUnavailableError({
-            message: 'down',
-            code: 'CONNECTOR_UNAVAILABLE',
-            executed: 'no',
-          });
-        return { crmLeadId: 'crm-2' };
-      }),
+    const sync = scoped(
+      new LeadSyncService(
+        prisma,
+        connectorStub(async () => {
+          // A refused connection: provably not applied, so a retry is safe.
+          // (An outage with an unclear outcome is covered in lead-sync.integration.spec.ts.)
+          if (!healthy)
+            throw new ConnectorUnavailableError({
+              message: 'down',
+              code: 'CONNECTOR_UNAVAILABLE',
+              executed: 'no',
+            });
+          return { crmLeadId: 'crm-2' };
+        }),
+        privileged,
+      ),
     );
     expect(await sync.sync(w.tenantId, id)).toBe('FAILED');
     const failed = await db.lead.findFirstOrThrow({ where: { id } });
@@ -841,10 +868,22 @@ describe('leads', () => {
     expect(failed.nextAttemptAt).not.toBeNull();
     expect(failed.summary).toContain('WARM'); // still fully observable
     // Not due yet: nothing is queued; once due, it is queued exactly once.
-    expect(await sync.scanDue(new Date())).toBe(0);
+    // (scanDue spans all tenants of the shared test database, and the strict
+    // run follows the normal one on it: assert this lead only.)
+    const retries = (): Promise<number> =>
+      db.outboxEvent.count({
+        where: {
+          tenantId: w.tenantId,
+          idempotencyKey: { startsWith: `crm.lead.sync:${id}:retry:` },
+        },
+      });
+    await sync.scanDue(new Date());
+    expect(await retries()).toBe(0);
     const due = new Date(failed.nextAttemptAt!.getTime() + 1_000);
-    expect(await sync.scanDue(due)).toBe(1);
-    expect(await sync.scanDue(due)).toBe(0);
+    await sync.scanDue(due);
+    expect(await retries()).toBe(1);
+    await sync.scanDue(due);
+    expect(await retries()).toBe(1);
     healthy = true;
     expect(await sync.sync(w.tenantId, id, due)).toBe('SYNCED');
     // Attempts are bounded.
@@ -857,7 +896,8 @@ describe('leads', () => {
         crmLeadId: null,
       },
     });
-    expect(await sync.scanDue(new Date())).toBe(0);
+    await sync.scanDue(new Date());
+    expect(await retries()).toBe(1);
   });
 });
 
@@ -963,7 +1003,7 @@ describe('offers shown and quotes', () => {
 
   it('records a confirmed quote for a synced offer once, with the exact facts shown', async () => {
     const w = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     const messageId = await delivered(w, {
       facts: [quoteFact()],
       shown: ['F10'],
@@ -998,7 +1038,7 @@ describe('offers shown and quotes', () => {
 
   it('explains why no Quote row exists: unsynced offer, listed price', async () => {
     const w = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     const unsynced = await delivered(w, {
       facts: [quoteFact()],
       shown: ['F10'],
@@ -1036,7 +1076,7 @@ describe('offers shown and quotes', () => {
 
   it('records nothing for a draft, a pending, a failed or an unreferenced fact', async () => {
     const w = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     for (const state of ['PENDING', 'FAILED'] as const) {
       const id = await delivered(w, {
         state,
@@ -1057,7 +1097,7 @@ describe('offers shown and quotes', () => {
   it('stays inside the tenant', async () => {
     const a = await world();
     const b = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     const messageId = await delivered(a, {
       facts: [quoteFact()],
       shown: ['F10'],
@@ -1071,7 +1111,7 @@ describe('offers shown and quotes', () => {
 
   it('resolves a delivered offer by its canonical id (DEF-001)', async () => {
     const w = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     // Create a synced offer and capture its canonical (uuid) id.
     const item = await db.catalogItem.create({
       data: {
@@ -1142,7 +1182,7 @@ describe('offers shown and quotes', () => {
 
   it('handles an invalid (non-UUID) offer reference without crashing', async () => {
     const w = await world();
-    const service = new ShownOffersService(prisma);
+    const service = scoped(new ShownOffersService(prisma));
     const messageId = await delivered(w, {
       facts: [quoteFact({ offerId: 'not-a-uuid' })],
       shown: ['F10'],
@@ -1164,8 +1204,11 @@ describe('offers shown and quotes', () => {
       shown: ['F10'],
       sync: true,
     });
-    await new ShownOffersService(prisma).recordDelivered(w.tenantId, messageId);
-    const result = await new LeadService(prisma).rescoreConversation(
+    await scoped(new ShownOffersService(prisma)).recordDelivered(
+      w.tenantId,
+      messageId,
+    );
+    const result = await scoped(new LeadService(prisma)).rescoreConversation(
       w.tenantId,
       w.conversationId,
     );
@@ -1186,7 +1229,7 @@ describe('the education pack stays valid', () => {
 });
 
 describe('operator lead score and CRM resend (ADR 037)', () => {
-  const handovers = new HandoverService(prisma);
+  const handovers = scoped(new HandoverService(prisma));
   const slots = (
     v: Record<string, string>,
   ): Record<string, { value: string }> =>
@@ -1195,12 +1238,14 @@ describe('operator lead score and CRM resend (ADR 037)', () => {
     w: World,
     s: Record<string, string>,
   ): ReturnType<LeadService['rescoreFromTurn']> =>
-    db.$transaction((tx) =>
-      new LeadService(prisma).rescoreFromTurn(tx, {
-        tenantId: w.tenantId,
-        conversationId: w.conversationId,
-        slots: slots(s),
-      }),
+    runWithTenant(w.tenantId, () =>
+      app.$transaction((tx) =>
+        scoped(new LeadService(prisma)).rescoreFromTurn(tx, {
+          tenantId: w.tenantId,
+          conversationId: w.conversationId,
+          slots: slots(s),
+        }),
+      ),
     );
   const base = (w: World): Parameters<HandoverService['setLeadScore']>[0] => ({
     tenantId: w.tenantId,
@@ -1315,12 +1360,16 @@ describe('operator lead score and CRM resend (ADR 037)', () => {
       where: { id },
       data: { crmSyncStatus: 'NOT_REQUIRED' },
     });
-    expect(await requeueLocalLeads(db, w.tenantId, 'crm-connected:test')).toBe(
-      1,
-    );
+    expect(
+      await runWithTenant(w.tenantId, () =>
+        requeueLocalLeads(app, w.tenantId, 'crm-connected:test'),
+      ),
+    ).toBe(1);
     expect((await lead(w)).crmSyncStatus).toBe('PENDING');
-    expect(await requeueLocalLeads(db, w.tenantId, 'crm-connected:test')).toBe(
-      0,
-    );
+    expect(
+      await runWithTenant(w.tenantId, () =>
+        requeueLocalLeads(app, w.tenantId, 'crm-connected:test'),
+      ),
+    ).toBe(0);
   });
 });

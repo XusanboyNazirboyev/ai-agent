@@ -17,6 +17,7 @@ const STRICT_SPECS = [
   'src/pipelines/funnel.integration.spec.ts',
   'src/persons/person-merge.integration.spec.ts',
   'src/tags/tags.integration.spec.ts',
+  'src/handover/phase5.integration.spec.ts',
 ];
 
 export default defineConfig({
