@@ -5,14 +5,18 @@ import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { HandoverNotificationService } from '../handover/handover-notification.service.js';
 import type {
   NotifierTarget,
   OperatorNotifier,
 } from '../handover/operator-notifier.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { AlertsService, OPERATOR_ALERT_EVENT } from './alerts.service.js';
 
@@ -20,12 +24,16 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Alert integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the services on the app
+// role. The alert and subscription scans find tenants on the privileged
+// handle and work under each; an alert card is sent under the outbox
+// event's tenant, as the queue job runs it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -40,9 +48,13 @@ const SETTINGS: Record<string, unknown> = {
   LLM_TENANT_MONTHLY_BUDGET_USD: '1',
 };
 const alerts = (overrides: Record<string, unknown> = {}): AlertsService =>
-  new AlertsService(prisma, {
-    get: (key: string) => ({ ...SETTINGS, ...overrides })[key],
-  } as unknown as ConfigService<AppEnvironment, true>);
+  new AlertsService(
+    prisma,
+    {
+      get: (key: string) => ({ ...SETTINGS, ...overrides })[key],
+    } as unknown as ConfigService<AppEnvironment, true>,
+    privileged,
+  );
 
 // Far in the future, so rows that other tests left in the shared test
 // database fall outside every window used here.
@@ -237,7 +249,9 @@ describe('operator alerts (fixed clock)', () => {
         return Promise.resolve({ messageId: '1' });
       },
     } as unknown as OperatorNotifier;
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = tenantScoped(
+      new HandoverNotificationService(prisma, notifier),
+    );
     const en = await tenant();
     const ru = await tenant({ locale: 'ru' });
     await service.process({
@@ -303,9 +317,12 @@ describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
     const end = new Date(R_NOW.getTime() + 3 * 86_400_000);
     const id = await subscribed(withGroup, end);
     await subscribed(noGroup, end);
-    const scan = new SubscriptionScanService(prisma, {
-      get: () => 3,
-    } as unknown as ConfigService<AppEnvironment, true>);
+    const scan = new SubscriptionScanService(
+      prisma,
+      { get: () => 3 } as unknown as ConfigService<AppEnvironment, true>,
+      undefined,
+      privileged,
+    );
 
     await scan.scanDue(R_NOW);
     await scan.scanDue(R_NOW);
@@ -336,7 +353,9 @@ describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
         return Promise.resolve({ messageId: '1' });
       },
     } as unknown as OperatorNotifier;
-    const service = new HandoverNotificationService(prisma, notifier);
+    const service = tenantScoped(
+      new HandoverNotificationService(prisma, notifier),
+    );
     const uz = await tenant({ locale: 'uz-Latn' });
     await db.tenant.update({
       where: { id: uz.tenantId },
