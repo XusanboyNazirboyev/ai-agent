@@ -3,21 +3,25 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { LeadTimelineController, TIMELINE_MESSAGES } from './lead-timeline.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Lead timeline tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const timeline = new LeadTimelineController(prisma);
+// RLS plan S8b: fixtures on the owner; the timeline on the app role under
+// the principal's tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const timeline = tenantScoped(new LeadTimelineController(prisma));
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
