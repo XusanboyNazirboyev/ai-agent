@@ -30,6 +30,11 @@ const ALLOWED = new Map([
   ['platform/platform-plans.controller.ts', 'plans'],
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],
+  // S6: queues. The relay and the scheduler find due work of every tenant;
+  // each job then runs under runWithTenant.
+  ['channels/telegram/telegram-queue.runtime.ts', 'outbox relay'],
+  ['connectors/sync/tenant-connector-loader.ts', 'connectors to schedule'],
+  ['connectors/sync/catalog-sync.store.ts', 'stale runs of every tenant'],
 ]);
 
 function sources(dir: string): string[] {

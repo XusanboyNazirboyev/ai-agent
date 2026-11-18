@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
 import { processQueuedEvent } from '../channels/telegram/telegram-queue.runtime.js';
+import { currentTenant } from '../persistence/tenant-context.js';
 import { HandoverRuntime } from '../handover/handover-runtime.js';
 import {
   currentLogContext,
@@ -139,16 +140,18 @@ describe('request trace id', () => {
 describe('correlation in the workers', () => {
   it('runs a queued Telegram event under its outbox id and tenant', async () => {
     let seen: unknown;
+    let tenant: string | null = null;
     const result = await processQueuedEvent(
       {
         process: () => {
           seen = currentLogContext();
+          tenant = currentTenant();
           return Promise.resolve(undefined);
         },
       },
       {
         outboxId: '0190f000-0000-7000-8000-000000000001',
-        tenantId: 't-9',
+        tenantId: '0190f000-0000-7000-8000-0000000000a9',
         type: 'telegram.inbound',
         payload: {},
       },
@@ -156,9 +159,12 @@ describe('correlation in the workers', () => {
     expect(result).toBeUndefined();
     expect(seen).toEqual({
       traceId: '0190f000-0000-7000-8000-000000000001',
-      tenantId: 't-9',
+      tenantId: '0190f000-0000-7000-8000-0000000000a9',
     });
     expect(currentLogContext()).toBeUndefined();
+    // RLS plan S6: the job's statements carry its tenant, and only inside it.
+    expect(tenant).toBe('0190f000-0000-7000-8000-0000000000a9');
+    expect(currentTenant()).toBeNull();
   });
 
   it('gives each scan pass one trace that every scan shares', async () => {

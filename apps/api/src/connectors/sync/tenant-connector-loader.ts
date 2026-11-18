@@ -1,7 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { parseTenantConnectorConfig } from '@agentcore/shared';
 import type { TenantConnector } from '../../generated/prisma/client.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import {
   CAPABILITY_METHODS,
   type ConnectorCapabilities,
@@ -26,11 +28,18 @@ import { ConnectorRegistry } from '../registry/connector-registry.js';
  */
 @Injectable()
 export class TenantConnectorLoader {
+  /** The scheduler lists connectors of every tenant (RLS plan S6). */
+  private readonly crossTenant: PrismaClient;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: ConnectorRegistry,
     @Optional() private readonly secrets?: ConnectorSecretStore,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   findActive(
     tenantId: string,
@@ -42,7 +51,7 @@ export class TenantConnectorLoader {
   }
 
   listActive(): Promise<TenantConnector[]> {
-    return this.prisma.tenantConnector.findMany({
+    return this.crossTenant.tenantConnector.findMany({
       where: { status: 'ACTIVE' },
       orderBy: [{ tenantId: 'asc' }, { id: 'asc' }],
     });

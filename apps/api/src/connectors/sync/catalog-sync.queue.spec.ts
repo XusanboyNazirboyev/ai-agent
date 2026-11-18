@@ -50,3 +50,53 @@ describe('catalog sync scheduling', () => {
     expect(schedule).not.toHaveBeenCalled();
   });
 });
+
+describe('catalog sync tenant context (RLS plan S6)', () => {
+  it('lists connectors with no tenant and builds each one in its own tenant', async () => {
+    const { currentTenant } =
+      await import('../../persistence/tenant-context.js');
+    const tenantA = '01a1ecc9-0000-7000-8000-00000000000a';
+    const tenantB = '01a1ecc9-0000-7000-8000-00000000000b';
+    const seen: Array<{ step: string; tenant: string | null }> = [];
+    const rows = [
+      { id: 'c1', tenantId: tenantA },
+      { id: 'c2', tenantId: tenantB },
+    ];
+    const subject = new CatalogSyncQueueRuntime(
+      {
+        get: (key: string) =>
+          ({
+            REDIS_URL: 'redis://localhost:6379',
+            CATALOG_SYNC_INTERVAL_MINUTES: 0,
+          })[key],
+      } as unknown as ConfigService<AppEnvironment, true>,
+      { staleAfter: 60_000 } as never,
+      {
+        recoverStaleRuns: () => {
+          seen.push({ step: 'recover', tenant: currentTenant() });
+          return Promise.resolve(0);
+        },
+      } as never,
+      {
+        listActive: () => {
+          seen.push({ step: 'list', tenant: currentTenant() });
+          return Promise.resolve(rows);
+        },
+        create: (row: { tenantId: string }) => {
+          seen.push({
+            step: `create ${row.tenantId}`,
+            tenant: currentTenant(),
+          });
+          return Promise.resolve({ capabilities: { sync: false } });
+        },
+      } as never,
+    );
+    await subject.schedule();
+    expect(seen).toEqual([
+      { step: 'recover', tenant: null },
+      { step: 'list', tenant: null },
+      { step: `create ${tenantA}`, tenant: tenantA },
+      { step: `create ${tenantB}`, tenant: tenantB },
+    ]);
+  });
+});

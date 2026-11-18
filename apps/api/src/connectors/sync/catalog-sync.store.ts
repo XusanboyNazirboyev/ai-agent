@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   CatalogAttributesSchema,
   ItemTypeSchema,
@@ -9,7 +9,9 @@ import {
   type CatalogSyncRun,
   type CatalogSyncStatus,
 } from '../../generated/prisma/client.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import type { CatalogItem, Offer } from '../contracts/canonical.js';
 import {
   ConnectorError,
@@ -150,7 +152,16 @@ function offerData(
  */
 @Injectable()
 export class CatalogSyncStore {
-  constructor(private readonly prisma: PrismaService) {}
+  /** Stale-run recovery without a tenant spans tenants (RLS plan S6). */
+  private readonly crossTenant: PrismaClient;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   /**
    * Starts a run. Stale runs of this connector are first recovered as
@@ -194,7 +205,8 @@ export class CatalogSyncStore {
     staleBefore: Date,
     scope: { tenantId?: string; tenantConnectorId?: string; now?: Date } = {},
   ): Promise<number> {
-    const result = await this.prisma.catalogSyncRun.updateMany({
+    const db = scope.tenantId ? this.prisma : this.crossTenant;
+    const result = await db.catalogSyncRun.updateMany({
       where: {
         status: 'RUNNING',
         heartbeatAt: { lt: staleBefore },

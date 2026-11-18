@@ -19,6 +19,10 @@ import {
   runWithLogContext,
 } from '../../observability/log-context.js';
 import { TenantConnectorLoader } from './tenant-connector-loader.js';
+import {
+  runWithTenant,
+  runWithoutTenant,
+} from '../../persistence/tenant-context.js';
 
 export const CATALOG_SYNC_QUEUE = 'agentcore-catalog-sync';
 const MAX_ATTEMPTS = 5;
@@ -88,10 +92,13 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
     });
     this.worker = new Worker<CatalogSyncRequest>(
       CATALOG_SYNC_QUEUE,
+      // RLS plan S6: the whole sync runs in the connector's tenant context.
       (job) =>
-        runWithLogContext(
-          { traceId: job.id ?? newTraceId(), tenantId: job.data.tenantId },
-          () => this.process(job),
+        runWithTenant(job.data.tenantId, () =>
+          runWithLogContext(
+            { traceId: job.id ?? newTraceId(), tenantId: job.data.tenantId },
+            () => this.process(job),
+          ),
         ),
       { connection: this.connection, concurrency: 2 },
     );
@@ -113,9 +120,10 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
    */
   startTimers(): void {
     if (this.intervalMs <= 0) return;
-    this.firstTick = setTimeout(() => void this.schedule(), FIRST_TICK_MS);
+    const tick = (): void => void runWithoutTenant(() => this.schedule());
+    this.firstTick = setTimeout(tick, FIRST_TICK_MS);
     this.firstTick.unref();
-    this.timer = setInterval(() => void this.schedule(), this.intervalMs);
+    this.timer = setInterval(tick, this.intervalMs);
     this.timer.unref();
   }
 
@@ -156,7 +164,9 @@ export class CatalogSyncQueueRuntime implements OnModuleInit, OnModuleDestroy {
       for (const row of await this.loader.listActive()) {
         let syncable = false;
         try {
-          syncable = (await this.loader.create(row)).capabilities.sync;
+          syncable = (
+            await runWithTenant(row.tenantId, () => this.loader.create(row))
+          ).capabilities.sync;
         } catch {
           syncable = true;
         }

@@ -3,13 +3,19 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DelayedError, Queue, Worker } from 'bullmq';
 import type { RedisOptions } from 'bullmq';
 import type { AppEnvironment } from '../../config/environment.js';
-import type { Prisma } from '../../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import {
+  runWithTenant,
+  runWithoutTenant,
+} from '../../persistence/tenant-context.js';
 import { InboundProcessor } from '../inbound/inbound-processor.js';
 import { telegramRetryDelayMs } from './retry-policy.js';
 import { runWithLogContext } from '../../observability/log-context.js';
@@ -24,14 +30,19 @@ export type QueuePayload = {
 
 const queueName = 'agentcore-telegram';
 
-/** Runs one queued event in its own log context: one trace per outbox event, the same across retries. */
+/**
+ * Runs one queued event in its own log context (one trace per outbox event,
+ * the same across retries) and in its tenant's database context (RLS plan
+ * S6): every statement of the job carries the tenant that queued it.
+ */
 export function processQueuedEvent(
   processor: Pick<InboundProcessor, 'process'>,
   data: QueuePayload,
 ): ReturnType<InboundProcessor['process']> {
-  return runWithLogContext(
-    { traceId: data.outboxId, tenantId: data.tenantId },
-    () => processor.process(data),
+  return runWithTenant(data.tenantId, () =>
+    runWithLogContext({ traceId: data.outboxId, tenantId: data.tenantId }, () =>
+      processor.process(data),
+    ),
   );
 }
 /** Publish attempts after which a FAILED outbox row is no longer re-queued. */
@@ -45,13 +56,22 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
   private worker!: Worker<QueuePayload>;
   private timer: ReturnType<typeof setInterval> | undefined;
   private publishing = false;
+  /**
+   * The outbox relay claims due events of every tenant, so it reads and
+   * writes on the privileged connection (RLS plan S6); each job then runs in
+   * its own tenant's context.
+   */
+  private readonly relay: PrismaClient;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
-    private readonly prisma: PrismaService,
+    prisma: PrismaService,
     private readonly processor: InboundProcessor,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
     this.connection = redisOptions(config.get('REDIS_URL', { infer: true }));
+    this.relay = privileged?.db ?? prisma;
   }
 
   onModuleInit(): void {
@@ -96,7 +116,9 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
       if (
         (job.attemptsMade ?? 0) >= (job.opts.attempts ?? OUTBOX_MAX_ATTEMPTS)
       ) {
-        void this.processor.markExhausted(job.data).catch(() => {
+        void runWithTenant(job.data.tenantId, () =>
+          this.processor.markExhausted(job.data),
+        ).catch(() => {
           this.logger.error('Failed to persist exhausted Telegram job state');
         });
       }
@@ -110,9 +132,12 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
         JSON.stringify({ event: 'telegram_queue_worker_error', code }),
       );
     });
-    this.timer = setInterval(() => void this.publishPending(), 500);
+    this.timer = setInterval(
+      () => void runWithoutTenant(() => this.publishPending()),
+      500,
+    );
     this.timer.unref();
-    void this.publishPending();
+    void runWithoutTenant(() => this.publishPending());
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -125,11 +150,11 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
     this.publishing = true;
     try {
       const staleBefore = new Date(Date.now() - 60_000);
-      await this.prisma.outboxEvent.updateMany({
+      await this.relay.outboxEvent.updateMany({
         where: { status: 'PROCESSING', updatedAt: { lt: staleBefore } },
         data: { status: 'PENDING' },
       });
-      await this.prisma.outboxEvent.updateMany({
+      await this.relay.outboxEvent.updateMany({
         where: {
           status: 'FAILED',
           attempts: { lt: OUTBOX_MAX_ATTEMPTS },
@@ -137,7 +162,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
         },
         data: { status: 'PENDING' },
       });
-      const events = await this.prisma.outboxEvent.findMany({
+      const events = await this.relay.outboxEvent.findMany({
         where: {
           type: {
             in: [
@@ -162,7 +187,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
         take: 25,
       });
       for (const event of events) {
-        const claimed = await this.prisma.outboxEvent.updateMany({
+        const claimed = await this.relay.outboxEvent.updateMany({
           where: { id: event.id, tenantId: event.tenantId, status: 'PENDING' },
           data: { status: 'PROCESSING', attempts: { increment: 1 } },
         });
@@ -182,7 +207,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
               ? { delay: 2_000 }
               : {}),
           });
-          await this.prisma.outboxEvent.updateMany({
+          await this.relay.outboxEvent.updateMany({
             where: {
               id: event.id,
               tenantId: event.tenantId,
@@ -195,7 +220,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
             1_000 * 2 ** Math.max(event.attempts, 0),
             30_000,
           );
-          await this.prisma.outboxEvent.updateMany({
+          await this.relay.outboxEvent.updateMany({
             where: {
               id: event.id,
               tenantId: event.tenantId,
