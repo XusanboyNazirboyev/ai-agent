@@ -7,9 +7,13 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { OperatorCommandsController } from '../handover/operator-commands.controller.js';
 import { OperatorTokenGuard } from '../handover/operator-auth.js';
@@ -47,12 +51,16 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Web inbox integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the code under test on the app role
+// under the tenant a request or the operator token sets. Sign-in, the session
+// lookup and the event bus poller span tenants: the privileged handle, as in
+// production.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 /** Distinct, deterministic peer addresses so limiter buckets never collide. */
@@ -64,9 +72,17 @@ const nextPeer = (): string => {
 
 const FAST = { N: 1024, r: 8, p: 1 };
 const policy = { ...DEFAULT_SESSION_POLICY, scrypt: FAST };
-const sessions = new SessionService(prisma, policy);
-const events = new InboxEventsService(prisma);
-const read = new InboxReadService(prisma);
+const sessions = new SessionService(
+  prisma,
+  policy,
+  undefined,
+  undefined,
+  privileged,
+);
+const events = tenantScoped(new InboxEventsService(prisma, privileged), {
+  tenantArg: 0,
+});
+const read = tenantScoped(new InboxReadService(prisma));
 const guard = new SessionGuard(sessions, {
   get: () => ['http://localhost:3000'],
 } as never);
@@ -164,8 +180,9 @@ function sessionServiceBeforeTransaction(
   before: () => Promise<void>,
 ): SessionService {
   let armed = true;
-  const transaction = prisma.$transaction.bind(prisma);
-  const racingPrisma = new Proxy(prisma as object, {
+  // Sign-in runs on the privileged handle: race its transaction.
+  const transaction = db.$transaction.bind(db);
+  const racingDb = new Proxy(db as object, {
     get(target: object, property: string | symbol): unknown {
       if (property === '$transaction') {
         return async (operation: unknown): Promise<unknown> => {
@@ -180,7 +197,9 @@ function sessionServiceBeforeTransaction(
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
-  return new SessionService(racingPrisma as PrismaService, policy);
+  return new SessionService(prisma, policy, undefined, undefined, {
+    db: racingDb,
+  } as PrivilegedDatabase);
 }
 
 describe('password hashing', () => {
@@ -646,8 +665,8 @@ describe('operator commands through the browser session', () => {
     new OperatorTokenGuard(prisma),
     guard,
   );
-  const controller = new OperatorCommandsController(
-    new HandoverService(prisma),
+  const controller = tenantScoped(
+    new OperatorCommandsController(new HandoverService(prisma)),
   );
 
   async function handoverOf(w: World): Promise<string> {
@@ -822,8 +841,8 @@ describe('search and filters', () => {
 });
 
 describe('lead status command', () => {
-  const controller = new OperatorCommandsController(
-    new HandoverService(prisma),
+  const controller = tenantScoped(
+    new OperatorCommandsController(new HandoverService(prisma)),
   );
   const requestGuard = new OperatorRequestGuard(
     new OperatorTokenGuard(prisma),
@@ -947,10 +966,12 @@ describe('lead status command', () => {
 describe('login cookies', () => {
   it('sets an httpOnly session cookie and a readable CSRF cookie, and clears both on logout', async () => {
     const w = await world();
-    const controller = new AuthController(sessions, prisma, {
-      get: (key: string) =>
-        key === 'SESSION_COOKIE_SECURE' ? true : undefined,
-    } as never);
+    const controller = tenantScoped(
+      new AuthController(sessions, prisma, {
+        get: (key: string) =>
+          key === 'SESSION_COOKIE_SECURE' ? true : undefined,
+      } as never),
+    );
     const headers: Record<string, string | string[]> = {};
     const reply = {
       setHeader: (n: string, v: string | string[]): void =>
@@ -978,9 +999,11 @@ describe('login cookies', () => {
   });
 
   it('rate-limits login attempts per address and answers bad bodies as invalid credentials', async () => {
-    const controller = new AuthController(sessions, prisma, {
-      get: () => false,
-    } as never);
+    const controller = tenantScoped(
+      new AuthController(sessions, prisma, {
+        get: () => false,
+      } as never),
+    );
     const reply = { setHeader: (): void => undefined };
     const ip = {
       headers: {},
@@ -1004,7 +1027,7 @@ describe('inbox event bus', () => {
   it('issues one query per tick for any number of listeners and delivers per tenant', async () => {
     const a = await world();
     const b = await world();
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const gotA1: BusEvent[] = [];
     const gotA2: BusEvent[] = [];
     const gotB: BusEvent[] = [];
@@ -1016,8 +1039,9 @@ describe('inbox event bus', () => {
       data: { state: 'CLOSED' },
     });
     const calls: string[] = [];
-    const original = prisma.inboxEvent.findMany.bind(prisma.inboxEvent);
-    (prisma.inboxEvent as { findMany: unknown }).findMany = (
+    // The bus polls every tenant at once: on the privileged handle.
+    const original = db.inboxEvent.findMany.bind(db.inboxEvent);
+    (db.inboxEvent as { findMany: unknown }).findMany = (
       ...args: Parameters<typeof original>
     ): ReturnType<typeof original> => {
       calls.push('findMany');
@@ -1026,7 +1050,7 @@ describe('inbox event bus', () => {
     try {
       await bus.tick();
     } finally {
-      (prisma.inboxEvent as { findMany: unknown }).findMany = original;
+      (db.inboxEvent as { findMany: unknown }).findMany = original;
     }
     expect(calls).toHaveLength(1);
     expect(gotA1.map((e) => e.type)).toEqual(['conversation.updated']);
@@ -1046,7 +1070,7 @@ describe('inbox event bus', () => {
       where: { id: w.conversationId },
       data: { state: 'CLOSED' },
     });
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const got: BusEvent[] = [];
     const off1 = await bus.subscribe(w.tenantId, () => {
       throw new Error('boom');
@@ -1095,18 +1119,20 @@ describe('event stream resource accounting', () => {
   }
 
   function controllerWith(bus: InboxEventBus): EventsController {
-    return new EventsController(
-      events,
-      bus,
-      { get: () => 60_000 } as never,
-      sessions,
+    return tenantScoped(
+      new EventsController(
+        events,
+        bus,
+        { get: () => 60_000 } as never,
+        sessions,
+      ),
     );
   }
 
   it('releases the slot, subscription and timers of a client that leaves during setup', async () => {
     const w = await world();
     const s = await signIn(w);
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const controller = controllerWith(bus);
     for (let i = 0; i < 7; i += 1) {
       const response = new FakeResponse(true);
@@ -1140,7 +1166,7 @@ describe('event stream resource accounting', () => {
   it('pauses writes on backpressure and flushes queued events after drain', async () => {
     const w = await world();
     const s = await signIn(w);
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const response = new FakeResponse();
     response.blockNextWrite = true;
 
@@ -1179,7 +1205,7 @@ describe('event stream resource accounting', () => {
   it('never sends an unknown or malformed persisted event: it resyncs, advances the cursor and keeps delivering', async () => {
     const w = await world();
     const s = await signIn(w);
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const response = new FakeResponse();
     await controllerWith(bus).stream(
       { principal: s.principal } as never,
@@ -1218,7 +1244,7 @@ describe('event stream resource accounting', () => {
     ] as const) {
       const w = await world();
       const s = await signIn(w);
-      const bus = new InboxEventBus(prisma);
+      const bus = new InboxEventBus(prisma, privileged);
       const response = new FakeResponse();
       await controllerWith(bus).stream(
         { principal: s.principal } as never,
@@ -1265,7 +1291,7 @@ describe('event stream resource accounting', () => {
   it('limits concurrent streams per operator and frees them on close', async () => {
     const w = await world();
     const s = await signIn(w);
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const controller = controllerWith(bus);
     const streams: FakeResponse[] = [];
     for (let i = 0; i < 5; i += 1) {
@@ -1304,7 +1330,7 @@ describe('event stream resource accounting', () => {
     const a = await world();
     const b = await world();
     const sa = await signIn(a);
-    const bus = new InboxEventBus(prisma);
+    const bus = new InboxEventBus(prisma, privileged);
     const before = await events.latestId(a.tenantId);
     await db.conversation.update({
       where: { id: b.conversationId },
@@ -1358,12 +1384,14 @@ describe('channels list', () => {
         operatorChatId: '-100123',
       },
     });
-    const store = new PrismaChannelSecretStore(
-      prisma,
-      new SecretCipher(
-        createKeyring({
-          SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
-        }),
+    const store = tenantScoped(
+      new PrismaChannelSecretStore(
+        prisma,
+        new SecretCipher(
+          createKeyring({
+            SECRETS_MASTER_KEY: randomBytes(32).toString('base64'),
+          }),
+        ),
       ),
     );
     const owner = { tenantId: a.tenantId, channelAccountId: a.accountId };
@@ -1404,10 +1432,12 @@ function channelsController(
     LLM_ALLOW_REAL_CUSTOMER_DATA: false,
     ...overrides,
   };
-  return new ChannelsController(
-    prisma,
-    { get: (key: string) => settings[key] } as never,
-    new PrismaChannelSecretStore(prisma, undefined),
+  return tenantScoped(
+    new ChannelsController(
+      prisma,
+      { get: (key: string) => settings[key] } as never,
+      new PrismaChannelSecretStore(prisma, undefined),
+    ),
   );
 }
 
@@ -1535,10 +1565,12 @@ describe('assistant mode', () => {
 
 describe('FAQ import', () => {
   const controller = (): KnowledgeFaqController =>
-    new KnowledgeFaqController(
-      prisma,
-      new KnowledgeService(prisma),
-      new HashingEmbeddingProvider(),
+    tenantScoped(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        new HashingEmbeddingProvider(),
+      ),
     );
 
   it('creates, updates by question instead of duplicating, and reports bad entries one by one', async () => {
@@ -1603,10 +1635,12 @@ describe('FAQ import', () => {
         response: { code: 'INVALID_BODY' },
       });
     await expect(
-      new KnowledgeFaqController(
-        prisma,
-        new KnowledgeService(prisma),
-        undefined,
+      tenantScoped(
+        new KnowledgeFaqController(
+          prisma,
+          new KnowledgeService(prisma),
+          undefined,
+        ),
       ).import(asAdmin, { entries, confirmProviderMayReadText: true }),
     ).rejects.toMatchObject({ response: { code: 'KNOWLEDGE_DISABLED' } });
   });
@@ -1628,11 +1662,11 @@ describe('FAQ import', () => {
       }),
     ).toEqual({ created: 2, updated: 0, failed: [] });
     const snapshot = async (): Promise<unknown> => ({
-      documents: await prisma.knowledgeDocument.findMany({
+      documents: await db.knowledgeDocument.findMany({
         where: { tenantId: a.tenantId },
         orderBy: { source: 'asc' },
       }),
-      chunks: await prisma.knowledgeChunk.findMany({
+      chunks: await db.knowledgeChunk.findMany({
         where: { tenantId: a.tenantId },
         orderBy: [{ documentId: 'asc' }, { ordinal: 'asc' }],
         select: { id: true, documentId: true, ordinal: true, text: true },
@@ -1672,12 +1706,12 @@ describe('FAQ import', () => {
     expect(await snapshot()).toEqual(aBefore);
     // B's work is audited only under B; nothing was written under A by B.
     expect(
-      await prisma.auditEvent.count({
+      await db.auditEvent.count({
         where: { tenantId: a.tenantId, actorId: b.operatorId },
       }),
     ).toBe(0);
     expect(
-      await prisma.auditEvent.count({
+      await db.auditEvent.count({
         where: {
           tenantId: b.tenantId,
           action: { startsWith: 'knowledge.faq_' },
@@ -1689,10 +1723,12 @@ describe('FAQ import', () => {
 
 describe('FAQ knowledge', () => {
   const faqController = (enabled = true): KnowledgeFaqController =>
-    new KnowledgeFaqController(
-      prisma,
-      new KnowledgeService(prisma),
-      enabled ? new HashingEmbeddingProvider() : undefined,
+    tenantScoped(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        enabled ? new HashingEmbeddingProvider() : undefined,
+      ),
     );
   const entry = {
     question: '  How   long is the   course? ',
@@ -1810,11 +1846,13 @@ describe('contacts list', () => {
       },
     });
     const s = await signIn(a);
-    const controller = new ContactsController(prisma, {
-      erase: async () => {
-        throw new Error('not used');
-      },
-    } as never);
+    const controller = tenantScoped(
+      new ContactsController(prisma, {
+        erase: async () => {
+          throw new Error('not used');
+        },
+      } as never),
+    );
     const request = { principal: s.principal } as never;
     const first = await controller.list(request, { limit: '2' });
     expect(first.items).toHaveLength(2);
@@ -1852,10 +1890,12 @@ const w = (world_: World): string => world_.contactId;
 
 describe('knowledge documents', () => {
   const docs = (enabled = true): KnowledgeDocumentsController =>
-    new KnowledgeDocumentsController(
-      prisma,
-      new KnowledgeService(prisma),
-      enabled ? new HashingEmbeddingProvider() : undefined,
+    tenantScoped(
+      new KnowledgeDocumentsController(
+        prisma,
+        new KnowledgeService(prisma),
+        enabled ? new HashingEmbeddingProvider() : undefined,
+      ),
     );
   const policy = {
     title: '  Refund   policy ',
@@ -1875,10 +1915,12 @@ describe('knowledge documents', () => {
     expect(first.replaced).toBe(false);
     expect(first.chunks).toBeGreaterThan(1);
     // A FAQ entry in the same tenant never shows up as a document.
-    await new KnowledgeFaqController(
-      prisma,
-      new KnowledgeService(prisma),
-      new HashingEmbeddingProvider(),
+    await tenantScoped(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        new HashingEmbeddingProvider(),
+      ),
     ).create(sa, {
       question: 'Is there a refund?',
       answer: 'Yes.',
@@ -1942,10 +1984,12 @@ describe('knowledge documents', () => {
     await expect(docs(false).upload(asAdmin, policy)).rejects.toMatchObject({
       response: { code: 'KNOWLEDGE_DISABLED' },
     });
-    const faq = await new KnowledgeFaqController(
-      prisma,
-      new KnowledgeService(prisma),
-      new HashingEmbeddingProvider(),
+    const faq = await tenantScoped(
+      new KnowledgeFaqController(
+        prisma,
+        new KnowledgeService(prisma),
+        new HashingEmbeddingProvider(),
+      ),
     ).create(asAdmin, {
       question: 'Is this a document?',
       answer: 'No.',
@@ -1960,12 +2004,14 @@ describe('knowledge documents', () => {
   });
 
   describe('lead pipeline', () => {
-    const controller = new LeadPipelineController(
-      prisma,
-      new TagsService(prisma),
-      new CustomFieldsService(prisma),
-      new ManualLeadService(prisma),
-      new LeadArchiveService(prisma),
+    const controller = tenantScoped(
+      new LeadPipelineController(
+        prisma,
+        new TagsService(prisma),
+        new CustomFieldsService(prisma),
+        new ManualLeadService(prisma),
+        new LeadArchiveService(prisma),
+      ),
     );
 
     function as(w: World, role: InboxPrincipal['role']): InboxRequest {
@@ -2089,7 +2135,7 @@ describe('knowledge documents', () => {
 });
 
 describe('lead board moves (ADR 037)', () => {
-  const controller = new LeadsController(prisma);
+  const controller = tenantScoped(new LeadsController(prisma));
   const lead = (w: World): Promise<{ id: string }> =>
     db.lead.create({
       data: {
@@ -2206,8 +2252,8 @@ describe('operator-initiated take-over (ADR 038)', () => {
     new OperatorTokenGuard(prisma),
     guard,
   );
-  const controller = new OperatorCommandsController(
-    new HandoverService(prisma),
+  const controller = tenantScoped(
+    new OperatorCommandsController(new HandoverService(prisma)),
   );
   const as = async (s: { cookie: string; csrf: string }): Promise<never> => {
     const request = {
