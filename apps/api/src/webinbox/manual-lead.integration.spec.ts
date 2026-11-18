@@ -3,11 +3,14 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
 import { LeadArchiveService } from '../leads/lead-archive.service.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
@@ -20,37 +23,42 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Manual lead integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant, as the session guard sets it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const leadsApi = new LeadPipelineController(
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
-  new ManualLeadService(prisma),
-  new LeadArchiveService(prisma),
+const leadsApi = tenantScoped(
+  new LeadPipelineController(
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+    new ManualLeadService(prisma),
+    new LeadArchiveService(prisma),
+  ),
 );
-const pipelines = new PipelinesController(prisma);
-const inbox = new InboxReadService(prisma);
-const channels = new ChannelsController(
-  prisma,
-  {
-    get: (key: string) =>
-      (
-        ({
-          NODE_ENV: 'development',
-          LLM_PROVIDER: 'mock',
-          LLM_TRUSTED_PROVIDERS: ['mock'],
-          LLM_ALLOW_REAL_CUSTOMER_DATA: false,
-        }) as Record<string, unknown>
-      )[key],
-  } as never,
-  new PrismaChannelSecretStore(prisma, undefined),
+const pipelines = tenantScoped(new PipelinesController(prisma));
+const inbox = tenantScoped(new InboxReadService(prisma));
+const channels = tenantScoped(
+  new ChannelsController(
+    prisma,
+    {
+      get: (key: string) =>
+        (
+          ({
+            NODE_ENV: 'development',
+            LLM_PROVIDER: 'mock',
+            LLM_TRUSTED_PROVIDERS: ['mock'],
+            LLM_ALLOW_REAL_CUSTOMER_DATA: false,
+          }) as Record<string, unknown>
+        )[key],
+    } as never,
+    new PrismaChannelSecretStore(prisma, undefined),
+  ),
 );
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;

@@ -25,6 +25,9 @@ const STRICT_SPECS = [
   'src/webinbox/conversation-tags.integration.spec.ts',
   'src/webinbox/inbox-waiting-order.integration.spec.ts',
   'src/webinbox/today.integration.spec.ts',
+  'src/webinbox/crm-template.integration.spec.ts',
+  'src/webinbox/lead-archive.integration.spec.ts',
+  'src/webinbox/manual-lead.integration.spec.ts',
 ];
 
 export default defineConfig({

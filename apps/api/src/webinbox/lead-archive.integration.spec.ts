@@ -3,11 +3,14 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { LeadArchiveService } from '../leads/lead-archive.service.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
@@ -20,22 +23,25 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Lead archive integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant, as the session guard sets it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const leadsApi = new LeadPipelineController(
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
-  new ManualLeadService(prisma),
-  new LeadArchiveService(prisma),
+const leadsApi = tenantScoped(
+  new LeadPipelineController(
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+    new ManualLeadService(prisma),
+    new LeadArchiveService(prisma),
+  ),
 );
-const pipelines = new PipelinesController(prisma);
+const pipelines = tenantScoped(new PipelinesController(prisma));
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -346,8 +352,11 @@ describe('archiving a lead (ADR 062)', () => {
   it('leaves archived leads out of the export, the person card counts and the inbox lead filter', async () => {
     const w = await world();
     const people = new PeopleService(prisma);
-    const exportService = new ExportService(prisma, people);
-    const inbox = new InboxReadService(prisma);
+    const exportService = tenantScoped(new ExportService(prisma, people), {
+      tenantArg: 0,
+    });
+    const peopleScoped = tenantScoped(people, { tenantArg: 0 });
+    const inbox = tenantScoped(new InboxReadService(prisma));
 
     const manual = await addManual(w, 'Counted', { phone: '+998907770011' });
     const row = await db.lead.findFirstOrThrow({
@@ -366,7 +375,7 @@ describe('archiving a lead (ADR 062)', () => {
 
     expect(await exportService.countLeads(w.tenantId, {})).toBe(2);
     expect(
-      (await people.itemsByIds(w.tenantId, [personId]))[0]!.leadCount,
+      (await peopleScoped.itemsByIds(w.tenantId, [personId]))[0]!.leadCount,
     ).toBe(1);
     expect(await inboxIds()).toContain(conversation.id);
 
@@ -375,7 +384,7 @@ describe('archiving a lead (ADR 062)', () => {
 
     expect(await exportService.countLeads(w.tenantId, {})).toBe(0);
     expect(
-      (await people.itemsByIds(w.tenantId, [personId]))[0]!.leadCount,
+      (await peopleScoped.itemsByIds(w.tenantId, [personId]))[0]!.leadCount,
     ).toBe(0);
     expect(await inboxIds()).not.toContain(conversation.id);
 
