@@ -58,17 +58,28 @@ export function appClient(pool: TestPoolOptions = {}): PrismaClient {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
+function tenantIdIn(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object' || !('tenantId' in value))
+    return undefined;
+  const { tenantId } = value as { tenantId: unknown };
+  return typeof tenantId === 'string' ? tenantId : undefined;
+}
+
 /**
- * The tenant a service call names: `{ tenantId }` in an argument, or the
- * `(tx, tenantId, ...)` shape. A leading id is not guessed (it may be an
- * account or conversation id): such calls set the tenant explicitly.
+ * The tenant a call names: `{ tenantId }` in an argument, a request carrying
+ * the `principal` the session guard set, or the `(tx, tenantId, ...)` shape.
+ * A leading id is not guessed (it may be an account or conversation id):
+ * such calls pass `tenantArg` or set the tenant explicitly.
  */
 function tenantOf(args: readonly unknown[]): string | undefined {
-  for (const arg of args)
-    if (arg !== null && typeof arg === 'object' && 'tenantId' in arg) {
-      const { tenantId } = arg as { tenantId: unknown };
-      if (typeof tenantId === 'string') return tenantId;
-    }
+  for (const arg of args) {
+    const tenantId =
+      tenantIdIn(arg) ??
+      (arg !== null && typeof arg === 'object' && 'principal' in arg
+        ? tenantIdIn((arg as { principal: unknown }).principal)
+        : undefined);
+    if (tenantId) return tenantId;
+  }
   const [first, second] = args;
   if (
     first !== null &&
@@ -80,12 +91,33 @@ function tenantOf(args: readonly unknown[]): string | undefined {
   return undefined;
 }
 
+/** How `tenantScoped` finds the tenant a call names. */
+export interface TenantScopedOptions {
+  /**
+   * The position of a plain tenant id argument, for services whose methods
+   * take `(tenantId, ...)`; such ids are not guessed otherwise.
+   */
+  readonly tenantArg?: number;
+}
+
+function tenantAt(
+  args: readonly unknown[],
+  index: number | undefined,
+): string | undefined {
+  if (index === undefined) return undefined;
+  const value = args[index];
+  return typeof value === 'string' && UUID.test(value) ? value : undefined;
+}
+
 /**
  * The service as a request, job or scan would call it: each method runs
  * under the tenant its arguments name (none named: no tenant, so strict mode
  * refuses its statements). Spec-only; production sets the tenant at the edge.
  */
-export function tenantScoped<T extends object>(service: T): T {
+export function tenantScoped<T extends object>(
+  service: T,
+  options: TenantScopedOptions = {},
+): T {
   return new Proxy(service, {
     get(target, key, receiver): unknown {
       const value: unknown = Reflect.get(target, key, receiver);
@@ -93,7 +125,7 @@ export function tenantScoped<T extends object>(service: T): T {
       return (...args: unknown[]): unknown => {
         const call = (): unknown =>
           (value as (...a: unknown[]) => unknown).apply(target, args);
-        const tenantId = tenantOf(args);
+        const tenantId = tenantAt(args, options.tenantArg) ?? tenantOf(args);
         return tenantId ? runWithTenant(tenantId, call) : call();
       };
     },

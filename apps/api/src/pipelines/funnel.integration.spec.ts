@@ -7,10 +7,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { DomainPack } from '@agentcore/shared';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { LeadService } from '../leads/lead.service.js';
 import { ensureLeadStages } from '../leads/lead-stage.util.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
@@ -22,23 +26,26 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Funnel integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the controllers on the app role, each
+// call under the tenant of the principal the session guard would set.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const pipelines = new PipelinesController(prisma);
-const leadsApi = new LeadPipelineController(
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
-  new ManualLeadService(prisma),
-  new LeadArchiveService(prisma),
+const pipelines = tenantScoped(new PipelinesController(prisma));
+const leadsApi = tenantScoped(
+  new LeadPipelineController(
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+    new ManualLeadService(prisma),
+    new LeadArchiveService(prisma),
+  ),
 );
-const board = new LeadsController(prisma);
+const board = tenantScoped(new LeadsController(prisma));
 const service = new LeadService(prisma);
 
 // Only the fields LeadService reads: one search slot and one intent rule.
@@ -162,14 +169,17 @@ const rescore = (
   w: World,
   slots: Record<string, { value: string | number }> = {},
 ) =>
-  db.$transaction((tx) =>
-    service.rescore(tx, {
-      tenantId: w.tenantId,
-      conversationId: w.conversationId,
-      pack: PACK,
-      slots,
-      intent: 'book',
-    }),
+  // The agent turn rescores inside its tenant transaction.
+  runWithTenant(w.tenantId, () =>
+    app.$transaction((tx) =>
+      service.rescore(tx, {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        pack: PACK,
+        slots,
+        intent: 'book',
+      }),
+    ),
   );
 
 const stageOf = async (leadId: string) => {

@@ -6,9 +6,13 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { ensureLeadStages } from '../leads/lead-stage.util.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { CustomFieldsService } from '../tags/custom-fields.service.js';
 import { TagsService } from '../tags/tags.service.js';
@@ -23,27 +27,32 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Pipelines integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the controllers on the app role, each
+// call under the tenant of the principal the session guard would set.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const pipelines = new PipelinesController(prisma);
-const leadsApi = new LeadPipelineController(
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
-  new ManualLeadService(prisma),
-  new LeadArchiveService(prisma),
+const pipelines = tenantScoped(new PipelinesController(prisma));
+const leadsApi = tenantScoped(
+  new LeadPipelineController(
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+    new ManualLeadService(prisma),
+    new LeadArchiveService(prisma),
+  ),
 );
-const board = new LeadsController(prisma);
-const team = new TeamController(
-  prisma,
-  new OperatorInviteService(prisma),
-  new PasswordResetService(prisma),
+const board = tenantScoped(new LeadsController(prisma));
+const team = tenantScoped(
+  new TeamController(
+    prisma,
+    new OperatorInviteService(prisma),
+    new PasswordResetService(prisma),
+  ),
 );
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
@@ -162,12 +171,12 @@ describe('migration backfill and ensureLeadStages (ADR 057)', () => {
     expect(await db.pipeline.count({ where: { tenantId: w.tenantId } })).toBe(
       0,
     );
-    const first = await db.$transaction((tx) =>
-      ensureLeadStages(tx, w.tenantId),
-    );
-    const second = await db.$transaction((tx) =>
-      ensureLeadStages(tx, w.tenantId),
-    );
+    const ensure = () =>
+      runWithTenant(w.tenantId, () =>
+        app.$transaction((tx) => ensureLeadStages(tx, w.tenantId)),
+      );
+    const first = await ensure();
+    const second = await ensure();
     expect(second).toBe(first);
     const all = await db.pipeline.findMany({ where: { tenantId: w.tenantId } });
     expect(all).toHaveLength(1);
@@ -897,7 +906,7 @@ describe('leads list: filters, new fields, batched owners', () => {
     const w = await world();
     for (const role of ROLES)
       await newLead(w, { ownerOperatorId: w.ids[role] });
-    const spy = vi.spyOn(db.operator, 'findMany');
+    const spy = vi.spyOn(app.operator, 'findMany');
     const page = await leadsApi.list(w.as.OWNER, {});
     expect(page.items.map((i) => i.owner?.id).sort()).toEqual(
       Object.values(w.ids).sort(),

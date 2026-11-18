@@ -12,6 +12,9 @@ const STRICT_SPECS = [
   'src/handover/handover.integration.spec.ts',
   'src/persons/person-identity.integration.spec.ts',
   'src/channels/telegram/telegram-agent.integration.spec.ts',
+  'src/retention/retention.integration.spec.ts',
+  'src/pipelines/pipelines.integration.spec.ts',
+  'src/pipelines/funnel.integration.spec.ts',
 ];
 
 export default defineConfig({

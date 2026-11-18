@@ -3,9 +3,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { ContactErasureService } from './contact-erasure.service.js';
 import { RetentionService } from './retention.service.js';
 
@@ -18,13 +21,17 @@ if (testDatabase !== 'agentcore_test') {
   );
 }
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the services on the app role; each
+// call runs under the tenant its first argument names, as the erase route
+// (session guard) and the retention scan (per-tenant runWithTenant) set it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const scoped = <T extends object>(service: T): T =>
+  tenantScoped(service, { tenantArg: 0 });
 
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 function unique(prefix: string): string {
@@ -131,7 +138,7 @@ describe('RetentionService (P0.6)', () => {
         },
       });
 
-      const service = new RetentionService(prisma);
+      const service = scoped(new RetentionService(prisma));
       const deleted = await service.scanTenant(tenant.id, now);
       expect(deleted).toBe(2);
 
@@ -175,7 +182,7 @@ describe('ContactErasureService (P0.6)', () => {
       data: { tenantId: tenant.id, displayName: 'Owner', role: 'OWNER' },
     });
 
-    const service = new ContactErasureService(prisma);
+    const service = scoped(new ContactErasureService(prisma));
     const result = await service.erase(tenant.id, contact.id, actor.id);
     expect(result).toMatchObject({
       contactId: contact.id,
@@ -246,7 +253,7 @@ describe('ContactErasureService (P0.6)', () => {
     const actor = await db.operator.create({
       data: { tenantId: tenant.id, displayName: 'Owner', role: 'OWNER' },
     });
-    const service = new ContactErasureService(prisma);
+    const service = scoped(new ContactErasureService(prisma));
 
     await service.erase(tenant.id, contact.id, actor.id);
     const afterFirst = await db.person.findUniqueOrThrow({
@@ -272,7 +279,7 @@ describe('ContactErasureService (P0.6)', () => {
     const actor = await db.operator.create({
       data: { tenantId: b.id, displayName: 'Owner B', role: 'OWNER' },
     });
-    const service = new ContactErasureService(prisma);
+    const service = scoped(new ContactErasureService(prisma));
     await expect(service.erase(b.id, contact.id, actor.id)).rejects.toThrow();
     const still = await db.contact.findUnique({
       where: { tenantId_id: { tenantId: a.id, id: contact.id } },
@@ -443,7 +450,7 @@ describe('RetentionService message purge (P0.6)', () => {
         },
       });
 
-      const service = new RetentionService(prisma);
+      const service = scoped(new RetentionService(prisma));
       const deleted = await service.scanTenant(tenant.id, now);
       expect(deleted).toBe(4);
       expect(await service.scanTenant(tenant.id, now)).toBe(0);
@@ -546,7 +553,7 @@ describe('RetentionService conversation purge (P0.6)', () => {
       await db.conversation.createMany({ data: rows });
       const now = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
-      const service = new RetentionService(prisma);
+      const service = scoped(new RetentionService(prisma));
       const deleted = await service.scanTenant(tenant.id, now);
       expect(deleted).toBe(206);
       await expect(
@@ -600,7 +607,7 @@ describe('RetentionService conversation purge (P0.6)', () => {
           return super.purgeOneConversation(tenantId, conversationId);
         }
       }
-      const service = new Flaky(prisma);
+      const service = scoped(new Flaky(prisma));
       const warn = vi
         .spyOn(
           (service as unknown as { logger: { warn: (m: string) => void } })
@@ -739,7 +746,7 @@ describe('ContactErasureService completeness (P0.6, ADR 049)', () => {
       const actor = await db.operator.create({
         data: { tenantId: tenant.id, displayName: 'Owner', role: 'OWNER' },
       });
-      const service = new ContactErasureService(prisma);
+      const service = scoped(new ContactErasureService(prisma));
       const result = await service.erase(tenant.id, contact.id, actor.id);
       expect(result.alreadyErased).toBe(false);
 
