@@ -5,9 +5,13 @@ import type { ConfigService } from '@nestjs/config';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
 import { DEFAULT_FOLLOW_UP_POLICY } from '../core/followup/policy.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { UZ_LATN } from '../locales/locale-packs.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { TelegramApiError } from '../channels/telegram/telegram-sender.js';
 import { TelegramProcessor } from '../channels/telegram/telegram-processor.js';
@@ -18,14 +22,14 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Follow-up integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const other = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// RLS plan S8b: fixtures and checks on the owner; the service on the app role
+// (two pools, for the two-worker race). A scan for one tenant runs under it;
+// the due scan finds candidates on the privileged handle and works per tenant.
+const db = ownerClient();
+const app = appClient();
+const other = appClient();
 afterAll(async () => {
-  await Promise.all([db.$disconnect(), other.$disconnect()]);
+  await Promise.all([db.$disconnect(), app.$disconnect(), other.$disconnect()]);
 });
 
 const config = (enabled: boolean): ConfigService<AppEnvironment, true> =>
@@ -39,8 +43,12 @@ const config = (enabled: boolean): ConfigService<AppEnvironment, true> =>
         FOLLOWUP_QUIET_END_HOUR: 9,
       })[key],
   }) as unknown as ConfigService<AppEnvironment, true>;
-const service = (client = db, enabled = true): FollowUpService =>
-  new FollowUpService(client as unknown as PrismaService, config(enabled));
+const service = (client = app, enabled = true): FollowUpService =>
+  tenantScoped(
+    new FollowUpService(client as unknown as PrismaService, config(enabled), {
+      db,
+    } as PrivilegedDatabase),
+  );
 
 const NOW = new Date('2026-10-26T07:00:00Z'); // 12:00 in Asia/Tashkent
 const HOURS = (n: number): Date => new Date(NOW.getTime() - n * 3_600_000);
@@ -231,7 +239,7 @@ describe('follow-up scheduler', () => {
 
   it('does nothing unless enabled', async () => {
     const c = await silentConversation();
-    expect(await service(db, false).scanDue(NOW)).toBe(0);
+    expect(await service(app, false).scanDue(NOW)).toBe(0);
     expect(await sentFor(c)).toBe(0);
   });
 });
@@ -321,9 +329,11 @@ describe('a blocked bot ends reminders', () => {
     const sender = {
       sendMessage: vi.fn().mockRejectedValue(new TelegramApiError(403, null)),
     };
-    const processor = new TelegramProcessor(
-      db as unknown as PrismaService,
-      sender as unknown as TelegramSender,
+    const processor = tenantScoped(
+      new TelegramProcessor(
+        app as unknown as PrismaService,
+        sender as unknown as TelegramSender,
+      ),
     );
     await processor.process({
       outboxId: randomUUID(),

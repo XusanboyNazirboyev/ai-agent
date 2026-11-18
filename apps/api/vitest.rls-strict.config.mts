@@ -52,6 +52,7 @@ const STRICT_SPECS = [
   'src/leads/lead-timeline.integration.spec.ts',
   'src/secrets/channel-secret-store.integration.spec.ts',
   'src/secrets/connector-secret-store.integration.spec.ts',
+  'src/followup/follow-up.integration.spec.ts',
 ];
 
 export default defineConfig({
