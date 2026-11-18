@@ -4,8 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { ContactErasureService } from '../retention/contact-erasure.service.js';
 import { PeopleController } from '../webinbox/people.controller.js';
@@ -28,30 +32,42 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('People integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the people controller and the
+// erasure on the app role under the principal's (or the named) tenant.
+// Sign-in and the session lookup run on the privileged handle, as in
+// production.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const sessions = new SessionService(prisma, {
-  ...DEFAULT_SESSION_POLICY,
-  scrypt: { N: 1024, r: 8, p: 1 },
-});
+const sessions = new SessionService(
+  prisma,
+  {
+    ...DEFAULT_SESSION_POLICY,
+    scrypt: { N: 1024, r: 8, p: 1 },
+  },
+  undefined,
+  undefined,
+  { db } as PrivilegedDatabase,
+);
 const guard = new SessionGuard(sessions, {
   get: () => ['http://localhost:3000'],
 } as never);
 const peopleService = new PeopleService(prisma);
-const erasure = new ContactErasureService(prisma);
-const controller = new PeopleController(
-  peopleService,
-  new PersonMergeService(prisma, peopleService),
-  new PersonErasureService(prisma, erasure),
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
+const contactErasure = new ContactErasureService(prisma);
+const erasure = tenantScoped(contactErasure, { tenantArg: 0 });
+const controller = tenantScoped(
+  new PeopleController(
+    peopleService,
+    new PersonMergeService(prisma, peopleService),
+    new PersonErasureService(prisma, contactErasure),
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+  ),
 );
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;

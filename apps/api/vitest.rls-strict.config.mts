@@ -53,6 +53,7 @@ const STRICT_SPECS = [
   'src/secrets/channel-secret-store.integration.spec.ts',
   'src/secrets/connector-secret-store.integration.spec.ts',
   'src/followup/follow-up.integration.spec.ts',
+  'src/persons/people.integration.spec.ts',
 ];
 
 export default defineConfig({
