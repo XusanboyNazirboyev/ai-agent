@@ -1,5 +1,6 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrismaClient } from '../../generated/prisma/client.js';
 import type { ColumnMapping } from './field-suggest.js';
 import type { MapOptions, SheetMapResult } from './row-mapper.js';
 
@@ -303,8 +304,10 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
     olderThan: Date,
     notAttemptedSince: Date,
     limit: number,
+    // RLS plan S7: the scan passes the privileged connection (every tenant).
+    db: Pick<PrismaClient, 'sheetCatalog'> = this.prisma,
   ): Promise<Array<{ id: string; tenantId: string }>> {
-    return this.prisma.sheetCatalog.findMany({
+    return db.sheetCatalog.findMany({
       where: {
         autoRefresh: true,
         sourceUrl: { not: null },

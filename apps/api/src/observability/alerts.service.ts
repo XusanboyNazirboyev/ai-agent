@@ -1,11 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
 import { monthStart } from '../agent/llm-budget-ledger.js';
 import type { AppEnvironment } from '../config/environment.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 
 export const OPERATOR_ALERT_EVENT = 'alert.operator';
 
@@ -48,15 +50,22 @@ export class AlertsService implements ScheduledScan {
   private readonly logger = new Logger(AlertsService.name);
   private readonly logged = new Set<string>();
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   async scanDue(now: Date): Promise<number> {
     if (this.config.get('ALERTS_ENABLED', { infer: true }) !== true) return 0;
     let queued = 0;
-    const tenants = await this.prisma.channelAccount.findMany({
+    const tenants = await this.crossTenant.channelAccount.findMany({
       where: {
         operatorChatId: { not: null },
         status: 'ACTIVE',
@@ -66,8 +75,12 @@ export class AlertsService implements ScheduledScan {
       select: { tenantId: true },
     });
     for (const { tenantId } of tenants) {
-      queued += await this.budget(tenantId, now);
-      queued += await this.crmFailures(tenantId, now);
+      queued += await runWithTenant(tenantId, async () => {
+        return (
+          (await this.budget(tenantId, now)) +
+          (await this.crmFailures(tenantId, now))
+        );
+      });
     }
     await this.platform(now);
     return queued;
@@ -143,7 +156,7 @@ export class AlertsService implements ScheduledScan {
     const backlogMinutes = this.config.get('ALERT_OUTBOX_BACKLOG_MINUTES', {
       infer: true,
     });
-    const waiting = await this.prisma.outboxEvent.aggregate({
+    const waiting = await this.crossTenant.outboxEvent.aggregate({
       where: {
         status: 'PENDING',
         availableAt: { lte: new Date(now.getTime() - backlogMinutes * 60_000) },
@@ -161,7 +174,7 @@ export class AlertsService implements ScheduledScan {
         ),
       });
 
-    const failed = await this.prisma.agentTurn.count({
+    const failed = await this.crossTenant.agentTurn.count({
       where: {
         status: 'FAILED',
         completedAt: { gt: new Date(now.getTime() - HOUR_MS), lte: now },

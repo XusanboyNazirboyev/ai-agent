@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 
 export interface InboxEventRow {
   readonly id: string;
@@ -14,7 +16,16 @@ export const EVENT_RETENTION_MS = 24 * 60 * 60 * 1000;
 /** Reads the per-tenant change feed written by database triggers (ADR 020). */
 @Injectable()
 export class InboxEventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  /** RLS plan S7: the feed is pruned for every tenant at once. */
+  private readonly crossTenant: PrismaClient;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   /** Newest event id of the tenant, or 0n: where a fresh stream starts. */
   async latestId(tenantId: string): Promise<bigint> {
@@ -73,7 +84,7 @@ export class InboxEventsService {
 
   /** Deletes events older than the retention window (idempotent). */
   async prune(now = new Date()): Promise<number> {
-    const result = await this.prisma.inboxEvent.deleteMany({
+    const result = await this.crossTenant.inboxEvent.deleteMany({
       where: {
         createdAt: { lt: new Date(now.getTime() - EVENT_RETENTION_MS) },
       },

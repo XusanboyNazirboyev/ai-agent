@@ -1,6 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { z } from 'zod';
+import type { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
 import { SHEET_CURRENCIES } from './cell-values.js';
 import { parseSheet, SheetReadError, type ParsedSheet } from './csv-reader.js';
 import {
@@ -175,7 +178,14 @@ export class SheetCatalogService {
     @Optional()
     @Inject(SHEET_FETCH_OPTIONS)
     private readonly fetchOptions: SheetFetchOptions = {},
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
+
+  /** RLS plan S7: the refresh scan finds due lists of every tenant. */
+  private readonly crossTenant: PrismaClient;
 
   /**
    * Reads a shared Google Sheets link on the server (a browser may not call
@@ -294,28 +304,37 @@ export class SheetCatalogService {
       new Date(now.getTime() - SHEET_REFRESH_EVERY_MS),
       new Date(now.getTime() - SHEET_REFRESH_RETRY_MS),
       limit,
+      this.crossTenant,
     );
     let refreshed = 0;
     for (const item of due) {
-      const claimed = await this.store.claimRefresh(
+      // Each list is claimed and reloaded in its own tenant's context.
+      const ok = await runWithTenant(
         item.tenantId,
-        item.id,
-        now,
-        new Date(now.getTime() - SHEET_REFRESH_RETRY_MS),
+        async (): Promise<boolean> => {
+          const claimed = await this.store.claimRefresh(
+            item.tenantId,
+            item.id,
+            now,
+            new Date(now.getTime() - SHEET_REFRESH_RETRY_MS),
+          );
+          if (!claimed) return false;
+          try {
+            await this.refresh(item.tenantId, null, now);
+            return true;
+          } catch (error) {
+            this.logger.warn(
+              JSON.stringify({
+                event: 'sheet_catalog.refresh_failed',
+                tenant: item.tenantId,
+                code: codeOf(error),
+              }),
+            );
+            return false;
+          }
+        },
       );
-      if (!claimed) continue;
-      try {
-        await this.refresh(item.tenantId, null, now);
-        refreshed += 1;
-      } catch (error) {
-        this.logger.warn(
-          JSON.stringify({
-            event: 'sheet_catalog.refresh_failed',
-            tenant: item.tenantId,
-            code: codeOf(error),
-          }),
-        );
-      }
+      if (ok) refreshed += 1;
     }
     return refreshed;
   }

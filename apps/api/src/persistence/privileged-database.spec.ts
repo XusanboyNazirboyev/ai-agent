@@ -35,6 +35,11 @@ const ALLOWED = new Map([
   ['channels/telegram/telegram-queue.runtime.ts', 'outbox relay'],
   ['connectors/sync/tenant-connector-loader.ts', 'connectors to schedule'],
   ['connectors/sync/catalog-sync.store.ts', 'stale runs of every tenant'],
+  // S7: scheduled scans find due work of every tenant, then work per tenant.
+  ['handover/digest.service.ts', 'tenants with an operator group'],
+  ['observability/alerts.service.ts', 'tenants to check, platform alerts'],
+  ['webinbox/inbox-events.service.ts', 'prunes the feed of every tenant'],
+  ['connectors/spreadsheet/sheet-catalog.service.ts', 'lists due a reload'],
 ]);
 
 function sources(dir: string): string[] {
