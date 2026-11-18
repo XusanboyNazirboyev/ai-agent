@@ -27,6 +27,9 @@ import { FollowUpService } from '../../../followup/follow-up.service.js';
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { HandoverService } from '../../../handover/handover.service.js';
 import type { PrismaService } from '../../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../../persistence/privileged-database.js';
+import { runWithTenant } from '../../../persistence/tenant-context.js';
+import { tenantScoped } from '../../../persistence/testing/test-clients.js';
 import { EVAL_PACKS } from '../eval-runner.js';
 import type { Scenario, SimLanguage } from './scenario.js';
 
@@ -155,6 +158,13 @@ export class SimulationWorld {
 
   static async create(options: {
     db: PrismaClient;
+    /**
+     * RLS plan S8b: the client the code under test runs on (defaults to
+     * `db`, which seeds the world and reads its state). The webhook routes
+     * on `db` as the privileged handle and accepts under the tenant; each
+     * queue event runs under its tenant, as the job does.
+     */
+    app?: PrismaClient;
     scenario: Scenario;
     language: SimLanguage;
     provider: LlmProvider;
@@ -166,7 +176,8 @@ export class SimulationWorld {
     const pack = EVAL_PACKS[scenario.pack];
     const source = SOURCE[scenario.pack];
     const spec = pack.actions[0];
-    const prisma = db as unknown as PrismaService;
+    const prisma = (options.app ?? db) as unknown as PrismaService;
+    const privileged = { db } as PrivilegedDatabase;
     const config = {
       get: (key: string) => options.settings[key],
     } as unknown as ConfigService<AppEnvironment, true>;
@@ -245,24 +256,31 @@ export class SimulationWorld {
     const sender = {
       sendMessage: () => Promise.resolve({ messageId: '1' }),
     } as unknown as TelegramSender;
-    const processor = new TelegramProcessor(
-      prisma,
-      sender,
-      pipeline,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      actions,
+    const processor = tenantScoped(
+      new TelegramProcessor(
+        prisma,
+        sender,
+        pipeline,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        actions,
+      ),
     );
-    const webhook = new TelegramWebhookService(prisma, {
-      get: (key: string) =>
-        ({
-          TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
-          TELEGRAM_WEBHOOK_SECRET: 's',
-          TELEGRAM_RATE_LIMIT_PER_MINUTE: 10_000,
-        })[key],
-    } as never);
+    const webhook = new TelegramWebhookService(
+      prisma,
+      {
+        get: (key: string) =>
+          ({
+            TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
+            TELEGRAM_WEBHOOK_SECRET: 's',
+            TELEGRAM_RATE_LIMIT_PER_MINUTE: 10_000,
+          })[key],
+      } as never,
+      undefined,
+      privileged,
+    );
     return new SimulationWorld(
       db,
       tenant.id,
@@ -271,7 +289,7 @@ export class SimulationWorld {
       source,
       webhook,
       processor,
-      new FollowUpService(prisma, config),
+      tenantScoped(new FollowUpService(prisma, config, privileged)),
       scenario.setup.contact,
     );
   }
@@ -292,7 +310,9 @@ export class SimulationWorld {
       },
     });
     if (normalized.kind !== 'text') throw new Error('text update expected');
-    await this.webhook.accept(this.accountId, normalized);
+    await runWithTenant(this.tenantId, () =>
+      this.webhook.accept(this.accountId, normalized),
+    );
     if (updateId === 1) await this.applyContactPreset();
     const outbox = await this.db.outboxEvent.findFirstOrThrow({
       where: {

@@ -5,8 +5,10 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../../../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../../persistence/postgres-adapter.js';
+import {
+  appClient,
+  ownerClient,
+} from '../../../persistence/testing/test-clients.js';
 import { extraction } from '../agent-harness.js';
 import { EVAL_PACKS } from '../eval-runner.js';
 import { ScriptedCustomer } from './customer.js';
@@ -26,10 +28,12 @@ if (
   database === process.env.POSTGRES_DATABASE
 )
   throw new Error('requires a dedicated agentcore_* test database');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: the world seeded and read on the owner, run on the app role.
+const db = ownerClient();
+const app = appClient();
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
-afterAll(async () => db.$disconnect());
 
 const scenarios = loadScenarios(resolve(process.cwd(), '../../eval/scenarios'));
 const byId = (id: string): Scenario => scenarios.find((s) => s.id === id)!;
@@ -42,6 +46,7 @@ async function run(
 ): ReturnType<typeof runScenario> {
   return runScenario({
     db,
+    app,
     scenario,
     language,
     run: 1,

@@ -31,6 +31,8 @@ export interface RunResult {
  */
 export async function runScenario(options: {
   db: PrismaClient;
+  /** The code under test's client (RLS plan S8b); defaults to `db`. */
+  app?: PrismaClient;
   scenario: Scenario;
   language: SimLanguage;
   run: number;
@@ -67,6 +69,7 @@ export async function runScenario(options: {
   try {
     world = await SimulationWorld.create({
       db: options.db,
+      ...(options.app ? { app: options.app } : {}),
       scenario,
       language,
       provider: options.provider,
