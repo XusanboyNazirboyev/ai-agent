@@ -37,6 +37,7 @@ import {
   type CrmConnector,
   type ListItemsParams,
   type QuoteRequest,
+  type ReadOptions,
   type WriteContext,
   type WriteIdempotency,
 } from '../interfaces/crm-connector.js';
@@ -105,16 +106,27 @@ function compact<T extends Record<string, unknown>>(value: T): T {
 export class GenericRestConnector implements CrmConnector {
   private readonly logger = new Logger(GenericRestConnector.name);
   readonly listItems?: (params?: ListItemsParams) => Promise<CatalogItem[]>;
-  readonly searchItems?: (query: CanonicalQuery) => Promise<CatalogItem[]>;
-  readonly getItem?: (id: string) => Promise<CatalogItem>;
-  readonly getOffers?: (itemId: string) => Promise<Offer[]>;
+  readonly searchItems?: (
+    query: CanonicalQuery,
+    options?: ReadOptions,
+  ) => Promise<CatalogItem[]>;
+  readonly getItem?: (
+    id: string,
+    options?: ReadOptions,
+  ) => Promise<CatalogItem>;
+  readonly getOffers?: (
+    itemId: string,
+    options?: ReadOptions,
+  ) => Promise<Offer[]>;
   readonly checkAvailability?: (
     offerId: string,
     request: AvailabilityRequest,
+    options?: ReadOptions,
   ) => Promise<Availability>;
   readonly getQuote?: (
     offerId: string,
     request: QuoteRequest,
+    options?: ReadOptions,
   ) => Promise<Quote>;
   readonly createLead?: (
     input: LeadInput,
@@ -736,7 +748,10 @@ export class GenericRestConnector implements CrmConnector {
     });
   }
 
-  private async searchCatalog(query: CanonicalQuery): Promise<CatalogItem[]> {
+  private async searchCatalog(
+    query: CanonicalQuery,
+    options: ReadOptions = {},
+  ): Promise<CatalogItem[]> {
     const endpoint = this.endpoint('searchItems', 'search');
     const parsed = this.input(CanonicalQuerySchema, query, 'search query');
     if (parsed.itemType && parsed.itemType !== this.config.catalogItemType) {
@@ -771,17 +786,22 @@ export class GenericRestConnector implements CrmConnector {
     const response = await this.request('searchItems', {
       method: endpoint.method,
       url: this.buildUrl(endpoint, {}, params),
+      ...signalOf(options),
     });
     const records = this.readList(response.body, endpoint).slice(0, limit);
     return this.dedupe(records.map((record) => this.mapItem(record)));
   }
 
-  private async fetchItem(id: string): Promise<CatalogItem> {
+  private async fetchItem(
+    id: string,
+    options: ReadOptions = {},
+  ): Promise<CatalogItem> {
     const endpoint = this.endpoint('getItem');
     const sourceEntityId = this.toSourceId(id, 'item');
     const response = await this.request('getItem', {
       method: endpoint.method,
       url: this.buildUrl(endpoint, { sourceEntityId }, {}),
+      ...signalOf(options),
     });
     const item = this.mapItem(this.readRecord(response.body, endpoint, 'item'));
     if (item.sourceEntityId !== sourceEntityId) {
@@ -794,12 +814,16 @@ export class GenericRestConnector implements CrmConnector {
     return item;
   }
 
-  private async fetchOffers(itemId: string): Promise<Offer[]> {
+  private async fetchOffers(
+    itemId: string,
+    options: ReadOptions = {},
+  ): Promise<Offer[]> {
     const endpoint = this.endpoint('getOffers');
     const itemSourceId = this.toSourceId(itemId, 'item');
     const response = await this.request('getOffers', {
       method: endpoint.method,
       url: this.buildUrl(endpoint, { itemId: itemSourceId }, {}),
+      ...signalOf(options),
     });
     return this.dedupe(
       this.readList(response.body, endpoint).map((record) =>
@@ -838,6 +862,7 @@ export class GenericRestConnector implements CrmConnector {
   private async fetchAvailability(
     offerId: string,
     request: AvailabilityRequest,
+    options: ReadOptions = {},
   ): Promise<Availability> {
     const endpoint = this.endpoint('checkAvailability', 'availability');
     this.assertRequestOffer(offerId, request.offerId);
@@ -845,6 +870,7 @@ export class GenericRestConnector implements CrmConnector {
     const response = await this.request('checkAvailability', {
       method: endpoint.method,
       url: this.buildUrl(endpoint, { offerId: sourceOfferId }, {}),
+      ...signalOf(options),
       body: this.liveReadBody(
         endpoint,
         sourceOfferId,
@@ -883,6 +909,7 @@ export class GenericRestConnector implements CrmConnector {
   private async fetchQuote(
     offerId: string,
     request: QuoteRequest,
+    options: ReadOptions = {},
   ): Promise<Quote> {
     const endpoint = this.endpoint('getQuote', 'liveQuote');
     this.assertRequestOffer(offerId, request.offerId);
@@ -890,6 +917,7 @@ export class GenericRestConnector implements CrmConnector {
     const response = await this.request('getQuote', {
       method: endpoint.method,
       url: this.buildUrl(endpoint, { offerId: sourceOfferId }, {}),
+      ...signalOf(options),
       body: this.liveReadBody(endpoint, sourceOfferId, request.attributes),
     });
 
@@ -1234,4 +1262,9 @@ function imageOf(record: unknown, path: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The caller's cancellation for one request, when there is one. */
+function signalOf(options: ReadOptions): { signal?: AbortSignal } {
+  return options.signal ? { signal: options.signal } : {};
 }

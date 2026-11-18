@@ -332,15 +332,22 @@ describe('agent turn: tool control', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('times out a hanging connector call', async () => {
+  it('times out a hanging connector call and aborts its request', async () => {
     const base = educationConnector();
+    const signals: AbortSignal[] = [];
     const slow: CrmConnector = {
       connectorKey: base.connectorKey,
       context: base.context,
       sourceSystem: base.sourceSystem,
       capabilities: base.capabilities,
-      searchItems: (query) => base.searchItems(query),
-      getOffers: () => new Promise(() => undefined),
+      searchItems: (query, options) => {
+        if (options?.signal) signals.push(options.signal);
+        return base.searchItems(query);
+      },
+      getOffers: (_itemId, options) => {
+        if (options?.signal) signals.push(options.signal);
+        return new Promise(() => undefined);
+      },
     };
     const provider = script(
       extraction({ subject: 'IELTS' }),
@@ -360,6 +367,12 @@ describe('agent turn: tool control', () => {
       code: 'TIMEOUT',
     });
     expect(result.outcome).toBe('ANSWERED');
+    // Every connector call got a signal; only the hanging one was aborted,
+    // with the tool deadline as the reason (ChatLab research, item 2).
+    expect(signals).toHaveLength(2);
+    expect(signals[0]!.aborted).toBe(false);
+    expect(signals[1]!.aborted).toBe(true);
+    expect((signals[1]!.reason as Error).message).toBe('TOOL_TIMEOUT');
   });
 
   it('separates an unreachable CRM from a missing data source', async () => {

@@ -616,15 +616,26 @@ export class AgentTools {
     };
   }
 
-  private withTimeout<T>(work: Promise<T>): Promise<T> {
+  /**
+   * Bounds a tool call by the tool deadline. A call given as a function gets
+   * an AbortSignal that is aborted when the deadline passes, so a connector
+   * that honours it closes its request instead of running on after the turn
+   * has moved on (a plain promise can only stop being awaited).
+   */
+  private withTimeout<T>(
+    work: Promise<T> | ((signal: AbortSignal) => Promise<T>),
+  ): Promise<T> {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error('TOOL_TIMEOUT')),
-        this.context.timeoutMs,
-      );
+      timer = setTimeout(() => {
+        const reason = new Error('TOOL_TIMEOUT');
+        controller.abort(reason);
+        reject(reason);
+      }, this.context.timeoutMs);
     });
-    return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+    const running = typeof work === 'function' ? work(controller.signal) : work;
+    return Promise.race([running, timeout]).finally(() => clearTimeout(timer));
   }
 
   /** Code-initiated catalog search from the slot state (value early). */
@@ -671,7 +682,7 @@ export class AgentTools {
         title: query.title,
         attributes: Object.keys(query.attributes ?? {}).join(','),
       },
-      () => this.catalogConnector().searchItems!(query),
+      (signal) => this.catalogConnector().searchItems!(query, { signal }),
     );
   }
 
@@ -721,23 +732,26 @@ export class AgentTools {
     const connector = this.catalogConnector();
     switch (tool) {
       case 'search_catalog':
-        return this.execute(name, 'model', input, () =>
-          connector.searchItems!({
-            itemType: pack.catalogItemType,
-            title: input.query,
-            limit: pack.maxOptionsShown,
-          }),
+        return this.execute(name, 'model', input, (signal) =>
+          connector.searchItems!(
+            {
+              itemType: pack.catalogItemType,
+              title: input.query,
+              limit: pack.maxOptionsShown,
+            },
+            { signal },
+          ),
         );
       case 'get_item_details':
-        return this.execute(name, 'model', input, async () => [
-          await connector.getItem!(input.itemId),
+        return this.execute(name, 'model', input, async (signal) => [
+          await connector.getItem!(input.itemId, { signal }),
         ]);
       case 'list_offers':
         return this.execute(
           name,
           'model',
           input,
-          () => connector.getOffers!(input.itemId),
+          (signal) => connector.getOffers!(input.itemId, { signal }),
           'offers',
         );
       case 'check_availability':
@@ -745,10 +759,12 @@ export class AgentTools {
           name,
           'model',
           input,
-          () =>
-            connector.checkAvailability!(input.offerId, {
-              offerId: input.offerId,
-            }),
+          (signal) =>
+            connector.checkAvailability!(
+              input.offerId,
+              { offerId: input.offerId },
+              { signal },
+            ),
           'availability',
           input.offerId,
         );
@@ -757,7 +773,12 @@ export class AgentTools {
           name,
           'model',
           input,
-          () => connector.getQuote!(input.offerId, { offerId: input.offerId }),
+          (signal) =>
+            connector.getQuote!(
+              input.offerId,
+              { offerId: input.offerId },
+              { signal },
+            ),
           'quote',
           input.offerId,
         );
@@ -1121,7 +1142,7 @@ export class AgentTools {
     name: string,
     origin: 'code' | 'model',
     input: Readonly<Record<string, unknown>>,
-    work: () => Promise<unknown>,
+    work: (signal: AbortSignal) => Promise<unknown>,
     shape: 'items' | 'offers' | 'availability' | 'quote' = 'items',
     expectedOfferId?: string,
   ): Promise<ToolOutcome> {
@@ -1129,7 +1150,7 @@ export class AgentTools {
     this.context.budget.countToolCall();
     let result: unknown;
     try {
-      result = await this.withTimeout(work());
+      result = await this.withTimeout(work);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'TOOL_TIMEOUT') {
         return this.fail(name, origin, 'TIMEOUT', started, input);

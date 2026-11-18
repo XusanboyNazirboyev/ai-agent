@@ -93,6 +93,16 @@ export interface WriteContext {
 export const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9:_-]{8,200}$/u;
 
 /**
+ * Options of a live read. `signal` is the caller's cancellation: the agent
+ * aborts it when its tool deadline passes, so a slow CRM request is closed
+ * instead of running on after the turn has moved on. Connectors without
+ * network I/O may only check it before they start.
+ */
+export interface ReadOptions {
+  readonly signal?: AbortSignal;
+}
+
+/**
  * Universal CRM connector contract.
  *
  * Connectors declare which capabilities they support and only implement the
@@ -114,14 +124,22 @@ export interface CrmConnector {
   shutdown?(): Promise<void>;
 
   listItems?(params: ListItemsParams): Promise<CatalogItem[]>;
-  searchItems?(query: CanonicalQuery): Promise<CatalogItem[]>;
-  getItem?(id: string): Promise<CatalogItem>;
-  getOffers?(itemId: string): Promise<Offer[]>;
+  searchItems?(
+    query: CanonicalQuery,
+    options?: ReadOptions,
+  ): Promise<CatalogItem[]>;
+  getItem?(id: string, options?: ReadOptions): Promise<CatalogItem>;
+  getOffers?(itemId: string, options?: ReadOptions): Promise<Offer[]>;
   checkAvailability?(
     offerId: string,
     request: AvailabilityRequest,
+    options?: ReadOptions,
   ): Promise<Availability>;
-  getQuote?(offerId: string, request: QuoteRequest): Promise<Quote>;
+  getQuote?(
+    offerId: string,
+    request: QuoteRequest,
+    options?: ReadOptions,
+  ): Promise<Quote>;
   /** Default `none`. Verified by the registry and the conformance suite. */
   readonly writeIdempotency?: WriteIdempotency;
   createLead?(

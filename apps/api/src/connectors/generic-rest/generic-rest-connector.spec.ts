@@ -820,3 +820,42 @@ describe('GenericRestConnector outbound write mapping', () => {
     });
   });
 });
+
+describe('GenericRestConnector caller cancellation (ChatLab research, item 2)', () => {
+  it('closes a live read when the caller aborts and does not retry it', async () => {
+    const server = await crm((_request, response) => {
+      // Answers far later than the caller waits.
+      setTimeout(() => json(response, 200, { id: 'x', title: 'Late' }), 2_000);
+    });
+    const rest = connector(server, {
+      endpoints: { getItem: { path: '/items/{sourceEntityId}' } },
+      maxRetries: 2,
+    });
+    const controller = new AbortController();
+    const started = Date.now();
+    setTimeout(() => controller.abort(new Error('TOOL_TIMEOUT')), 50);
+    await expect(
+      rest.getItem?.('generic-rest:x', { signal: controller.signal }),
+    ).rejects.toMatchObject({
+      code: 'CONNECTOR_REQUEST_CANCELLED',
+      category: ConnectorErrorCategory.CANCELLED,
+    });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it('does not send at all when the signal is already aborted', async () => {
+    const server = await crm((_request, response) =>
+      json(response, 200, { id: 'x', title: 'Fictional' }),
+    );
+    const rest = connector(server, {
+      endpoints: { getItem: { path: '/items/{sourceEntityId}' } },
+    });
+    const controller = new AbortController();
+    controller.abort(new Error('TOOL_TIMEOUT'));
+    await expect(
+      rest.getItem?.('generic-rest:x', { signal: controller.signal }),
+    ).rejects.toMatchObject({ category: ConnectorErrorCategory.CANCELLED });
+    expect(server.requests).toHaveLength(0);
+  });
+});
