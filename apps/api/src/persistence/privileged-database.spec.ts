@@ -17,6 +17,7 @@ const ALLOWED = new Map([
   // S5: identity is looked up before any tenant is known.
   ['webinbox/session.service.ts', 'login by e-mail, session by cookie hash'],
   ['auth/mfa.service.ts', 'second factor of a person not yet signed in'],
+  ['handover/operator-auth.ts', 'operator API token found by its hash'],
   ['team/operator-invite.service.ts', 'invite found by its token alone'],
   ['team/password-reset.service.ts', 'reset link found by its token alone'],
   // S5: a webhook names the account; one lookup finds its tenant.

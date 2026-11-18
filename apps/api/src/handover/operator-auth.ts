@@ -3,9 +3,14 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { enrichLogContext } from '../observability/log-context.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { setTenant } from '../persistence/tenant-context.js';
 
 export interface AuthenticatedOperator {
   readonly tenantId: string;
@@ -31,7 +36,20 @@ export function newOperatorToken(): string {
  */
 @Injectable()
 export class OperatorTokenGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * The token is looked up before any tenant is known, so on the privileged
+   * connection (RLS plan S5); the request then runs under the token's tenant.
+   */
+  private readonly db: PrismaClient;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional only so specs can build the guard by hand; Nest always
+    // provides it, next to PrismaService, from PersistenceModule.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.db = privileged?.db ?? prisma;
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
@@ -41,7 +59,7 @@ export class OperatorTokenGuard implements CanActivate {
     const header = request.headers.authorization ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!token.startsWith(PREFIX) || token.length > 200) throw this.reject();
-    const row = await this.prisma.operatorApiToken.findFirst({
+    const row = await this.db.operatorApiToken.findFirst({
       where: {
         tokenHash: hashToken(token),
         revokedAt: null,
@@ -53,10 +71,16 @@ export class OperatorTokenGuard implements CanActivate {
       select: { id: true, tenantId: true, operatorId: true },
     });
     if (!row) throw this.reject();
+    enrichLogContext({ tenantId: row.tenantId });
+    // RLS (ADR 050): the request's queries run for this tenant from here on.
+    setTenant(row.tenantId);
     request.operator = { tenantId: row.tenantId, operatorId: row.operatorId };
     // Best effort: a failed bookkeeping write must not block the operator.
     await this.prisma.operatorApiToken
-      .updateMany({ where: { id: row.id }, data: { lastUsedAt: new Date() } })
+      .updateMany({
+        where: { tenantId: row.tenantId, id: row.id },
+        data: { lastUsedAt: new Date() },
+      })
       .catch(() => undefined);
     return true;
   }

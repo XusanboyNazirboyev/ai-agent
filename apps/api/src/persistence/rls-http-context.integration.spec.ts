@@ -10,6 +10,7 @@ import { traceRequests } from '../observability/trace-requests.js';
 import { createPostgresAdapter } from './postgres-adapter.js';
 import { ensureRlsAppRole } from './testing/rls-app-role.js';
 import { hashPassword } from '../webinbox/password.js';
+import { hashToken, newOperatorToken } from '../handover/operator-auth.js';
 
 /**
  * RLS plan S5 acceptance: the real AppModule over HTTP (with the tenant slot
@@ -56,6 +57,7 @@ interface Fixture {
   telegramAccountId: string;
   igUserId: string;
   email: string;
+  apiToken: string;
 }
 
 async function seed(): Promise<Fixture> {
@@ -101,11 +103,21 @@ async function seed(): Promise<Fixture> {
       passwordHash: await hashPassword(PASSWORD),
     },
   });
+  const apiToken = newOperatorToken();
+  await db.operatorApiToken.create({
+    data: {
+      tenantId: tenant.id,
+      operatorId: operator.id,
+      tokenHash: hashToken(apiToken),
+      label: 'RLS strict fixture',
+    },
+  });
   return {
     tenantId: tenant.id,
     telegramAccountId: telegram.id,
     igUserId,
     email,
+    apiToken,
   };
 }
 
@@ -243,6 +255,21 @@ describe(`RLS tenant context over HTTP (plan S5${STRICT ? ', strict as app role'
       },
     );
     expect(accepted.status).toBe(200);
+  });
+
+  it('serves the operator API to a Bearer token', async () => {
+    // The token names the tenant: looked up before one is known, then every
+    // command statement runs under it. An unknown handover is a plain 404.
+    const call = (token: string): Promise<Response> =>
+      fetch(`${base}/api/v1/handovers/${randomUUID()}/take-over`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'idempotency-key': `key-${randomUUID()}`,
+        },
+      });
+    expect((await call(f.apiToken)).status).toBe(404);
+    expect((await call(newOperatorToken())).status).toBe(401);
   });
 
   it('accepts a Telegram update routed by its account', async () => {
