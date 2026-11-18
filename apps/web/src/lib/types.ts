@@ -600,3 +600,37 @@ export interface CannedResponse {
   text: string;
   position: number;
 }
+
+/** ADR 074: the categories of the tenant audit log, as the API names them. */
+export const AUDIT_CATEGORIES = [
+  'conversations',
+  'leads',
+  'contacts',
+  'channels',
+  'assistant',
+  'crm',
+  'fields',
+  'team',
+  'other',
+] as const;
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+export interface AuditLogEvent {
+  id: string;
+  action: string;
+  category: AuditCategory;
+  actorType: 'SYSTEM' | 'CUSTOMER' | 'OPERATOR' | 'ADMIN';
+  /** Operator display name; null for the system, a customer or a removed operator. */
+  actor: string | null;
+  entityType: string;
+  entityId: string;
+  summary: unknown;
+  createdAt: string;
+}
+
+export interface AuditLogPage {
+  page: number;
+  pageSize: number;
+  total: number;
+  events: AuditLogEvent[];
+}

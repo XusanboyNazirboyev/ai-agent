@@ -20,6 +20,7 @@ export type SettingsSection =
   | 'team'
   | 'subscription'
   | 'security'
+  | 'history'
   | 'general';
 
 interface SectionDef {
@@ -117,6 +118,12 @@ export const SETTINGS_GROUPS: GroupDef[] = [
         key: 'security',
         href: '/settings/security',
         label: 'settings.section.security',
+      },
+      {
+        key: 'history',
+        href: '/settings/history',
+        label: 'settings.section.history',
+        managers: true,
       },
       { key: 'general', href: '/settings', label: 'settings.section.general' },
     ],

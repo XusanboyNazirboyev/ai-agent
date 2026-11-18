@@ -63,6 +63,7 @@ import { InboxEventsService } from './inbox-events.service.js';
 import { InboxReadService } from './inbox-read.service.js';
 import { SessionGuard } from './session.guard.js';
 import { SessionService } from './session.service.js';
+import { AuditLogController } from './audit-log.controller.js';
 import { ExportsController } from './exports.controller.js';
 import { ExportService } from '../exports/export.service.js';
 import { ExportLock } from '../exports/export-lock.js';
@@ -109,6 +110,7 @@ import { ExportLock } from '../exports/export-lock.js';
     TeamController,
     SubscriptionController,
     ExportsController,
+    AuditLogController,
   ],
   providers: [
     ManualLeadService,

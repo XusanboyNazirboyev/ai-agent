@@ -19,6 +19,7 @@ const ALL: SettingsSection[] = [
   'team',
   'subscription',
   'security',
+  'history',
   'general',
 ];
 
@@ -54,7 +55,8 @@ describe('settings groups', () => {
     expect(keys(true).sort()).toEqual([...ALL].sort());
     expect(keys(false).sort()).toEqual(
       ALL.filter(
-        (k) => !['test', 'catalog', 'team', 'subscription'].includes(k),
+        (k) =>
+          !['test', 'catalog', 'team', 'subscription', 'history'].includes(k),
       ).sort(),
     );
   });
@@ -76,6 +78,7 @@ describe('settings groups', () => {
       team: '/settings/team',
       subscription: '/settings/subscription',
       security: '/settings/security',
+      history: '/settings/history',
       general: '/settings',
     });
   });
