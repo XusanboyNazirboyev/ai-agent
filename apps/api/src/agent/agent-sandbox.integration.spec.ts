@@ -9,9 +9,12 @@ import { createConnectorRegistry } from '../connectors/connectors.module.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import { extraction } from './testing/agent-harness.js';
 import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { AgentConversationService } from './agent-conversation.service.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
 import { LlmUsageStore } from './llm-usage.store.js';
@@ -21,10 +24,15 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Agent sandbox tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const database = prisma as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner (`prisma`); the agent on
+// the app role, each turn under the tenant it names, as the queue job runs it.
+const prisma = ownerClient();
+const app = appClient();
+const database = app as unknown as PrismaService;
+const scopedAgent = (
+  ...args: ConstructorParameters<typeof AgentConversationService>
+): AgentConversationService =>
+  tenantScoped(new AgentConversationService(...args));
 
 const settings: Partial<AppEnvironment> = {
   LLM_PROVIDER: 'mock',
@@ -59,7 +67,7 @@ function service(
     NODE_ENV: 'test',
     CONNECTOR_OUTBOUND_POLICY: 'strict',
   });
-  return new AgentConversationService(
+  return scopedAgent(
     database,
     new TenantConnectorLoader(database, registry),
     new LlmUsageStore(database),
@@ -120,7 +128,7 @@ async function fixture(): Promise<{
 }
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
 
 async function tenantOnly(): Promise<string> {

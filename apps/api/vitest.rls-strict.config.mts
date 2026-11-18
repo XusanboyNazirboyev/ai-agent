@@ -71,6 +71,9 @@ const STRICT_SPECS = [
   'src/actions/action.integration.spec.ts',
   'src/actions/cross-domain.integration.spec.ts',
   'src/agent/llm-budget-ledger.integration.spec.ts',
+  'src/agent/agent.integration.spec.ts',
+  'src/agent/agent-sandbox.integration.spec.ts',
+  'src/agent/knowledge-turn.integration.spec.ts',
 ];
 
 export default defineConfig({
