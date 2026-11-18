@@ -217,6 +217,18 @@ async function leadWorld(): Promise<{ tenantId: string; leadId: string }> {
 }
 
 const later = (base: Date, ms: number): Date => new Date(base.getTime() + ms);
+/** Waits until a worker holds the tenant's operation (strict runs are slower than a fixed sleep). */
+async function heldInFlight(tenantId: string): Promise<void> {
+  for (let i = 0; i < 100; i += 1) {
+    const held = await db.connectorOperation.findFirst({
+      where: { tenantId, status: 'IN_FLIGHT' },
+    });
+    if (held) return;
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  throw new Error('no operation in flight');
+}
+
 const op = (
   tenantId: string,
   leadId: string,
@@ -448,7 +460,7 @@ describe('lead CRM sync: one logical write per lead', () => {
     const one = leadSync(prisma, loaderFor(crm));
     const two = leadSync(db2 as unknown as PrismaService, loaderFor(crm));
     const first = one.sync(w.tenantId, w.leadId);
-    await new Promise((r) => setTimeout(r, 100));
+    await heldInFlight(w.tenantId);
     const results = await Promise.all([
       two.sync(w.tenantId, w.leadId),
       two.sync(w.tenantId, w.leadId),
@@ -467,7 +479,7 @@ describe('lead CRM sync: one logical write per lead', () => {
       const crm = new FakeCrm(mode, [{ hold }, 'ok']);
       const dead = leadSync(prisma, loaderFor(crm));
       void dead.sync(w.tenantId, w.leadId);
-      await new Promise((r) => setTimeout(r, 100));
+      await heldInFlight(w.tenantId);
       expect(await op(w.tenantId, w.leadId)).toMatchObject({
         status: 'IN_FLIGHT',
       });
@@ -575,7 +587,7 @@ describe('lead CRM sync: one logical write per lead', () => {
     const crm = new FakeCrm('native', [{ hold }, 'ok']);
     const slow = leadSync(prisma, loaderFor(crm));
     const pending = slow.sync(w.tenantId, w.leadId);
-    await new Promise((r) => setTimeout(r, 100));
+    await heldInFlight(w.tenantId);
     const fast = leadSync(db2 as unknown as PrismaService, loaderFor(crm));
     expect(
       await fast.sync(

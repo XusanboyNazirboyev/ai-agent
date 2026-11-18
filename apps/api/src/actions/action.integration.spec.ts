@@ -202,6 +202,18 @@ const service = (crm: FakeCrm, client: PrismaClient = app): ActionService =>
     { tenantArg: 0 },
   );
 
+/** Waits until a worker holds the tenant's operation (strict runs are slower than a fixed sleep). */
+async function heldInFlight(tenantId: string): Promise<void> {
+  for (let i = 0; i < 100; i += 1) {
+    const held = await db.connectorOperation.findFirst({
+      where: { tenantId, status: 'IN_FLIGHT' },
+    });
+    if (held) return;
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  throw new Error('no operation in flight');
+}
+
 async function decide(
   actions: ActionService,
   w: World,
@@ -723,7 +735,7 @@ describe('execution', () => {
     const two = service(crm, db2);
     const id = await proposeAndConfirm(one, w);
     const first = one.execute(w.tenantId, id);
-    await new Promise((done) => setTimeout(done, 100));
+    await heldInFlight(w.tenantId);
     expect(
       await Promise.all([
         two.execute(w.tenantId, id),
@@ -783,7 +795,7 @@ describe('execution', () => {
     ]);
     const zid = await proposeAndConfirm(service(dead), z);
     void service(dead).execute(z.tenantId, zid);
-    await new Promise((done) => setTimeout(done, 100));
+    await heldInFlight(z.tenantId);
     await actions.scanDue(
       new Date(Date.now() + ACTION_LEASE_MS + 1_000),
       100_000,
