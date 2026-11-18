@@ -12,9 +12,12 @@ import {
   OAuthStateLedgerUnavailableError,
   RedisOAuthStateLedger,
 } from '../channels/instagram/instagram-oauth-state-ledger.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { InstagramConnectController } from './instagram-connect.controller.js';
@@ -22,17 +25,18 @@ import { InstagramConnectController } from './instagram-connect.controller.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Instagram connect tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the controller and the secret store on
+// the app role under the principal's tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 const redisConfig = {
   get: () => process.env.REDIS_URL ?? 'redis://localhost:6379',
 } as never;
 const ledgers: RedisOAuthStateLedger[] = [];
 afterAll(async () => {
   await Promise.all(ledgers.map((l) => l.onModuleDestroy()));
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 /** Fake values only; no real Meta credential is used. */
@@ -223,18 +227,20 @@ function setup(
     cipher,
     request as unknown as typeof fetch,
   );
-  const controller = new InstagramConnectController(
-    prisma,
-    config,
-    store,
-    new InstagramGraphClient(request as unknown as typeof fetch),
-    oauth,
-    ledger,
+  const controller = tenantScoped(
+    new InstagramConnectController(
+      prisma,
+      config,
+      store,
+      new InstagramGraphClient(request as unknown as typeof fetch),
+      oauth,
+      ledger,
+    ),
   );
   return {
     igUserId,
     calls,
-    store,
+    store: tenantScoped(store),
     controller,
     oauth,
     setMe: (next: typeof meReply): void => {
