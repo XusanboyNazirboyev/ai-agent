@@ -64,8 +64,16 @@ test('an admin finds everything under four groups, the knowledge base under Assi
       'Team',
       'Subscription',
       'Security',
+      'History',
       'General',
     ]);
+    // ADR 074: the workspace audit log opens for an admin.
+    await page.getByTestId('settings-tab-history').click();
+    await page.waitForURL(/\/settings\/history$/u);
+    await expect(
+      page.getByText(/^Who changed what in this workspace/u),
+    ).toBeVisible();
+    await expect(page.getByTestId('audit-category')).toBeVisible();
     await page.getByTestId('settings-tab-general').click();
     await page.waitForURL(/\/settings$/u);
 
