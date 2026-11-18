@@ -30,6 +30,7 @@ const STRICT_SPECS = [
   'src/webinbox/manual-lead.integration.spec.ts',
   'src/webinbox/test-chat.integration.spec.ts',
   'src/webinbox/suggest-reply.integration.spec.ts',
+  'src/webinbox/sheet-catalog.integration.spec.ts',
 ];
 
 export default defineConfig({

@@ -9,26 +9,31 @@ import { createConnectorRegistry } from '../connectors/connectors.module.js';
 import { PrismaSheetCatalogStore } from '../connectors/spreadsheet/sheet-catalog.store.js';
 import { SheetCatalogService } from '../connectors/spreadsheet/sheet-catalog.service.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { SheetCatalogController } from './sheet-catalog.controller.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Sheet catalog API tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant (or the agent turn's).
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const store = new PrismaSheetCatalogStore(prisma);
-const controller = new SheetCatalogController(
-  new SheetCatalogService(prisma, store),
+const controller = tenantScoped(
+  new SheetCatalogController(new SheetCatalogService(prisma, store)),
 );
 const registry = createConnectorRegistry(
   { NODE_ENV: 'test', CONNECTOR_OUTBOUND_POLICY: 'strict' },
@@ -137,14 +142,17 @@ describe('price list upload API (ADR 064)', () => {
     });
 
     // The CATALOG role now serves this price list to the agent.
-    const connector = await selector.select(w.tenantId, 'CATALOG', 'search');
-    expect(connector?.connectorKey).toBe('spreadsheet');
-    const items = await connector!.searchItems!({ title: 'rixos' });
-    const offers = await connector!.getOffers!(items[0]!.id);
-    const quote = await connector!.getQuote!(offers[0]!.id, {
-      offerId: offers[0]!.id,
+    // As the agent turn: under its tenant.
+    await runWithTenant(w.tenantId, async () => {
+      const connector = await selector.select(w.tenantId, 'CATALOG', 'search');
+      expect(connector?.connectorKey).toBe('spreadsheet');
+      const items = await connector!.searchItems!({ title: 'rixos' });
+      const offers = await connector!.getOffers!(items[0]!.id);
+      const quote = await connector!.getQuote!(offers[0]!.id, {
+        offerId: offers[0]!.id,
+      });
+      expect(quote.amount).toEqual({ amount: '820', currency: 'USD' });
     });
-    expect(quote.amount).toEqual({ amount: '820', currency: 'USD' });
 
     // Counts only in the audit trail.
     const audit = await db.auditEvent.findFirstOrThrow({
@@ -284,16 +292,18 @@ describe('price list from a Google Sheets link (ADR 064 S3)', () => {
   const LINK = `https://docs.google.com/spreadsheets/d/${ID}/edit?usp=sharing#gid=0`;
   const CANONICAL = `https://docs.google.com/spreadsheets/d/${ID}/edit#gid=0`;
   const fake = { text: SAMPLE, status: 200, type: 'text/csv', calls: 0 };
-  const linkController = new SheetCatalogController(
-    new SheetCatalogService(prisma, store, {
-      fetchImpl: (async () => {
-        fake.calls += 1;
-        return new Response(fake.text, {
-          status: fake.status,
-          headers: { 'content-type': fake.type },
-        });
-      }) as unknown as typeof fetch,
-    }),
+  const linkController = tenantScoped(
+    new SheetCatalogController(
+      new SheetCatalogService(prisma, store, {
+        fetchImpl: (async () => {
+          fake.calls += 1;
+          return new Response(fake.text, {
+            status: fake.status,
+            headers: { 'content-type': fake.type },
+          });
+        }) as unknown as typeof fetch,
+      }),
+    ),
   );
 
   it('reads the link on the server, then saves it with auto refresh and refreshes on demand', async () => {
