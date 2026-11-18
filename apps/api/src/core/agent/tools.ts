@@ -88,6 +88,10 @@ export type ToolOutcomeType =
   | 'INVALID_RESPONSE'
   | 'REJECTED';
 
+/** What the model is told about an offer whose start date has passed. */
+const STARTED_OFFER_NOTE =
+  'already started on startedAtFact, so it is not an upcoming option: do not offer it, quote it or invite the customer to join it. If no other option is listed, say that no upcoming start is listed and an operator can tell them about the next one.';
+
 export type ToolErrorCode =
   | 'UNKNOWN_TOOL'
   | 'UNSUPPORTED'
@@ -438,6 +442,11 @@ export class AgentTools {
     };
   }
 
+  private hasStarted(startsAt: string): boolean {
+    const start = Date.parse(startsAt);
+    return !Number.isNaN(start) && start <= this.context.now().getTime();
+  }
+
   private isStale(validUntil: string | undefined): boolean {
     return (
       validUntil !== undefined &&
@@ -473,6 +482,26 @@ export class AgentTools {
     const { facts } = this.context;
     return promptSafeJson({
       offers: offers.map((offer) => {
+        // An offer whose start date has passed is not an upcoming option:
+        // only that date is given, and the offer is not quoted or checked
+        // in this turn (it never joins the known offers).
+        if (offer.startsAt !== undefined && this.hasStarted(offer.startsAt)) {
+          return {
+            itemId: offer.itemId,
+            started: true,
+            startedAtFact: facts.add(
+              { kind: 'datetime', iso: offer.startsAt },
+              this.provenance(
+                'list_offers',
+                offer.sourceEntityId,
+                offer.sourceSystem,
+                offer.validUntil,
+                { offerId: offer.id, live: false },
+              ),
+            ),
+            note: STARTED_OFFER_NOTE,
+          };
+        }
         this.knownOffers.add(offer.id);
         // An expired offer yields no facts: its price, seats and dates are
         // not current and must be re-checked live before anyone sees them.

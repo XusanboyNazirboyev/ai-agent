@@ -209,6 +209,8 @@ export function responseUserMessage(input: {
   readonly slots: SlotState;
   readonly searchResults: string;
   readonly nextQuestion: string | undefined;
+  /** Today in the business time zone, so start dates can be judged. */
+  readonly today?: { readonly date: string; readonly weekday: string };
 }): string {
   const known = Object.fromEntries(
     Object.entries(input.slots).map(([key, entry]) => [key, entry.value]),
@@ -218,6 +220,11 @@ export function responseUserMessage(input: {
     `<latest_customer_message>${sanitize(input.latest)}</latest_customer_message>`,
     `<known_customer_details>${sanitize(JSON.stringify(known))}</known_customer_details>`,
     `<catalog_context>${input.searchResults}</catalog_context>`,
+    ...(input.today
+      ? [
+          `Today is ${input.today.date} (${input.today.weekday}) in the business time zone. Use it to tell whether a start date has passed; an offer marked started is not an upcoming option.`,
+        ]
+      : []),
     input.nextQuestion
       ? `If you need one more detail, ask for it in your own words as part of your answer, one question only. The detail, as the business would ask it: ${input.nextQuestion}`
       : 'Do not ask for more details unless the customer needs to choose between options.',

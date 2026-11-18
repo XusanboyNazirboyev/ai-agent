@@ -17,8 +17,8 @@ import json, os
 
 LOCALES = ['uz-Latn', 'uz-Cyrl', 'ru', 'en']
 ANTALYA = 'mock-tourism:tour-antalya-001'
-JUNE = 'mock-tourism:offer:antalya-departure-2026-06-15'
-JULY = 'mock-tourism:offer:antalya-departure-2026-07-01'
+JUNE = 'mock-tourism:offer:antalya-departure-2027-06-15'
+JULY = 'mock-tourism:offer:antalya-departure-2027-07-01'
 TRAVEL_KEYS = ['contact.name', 'contact.phone', 'slots.destination', 'slots.partySize', 'slots.travelMonth']
 EDU_KEYS = ['contact.phone', 'slots.preferredTime', 'slots.subject']
 TRAVEL_FULL = {'destination': 'Antalya', 'travelMonth': 'july', 'partySize': '2'}

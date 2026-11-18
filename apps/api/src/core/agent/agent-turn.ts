@@ -1392,14 +1392,15 @@ export async function runAgentTurn(
   if (!knowledgeOutcome && search.ok && search.items.length > 0)
     tools!.withhold(['search_catalog', 'get_item_details']);
   const nowDate = now();
+  const today = {
+    date: localDateIn(nowDate, input.timeZone),
+    weekday: new Intl.DateTimeFormat('en', {
+      weekday: 'long',
+      timeZone: input.timeZone,
+    }).format(nowDate),
+  };
   const systemPrompt = schedulingTurn
-    ? schedulingSystemPrompt(pack, locale(), {
-        date: localDateIn(nowDate, input.timeZone),
-        weekday: new Intl.DateTimeFormat('en', {
-          weekday: 'long',
-          timeZone: input.timeZone,
-        }).format(nowDate),
-      })
+    ? schedulingSystemPrompt(pack, locale(), today)
     : responseSystemPrompt(pack, locale());
   const draft = await respond(deps, tools!, stopwatch, {
     system: systemPrompt,
@@ -1415,6 +1416,7 @@ export async function runAgentTurn(
           slots,
           searchResults: search.summary,
           nextQuestion,
+          today,
         }),
   });
   // ADR 046: a tool prepared a booking, cancellation or move. Code asks the

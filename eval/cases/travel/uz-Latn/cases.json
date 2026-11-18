@@ -71,7 +71,7 @@
      {
       "name": "get_quote",
       "input": {
-       "offerId": "mock-tourism:offer:antalya-departure-2026-06-15"
+       "offerId": "mock-tourism:offer:antalya-departure-2027-06-15"
       }
      }
     ]
@@ -128,7 +128,7 @@
      {
       "name": "check_availability",
       "input": {
-       "offerId": "mock-tourism:offer:antalya-departure-2026-06-15"
+       "offerId": "mock-tourism:offer:antalya-departure-2027-06-15"
       }
      }
     ]
@@ -244,7 +244,7 @@
      {
       "name": "check_availability",
       "input": {
-       "offerId": "mock-tourism:offer:antalya-departure-2026-07-01"
+       "offerId": "mock-tourism:offer:antalya-departure-2027-07-01"
       }
      }
     ]

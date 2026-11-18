@@ -626,3 +626,64 @@ describe('agent turn: a verified quote answers when the model cannot word it', (
     });
   });
 });
+
+describe('agent turn: offers whose start date has passed', () => {
+  // The weekday IELTS group starts 2027-02-01 18:00 (Tashkent), the weekend
+  // group 2027-02-06 10:00; "now" falls between the two.
+  const NOW = new Date('2027-02-03T10:00:00Z');
+  const WEEKEND = 'mock-education:offer:ielts-group-weekend';
+
+  it('gives only the start date of a started offer and refuses to quote it', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      {
+        kind: 'tools',
+        toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+      },
+      {
+        kind: 'tools',
+        toolCalls: [
+          { name: 'get_quote', input: { offerId: WEEKDAY } },
+          { name: 'get_quote', input: { offerId: WEEKEND } },
+        ],
+      },
+      { kind: 'tools', text: '{{F1}} kursi mavjud.' },
+    );
+    const { result } = await runTurn({
+      provider,
+      text: 'IELTS kursi narxi qancha?',
+      now: NOW,
+    });
+    expect(
+      result.tools.filter((t) => t.origin === 'model').map((t) => t.code),
+    ).toEqual([undefined, 'UNKNOWN_REFERENCE', undefined]);
+    // The model reads today's date and the started marker, never the started
+    // offer's id, price or seats.
+    const offers = provider.calls
+      .at(-1)!
+      .request.messages.map((message) => JSON.stringify(message))
+      .find((message) => message.includes('startedAtFact'));
+    expect(offers).toBeDefined();
+    expect(offers).toContain('started');
+    expect(offers).not.toContain(WEEKDAY);
+    expect(offers).toContain(WEEKEND);
+    expect(JSON.stringify(provider.calls[1]!.request.messages[0])).toContain(
+      'Today is 2027-02-03 (Wednesday) in the business time zone.',
+    );
+  });
+
+  it('lists every offer as before while none has started', async () => {
+    const provider = script(
+      extraction({ subject: 'IELTS' }, 'price'),
+      {
+        kind: 'tools',
+        toolCalls: [{ name: 'list_offers', input: { itemId: IELTS } }],
+      },
+      { kind: 'tools', text: '{{F1}} kursi mavjud.' },
+    );
+    await runTurn({ provider, text: 'IELTS kursi narxi qancha?' });
+    const offers = JSON.stringify(provider.calls[2]!.request.messages.at(-1));
+    expect(offers).not.toContain('started');
+    expect(offers).toContain(WEEKDAY);
+  });
+});

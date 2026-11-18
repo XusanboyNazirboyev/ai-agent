@@ -39,7 +39,7 @@ describeConnectorConformance({
   samples: {
     searchTitle: 'Antalya',
     itemId: 'mock-tourism:tour-antalya-001',
-    offerId: 'mock-tourism:offer:antalya-departure-2026-06-15',
+    offerId: 'mock-tourism:offer:antalya-departure-2027-06-15',
     missingItemId: 'mock-tourism:missing',
     missingOfferId: 'mock-tourism:offer:missing',
   },
