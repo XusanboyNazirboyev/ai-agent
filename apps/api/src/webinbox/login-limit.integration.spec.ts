@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { appModuleEnvironment } from '../persistence/testing/test-clients.js';
 import { CLIENT_IP_HEADER, PROXY_AUTH_HEADER } from './client-address.js';
 
 /**
@@ -24,6 +25,8 @@ for (const key of [
   const value = process.env[`TEST_POSTGRES_${key}`];
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
+// RLS plan S8b: strict runs the app with the main pool on the app role.
+Object.assign(process.env, appModuleEnvironment());
 const SECRET = 'test-proxy-secret-'.padEnd(48, 'x');
 process.env.NODE_ENV = 'test';
 process.env.WEB_PROXY_SECRET = SECRET;

@@ -56,6 +56,28 @@ export function appClient(pool: TestPoolOptions = {}): PrismaClient {
   });
 }
 
+/**
+ * Environment for a spec that boots the real AppModule, set after the
+ * `TEST_POSTGRES_*` copy to `POSTGRES_*`. Strict: `RLS_CONTEXT_MODE=strict`,
+ * the main pool as the NOBYPASSRLS role and the test owner as the privileged
+ * pool, as `rls-http-context.integration.spec.ts` runs it. Otherwise nothing
+ * changes.
+ */
+export function appModuleEnvironment(): Record<string, string> {
+  if (!RLS_STRICT) return {};
+  const owner = process.env.TEST_POSTGRES_USER;
+  if (!owner) throw new Error('TEST_POSTGRES_USER is required');
+  return {
+    RLS_CONTEXT_MODE: 'strict',
+    POSTGRES_USER: RLS_APP_ROLE,
+    POSTGRES_PASSWORD: rlsAppRolePassword(),
+    POSTGRES_ADMIN_USER: owner,
+    ...(process.env.TEST_POSTGRES_PASSWORD === undefined
+      ? {}
+      : { POSTGRES_ADMIN_PASSWORD: process.env.TEST_POSTGRES_PASSWORD }),
+  };
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 function tenantIdIn(value: unknown): string | undefined {
