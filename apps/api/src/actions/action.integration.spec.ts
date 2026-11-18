@@ -18,27 +18,34 @@ import {
   proposalDigest,
   type ActionDecision,
 } from '../core/actions/actions.js';
-import { PrismaClient } from '../generated/prisma/client.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { UZ_LATN } from '../locales/locale-packs.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { ACTION_LEASE_MS, ActionService } from './action.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('requires agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const db2 = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the action service on the
+// app role (a second app pool is a second worker), each call under the
+// tenant it names; a decision is applied in the turn's transaction under its
+// tenant; the due scan finds operations on the privileged handle.
+const db = ownerClient();
+const app = appClient();
+const db2 = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 afterAll(async () => {
-  await db.$disconnect();
-  await db2.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect(), db2.$disconnect()]);
 });
 
 type Step = 'ok' | 'reject' | 'commit-then-timeout' | { hold: Promise<void> };
@@ -182,12 +189,17 @@ async function world(
   };
 }
 
-const service = (crm: FakeCrm, client: PrismaClient = db): ActionService =>
-  new ActionService(
-    client as unknown as PrismaService,
-    { create: () => crm.connector() } as unknown as TenantConnectorLoader,
-    new HandoverService(client as unknown as PrismaService),
-    { get: () => 10 } as never,
+const service = (crm: FakeCrm, client: PrismaClient = app): ActionService =>
+  tenantScoped(
+    new ActionService(
+      client as unknown as PrismaService,
+      { create: () => crm.connector() } as unknown as TenantConnectorLoader,
+      new HandoverService(client as unknown as PrismaService),
+      { get: () => 10 } as never,
+      undefined,
+      privileged,
+    ),
+    { tenantArg: 0 },
   );
 
 async function decide(
@@ -196,15 +208,17 @@ async function decide(
   decision: ActionDecision,
   now = new Date(),
 ): Promise<{ expired?: true }> {
-  return db.$transaction((tx) =>
-    actions.applyDecision(tx, {
-      tenantId: w.tenantId,
-      conversationId: w.conversationId,
-      decision,
-      packRef: 'education@1',
-      turnKey: `turn-${randomUUID()}`,
-      now,
-    }),
+  return runWithTenant(w.tenantId, () =>
+    app.$transaction((tx) =>
+      actions.applyDecision(tx, {
+        tenantId: w.tenantId,
+        conversationId: w.conversationId,
+        decision,
+        packRef: 'education@1',
+        turnKey: `turn-${randomUUID()}`,
+        now,
+      }),
+    ),
   );
 }
 
@@ -508,9 +522,11 @@ describe('execution', () => {
     });
     const leadCrm = new FakeCrm('native');
     expect(
-      await new LeadSyncService(prisma, {
-        create: () => leadCrm.connector(),
-      } as unknown as TenantConnectorLoader).sync(w.tenantId, lead.id),
+      await runWithTenant(w.tenantId, () =>
+        new LeadSyncService(prisma, {
+          create: () => leadCrm.connector(),
+        } as unknown as TenantConnectorLoader).sync(w.tenantId, lead.id),
+      ),
     ).toBe('SKIPPED');
     expect(leadCrm.calls).toHaveLength(0);
     expect(

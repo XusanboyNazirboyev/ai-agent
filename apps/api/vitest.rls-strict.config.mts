@@ -68,6 +68,7 @@ const STRICT_SPECS = [
   'src/observability/alerts.integration.spec.ts',
   'src/actions/action-eval.integration.spec.ts',
   'src/actions/action-pipeline.integration.spec.ts',
+  'src/actions/action.integration.spec.ts',
 ];
 
 export default defineConfig({
