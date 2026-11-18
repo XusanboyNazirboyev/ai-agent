@@ -10,13 +10,16 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import {
   RoutingLlmProvider,
   type RoutedCandidate,
 } from '../llm/routing/routing-provider.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
@@ -25,24 +28,29 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Ledger integration tests require agentcore_test');
 }
 
+// RLS plan S8b: fixtures and checks on the owner; the ledger and usage
+// store on the app role, each call under the tenant it names (the agent
+// turn's tenant).
+const owner = ownerClient();
 /** Two clients with their own pools stand in for two worker processes. */
-const clients = [0, 1].map(
-  () =>
-    new PrismaClient({
-      adapter: createPostgresAdapter(process.env, 'TEST_'),
-    }),
-);
+const clients = [appClient(), appClient()];
 const [clientA, clientB] = clients;
-const workerA = new LlmBudgetLedger(clientA as unknown as PrismaService);
-const workerB = new LlmBudgetLedger(clientB as unknown as PrismaService);
-const usage = new LlmUsageStore(clientA as unknown as PrismaService);
+const scoped = <T extends object>(service: T): T =>
+  tenantScoped(service, { tenantArg: 0 });
+const workerA = scoped(
+  new LlmBudgetLedger(clientA as unknown as PrismaService),
+);
+const workerB = scoped(
+  new LlmBudgetLedger(clientB as unknown as PrismaService),
+);
+const usage = scoped(new LlmUsageStore(clientA as unknown as PrismaService));
 
 afterAll(async () => {
-  await Promise.all(clients.map((client) => client.$disconnect()));
+  await Promise.all([owner, ...clients].map((client) => client.$disconnect()));
 });
 
 async function tenant(): Promise<string> {
-  const row = await clientA.tenant.create({
+  const row = await owner.tenant.create({
     data: {
       slug: `ledger-${randomUUID()}`,
       name: 'Ledger fixture',
@@ -207,7 +215,7 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     expect(
       await workerA.conversationExposure(tenantId, conversationId),
     ).toEqual({ nano: 3 * UNIT, tokens: 300 });
-    const rows = await clientA.llmBudgetReservation.findMany({
+    const rows = await owner.llmBudgetReservation.findMany({
       where: { tenantId },
       orderBy: { invocationId: 'asc' },
     });
@@ -232,7 +240,7 @@ describe('tenant-month reservations (PostgreSQL)', () => {
       undefined,
     );
     if (!retry.granted) throw new Error('unreachable');
-    const states = await clientA.llmBudgetReservation.findMany({
+    const states = await owner.llmBudgetReservation.findMany({
       where: { tenantId },
       orderBy: { invocationId: 'asc' },
       select: { invocationId: true, state: true },
@@ -260,14 +268,17 @@ describe('tenant-month reservations (PostgreSQL)', () => {
   it('recovers a crashed reservation as unknown exposure, never as free budget', async () => {
     const tenantId = await tenant();
     let now = new Date();
-    const crashed = new LlmBudgetLedger(
-      clientA as unknown as PrismaService,
-    ).configure({ ttlMs: 1_000, clock: () => now });
+    const crashed = scoped(
+      new LlmBudgetLedger(clientA as unknown as PrismaService).configure({
+        ttlMs: 1_000,
+        clock: () => now,
+      }),
+    );
     await reserve(crashed, tenantId, 'dead:0');
     now = new Date(now.getTime() + 5_000);
     // Any later reservation of the tenant performs the recovery.
     await reserve(crashed, tenantId, 'next:0');
-    const rows = await clientA.llmBudgetReservation.findMany({
+    const rows = await owner.llmBudgetReservation.findMany({
       where: { tenantId },
       orderBy: { invocationId: 'asc' },
       select: { invocationId: true, state: true },
@@ -279,7 +290,7 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     expect(await crashed.tenantMonthExposureNano(tenantId, now)).toBe(2 * UNIT);
     // A late completion with reported usage may then replace the worst case.
     const late = rows[0];
-    const row = await clientA.llmBudgetReservation.findFirstOrThrow({
+    const row = await owner.llmBudgetReservation.findFirstOrThrow({
       where: { tenantId, invocationId: late.invocationId },
     });
     await crashed.settle(tenantId, row.id, entry(tenantId));
@@ -319,9 +330,12 @@ describe('tenant-month reservations (PostgreSQL)', () => {
     // day 1 before changing months so dates such as October 31 cannot
     // overflow into the current month (September has only 30 days).
     const lastMonth = previousUtcMonthStart(new Date());
-    const old = new LlmBudgetLedger(
-      clientA as unknown as PrismaService,
-    ).configure({ clock: () => lastMonth, ttlMs: 10 * 60_000 });
+    const old = scoped(
+      new LlmBudgetLedger(clientA as unknown as PrismaService).configure({
+        clock: () => lastMonth,
+        ttlMs: 10 * 60_000,
+      }),
+    );
     const three = await tenant();
     for (let i = 0; i < 3; i++) await reserve(old, three, `o:${i}`);
     expect(await workerA.tenantMonthExposureNano(three)).toBe(0);
@@ -549,7 +563,7 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
     );
     await llm.withTools(request);
     expect(budget.snapshot.spentNano).toBeGreaterThan(0);
-    const row = await clientA.llmUsageRecord.findFirstOrThrow({
+    const row = await owner.llmUsageRecord.findFirstOrThrow({
       where: { tenantId },
     });
     return Number(row.reservedNano);
@@ -561,7 +575,7 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
     await llm.withTools(request);
     expect(await workerA.tenantMonthExposureNano(tenantId)).toBe(0);
     expect(await usage.tenantMonthSpendNano(tenantId)).toBeGreaterThan(0);
-    const rows = await clientA.llmBudgetReservation.findMany({
+    const rows = await owner.llmBudgetReservation.findMany({
       where: { tenantId },
     });
     expect(rows.map((r) => r.state)).toEqual(['SETTLED']);
@@ -589,7 +603,7 @@ describe('MeteredLlm with the PostgreSQL ledger', () => {
     expect(b2.scripted.calls).toHaveLength(1);
     expect(await workerA.tenantMonthExposureNano(roomy)).toBe(n);
     const states = (
-      await clientA.llmBudgetReservation.findMany({
+      await owner.llmBudgetReservation.findMany({
         where: { tenantId: roomy },
         orderBy: { invocationId: 'asc' },
       })

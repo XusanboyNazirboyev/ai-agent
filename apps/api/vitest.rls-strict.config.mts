@@ -70,6 +70,7 @@ const STRICT_SPECS = [
   'src/actions/action-pipeline.integration.spec.ts',
   'src/actions/action.integration.spec.ts',
   'src/actions/cross-domain.integration.spec.ts',
+  'src/agent/llm-budget-ledger.integration.spec.ts',
 ];
 
 export default defineConfig({
