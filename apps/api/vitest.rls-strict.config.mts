@@ -64,6 +64,7 @@ const STRICT_SPECS = [
   'src/connectors/sync/catalog-sync.integration.spec.ts',
   'src/leads/lead-sync.integration.spec.ts',
   'src/knowledge/knowledge.integration.spec.ts',
+  'src/exports/export.integration.spec.ts',
 ];
 
 export default defineConfig({
