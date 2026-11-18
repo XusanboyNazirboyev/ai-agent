@@ -77,6 +77,8 @@ const STRICT_SPECS = [
   'src/agent/testing/simulation/simulation.integration.spec.ts',
   'src/access/access-enforcement.integration.spec.ts',
   'src/auth/mfa.integration.spec.ts',
+  'src/platform/platform-mfa-nokey.integration.spec.ts',
+  'src/platform/platform-console.integration.spec.ts',
 ];
 
 export default defineConfig({

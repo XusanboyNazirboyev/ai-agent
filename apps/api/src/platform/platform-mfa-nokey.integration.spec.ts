@@ -3,10 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MfaService } from '../auth/mfa.service.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { appClient, ownerClient } from '../persistence/testing/test-clients.js';
 import { hashPassword } from '../webinbox/password.js';
 import { PlatformSessionService } from './platform-session.service.js';
 
@@ -14,11 +13,13 @@ import { PlatformSessionService } from './platform-session.service.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('MFA tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// RLS plan S8b: the platform sign-in runs on the privileged handle (the
+// owner, as PersistenceModule wires it); the app role is only the main
+// client it must never need.
+const db = ownerClient();
+const app = appClient();
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 describe('platform sign-in without the keyring', () => {
@@ -36,11 +37,16 @@ describe('platform sign-in without the keyring', () => {
         }),
       },
     });
-    const prisma = db as unknown as PrismaService;
+    const privileged = { db } as PrivilegedDatabase;
     const sessions = new PlatformSessionService(
-      { db: prisma } as unknown as PrivilegedDatabase,
+      privileged,
       undefined,
-      new MfaService(prisma),
+      new MfaService(
+        app as unknown as PrismaService,
+        undefined,
+        undefined,
+        privileged,
+      ),
     );
     expect(await sessions.login(email, 'platform admin password')).toEqual({
       ok: false,
