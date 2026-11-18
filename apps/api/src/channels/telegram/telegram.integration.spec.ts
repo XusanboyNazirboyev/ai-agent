@@ -4,10 +4,15 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { retireForeignBacklog } from './testing/outbox.js';
-import { PrismaClient } from '../../generated/prisma/client.js';
 import type { AppEnvironment } from '../../config/environment.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { TelegramProcessor } from './telegram-processor.js';
 import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
 import {
@@ -25,9 +30,14 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Telegram integration tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// RLS plan S8b: fixtures and checks on the owner (`prisma`); the code under
+// test on the app role (`app`): an update accepted under the tenant its
+// account routes to, outbox jobs processed under their tenant, the queue
+// runtime publishing on the privileged handle.
+const prisma = ownerClient();
+const appDb = appClient();
+const app = appDb as unknown as PrismaService;
+const privileged = { db: prisma } as PrivilegedDatabase;
 
 /** Telegram message id the fake sender returns for the queued echo. */
 const ECHO_PROVIDER_MESSAGE_ID = '902';
@@ -47,8 +57,19 @@ function config(
 type TelegramFixture = {
   tenantId: string;
   channelAccountId: string;
-  service: TelegramWebhookService;
+  service: Pick<TelegramWebhookService, 'accept'>;
 };
+
+/** As the webhook route: the update is accepted under its account's tenant. */
+function routed(
+  tenantId: string,
+  webhook: TelegramWebhookService,
+): Pick<TelegramWebhookService, 'accept'> {
+  return {
+    accept: (accountId, update) =>
+      runWithTenant(tenantId, () => webhook.accept(accountId, update)),
+  };
+}
 
 async function fixtures(rateLimit = 120): Promise<TelegramFixture> {
   const suffix = randomUUID();
@@ -74,13 +95,18 @@ async function fixtures(rateLimit = 120): Promise<TelegramFixture> {
   return {
     tenantId: tenant.id,
     channelAccountId: account.id,
-    service: new TelegramWebhookService(
-      prisma as unknown as PrismaService,
-      config({
-        TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
-        TELEGRAM_WEBHOOK_SECRET: 'integration-secret',
-        TELEGRAM_RATE_LIMIT_PER_MINUTE: rateLimit,
-      }),
+    service: routed(
+      tenant.id,
+      new TelegramWebhookService(
+        app,
+        config({
+          TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
+          TELEGRAM_WEBHOOK_SECRET: 'integration-secret',
+          TELEGRAM_RATE_LIMIT_PER_MINUTE: rateLimit,
+        }),
+        undefined,
+        privileged,
+      ),
     ),
   };
 }
@@ -106,7 +132,9 @@ function update(input: {
 
 describe('Telegram persistence and processing integration', () => {
   beforeAll(async () => prisma.$connect());
-  afterAll(async () => prisma.$disconnect());
+  afterAll(async () => {
+    await Promise.all([prisma.$disconnect(), appDb.$disconnect()]);
+  });
 
   it('durably accepts concurrent duplicate webhook deliveries only once', async () => {
     const fixture = await fixtures();
@@ -191,10 +219,7 @@ describe('Telegram persistence and processing integration', () => {
       orderBy: { createdAt: 'asc' },
     });
     const sender = { sendMessage: vi.fn() } as unknown as TelegramSender;
-    const processor = new TelegramProcessor(
-      prisma as unknown as PrismaService,
-      sender,
-    );
+    const processor = tenantScoped(new TelegramProcessor(app, sender));
     await Promise.all(
       inboundOutbox.map((event) =>
         processor.process({
@@ -231,10 +256,7 @@ describe('Telegram persistence and processing integration', () => {
       where: { tenantId: fixture.tenantId, type: 'telegram.inbound' },
     });
     const sender = { sendMessage: vi.fn() } as unknown as TelegramSender;
-    const processor = new TelegramProcessor(
-      prisma as unknown as PrismaService,
-      sender,
-    );
+    const processor = tenantScoped(new TelegramProcessor(app, sender));
     await processor.process({
       outboxId: inboundOutbox.id,
       tenantId: fixture.tenantId,
@@ -281,9 +303,10 @@ describe('Telegram persistence and processing integration', () => {
     }
 
     const senderMock = vi.fn().mockRejectedValue(new TelegramApiError(429, 2));
-    const processor = new TelegramProcessor(
-      prisma as unknown as PrismaService,
-      { sendMessage: senderMock } as unknown as TelegramSender,
+    const processor = tenantScoped(
+      new TelegramProcessor(app, {
+        sendMessage: senderMock,
+      } as unknown as TelegramSender),
     );
     const inbound = await prisma.outboxEvent.findMany({
       where: { tenantId: fixture.tenantId, type: 'telegram.inbound' },
@@ -367,15 +390,16 @@ describe('Telegram persistence and processing integration', () => {
           ),
         ),
     );
-    const processor = new TelegramProcessor(
-      prisma as unknown as PrismaService,
-      { sendMessage } as unknown as TelegramSender,
-    );
+    // The runtime itself runs each job under its tenant.
+    const processor = new TelegramProcessor(app, {
+      sendMessage,
+    } as unknown as TelegramSender);
     await retireForeignBacklog(prisma, [fixture.tenantId]);
     const runtime = new TelegramQueueRuntime(
       config({ REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379' }),
-      prisma as unknown as PrismaService,
+      app,
       processor,
+      privileged,
     );
     await runtime.onModuleInit();
     try {
