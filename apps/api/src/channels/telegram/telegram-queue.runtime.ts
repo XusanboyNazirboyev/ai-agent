@@ -62,6 +62,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
    * its own tenant's context.
    */
   private readonly relay: PrismaClient;
+  private readonly concurrency: number;
 
   constructor(
     config: ConfigService<AppEnvironment, true>,
@@ -72,6 +73,10 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
   ) {
     this.connection = redisOptions(config.get('REDIS_URL', { infer: true }));
     this.relay = privileged?.db ?? prisma;
+    // Jobs processed at once per API process; per-conversation order is kept
+    // by the conversation lock, not by this number (load test 2026-11-18).
+    this.concurrency =
+      config.get('TELEGRAM_QUEUE_CONCURRENCY', { infer: true }) ?? 8;
   }
 
   onModuleInit(): void {
@@ -97,7 +102,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
       },
       {
         connection: this.connection,
-        concurrency: 8,
+        concurrency: this.concurrency,
         settings: {
           backoffStrategy: (attemptsMade, _type, error): number =>
             telegramRetryDelayMs(attemptsMade, error),

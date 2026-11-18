@@ -114,6 +114,18 @@ const environmentSchema = postgresEnvironmentSchema
       .max(10_000)
       .default(120),
     /**
+     * Channel queue jobs (inbound turns and sends of every channel) one API
+     * process works on at once. The 2026-11-18 load test (mock model, 1.5 s
+     * per call) saturated at 8 with 50 customers; mind the LLM provider's
+     * rate limit and the database pool before raising it.
+     */
+    TELEGRAM_QUEUE_CONCURRENCY: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(64)
+      .default(8),
+    /**
      * Outbound policy for CRM connectors. `permissive` (private/loopback
      * destinations and plain http, still DNS-pinned) is for a developer's own
      * machine only and is refused in production.

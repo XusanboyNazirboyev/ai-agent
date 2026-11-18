@@ -104,6 +104,25 @@ describe('validateEnvironment', () => {
     ).toBe(120);
   });
 
+  it('keeps the channel queue at 8 jobs at once unless set, within 1 to 64', () => {
+    expect(
+      validateEnvironment(postgresEnvironment).TELEGRAM_QUEUE_CONCURRENCY,
+    ).toBe(8);
+    expect(
+      validateEnvironment({
+        ...postgresEnvironment,
+        TELEGRAM_QUEUE_CONCURRENCY: '24',
+      }).TELEGRAM_QUEUE_CONCURRENCY,
+    ).toBe(24);
+    for (const value of ['0', '65', '2.5'])
+      expect(() =>
+        validateEnvironment({
+          ...postgresEnvironment,
+          TELEGRAM_QUEUE_CONCURRENCY: value,
+        }),
+      ).toThrow();
+  });
+
   it('defaults connectors to the strict outbound policy and refuses permissive in production', () => {
     expect(
       validateEnvironment(postgresEnvironment).CONNECTOR_OUTBOUND_POLICY,
