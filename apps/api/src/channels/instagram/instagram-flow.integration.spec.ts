@@ -15,9 +15,14 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../../core/llm/scripted-llm-provider.js';
-import { PrismaClient, type Message } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
+import type { Message } from '../../generated/prisma/client.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
 import { metaInboundKey } from '../meta/meta-event-key.js';
@@ -49,11 +54,16 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Instagram flow integration tests require agentcore_test');
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: fixtures and checks on the owner, the code under test on the
+// app role. Intake routes on the privileged handle and accepts under the
+// tenant it found; each queued event is processed under its own tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as unknown as PrivilegedDatabase;
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
-const prisma = db as unknown as PrismaService;
-afterAll(async () => db.$disconnect());
 
 const PRODUCTION = agentModePolicy({
   NODE_ENV: 'production',
@@ -163,14 +173,16 @@ async function fixture(options: {
       agentMode: options.mode,
     },
   });
-  const secrets = new PrismaChannelSecretStore(
-    prisma,
-    new SecretCipher(
-      createKeyring({ SECRETS_MASTER_KEY: randomBytes(32).toString('base64') }),
-    ),
+  const cipher = new SecretCipher(
+    createKeyring({ SECRETS_MASTER_KEY: randomBytes(32).toString('base64') }),
   );
+  const secrets = new PrismaChannelSecretStore(prisma, cipher);
+  // The token as the connect flow stored it: a fixture, on the owner.
   if (options.storeToken !== false)
-    await secrets.put(
+    await new PrismaChannelSecretStore(
+      db as unknown as PrismaService,
+      cipher,
+    ).put(
       { tenantId: tenant.id, channelAccountId: account.id },
       'instagram_access_token',
       TOKEN,
@@ -251,9 +263,11 @@ async function fixture(options: {
     tenantId: tenant.id,
     channelAccountId: account.id,
     igUserId,
-    intake: new InstagramWebhookService(prisma),
-    processor,
-    instagram,
+    intake: new InstagramWebhookService(prisma, privileged),
+    // As the queue job: each event runs under its tenant.
+    processor: tenantScoped(processor),
+    // Direct sends name their tenant first, as the processor's do.
+    instagram: tenantScoped(instagram, { tenantArg: 0 }),
     telegram,
     calls,
     profileCalls,

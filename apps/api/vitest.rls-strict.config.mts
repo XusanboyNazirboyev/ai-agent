@@ -18,6 +18,7 @@ const STRICT_SPECS = [
   'src/persons/person-merge.integration.spec.ts',
   'src/tags/tags.integration.spec.ts',
   'src/handover/phase5.integration.spec.ts',
+  'src/channels/instagram/instagram-flow.integration.spec.ts',
 ];
 
 export default defineConfig({
