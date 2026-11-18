@@ -4,9 +4,12 @@ import { resolve } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
+import { traceRequests } from '../observability/trace-requests.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import {
+  appModuleEnvironment,
+  ownerClient,
+} from '../persistence/testing/test-clients.js';
 import { base32Decode, totpCode } from '../auth/totp.js';
 import { hashPassword } from '../webinbox/password.js';
 
@@ -29,6 +32,9 @@ for (const key of [
   const value = process.env[`TEST_POSTGRES_${key}`];
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
+// RLS plan S8b: strict runs the app with the main pool on the app role and
+// the test owner as the privileged pool; fixtures and checks on the owner.
+Object.assign(process.env, appModuleEnvironment());
 process.env.NODE_ENV = 'test';
 process.env.SECRETS_MASTER_KEY = randomBytes(32).toString('base64');
 process.env.LOGIN_RATE_LIMIT_PER_MINUTE = '1000';
@@ -38,9 +44,7 @@ delete process.env.WEB_PROXY_SECRET;
 const ORIGIN = 'http://localhost:3000';
 const FAST = { N: 1024, r: 8, p: 1 };
 const PACK = [...DOMAIN_PACKS.keys()][0] as string;
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+const db = ownerClient();
 let app: INestApplication;
 let base = '';
 const suffix = randomUUID().slice(0, 8);
@@ -66,6 +70,8 @@ beforeAll(async () => {
     logger: false,
     abortOnError: false,
   });
+  // As main.ts: every request gets its tenant slot (RLS plan S4).
+  app.use(traceRequests);
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
   await enrol(OWNER_EMAIL);
@@ -1022,5 +1028,44 @@ describe('password reset links (ADR 047 amendment 2026-11-17)', () => {
         where: { tenantId, action: 'operator.password_reset' },
       }),
     ).toBe(1);
+  });
+});
+
+describe('tenant invites from the console', () => {
+  it('lists, creates and revokes an invite of one tenant', async () => {
+    const platform = await platformLogin(OWNER_EMAIL);
+    const created = await call('POST', '/api/v1/platform/tenants', {
+      session: platform,
+      body: {
+        slug: `invites-${suffix}`,
+        name: 'Invites tenant',
+        pack: PACK,
+        defaultLocale: 'uz-Latn',
+        timezone: 'Asia/Tashkent',
+        ownerEmail: `invites-owner-${suffix}@example.test`,
+      },
+    });
+    expect(created.status).toBe(201);
+    const tenantId = String((created.body.tenant as { id: string }).id);
+    const path = `/api/v1/platform/tenants/${tenantId}/invites`;
+    const pending = async (): Promise<string[]> => {
+      const list = await call('GET', path, { session: platform });
+      expect(list.status).toBe(200);
+      return (list.body.invites as { role: string }[]).map((i) => i.role);
+    };
+    expect(await pending()).toEqual(['OWNER']);
+
+    const invite = await call('POST', path, {
+      session: platform,
+      body: { email: `invites-admin-${suffix}@example.test`, role: 'ADMIN' },
+    });
+    expect(invite.status).toBe(201);
+    expect(await pending()).toEqual(['ADMIN', 'OWNER']);
+
+    const revoked = await call('DELETE', `${path}/${String(invite.body.id)}`, {
+      session: platform,
+    });
+    expect(revoked.status).toBe(204);
+    expect(await pending()).toEqual(['OWNER']);
   });
 });

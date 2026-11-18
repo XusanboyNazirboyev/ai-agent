@@ -299,7 +299,9 @@ export class PlatformTenantsController {
       },
       operators,
       channels,
-      invites: await this.invites.listPending(id, now),
+      // RLS plan S5b: the invite service runs on the main pool, so the
+      // console reads one tenant's invites under that tenant.
+      invites: await runWithTenant(id, () => this.invites.listPending(id, now)),
     };
   }
 
@@ -619,7 +621,9 @@ export class PlatformTenantsController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<{ invites: PendingInvite[] }> {
     await this.requireTenant(id);
-    return { invites: await this.invites.listPending(id) };
+    return {
+      invites: await runWithTenant(id, () => this.invites.listPending(id)),
+    };
   }
 
   @Post(':id/invites')
@@ -632,12 +636,14 @@ export class PlatformTenantsController {
     await this.requireTenant(id);
     let created: CreatedInvite;
     try {
-      created = await this.invites.create({
-        tenantId: id,
-        email: input.email,
-        role: input.role,
-        createdByPlatformAdminId: request.platform!.adminId,
-      });
+      created = await runWithTenant(id, () =>
+        this.invites.create({
+          tenantId: id,
+          email: input.email,
+          role: input.role,
+          createdByPlatformAdminId: request.platform!.adminId,
+        }),
+      );
     } catch (error) {
       throw inviteHttpError(error);
     }
@@ -659,7 +665,10 @@ export class PlatformTenantsController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('inviteId', new ParseUUIDPipe()) inviteId: string,
   ): Promise<void> {
-    if (!(await this.invites.revoke(id, inviteId))) throw notFound();
+    const revoked = await runWithTenant(id, () =>
+      this.invites.revoke(id, inviteId),
+    );
+    if (!revoked) throw notFound();
     await recordPlatformAudit(this.prisma, {
       actorAdminId: request.platform!.adminId,
       action: 'invite.revoked',
