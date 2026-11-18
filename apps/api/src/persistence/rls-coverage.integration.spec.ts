@@ -25,13 +25,6 @@ const PENDING = new Set([
   'operator_password_resets',
   'operator_sessions',
   'operators',
-  // Channels and the outbox.
-  'channel_accounts',
-  'channel_secrets',
-  'inbound_events',
-  'inbox_events',
-  'instagram_comments',
-  'outbox_events',
   // Catalog, connectors and knowledge.
   'catalog_aliases',
   'catalog_items',
