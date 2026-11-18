@@ -35,6 +35,7 @@ const STRICT_SPECS = [
   'src/webinbox/connectors.integration.spec.ts',
   'src/webinbox/analytics.integration.spec.ts',
   'src/webinbox/facebook-connect.integration.spec.ts',
+  'src/webinbox/telegram-connect.integration.spec.ts',
 ];
 
 export default defineConfig({

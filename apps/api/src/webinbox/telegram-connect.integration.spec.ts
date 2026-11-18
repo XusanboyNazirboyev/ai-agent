@@ -3,12 +3,16 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { Logger } from '@nestjs/common';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { TelegramCredentials } from '../channels/telegram/telegram-credentials.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { TelegramWebhookService } from '../channels/telegram/telegram-webhook.service.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { ChannelsController } from './channels.controller.js';
@@ -18,12 +22,14 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Telegram connect tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the controllers, the secret store and
+// the webhook check on the app role under the tenant a request (the
+// principal) or a routed webhook (the account's tenant) sets.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 // Bot ids are globally unique, so every run uses its own range.
@@ -186,13 +192,15 @@ function setup(
         ),
   );
   const config = configWith(options.config);
-  const controller = new TelegramConnectController(
-    prisma,
-    config,
-    store,
-    new TelegramManagement(telegram.request as never),
+  const controller = tenantScoped(
+    new TelegramConnectController(
+      prisma,
+      config,
+      store,
+      new TelegramManagement(telegram.request as never),
+    ),
   );
-  return { bots, telegram, store, controller, config };
+  return { bots, telegram, store: tenantScoped(store), controller, config };
 }
 
 describe('connecting a Telegram bot from the web', () => {
@@ -272,11 +280,13 @@ describe('connecting a Telegram bot from the web', () => {
     });
     const noBase = setup({ config: { PUBLIC_BASE_URL: undefined } });
     await expect(
-      new TelegramConnectController(
-        prisma,
-        noBase.config,
-        store,
-        new TelegramManagement(telegram.request as never),
+      tenantScoped(
+        new TelegramConnectController(
+          prisma,
+          noBase.config,
+          store,
+          new TelegramManagement(telegram.request as never),
+        ),
       ).enable(t.request, id),
     ).rejects.toMatchObject({
       response: { code: 'PUBLIC_URL_NOT_CONFIGURED' },
@@ -315,12 +325,13 @@ describe('connecting a Telegram bot from the web', () => {
       config,
       new TelegramCredentials(prisma, config, store),
     );
+    // As the webhook route: the secret check runs under the routed tenant.
     await expect(
-      webhook.assertWebhookSecret(id, secret),
+      runWithTenant(t.tenantId, () => webhook.assertWebhookSecret(id, secret)),
     ).resolves.toBeUndefined();
-    await expect(webhook.assertWebhookSecret(id, 'wrong')).rejects.toThrow(
-      'Invalid',
-    );
+    await expect(
+      runWithTenant(t.tenantId, () => webhook.assertWebhookSecret(id, 'wrong')),
+    ).rejects.toThrow('Invalid');
 
     const result = await controller.test(t.request, id);
     expect(result).toMatchObject({
@@ -346,9 +357,10 @@ describe('connecting a Telegram bot from the web', () => {
     await controller.disconnect(t.request, id);
     expect(await store.exists(owner, 'bot_token')).toBe(false);
     expect(await db.channelAccount.count({ where: { id } })).toBe(1);
-    await expect(webhook.assertWebhookSecret(id, secret)).rejects.toThrow(
-      'not configured',
-    );
+    // The account row stays, so the route still finds its tenant.
+    await expect(
+      runWithTenant(t.tenantId, () => webhook.assertWebhookSecret(id, secret)),
+    ).rejects.toThrow('not configured');
     const actions = (
       await db.auditEvent.findMany({
         where: { tenantId: t.tenantId },
@@ -534,9 +546,9 @@ describe('connecting a Telegram bot from the web', () => {
     const t = await tenant();
     bots.set(TOKEN(RUN + 777), { id: RUN + 777, username: 'list_bot' });
     await controller.connect(t.request, { botToken: TOKEN(RUN + 777) });
-    const list = await new ChannelsController(prisma, config, store).list(
-      t.request,
-    );
+    const list = await tenantScoped(
+      new ChannelsController(prisma, config, store),
+    ).list(t.request);
     expect(list.capabilities).toEqual({
       secretsConfigured: true,
       publicUrlConfigured: true,
