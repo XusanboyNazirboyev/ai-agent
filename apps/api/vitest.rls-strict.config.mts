@@ -48,6 +48,7 @@ const STRICT_SPECS = [
   'src/channels/facebook/facebook-flow.integration.spec.ts',
   'src/channels/instagram/instagram-comment-flow.integration.spec.ts',
   'src/leads/customer-lead.integration.spec.ts',
+  'src/tasks/lead-tasks.integration.spec.ts',
 ];
 
 export default defineConfig({

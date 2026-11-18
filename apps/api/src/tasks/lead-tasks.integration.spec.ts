@@ -3,22 +3,30 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { LeadTaskReminders, LeadTasksController } from './lead-tasks.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Lead task tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const tasks = new LeadTasksController(prisma);
-const reminders = new LeadTaskReminders(prisma);
+// RLS plan S8b: fixtures on the owner; the controller on the app role under
+// the principal's tenant; the reminder scan finds due tasks on the privileged
+// handle and reminds under each task's tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const tasks = tenantScoped(new LeadTasksController(prisma));
+const reminders = new LeadTaskReminders(prisma, {
+  db,
+} as PrivilegedDatabase);
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
