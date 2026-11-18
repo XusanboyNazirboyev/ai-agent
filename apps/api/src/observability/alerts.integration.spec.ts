@@ -179,6 +179,8 @@ const queuedAlerts = (tenantId: string): Promise<unknown[]> =>
     .then((rows) => rows.map((row) => row.payload));
 
 describe('operator alerts (fixed clock)', () => {
+  // Seven scans, each visiting every tenant with an operator group in the
+  // shared test database (thousands locally; strict wraps each statement).
   it('queues the budget alert once per UTC month when spend reaches the threshold', async () => {
     const f = await tenant();
     await spend(f, 790_000_000n, minutesAgo(60)); // 79% of $1
@@ -201,7 +203,7 @@ describe('operator alerts (fixed clock)', () => {
       expect.objectContaining({ month: '2031-03' }),
       { kind: 'BUDGET_NEAR_LIMIT', percent: 90, month: '2031-04' },
     ]);
-  });
+  }, 180_000);
 
   it('queues the CRM failure alert once per hour from the threshold, per tenant', async () => {
     const a = await tenant();
