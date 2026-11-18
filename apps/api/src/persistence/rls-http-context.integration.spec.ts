@@ -8,6 +8,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import { signMetaBody } from '../channels/meta/meta-webhook-auth.js';
 import { traceRequests } from '../observability/trace-requests.js';
 import { createPostgresAdapter } from './postgres-adapter.js';
+import { ensureRlsAppRole } from './testing/rls-app-role.js';
 import { hashPassword } from '../webinbox/password.js';
 
 /**
@@ -18,9 +19,10 @@ import { hashPassword } from '../webinbox/password.js';
  * webhook may not run a single statement on the main connection while their
  * request is still waiting for its tenant: what runs before the tenant is
  * known goes through the privileged connection, everything after it runs
- * under the tenant. The app cannot boot in strict mode yet: startup checks
- * and background jobs have no tenant (S6/S7), so warn mode reports and each
- * in-request report fails the test.
+ * under the tenant. Warn mode reports each miss and every in-request report
+ * fails the test. With TEST_RLS_STRICT=1 (plan S8, CI) the same flows run in
+ * strict mode with the main pool as a NOBYPASSRLS login role, so policies
+ * apply and a miss throws.
  */
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 
@@ -39,6 +41,8 @@ for (const key of [
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
 
+/** Plan S8 (CI): strict mode, main pool as a NOBYPASSRLS login role. */
+const STRICT = process.env.TEST_RLS_STRICT === '1';
 const TELEGRAM_SECRET = 'rls-strict-webhook-secret';
 const META_SECRET = 'rls-strict-meta-secret';
 const PASSWORD = 'correct horse battery';
@@ -107,35 +111,49 @@ async function seed(): Promise<Fixture> {
 
 /** Warnings the app logs; the in-request tenant misses are the S5 signal. */
 const warnings: string[] = [];
+const keep = (message: unknown): void => {
+  if (typeof message === 'string') warnings.push(message);
+  else if (message instanceof Error)
+    warnings.push(`${message.name}: ${message.message}`);
+};
 const capture: LoggerService = {
   log: () => undefined,
-  error: () => undefined,
   debug: () => undefined,
   verbose: () => undefined,
-  fatal: () => undefined,
-  warn: (message: unknown) => {
-    if (typeof message === 'string') warnings.push(message);
-  },
+  error: keep,
+  fatal: keep,
+  warn: keep,
 };
+/** Warn mode reports a miss; strict mode throws it (500 or a logged error). */
 const inRequestMisses = (): string[] =>
   warnings.filter(
     (line) =>
-      line.includes('db.tenant_context_missing') &&
-      line.includes('"inRequest":true'),
+      (line.includes('db.tenant_context_missing') &&
+        line.includes('"inRequest":true')) ||
+      line.includes('TenantContextError'),
   );
 
-describe('RLS tenant context over HTTP (plan S5)', () => {
+describe(`RLS tenant context over HTTP (plan S5${STRICT ? ', strict as app role' : ''})`, () => {
   let app: INestApplication;
   let base: string;
   let f: Fixture;
 
   beforeAll(async () => {
     f = await seed();
+    const role = STRICT ? await ensureRlsAppRole(db) : null;
+    if (STRICT && !role)
+      throw new Error(
+        'TEST_RLS_STRICT=1 needs a test user that may create roles (CI)',
+      );
     Object.assign(process.env, {
       NODE_ENV: 'test',
-      RLS_CONTEXT_MODE: 'warn',
-      // Its own pool as the same test role: unwrapped, so no tenant needed.
+      RLS_CONTEXT_MODE: STRICT ? 'strict' : 'warn',
+      // Its own pool as the test (owner) role: unwrapped, so no tenant needed.
       POSTGRES_ADMIN_USER: process.env.TEST_POSTGRES_USER,
+      // Strict: the main pool as the role that RLS policies bind.
+      ...(role
+        ? { POSTGRES_USER: role.user, POSTGRES_PASSWORD: role.password }
+        : {}),
       TELEGRAM_CHANNEL_ACCOUNT_ID: f.telegramAccountId,
       TELEGRAM_WEBHOOK_SECRET: TELEGRAM_SECRET,
       // Nothing may reach Telegram from this test: a placeholder token

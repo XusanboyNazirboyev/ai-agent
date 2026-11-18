@@ -76,6 +76,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:unit
       - run: pnpm test:integration
+      # RLS plan S8: the HTTP and background acceptance specs again, in strict
+      # mode with the main pool as a NOBYPASSRLS login role (the CI database
+      # user is a superuser, so it may create it); the owner stays the
+      # privileged pool.
+      - run: pnpm test:rls:strict
       # Phase 7.2 quality gate: scripted + action-lifecycle evaluation,
       # coverage per pack/locale/risk group, zero false success claims.
       - run: pnpm test:eval

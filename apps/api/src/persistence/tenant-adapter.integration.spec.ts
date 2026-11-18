@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { config as loadEnv } from 'dotenv';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { createPostgresAdapter } from './postgres-adapter.js';
 import { TenantContextAdapterFactory } from './tenant-adapter.js';
+import { ensureRlsAppRole } from './testing/rls-app-role.js';
 import {
   runWithTenant,
   runWithTenantSlot,
@@ -17,7 +18,8 @@ import {
 // adapter wrapper. The test database user may not create roles, so the proof
 // uses a probe table in its own schema with FORCE ROW LEVEL SECURITY (the
 // owner is then bound by the policy too); shared tables are not touched.
-// Running the whole suite as a NOBYPASSRLS role is slice S8 (CI).
+// The app-level acceptance specs run as a NOBYPASSRLS role in CI
+// (`pnpm test:rls:strict`, plan S8).
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
@@ -27,9 +29,6 @@ const owner = new PrismaClient({
   adapter: createPostgresAdapter(process.env, 'TEST_'),
 });
 const missed: string[] = [];
-/** A login role that cannot bypass RLS; only created where we may (CI). */
-const APP_ROLE = 'agentcore_rls_app_test';
-const appPassword = randomBytes(18).toString('hex');
 let roleEnv: Record<string, unknown> = process.env;
 const client = (mode: 'warn' | 'strict') =>
   new PrismaClient({
@@ -48,8 +47,6 @@ beforeAll(async () => {
   // A superuser (the CI database user) bypasses RLS even with FORCE: there the
   // test connects as a NOBYPASSRLS login role instead. Locally the test user
   // is the table owner without CREATEROLE, and FORCE binds the owner.
-  const [me] = await owner.$queryRaw<{ superuser: boolean }[]>`
-    SELECT rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`;
   await owner.$executeRawUnsafe('CREATE SCHEMA IF NOT EXISTS rls_probe');
   await owner.$executeRawUnsafe(
     'CREATE TABLE IF NOT EXISTS rls_probe.rows (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)',
@@ -66,30 +63,14 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(
     `CREATE POLICY tenant_isolation ON rls_probe.rows USING (${POLICY}) WITH CHECK (${POLICY})`,
   );
-  if (me?.superuser) {
-    const [exists] = await owner.$queryRaw<{ n: number }[]>`
-      SELECT count(*)::int AS n FROM pg_roles WHERE rolname = ${APP_ROLE}`;
-    if (!exists?.n) await owner.$executeRawUnsafe(`CREATE ROLE ${APP_ROLE}`);
-    await owner.$executeRawUnsafe(
-      `ALTER ROLE ${APP_ROLE} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${appPassword}'`,
-    );
-    for (const schema of ['public', 'rls_probe']) {
-      await owner.$executeRawUnsafe(
-        `GRANT USAGE ON SCHEMA ${schema} TO ${APP_ROLE}`,
-      );
-      await owner.$executeRawUnsafe(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${schema} TO ${APP_ROLE}`,
-      );
-      await owner.$executeRawUnsafe(
-        `GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${schema} TO ${APP_ROLE}`,
-      );
-    }
+  // A login role that cannot bypass RLS; only created where we may (CI).
+  const role = await ensureRlsAppRole(owner, ['public', 'rls_probe']);
+  if (role)
     roleEnv = {
       ...process.env,
-      TEST_POSTGRES_USER: APP_ROLE,
-      TEST_POSTGRES_PASSWORD: appPassword,
+      TEST_POSTGRES_USER: role.user,
+      TEST_POSTGRES_PASSWORD: role.password,
     };
-  }
   strict = client('strict');
   warn = client('warn');
 });

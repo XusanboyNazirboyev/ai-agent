@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PrismaClient } from '../generated/prisma/client.js';
 import { HandoverRuntime } from '../handover/handover-runtime.js';
+import { createPostgresAdapter } from './postgres-adapter.js';
+import { ensureRlsAppRole } from './testing/rls-app-role.js';
 
 /**
  * RLS plan S6/S7 acceptance: the real AppModule in RLS_CONTEXT_MODE=warn
@@ -16,6 +19,11 @@ import { HandoverRuntime } from '../handover/handover-runtime.js';
  *
  * The warn reporter always logs the first miss of the process, so "no
  * `db.tenant_context_missing` line at all" means none happened.
+ *
+ * With TEST_RLS_STRICT=1 (plan S8, CI) the same pass runs in strict mode with
+ * the main pool as a NOBYPASSRLS login role (policies apply) and the
+ * privileged pool as the owner: a miss then throws, which the scan runtime
+ * logs as `handover.scan_failed` with the error name.
  */
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
@@ -33,24 +41,42 @@ for (const key of [
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
 
-const warnings: string[] = [];
+const STRICT = process.env.TEST_RLS_STRICT === '1';
+const owner = new PrismaClient({
+  adapter: createPostgresAdapter(process.env, 'TEST_'),
+});
+
+const lines: string[] = [];
+const keep = (message: unknown): void => {
+  if (typeof message === 'string') lines.push(message);
+  else if (message instanceof Error)
+    lines.push(`${message.name}: ${message.message}`);
+};
 const capture: LoggerService = {
   log: () => undefined,
-  error: () => undefined,
   debug: () => undefined,
   verbose: () => undefined,
-  fatal: () => undefined,
-  warn: (message: unknown) => {
-    if (typeof message === 'string') warnings.push(message);
-  },
+  error: keep,
+  fatal: keep,
+  warn: keep,
 };
 const misses = (): string[] =>
-  warnings.filter((line) => line.includes('db.tenant_context_missing'));
+  lines.filter(
+    (line) =>
+      line.includes('db.tenant_context_missing') ||
+      line.includes('TenantContextError') ||
+      line.includes('handover.scan_failed'),
+  );
 
-describe('RLS tenant context in background work (plan S6/S7)', () => {
+describe(`RLS tenant context in background work (plan S6/S7${STRICT ? ', strict as app role' : ''})`, () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    const role = STRICT ? await ensureRlsAppRole(owner) : null;
+    if (STRICT && !role)
+      throw new Error(
+        'TEST_RLS_STRICT=1 needs a test user that may create roles (CI)',
+      );
     // No platform bot, in CI and locally alike (the three keys must be set
     // together or not at all), and ConfigModule may not refill them from
     // the env file: everything it needs is already in process.env.
@@ -63,9 +89,13 @@ describe('RLS tenant context in background work (plan S6/S7)', () => {
     Object.assign(process.env, {
       ENV_FILE: resolve(process.cwd(), 'rls-background-no-env-file'),
       NODE_ENV: 'test',
-      RLS_CONTEXT_MODE: 'warn',
-      // Its own pool as the same test role: unwrapped, so no tenant needed.
+      RLS_CONTEXT_MODE: STRICT ? 'strict' : 'warn',
+      // Its own pool as the test (owner) role: unwrapped, so no tenant needed.
       POSTGRES_ADMIN_USER: process.env.TEST_POSTGRES_USER,
+      // Strict: the main pool as the role that RLS policies bind.
+      ...(role
+        ? { POSTGRES_USER: role.user, POSTGRES_PASSWORD: role.password }
+        : {}),
       // Nothing may reach Telegram from this test.
       TELEGRAM_API_BASE_URL: 'http://127.0.0.1:9',
       // Every scan does its work, including the ones off by default.
@@ -85,6 +115,7 @@ describe('RLS tenant context in background work (plan S6/S7)', () => {
 
   afterAll(async () => {
     await app?.close();
+    await owner.$disconnect();
   });
 
   it('boots, runs every scan once and relays the outbox without a tenant-less statement', async () => {

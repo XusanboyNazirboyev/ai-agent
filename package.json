@@ -17,6 +17,7 @@
     "test": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit",
     "test:unit": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:unit && pnpm --filter @agentcore/web test",
     "test:integration": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:integration",
+    "test:rls:strict": "pnpm --filter @agentcore/api test:rls:strict",
     "test:coverage": "pnpm --filter @agentcore/shared build && pnpm --filter @agentcore/api test:coverage",
     "ops:backfill-persons": "pnpm --filter @agentcore/api ops:backfill-persons",
     "db:generate": "pnpm --filter @agentcore/api db:generate",
