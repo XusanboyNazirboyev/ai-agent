@@ -71,7 +71,7 @@ const MODEL_PATTERNS: ReadonlyArray<
   [/(?<![\d+])[3-6]\d{13}(?!\d)/gu, '[id]'],
   [
     /(?<![\d+])[1-9]\d{12,14}(?!\d)/gu,
-    (match) => (luhnValid(match) ? '[card]' : match),
+    (match: string): string => (luhnValid(match) ? '[card]' : match),
   ],
   [/(?<![\p{L}\d])[A-Z]{2} ?\d{7}(?![\p{L}\d])/gu, '[document]'],
 ];
