@@ -7,9 +7,13 @@ import { operatorStrings, refLine } from '../../handover/operator-text.js';
 import { OperatorUpdateHandler } from '../../handover/operator-update.handler.js';
 import { TelegramBotApi } from '../../handover/telegram-bot-api.js';
 import { TelegramGroupNotifier } from '../../handover/telegram-group-notifier.js';
-import { PrismaClient } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
 import { TelegramCredentials } from './telegram-credentials.js';
@@ -28,12 +32,14 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Operator webhook tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the real webhook controller on the
+// app role, routing on the privileged handle and the update under the
+// account's tenant, as in production.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const GROUP = '-100777';
@@ -185,8 +191,8 @@ async function rig(): Promise<Rig> {
   const token = `${telegramId()}:AAH-opwh_token_${randomBytes(12).toString('hex')}`;
   const secret = randomBytes(24).toString('base64url');
   const owner = { tenantId: tenant.id, channelAccountId: account.id };
-  await store.put(owner, 'bot_token', token);
-  await store.put(owner, 'webhook_secret', secret);
+  await tenantScoped(store).put(owner, 'bot_token', token);
+  await tenantScoped(store).put(owner, 'webhook_secret', secret);
 
   const calls: BotCall[] = [];
   let sent = 500;
@@ -209,7 +215,9 @@ async function rig(): Promise<Rig> {
     new TelegramBotApi(config, fakeFetch, credentials),
   );
   const controller = new TelegramWebhookController(
-    new TelegramWebhookService(prisma, config, credentials),
+    new TelegramWebhookService(prisma, config, credentials, {
+      db,
+    } as PrivilegedDatabase),
     new OperatorUpdateHandler(prisma, new HandoverService(prisma), notifier),
   );
   return {

@@ -43,6 +43,7 @@ const STRICT_SPECS = [
   'src/channels/telegram/operator-group-link.integration.spec.ts',
   'src/handover/digest.integration.spec.ts',
   'src/handover/operator-idle-return.integration.spec.ts',
+  'src/channels/telegram/operator-webhook.integration.spec.ts',
 ];
 
 export default defineConfig({
