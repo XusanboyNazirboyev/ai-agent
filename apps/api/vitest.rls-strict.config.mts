@@ -76,6 +76,7 @@ const STRICT_SPECS = [
   'src/agent/knowledge-turn.integration.spec.ts',
   'src/agent/testing/simulation/simulation.integration.spec.ts',
   'src/access/access-enforcement.integration.spec.ts',
+  'src/auth/mfa.integration.spec.ts',
 ];
 
 export default defineConfig({

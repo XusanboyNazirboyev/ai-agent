@@ -4,9 +4,14 @@ import { resolve } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { traceRequests } from '../observability/trace-requests.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  appModuleEnvironment,
+  ownerClient,
+} from '../persistence/testing/test-clients.js';
 import { hashPassword } from '../webinbox/password.js';
 import { SessionService } from '../webinbox/session.service.js';
 import { MfaError, MfaService } from './mfa.service.js';
@@ -32,6 +37,9 @@ for (const key of [
   const value = process.env[`TEST_POSTGRES_${key}`];
   if (value !== undefined) process.env[`POSTGRES_${key}`] = value;
 }
+// RLS plan S8b: strict runs the app with the main pool on the app role and
+// the test owner as the privileged pool.
+Object.assign(process.env, appModuleEnvironment());
 process.env.NODE_ENV = 'test';
 process.env.LOGIN_RATE_LIMIT_PER_MINUTE = '1000';
 process.env.WEB_ORIGINS = 'http://localhost:3000';
@@ -42,9 +50,12 @@ delete process.env.WEB_PROXY_SECRET;
 
 const FAST = { N: 1024, r: 8, p: 1 };
 const PASSWORD = 'correct horse battery';
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// Fixtures and checks on the owner; services built by hand below get the
+// app role as their main client and the owner as the privileged handle, as
+// PersistenceModule wires them.
+const db = ownerClient();
+const appRole = appClient();
+const privileged = { db } as PrivilegedDatabase;
 const suffix = randomUUID().slice(0, 8);
 let app: INestApplication;
 let base = '';
@@ -68,12 +79,15 @@ beforeAll(async () => {
     logger: false,
     abortOnError: false,
   });
+  // As main.ts: every request gets its tenant slot, filled by the session
+  // check (RLS plan S4).
+  app.use(traceRequests);
   await app.listen(0, '127.0.0.1');
   base = await app.getUrl();
 });
 afterAll(async () => {
   await app?.close();
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), appRole.$disconnect()]);
 });
 
 interface Result {
@@ -615,7 +629,12 @@ describe('platform admin forced enrolment and sign-in', () => {
 });
 
 describe('without the keyring', () => {
-  const noKey = new MfaService(db as unknown as PrismaService);
+  const noKey = new MfaService(
+    appRole as unknown as PrismaService,
+    undefined,
+    undefined,
+    privileged,
+  );
 
   it('refuses enrolment and never stores a secret', async () => {
     const { operatorId } = await newOperator('nokey');
@@ -643,10 +662,11 @@ describe('without the keyring', () => {
       },
     });
     const tenantSessions = new SessionService(
-      db as unknown as PrismaService,
+      appRole as unknown as PrismaService,
       undefined,
       undefined,
       noKey,
+      privileged,
     );
     expect(await tenantSessions.login(email, PASSWORD)).toEqual({
       ok: false,
