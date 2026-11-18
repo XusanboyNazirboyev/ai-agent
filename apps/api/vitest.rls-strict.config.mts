@@ -33,6 +33,7 @@ const STRICT_SPECS = [
   'src/webinbox/sheet-catalog.integration.spec.ts',
   'src/webinbox/connector-roles.integration.spec.ts',
   'src/webinbox/connectors.integration.spec.ts',
+  'src/webinbox/analytics.integration.spec.ts',
 ];
 
 export default defineConfig({

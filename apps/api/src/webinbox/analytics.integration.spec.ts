@@ -2,10 +2,13 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { ensureLeadStages } from '../leads/lead-stage.util.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { AnalyticsController } from './analytics.controller.js';
 import { AnalyticsService } from './analytics.service.js';
 
@@ -13,12 +16,15 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Analytics tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the report on the app role under the
+// tenant it is asked for (the principal's, or the first argument).
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const analytics = (): AnalyticsService =>
+  tenantScoped(new AnalyticsService(prisma), { tenantArg: 0 });
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 /**
@@ -330,7 +336,7 @@ describe('analytics report', () => {
       status: 'DISCARDED',
     });
 
-    const report = await new AnalyticsService(prisma).report(t.id, {
+    const report = await analytics().report(t.id, {
       from: '2026-03-01',
       to: '2026-03-02',
     });
@@ -413,7 +419,7 @@ describe('analytics report', () => {
       language: 'uz',
       replyAfterSeconds: 5,
     });
-    const empty = await new AnalyticsService(prisma).report(t.id, {
+    const empty = await analytics().report(t.id, {
       from: '2026-03-01',
       to: '2026-03-02',
     });
@@ -426,12 +432,12 @@ describe('analytics report', () => {
       cost: { perConversationUsd: null, totalUsd: 0 },
       tools: { errorRate: null },
     });
-    const day = await new AnalyticsService(prisma).report(t.id, {
+    const day = await analytics().report(t.id, {
       from: '2026-03-04',
       to: '2026-03-04',
     });
     expect(day.conversations.total).toBe(1);
-    const before = await new AnalyticsService(prisma).report(t.id, {
+    const before = await analytics().report(t.id, {
       from: '2026-03-03',
       to: '2026-03-03',
     });
@@ -440,7 +446,7 @@ describe('analytics report', () => {
 
   it('refuses a reversed, malformed or oversized range', async () => {
     const t = await tenant();
-    const service = new AnalyticsService(prisma);
+    const service = analytics();
     for (const range of [
       { from: '2026-03-05', to: '2026-03-01' },
       { from: '2026-03-01', to: '2027-06-01' },
@@ -453,7 +459,9 @@ describe('analytics report', () => {
 describe('analytics access', () => {
   it('is for owners and admins only, and a bad query is a 400', async () => {
     const t = await tenant();
-    const controller = new AnalyticsController(new AnalyticsService(prisma));
+    const controller = tenantScoped(
+      new AnalyticsController(new AnalyticsService(prisma)),
+    );
     for (const role of ['OPERATOR', 'VIEWER'])
       await expect(
         controller.report(principal(t.id, role), {}),
@@ -524,7 +532,7 @@ describe('leads by funnel stage (ADR 058)', () => {
       where: { tenantId_id: { tenantId: t.id, id: leads[2]!.id } },
       data: { archivedAt: new Date() },
     });
-    const report = await new AnalyticsService(prisma).report(t.id, {
+    const report = await analytics().report(t.id, {
       from: '2026-03-01',
       to: '2026-03-02',
     });
@@ -587,7 +595,7 @@ describe('leads by funnel stage (ADR 058)', () => {
     });
     await turn(other, o, { ...base, outcome: 'ANSWERED', intent: 'price' });
 
-    const report = await new AnalyticsService(prisma).report(t.id, {
+    const report = await analytics().report(t.id, {
       from: '2026-03-01',
       to: '2026-03-03',
     });
