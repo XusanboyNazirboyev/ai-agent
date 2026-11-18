@@ -6,12 +6,16 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { PeopleService } from '../persons/people.service.js';
 import { PersonErasureService } from '../persons/person-erasure.service.js';
 import { PersonMergeService } from '../persons/person-merge.service.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { ContactErasureService } from '../retention/contact-erasure.service.js';
 import { CustomFieldsController } from '../webinbox/custom-fields.controller.js';
 import { InboxReadService } from '../webinbox/inbox-read.service.js';
@@ -34,18 +38,23 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Tags integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, controllers and services on the app
+// role, each call under the tenant of the principal the guard set. Sessions
+// are looked up before a tenant is known: the privileged handle.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const sessions = new SessionService(prisma, {
-  ...DEFAULT_SESSION_POLICY,
-  scrypt: { N: 1024, r: 8, p: 1 },
-});
+const sessions = new SessionService(
+  prisma,
+  { ...DEFAULT_SESSION_POLICY, scrypt: { N: 1024, r: 8, p: 1 } },
+  undefined,
+  undefined,
+  { db } as PrivilegedDatabase,
+);
 const guard = new SessionGuard(sessions, {
   get: () => ['http://localhost:3000'],
 } as never);
@@ -53,24 +62,30 @@ const tagsService = new TagsService(prisma);
 const fieldsService = new CustomFieldsService(prisma);
 const peopleService = new PeopleService(prisma);
 const contactErasure = new ContactErasureService(prisma);
-const tagsC = new TagsController(tagsService);
-const fieldsC = new CustomFieldsController(fieldsService);
-const peopleC = new PeopleController(
-  peopleService,
-  new PersonMergeService(prisma, peopleService),
-  new PersonErasureService(prisma, contactErasure),
-  prisma,
-  tagsService,
-  fieldsService,
+/** Direct erasure calls, under the tenant they name first. */
+const erasure = tenantScoped(contactErasure, { tenantArg: 0 });
+const tagsC = tenantScoped(new TagsController(tagsService));
+const fieldsC = tenantScoped(new CustomFieldsController(fieldsService));
+const peopleC = tenantScoped(
+  new PeopleController(
+    peopleService,
+    new PersonMergeService(prisma, peopleService),
+    new PersonErasureService(prisma, contactErasure),
+    prisma,
+    tagsService,
+    fieldsService,
+  ),
 );
-const leadsC = new LeadPipelineController(
-  prisma,
-  tagsService,
-  fieldsService,
-  new ManualLeadService(prisma),
-  new LeadArchiveService(prisma),
+const leadsC = tenantScoped(
+  new LeadPipelineController(
+    prisma,
+    tagsService,
+    fieldsService,
+    new ManualLeadService(prisma),
+    new LeadArchiveService(prisma),
+  ),
 );
-const read = new InboxReadService(prisma);
+const read = tenantScoped(new InboxReadService(prisma));
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -947,7 +962,7 @@ describe('Reads and filters (ADR 053)', () => {
       const p = await person(f);
       await peopleC.setTags(f.as.OWNER, p.person.id, { tagIds: [t.id] });
     }
-    const spy = vi.spyOn(db.personTag, 'findMany');
+    const spy = vi.spyOn(app.personTag, 'findMany');
     const page = await peopleC.list(f.as.OWNER, { limit: '10' });
     expect(page.items).toHaveLength(6);
     expect(page.items.every((i) => i.tags.length === 1)).toBe(true);
@@ -1078,12 +1093,12 @@ describe('Erasure clears tags and values (ADR 053)', () => {
   it('erasing the LAST contact clears values and tag links', async () => {
     const f = await fixture();
     const { p } = await tagged(f, 2);
-    await contactErasure.erase(f.tenantId, p.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, p.contacts[0].id, f.operatorId);
     expect(await state(p.person.id)).toEqual({
       fields: { note: 'personal text' },
       tags: 1,
     });
-    await contactErasure.erase(f.tenantId, p.contacts[1].id, f.operatorId);
+    await erasure.erase(f.tenantId, p.contacts[1].id, f.operatorId);
     expect(await state(p.person.id)).toEqual({ fields: {}, tags: 0 });
   });
 
@@ -1115,7 +1130,7 @@ describe('Erasure clears tags and values (ADR 053)', () => {
       intoId: survivor.person.id,
       reason: 'same customer',
     });
-    await contactErasure.erase(f.tenantId, merged.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, merged.contacts[0].id, f.operatorId);
     expect(await state(merged.person.id)).toEqual({ fields: {}, tags: 0 });
     // The tag the survivor carried over from the erased customer is removed
     // again; only the survivor's own tag stays.
@@ -1152,7 +1167,7 @@ describe('Erasure clears tags and values (ADR 053)', () => {
       data: { customFields: { city: 'Bukhara', note: 'edited by operator' } },
     });
 
-    await contactErasure.erase(f.tenantId, source.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, source.contacts[0].id, f.operatorId);
     const after = await state(survivor.person.id);
     // The carried tag is gone, the survivor's own tag stays.
     expect(after.tags).toBe(1);
@@ -1178,7 +1193,7 @@ describe('Erasure clears tags and values (ADR 053)', () => {
     expect((await state(s2.person.id)).fields).toEqual({
       note: 'private note',
     });
-    await contactErasure.erase(f2.tenantId, m2.contacts[0].id, f2.operatorId);
+    await erasure.erase(f2.tenantId, m2.contacts[0].id, f2.operatorId);
     expect((await state(s2.person.id)).fields).toEqual({});
   });
 
@@ -1192,7 +1207,7 @@ describe('Erasure clears tags and values (ADR 053)', () => {
     await leadsC.setCustomFields(f.as.OWNER, lead.id, {
       values: { budget: 5 },
     });
-    await contactErasure.erase(f.tenantId, p.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, p.contacts[0].id, f.operatorId);
     expect(await db.leadTag.count({ where: { leadId: lead.id } })).toBe(0);
     expect(
       (await db.lead.findUniqueOrThrow({ where: { id: lead.id } }))

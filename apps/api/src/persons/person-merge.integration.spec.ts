@@ -4,9 +4,13 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { ContactErasureService } from '../retention/contact-erasure.service.js';
 import { PeopleController } from '../webinbox/people.controller.js';
 import {
@@ -28,31 +32,40 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Person merge integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the controller and services on the
+// app role, each call under the tenant of the principal the guard set.
+// Sessions are looked up before a tenant is known: the privileged handle.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const sessions = new SessionService(prisma, {
-  ...DEFAULT_SESSION_POLICY,
-  scrypt: { N: 1024, r: 8, p: 1 },
-});
+const sessions = new SessionService(
+  prisma,
+  { ...DEFAULT_SESSION_POLICY, scrypt: { N: 1024, r: 8, p: 1 } },
+  undefined,
+  undefined,
+  { db } as PrivilegedDatabase,
+);
 const guard = new SessionGuard(sessions, {
   get: () => ['http://localhost:3000'],
 } as never);
 const peopleService = new PeopleService(prisma);
 const contactErasure = new ContactErasureService(prisma);
-const controller = new PeopleController(
-  peopleService,
-  new PersonMergeService(prisma, peopleService),
-  new PersonErasureService(prisma, contactErasure),
-  prisma,
-  new TagsService(prisma),
-  new CustomFieldsService(prisma),
+const controller = tenantScoped(
+  new PeopleController(
+    peopleService,
+    new PersonMergeService(prisma, peopleService),
+    new PersonErasureService(prisma, contactErasure),
+    prisma,
+    new TagsService(prisma),
+    new CustomFieldsService(prisma),
+  ),
 );
+/** Direct erasure calls, under the tenant they name first. */
+const erasure = tenantScoped(contactErasure, { tenantArg: 0 });
 
 const unique = (prefix: string): string => `${prefix}-${randomUUID()}`;
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -647,11 +660,7 @@ describe('Merge and unmerge (ADR 052 slice C)', () => {
       expect(
         (await controller.detail(f.as.OWNER, survivor.person.id)).lastMerge,
       ).not.toBeNull();
-      await contactErasure.erase(
-        f.tenantId,
-        source.contacts[0].id,
-        f.operatorId,
-      );
+      await erasure.erase(f.tenantId, source.contacts[0].id, f.operatorId);
       expect(
         (await controller.detail(f.as.OWNER, survivor.person.id)).lastMerge,
       ).toBeNull();
@@ -846,7 +855,7 @@ describe('Person erase (ADR 052 slice D)', () => {
       displayName: 'M copy',
     });
     await merge(f, 'OWNER', m.person.id, s.person.id, 'secret reason');
-    await contactErasure.erase(f.tenantId, s.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, s.contacts[0].id, f.operatorId);
     // One contact left: the merged row and the reason stay.
     const mid = await db.person.findUniqueOrThrow({
       where: { id: m.person.id },
@@ -861,7 +870,7 @@ describe('Person erase (ADR 052 slice D)', () => {
       ).reason,
     ).toBe('secret reason');
 
-    await contactErasure.erase(f.tenantId, m.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, m.contacts[0].id, f.operatorId);
     const last = await db.person.findUniqueOrThrow({
       where: { id: m.person.id },
     });
@@ -884,7 +893,7 @@ describe('Person erase (ADR 052 slice D)', () => {
     await merge(f, 'OWNER', m.person.id, s.person.id, 'secret reason');
 
     // One of the two snapshot contacts is erased: the copy and the reason stay.
-    await contactErasure.erase(f.tenantId, m.contacts[0].id, f.operatorId);
+    await erasure.erase(f.tenantId, m.contacts[0].id, f.operatorId);
     const mid = await db.person.findUniqueOrThrow({
       where: { id: m.person.id },
     });
@@ -892,7 +901,7 @@ describe('Person erase (ADR 052 slice D)', () => {
     expect(mid.deletedAt).toBeNull();
 
     // The last snapshot contact is erased; the survivor still has S1.
-    await contactErasure.erase(f.tenantId, m.contacts[1].id, f.operatorId);
+    await erasure.erase(f.tenantId, m.contacts[1].id, f.operatorId);
     const last = await db.person.findUniqueOrThrow({
       where: { id: m.person.id },
     });

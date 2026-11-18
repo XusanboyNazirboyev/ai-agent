@@ -15,6 +15,8 @@ const STRICT_SPECS = [
   'src/retention/retention.integration.spec.ts',
   'src/pipelines/pipelines.integration.spec.ts',
   'src/pipelines/funnel.integration.spec.ts',
+  'src/persons/person-merge.integration.spec.ts',
+  'src/tags/tags.integration.spec.ts',
 ];
 
 export default defineConfig({
