@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { newTraceId, runWithLogContext } from '../observability/log-context.js';
+import { runWithoutTenant } from '../persistence/tenant-context.js';
 import { HandoverSlaService } from './handover-sla.service.js';
 
 export const SCHEDULED_SCANS = Symbol('SCHEDULED_SCANS');
@@ -50,10 +51,13 @@ export class HandoverRuntime implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       // Each pass is one trace (it covers every tenant, so no tenantId).
-      await runWithLogContext({ traceId: newTraceId() }, async () => {
-        await this.sla.scan(now);
-        for (const scan of this.scans) await scan.scanDue(now);
-      });
+      // RLS plan S7: a pass belongs to no tenant; each scan sets one per item.
+      await runWithoutTenant(() =>
+        runWithLogContext({ traceId: newTraceId() }, async () => {
+          await this.sla.scan(now);
+          for (const scan of this.scans) await scan.scanDue(now);
+        }),
+      );
     } catch (error) {
       this.logger.warn(
         JSON.stringify({

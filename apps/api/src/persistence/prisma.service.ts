@@ -9,7 +9,7 @@ import { PrismaClient } from '../generated/prisma/client.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { assertUtcSession, createPostgresAdapter } from './postgres-adapter.js';
 import { TenantContextAdapterFactory } from './tenant-adapter.js';
-import { awaitingTenant } from './tenant-context.js';
+import { awaitingTenant, runAsProbe } from './tenant-context.js';
 
 /** At most one "no tenant" warning per this many statements (warn mode). */
 const MISSING_TENANT_LOG_EVERY = 100;
@@ -66,7 +66,8 @@ export class PrismaService
 
   async onModuleInit(): Promise<void> {
     await this.$connect();
-    await assertUtcSession(this);
+    // Reads only a session setting: runs as the probe tenant (RLS plan S7).
+    await runAsProbe(() => assertUtcSession(this));
   }
 
   /**

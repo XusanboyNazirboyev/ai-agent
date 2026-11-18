@@ -1,5 +1,8 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, Optional } from '@nestjs/common';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithoutTenant } from '../persistence/tenant-context.js';
 
 export interface BusEvent {
   readonly id: string;
@@ -33,7 +36,20 @@ export class InboxEventBus implements OnModuleDestroy {
   /** Poll interval; tests may lower it. */
   pollMs = POLL_MS;
 
-  constructor(private readonly prisma: PrismaService) {}
+  /**
+   * RLS plan S7: one poller serves the open streams of every tenant, so it
+   * reads on the privileged connection and its timer runs with no tenant
+   * (it is first started inside one tenant's request).
+   */
+  private readonly db: PrismaClient;
+
+  constructor(
+    prisma: PrismaService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.db = privileged?.db ?? prisma;
+  }
 
   /**
    * Registers a listener and makes sure the bus cursor exists BEFORE
@@ -45,10 +61,12 @@ export class InboxEventBus implements OnModuleDestroy {
     if (!set) this.listeners.set(tenantId, (set = new Set()));
     set.add(listener);
     if (this.cursor === undefined) {
-      const latest = await this.prisma.inboxEvent.findFirst({
-        orderBy: { id: 'desc' },
-        select: { id: true },
-      });
+      const latest = await runWithoutTenant(() =>
+        this.db.inboxEvent.findFirst({
+          orderBy: { id: 'desc' },
+          select: { id: true },
+        }),
+      );
       this.cursor ??= latest?.id ?? 0n;
     }
     this.ensureRunning();
@@ -66,20 +84,25 @@ export class InboxEventBus implements OnModuleDestroy {
   }
 
   /** Test hook: one poll now. */
-  async tick(): Promise<void> {
+  tick(): Promise<void> {
+    // Whoever calls it, the poll belongs to no tenant (RLS plan S7).
+    return runWithoutTenant(() => this.poll());
+  }
+
+  private async poll(): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
       this.polls += 1;
       if (this.cursor === undefined) return;
       const tenants = [...this.listeners.keys()];
-      const rows = await this.prisma.inboxEvent.findMany({
+      const rows = await this.db.inboxEvent.findMany({
         where: { id: { gt: this.cursor }, tenantId: { in: tenants } },
         orderBy: { id: 'asc' },
         take: BATCH,
       });
       // Advance past rows of tenants nobody listens to as well.
-      const newest = await this.prisma.inboxEvent.findFirst({
+      const newest = await this.db.inboxEvent.findFirst({
         where: { id: { gt: this.cursor } },
         orderBy: { id: 'desc' },
         select: { id: true },
@@ -113,7 +136,9 @@ export class InboxEventBus implements OnModuleDestroy {
 
   private ensureRunning(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.tick(), this.pollMs);
+    this.timer = runWithoutTenant(() =>
+      setInterval(() => void this.tick(), this.pollMs),
+    );
     this.timer.unref();
   }
 

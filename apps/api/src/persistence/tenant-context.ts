@@ -88,3 +88,16 @@ export function awaitingTenant(): boolean {
   const slot = storage.getStore();
   return slot !== undefined && slot.tenantId === null;
 }
+
+/**
+ * RLS plan S7: a tenant id that owns no row (the nil UUID). Statements that
+ * read no tenant data at all, such as the session time-zone check at start-
+ * up, run under it so that strict mode never needs an exception for them;
+ * under row-level security they see nothing of any tenant.
+ */
+export const NO_TENANT_PROBE = '00000000-0000-0000-0000-000000000000';
+
+/** Runs work that reads no tenant data under `NO_TENANT_PROBE`. */
+export function runAsProbe<T>(fn: () => T): T {
+  return runWithTenant(NO_TENANT_PROBE, fn);
+}

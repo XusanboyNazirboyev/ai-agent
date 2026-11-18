@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { DigestService } from '../handover/digest.service.js';
+import { InboxEventBus } from '../webinbox/inbox-event-bus.js';
 import { LeadTaskReminders } from '../tasks/lead-tasks.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
-import { currentTenant } from './tenant-context.js';
+import { currentTenant, runWithTenant } from './tenant-context.js';
 
 /**
  * RLS plan S7: a scheduled scan finds due work on the privileged connection
@@ -141,5 +142,23 @@ describe('scheduled scans and the tenant context (RLS plan S7)', () => {
       { db: 'main', call: 'leadTask.updateMany', tenant: B },
       { db: 'main', call: 'inboxEvent.create', tenant: B },
     ]);
+  });
+
+  it('the inbox event poller reads with no tenant even when a request starts it', async () => {
+    const seen: Seen = [];
+    const main = recorder('main', seen, {});
+    const privileged = recorder('privileged', seen, {
+      inboxEvent: { findFirst: () => ({ id: 5n }), findMany: () => [] },
+    });
+    const bus = new InboxEventBus(main as never, { db: privileged } as never);
+    bus.pollMs = 60_000;
+    const unsubscribe = await runWithTenant(A, () =>
+      bus.subscribe(A, () => undefined),
+    );
+    await runWithTenant(A, () => bus.tick());
+    unsubscribe();
+    bus.onModuleDestroy();
+    expect(seen.every((entry) => entry.db === 'privileged')).toBe(true);
+    expect(seen.map((entry) => entry.tenant)).toEqual([null, null, null]);
   });
 });

@@ -1,7 +1,14 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  Optional,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { agentModePolicyFrom, assertAgentModeAllowed } from './agent-mode.js';
 
 /**
@@ -14,10 +21,17 @@ import { agentModePolicyFrom, assertAgentModeAllowed } from './agent-mode.js';
 export class AgentModeStartupCheck implements OnApplicationBootstrap {
   private readonly logger = new Logger(AgentModeStartupCheck.name);
 
+  /** The served account is looked up before any tenant is known (RLS S7). */
+  private readonly db: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.db = privileged?.db ?? prisma;
+  }
 
   async onApplicationBootstrap(): Promise<void> {
     const get = <K extends keyof AppEnvironment>(key: K): AppEnvironment[K] =>
@@ -35,7 +49,7 @@ export class AgentModeStartupCheck implements OnApplicationBootstrap {
     }
     const served = get('TELEGRAM_CHANNEL_ACCOUNT_ID');
     if (!served) return;
-    const account = await this.prisma.channelAccount.findFirst({
+    const account = await this.db.channelAccount.findFirst({
       where: { id: served, status: 'ACTIVE' },
       select: {
         id: true,
