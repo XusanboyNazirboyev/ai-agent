@@ -28,6 +28,8 @@ const STRICT_SPECS = [
   'src/webinbox/crm-template.integration.spec.ts',
   'src/webinbox/lead-archive.integration.spec.ts',
   'src/webinbox/manual-lead.integration.spec.ts',
+  'src/webinbox/test-chat.integration.spec.ts',
+  'src/webinbox/suggest-reply.integration.spec.ts',
 ];
 
 export default defineConfig({

@@ -12,9 +12,12 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { AgentConversationService } from '../agent/agent-conversation.service.js';
 import { TestChatController } from './test-chat.controller.js';
 import { LlmBudgetLedger } from '../agent/llm-budget-ledger.js';
@@ -25,10 +28,11 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Test chat tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const database = prisma as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner (`prisma`), the code under test on the
+// app role (`database`) under the principal's tenant.
+const prisma = ownerClient();
+const app = appClient();
+const database = app as unknown as PrismaService;
 
 const settings: Partial<AppEnvironment> = {
   LLM_PROVIDER: 'mock',
@@ -74,7 +78,7 @@ function service(
 }
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
 
 async function tenantOnly(): Promise<string> {
@@ -134,9 +138,11 @@ const steps = (): ScriptStep[] => [
 describe('assistant test chat API (ADR 065)', () => {
   it('returns the reply, what was looked up and the collected details, and writes nothing', async () => {
     const tenantId = await tenantOnly();
-    const controller = new TestChatController(
-      service(new ScriptedLlmProvider([...steps(), ...steps()])),
-      database,
+    const controller = tenantScoped(
+      new TestChatController(
+        service(new ScriptedLlmProvider([...steps(), ...steps()])),
+        database,
+      ),
     );
     const answer = await controller.send(as(tenantId, 'ADMIN'), {
       sessionId: randomUUID(),
@@ -186,7 +192,9 @@ describe('assistant test chat API (ADR 065)', () => {
   it('only an owner or admin may use it, and a bad body is refused before any model call', async () => {
     const tenantId = await tenantOnly();
     const provider = new ScriptedLlmProvider(steps());
-    const controller = new TestChatController(service(provider), database);
+    const controller = tenantScoped(
+      new TestChatController(service(provider), database),
+    );
     const valid = { sessionId: randomUUID(), text: 'Hello' };
     for (const role of ['OPERATOR', 'VIEWER'] as Role[])
       expect(
@@ -220,15 +228,17 @@ describe('assistant test chat API (ADR 065)', () => {
 
   it('limits each person to ten messages a minute, and others are not affected', async () => {
     const tenantId = await tenantOnly();
-    const controller = new TestChatController(
-      service(
-        new ScriptedLlmProvider(
-          Array.from({ length: 24 }, () =>
-            extraction({}, 'greeting', 'en', 'Latn'),
+    const controller = tenantScoped(
+      new TestChatController(
+        service(
+          new ScriptedLlmProvider(
+            Array.from({ length: 24 }, () =>
+              extraction({}, 'greeting', 'en', 'Latn'),
+            ),
           ),
         ),
+        database,
       ),
-      database,
     );
     const person = randomUUID();
     const body = {
@@ -259,9 +269,8 @@ describe('assistant test chat API (ADR 065)', () => {
       where: { id: tenantId },
       data: { supportedLocales: [] },
     });
-    const controller = new TestChatController(
-      service(new ScriptedLlmProvider([])),
-      database,
+    const controller = tenantScoped(
+      new TestChatController(service(new ScriptedLlmProvider([])), database),
     );
     expect(
       await call(() =>

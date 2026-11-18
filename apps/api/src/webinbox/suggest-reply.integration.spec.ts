@@ -12,9 +12,12 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { AgentConversationService } from '../agent/agent-conversation.service.js';
 import { SuggestReplyController } from './suggest-reply.controller.js';
 import { LlmBudgetLedger } from '../agent/llm-budget-ledger.js';
@@ -25,10 +28,11 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Suggest reply tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const database = prisma as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner (`prisma`), the code under test on the
+// app role (`database`) under the principal's tenant.
+const prisma = ownerClient();
+const app = appClient();
+const database = app as unknown as PrismaService;
 
 const settings: Partial<AppEnvironment> = {
   LLM_PROVIDER: 'mock',
@@ -74,7 +78,7 @@ function service(
 }
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
 
 async function tenantOnly(): Promise<string> {
@@ -205,9 +209,11 @@ describe('assistant suggestion for an operator (ADR 066)', () => {
         ['BOT', 'A later message that is not the customer'],
       ],
     });
-    const controller = new SuggestReplyController(
-      service(new ScriptedLlmProvider(answerSteps())),
-      database,
+    const controller = tenantScoped(
+      new SuggestReplyController(
+        service(new ScriptedLlmProvider(answerSteps())),
+        database,
+      ),
     );
     const before = await counts(tenantId);
     const out = await controller.suggest(
@@ -232,13 +238,15 @@ describe('assistant suggestion for an operator (ADR 066)', () => {
     const convo = await conversationOf(tenantId, {
       messages: [['CUSTOMER', 'Hello, I want to talk to a person']],
     });
-    const controller = new SuggestReplyController(
-      service(
-        new ScriptedLlmProvider([
-          extraction({}, 'human_request', 'en', 'Latn'),
-        ]),
+    const controller = tenantScoped(
+      new SuggestReplyController(
+        service(
+          new ScriptedLlmProvider([
+            extraction({}, 'human_request', 'en', 'Latn'),
+          ]),
+        ),
+        database,
       ),
-      database,
     );
     const out = await controller.suggest(
       as(tenantId, 'ADMIN'),
@@ -262,7 +270,9 @@ describe('assistant suggestion for an operator (ADR 066)', () => {
       messages: [['BOT', 'Welcome']],
     });
     const provider = new ScriptedLlmProvider(answerSteps());
-    const controller = new SuggestReplyController(service(provider), database);
+    const controller = tenantScoped(
+      new SuggestReplyController(service(provider), database),
+    );
     expect(
       (
         await call(() =>
@@ -294,15 +304,17 @@ describe('assistant suggestion for an operator (ADR 066)', () => {
     const convo = await conversationOf(tenantId, {
       messages: [['CUSTOMER', 'Hello']],
     });
-    const controller = new SuggestReplyController(
-      service(
-        new ScriptedLlmProvider(
-          Array.from({ length: 24 }, () =>
-            extraction({}, 'greeting', 'en', 'Latn'),
+    const controller = tenantScoped(
+      new SuggestReplyController(
+        service(
+          new ScriptedLlmProvider(
+            Array.from({ length: 24 }, () =>
+              extraction({}, 'greeting', 'en', 'Latn'),
+            ),
           ),
         ),
+        database,
       ),
-      database,
     );
     const person = randomUUID();
     let refused = 0;
