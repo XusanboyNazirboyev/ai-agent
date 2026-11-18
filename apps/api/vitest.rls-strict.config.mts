@@ -47,6 +47,7 @@ const STRICT_SPECS = [
   'src/channels/telegram/telegram.integration.spec.ts',
   'src/channels/facebook/facebook-flow.integration.spec.ts',
   'src/channels/instagram/instagram-comment-flow.integration.spec.ts',
+  'src/leads/customer-lead.integration.spec.ts',
 ];
 
 export default defineConfig({

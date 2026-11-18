@@ -6,8 +6,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
 import { TelegramWebhookService } from '../channels/telegram/telegram-webhook.service.js';
 import { normalizeTelegramUpdate } from '../channels/telegram/telegram-normalizer.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import {
   LEAD_BACKFILL_ACTION,
@@ -22,13 +26,15 @@ loadEnv({ path: resolve(process.cwd(), '../../.env') });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Lead integration tests require agentcore_test');
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const db = prisma as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner (`prisma`); the code under
+// test on the app role (`db`): the update accepted under its account's
+// tenant, the backfill run per tenant as its scan runs it.
+const prisma = ownerClient();
+const app = appClient();
+const db = app as unknown as PrismaService;
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
 
 function config(
@@ -132,10 +138,17 @@ const leadOf = (
 describe('every customer who writes is a lead', () => {
   it('a Telegram message makes a cold lead in the first stage even with the assistant off; /start does not', async () => {
     const { tenantId, accountId } = await tenant();
-    const service = new TelegramWebhookService(
+    const webhook = new TelegramWebhookService(
       db,
       config({ TELEGRAM_RATE_LIMIT_PER_MINUTE: 120 }),
     );
+    // As the webhook route: the update runs under its account's tenant.
+    const service = {
+      accept: (
+        ...args: Parameters<TelegramWebhookService['accept']>
+      ): ReturnType<TelegramWebhookService['accept']> =>
+        runWithTenant(tenantId, () => webhook.accept(...args)),
+    };
     const chat = Math.floor(Math.random() * 1e9) + 1_000;
     const opened = text(
       chat,
@@ -194,7 +207,9 @@ describe('every customer who writes is a lead', () => {
       },
     });
 
-    const scan = new LeadBackfillScan(db, new LeadService(db));
+    const scan = tenantScoped(new LeadBackfillScan(db, new LeadService(db)), {
+      tenantArg: 0,
+    });
     expect(await scan.backfillTenant(tenantId)).toBe(1);
     expect(await leadOf(tenantId, wrote)).toMatchObject({ score: 'COLD' });
     expect(await leadOf(tenantId, openedOnly)).toBeNull();
