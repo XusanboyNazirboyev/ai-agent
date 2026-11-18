@@ -2,9 +2,14 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { HandoverService } from './handover.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
@@ -12,18 +17,26 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Handover integration tests require agentcore_test');
 }
 
+/** Fixtures and checks; RLS plan S8b: never the code under test. */
+const db = ownerClient();
 /** Two clients with their own pools stand in for two API workers. */
-const clients = [0, 1].map(
-  () =>
-    new PrismaClient({ adapter: createPostgresAdapter(process.env, 'TEST_') }),
+const apps = [appClient(), appClient()];
+const workerA = tenantScoped(
+  new HandoverService(apps[0] as unknown as PrismaService),
 );
-const [db, other] = clients;
-const workerA = new HandoverService(db as unknown as PrismaService);
-const workerB = new HandoverService(other as unknown as PrismaService);
+const workerB = tenantScoped(
+  new HandoverService(apps[1] as unknown as PrismaService),
+);
 
 afterAll(async () => {
-  await Promise.all(clients.map((client) => client.$disconnect()));
+  await Promise.all([db, ...apps].map((client) => client.$disconnect()));
 });
+
+/** A transaction on worker A's client under the tenant, as a request runs it. */
+const inTenantTx = <T>(
+  tenantId: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> => runWithTenant(tenantId, () => apps[0].$transaction(fn));
 
 async function fixture(
   state: 'BOT_ACTIVE' | 'WAITING_OPERATOR' = 'WAITING_OPERATOR',
@@ -372,7 +385,7 @@ describe('operator replies, notes, return and close', () => {
         idempotencyKey: key(),
       }),
     ).toEqual({ status: 'REJECTED', code: 'ILLEGAL_STATE' });
-    const reopened = await db.$transaction((tx) =>
+    const reopened = await inTenantTx(f.tenantId, (tx) =>
       workerA.reopenIfClosed(tx, f.tenantId, f.conversationId),
     );
     expect(reopened).toBe(true);
@@ -384,7 +397,7 @@ describe('operator replies, notes, return and close', () => {
       ).state,
     ).toBe('BOT_ACTIVE');
     expect(
-      await db.$transaction((tx) =>
+      await inTenantTx(f.tenantId, (tx) =>
         workerA.reopenIfClosed(tx, f.tenantId, f.conversationId),
       ),
     ).toBe(false);
@@ -425,7 +438,7 @@ describe('opening a handover from the agent', () => {
     const f = await fixture('BOT_ACTIVE');
     await db.handover.deleteMany({ where: { id: f.handoverId } }); // fixture handover not needed
     const now = new Date('2026-10-24T10:00:00Z');
-    const id = await db.$transaction((tx) =>
+    const id = await inTenantTx(f.tenantId, (tx) =>
       workerA.openHandover(tx, {
         tenantId: f.tenantId,
         conversationId: f.conversationId,
@@ -451,7 +464,7 @@ describe('opening a handover from the agent', () => {
       }),
     ).toMatchObject({ state: 'WAITING_OPERATOR', version: 2 });
     // A stale version (the conversation moved on) creates nothing.
-    const stale = await db.$transaction((tx) =>
+    const stale = await inTenantTx(f.tenantId, (tx) =>
       workerA.openHandover(tx, {
         tenantId: f.tenantId,
         conversationId: f.conversationId,

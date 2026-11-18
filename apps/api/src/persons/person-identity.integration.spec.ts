@@ -6,10 +6,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { normalizeTelegramUpdate } from '../channels/telegram/telegram-normalizer.js';
 import { TelegramWebhookService } from '../channels/telegram/telegram-webhook.service.js';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { backfillPersons } from '../ops/backfill-persons.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import { appClient, ownerClient } from '../persistence/testing/test-clients.js';
 import { upsertContactWithPerson } from './ensure-contact.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env') });
@@ -18,12 +19,15 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Person integration tests require agentcore_test');
 }
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+/** Fixtures, checks and the ops backfill (a CLI on the owner connection). */
+const db = ownerClient();
+/** The code under test (RLS plan S8b: strict as the app role on that run). */
+const app = appClient();
 
 beforeAll(async () => db.$connect());
-afterAll(async () => db.$disconnect());
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
+});
 
 async function tenantWithAccount(): Promise<{
   tenantId: string;
@@ -77,7 +81,7 @@ describe('Person above Contact (ADR 052, slice A)', () => {
   it('Telegram intake creates one person for a new user and none for a repeat', async () => {
     const { tenantId, channelAccountId } = await tenantWithAccount();
     const service = new TelegramWebhookService(
-      db as unknown as PrismaService,
+      app as unknown as PrismaService,
       {
         get: (key: string) =>
           ({
@@ -86,10 +90,17 @@ describe('Person above Contact (ADR 052, slice A)', () => {
             TELEGRAM_RATE_LIMIT_PER_MINUTE: 120,
           })[key],
       } as unknown as ConfigService<AppEnvironment, true>,
+      undefined,
+      { db } as unknown as PrivilegedDatabase,
     );
 
-    await service.accept(channelAccountId, telegramText(42, 'hello'));
-    await service.accept(channelAccountId, telegramText(42, 'hello again'));
+    // As the controller: the tenant comes from the privileged route lookup.
+    const routed = await service.routeTenant(channelAccountId);
+    expect(routed).toBe(tenantId);
+    for (const text of ['hello', 'hello again'])
+      await runWithTenant(tenantId, () =>
+        service.accept(channelAccountId, telegramText(42, text)),
+      );
 
     const persons = await db.person.findMany({ where: { tenantId } });
     expect(persons).toHaveLength(1);
@@ -103,13 +114,15 @@ describe('Person above Contact (ADR 052, slice A)', () => {
     const { tenantId, channelAccountId } = await tenantWithAccount();
     const results = await Promise.all(
       Array.from({ length: 6 }, () =>
-        db.$transaction((tx) =>
-          upsertContactWithPerson(tx, {
-            tenantId,
-            channelAccountId,
-            providerUserId: 'same-user',
-            name: 'Race',
-          }),
+        runWithTenant(tenantId, () =>
+          app.$transaction((tx) =>
+            upsertContactWithPerson(tx, {
+              tenantId,
+              channelAccountId,
+              providerUserId: 'same-user',
+              name: 'Race',
+            }),
+          ),
         ),
       ),
     );
@@ -126,12 +139,14 @@ describe('Person above Contact (ADR 052, slice A)', () => {
     await db.contact.create({
       data: { tenantId, channelAccountId, providerUserId: 'legacy' },
     });
-    await db.$transaction((tx) =>
-      upsertContactWithPerson(tx, {
-        tenantId,
-        channelAccountId,
-        providerUserId: 'legacy',
-      }),
+    await runWithTenant(tenantId, () =>
+      app.$transaction((tx) =>
+        upsertContactWithPerson(tx, {
+          tenantId,
+          channelAccountId,
+          providerUserId: 'legacy',
+        }),
+      ),
     );
     expect(await db.person.count({ where: { tenantId } })).toBe(1);
   });

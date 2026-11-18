@@ -9,6 +9,14 @@ export interface RlsAppRole {
   readonly password: string;
 }
 
+/** The role's password, derived from the owner's test password. */
+export function rlsAppRolePassword(): string {
+  return createHash('sha256')
+    .update(`rls-app-role:${process.env.TEST_POSTGRES_PASSWORD ?? ''}`)
+    .digest('hex')
+    .slice(0, 32);
+}
+
 /**
  * Creates or refreshes the NOBYPASSRLS login role with DML rights on the given
  * schemas, when the connected user may (a superuser: the CI database user).
@@ -25,10 +33,7 @@ export async function ensureRlsAppRole(
   const [me] = await owner.$queryRaw<{ superuser: boolean }[]>`
     SELECT rolsuper AS superuser FROM pg_roles WHERE rolname = current_user`;
   if (!me?.superuser) return null;
-  const password = createHash('sha256')
-    .update(`rls-app-role:${process.env.TEST_POSTGRES_PASSWORD ?? ''}`)
-    .digest('hex')
-    .slice(0, 32);
+  const password = rlsAppRolePassword();
   await owner.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${RLS_APP_ROLE}))`;
     const [exists] = await tx.$queryRaw<{ n: number }[]>`

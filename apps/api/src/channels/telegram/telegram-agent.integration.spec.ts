@@ -5,7 +5,6 @@ import {
 } from '../../core/speech/speech-to-text.js';
 import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 import type { ConfigService } from '@nestjs/config';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -16,10 +15,6 @@ import { LlmBudgetLedger } from '../../agent/llm-budget-ledger.js';
 import { LlmUsageStore } from '../../agent/llm-usage.store.js';
 import { extraction } from '../../agent/testing/agent-harness.js';
 import type { AppEnvironment } from '../../config/environment.js';
-import {
-  parsePostgresEnvironment,
-  postgresPoolOptions,
-} from '../../config/postgres-config.js';
 import { createConnectorRegistry } from '../../connectors/connectors.module.js';
 import { TenantConnectorLoader } from '../../connectors/sync/tenant-connector-loader.js';
 import {
@@ -36,10 +31,15 @@ import {
   type ScriptStep,
 } from '../../core/llm/scripted-llm-provider.js';
 import { retireForeignBacklog } from './testing/outbox.js';
-import { PrismaClient } from '../../generated/prisma/client.js';
 import { UZ_LATN } from '../../locales/locale-packs.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import { normalizeTelegramUpdate } from './telegram-normalizer.js';
 import {
@@ -55,9 +55,8 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Agent pipeline integration tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+/** Fixtures and checks (RLS plan S8b: never the code under test). */
+const prisma = ownerClient();
 /**
  * The pipeline under test runs on a one-connection pool with its own
  * application_name: if any step held a connection or transaction during the
@@ -65,13 +64,11 @@ const prisma = new PrismaClient({
  * pg_stat_activity would show the session idle in transaction.
  */
 const APP_NAME = `agentcore-it-${process.pid}`;
-const limited = new PrismaClient({
-  adapter: new PrismaPg({
-    ...postgresPoolOptions(parsePostgresEnvironment(process.env, 'TEST_')),
-    max: 1,
-    application_name: APP_NAME,
-  }),
-});
+const limited = appClient({ max: 1, application_name: APP_NAME });
+/** Webhook intake and scans: the code under test on its own pool. */
+const intake = appClient();
+/** What PersistenceModule provides next to PrismaService (owner pool). */
+const privileged = { db: prisma } as unknown as PrivilegedDatabase;
 
 const DEV: AgentModePolicy = {
   nodeEnv: 'development',
@@ -248,17 +245,22 @@ async function fixture(options: {
     tenantId: tenant.id,
     channelAccountId: account.id,
     webhook: new TelegramWebhookService(
-      prisma as unknown as PrismaService,
+      intake as unknown as PrismaService,
       config({
         TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
         TELEGRAM_WEBHOOK_SECRET: 'integration-secret',
         TELEGRAM_RATE_LIMIT_PER_MINUTE: 1_000,
       }),
+      undefined,
+      privileged,
     ),
-    processor: new TelegramProcessor(
-      database,
-      sender as unknown as TelegramSender,
-      pipeline,
+    // As the queue job (RLS plan S6): each event runs under its tenant.
+    processor: tenantScoped(
+      new TelegramProcessor(
+        database,
+        sender as unknown as TelegramSender,
+        pipeline,
+      ),
     ),
     pipeline,
     sender,
@@ -284,9 +286,13 @@ async function receive(
     },
   });
   if (normalized.kind !== 'text') throw new Error('expected text');
-  expect(await f.webhook.accept(f.channelAccountId, normalized)).toBe(
-    'accepted',
-  );
+  // As the controller: routed on the privileged pool, accepted under it.
+  expect(await f.webhook.routeTenant(f.channelAccountId)).toBe(f.tenantId);
+  expect(
+    await runWithTenant(f.tenantId, () =>
+      f.webhook.accept(f.channelAccountId, normalized),
+    ),
+  ).toBe('accepted');
   const outbox = await prisma.outboxEvent.findFirstOrThrow({
     where: {
       tenantId: f.tenantId,
@@ -318,10 +324,14 @@ async function outbound(f: Fixture): Promise<number> {
 }
 
 beforeAll(async () => {
-  await Promise.all([prisma.$connect(), limited.$connect()]);
+  await Promise.all([prisma.$connect(), limited.$connect(), intake.$connect()]);
 });
 afterAll(async () => {
-  await Promise.all([prisma.$disconnect(), limited.$disconnect()]);
+  await Promise.all([
+    prisma.$disconnect(),
+    limited.$disconnect(),
+    intake.$disconnect(),
+  ]);
 });
 
 describe('agent mode OFF', () => {
@@ -658,9 +668,13 @@ describe('agent mode LIVE (local development policy)', () => {
     await f.processor.process(event);
     expect(await outbound(f)).toBe(0);
 
-    const idle = new OperatorIdleReturnService(
-      prisma as unknown as PrismaService,
-      config({}),
+    // The scoped scan runs under its caller's tenant (RLS plan S7).
+    const idle = tenantScoped(
+      new OperatorIdleReturnService(
+        intake as unknown as PrismaService,
+        config({}),
+        privileged,
+      ),
     );
     const later = new Date(Date.now() + 3 * 60_000);
     expect(await idle.scan(later, 2, { tenantId: f.tenantId })).toBe(1);
@@ -728,7 +742,10 @@ describe('claim -> compute -> commit concurrency', () => {
     await waiting;
     // One-connection pool: this would block if compute held the connection.
     const probe = await Promise.race([
-      limited.$queryRaw<Array<{ ok: number }>>`SELECT 1::int AS ok`,
+      runWithTenant(
+        f.tenantId,
+        () => limited.$queryRaw<Array<{ ok: number }>>`SELECT 1::int AS ok`,
+      ),
       new Promise<'blocked'>((resolve) =>
         setTimeout(() => resolve('blocked'), 3_000),
       ),
@@ -972,6 +989,7 @@ describe('BullMQ end to end (shadow mode, mock model)', () => {
       config({ REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379' }),
       limited as unknown as PrismaService,
       f.processor,
+      privileged,
     );
     runtime.onModuleInit();
     try {
@@ -1086,9 +1104,11 @@ describe('voice notes (ADR 042)', () => {
       },
     });
     if (normalized.kind !== 'text') throw new Error('expected text');
-    expect(await f.webhook.accept(f.channelAccountId, normalized)).toBe(
-      'accepted',
-    );
+    expect(
+      await runWithTenant(f.tenantId, () =>
+        f.webhook.accept(f.channelAccountId, normalized),
+      ),
+    ).toBe('accepted');
     const stored = await prisma.message.findFirstOrThrow({
       where: { tenantId: f.tenantId, providerMessageId: String(updateId) },
     });
@@ -1111,26 +1131,28 @@ describe('voice notes (ADR 042)', () => {
       downloadFile: vi.fn(async () => download),
     };
     const voice = new VoiceTranscriptionService(
-      prisma as unknown as PrismaService,
+      intake as unknown as PrismaService,
       config(metering?.env ?? {}),
       sender as unknown as TelegramSender,
       stt,
       metering
-        ? new LlmBudgetLedger(prisma as unknown as PrismaService)
+        ? new LlmBudgetLedger(intake as unknown as PrismaService)
         : undefined,
     );
-    const processor = new TelegramProcessor(
-      prisma as unknown as PrismaService,
-      sender as unknown as TelegramSender,
-      f.pipeline,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      voice,
+    const processor = tenantScoped(
+      new TelegramProcessor(
+        intake as unknown as PrismaService,
+        sender as unknown as TelegramSender,
+        f.pipeline,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        voice,
+      ),
     );
     await processor.process({
       outboxId: outbox.id,
