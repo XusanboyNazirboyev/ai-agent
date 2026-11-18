@@ -13,9 +13,12 @@ import {
   mockConnectorRegistration,
 } from '../connectors/registry/registrations.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { PrismaConnectorSecretStore } from '../secrets/connector-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { ConnectorsController } from './connectors.controller.js';
@@ -24,12 +27,13 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Connector API tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the tenant its call names (the principal's, a row's, a secret's).
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -67,12 +71,14 @@ function setup(options: { withKey?: boolean } = {}): {
   );
   return {
     portal,
-    store,
-    controller: new ConnectorsController(
-      prisma,
-      store,
-      portal.transport,
-      capabilityRegistry(),
+    store: tenantScoped(store),
+    controller: tenantScoped(
+      new ConnectorsController(
+        prisma,
+        store,
+        portal.transport,
+        capabilityRegistry(),
+      ),
     ),
   };
 }
@@ -227,7 +233,9 @@ describe('connecting Bitrix24 from the web (ADR 032)', () => {
         });
       },
     });
-    const loader = new TenantConnectorLoader(prisma, registry, store);
+    const loader = tenantScoped(
+      new TenantConnectorLoader(prisma, registry, store),
+    );
     const row = await db.tenantConnector.findUniqueOrThrow({ where: { id } });
     const connector = await loader.create(row);
     expect(connector.capabilities.createLead).toBe(true);
@@ -272,12 +280,14 @@ describe('connecting Bitrix24 from the web (ADR 032)', () => {
       controller.connectBitrix24(t.request, { webhookUrl: URL_OF(CODE()) }),
     ).rejects.toMatchObject({ response: { code: 'CRM_REJECTED' } });
 
-    const down = new ConnectorsController(prisma, setup().store, () =>
-      Promise.reject(
-        new ConnectorUnavailableError({
-          message: 'unreachable',
-          code: 'CONNECTOR_UNREACHABLE',
-        }),
+    const down = tenantScoped(
+      new ConnectorsController(prisma, setup().store, () =>
+        Promise.reject(
+          new ConnectorUnavailableError({
+            message: 'unreachable',
+            code: 'CONNECTOR_UNREACHABLE',
+          }),
+        ),
       ),
     );
     await expect(
