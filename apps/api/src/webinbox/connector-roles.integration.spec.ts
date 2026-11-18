@@ -14,21 +14,26 @@ import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { createConnectorRegistry } from '../connectors/connectors.module.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { ConnectorRolesController } from './connector-roles.controller.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Connector role tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner, the code under test on the app role
+// under the principal's tenant (or the agent turn's).
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -38,7 +43,11 @@ const registry = createConnectorRegistry({
 });
 const loader = new TenantConnectorLoader(prisma, registry);
 const selector = new ConnectorSelector(prisma, loader);
-const controller = new ConnectorRolesController(prisma, selector, loader);
+const controller = tenantScoped(
+  new ConnectorRolesController(prisma, selector, loader),
+);
+/** Direct selections, under the tenant they name first. */
+const scopedSelector = tenantScoped(selector, { tenantArg: 0 });
 
 type Role = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 
@@ -353,13 +362,13 @@ describe('selection against the database (ADR 059)', () => {
       role: 'CATALOG',
       tenantConnectorId: t.newer.id,
     });
-    const picked = await selector.select(t.tenantId, 'CATALOG');
+    const picked = await scopedSelector.select(t.tenantId, 'CATALOG');
     expect(picked?.connectorKey).toBe('generic-rest');
     await db.tenantConnector.update({
       where: { id: t.newer.id },
       data: { status: 'DISABLED' },
     });
-    expect(await selector.select(t.tenantId, 'CATALOG')).toBeUndefined();
+    expect(await scopedSelector.select(t.tenantId, 'CATALOG')).toBeUndefined();
   });
 
   it('the agent catalog search uses the bound connector although an older one exists', async () => {
@@ -392,8 +401,11 @@ describe('selection against the database (ADR 059)', () => {
       }
     ).connectorFor.bind(agent);
     expect(
-      (await connectorFor(t.tenantId, { tools: ['search_catalog'] }))
-        ?.connectorKey,
+      (
+        await runWithTenant(t.tenantId, () =>
+          connectorFor(t.tenantId, { tools: ['search_catalog'] }),
+        )
+      )?.connectorKey,
     ).toBe('generic-rest');
   });
 });
@@ -419,7 +431,15 @@ describe('backfill (ADR 059 decision 4)', () => {
       },
       new Date('2026-02-01T00:00:00Z'),
     );
-    const options = { prisma, loader, tenantIds: [t.tenantId] } as const;
+    // An ops script: it runs as the owner, outside any tenant.
+    const options = {
+      prisma: db as unknown as PrismaService,
+      loader: new TenantConnectorLoader(
+        db as unknown as PrismaService,
+        registry,
+      ),
+      tenantIds: [t.tenantId],
+    } as const;
 
     const dry = await backfillConnectorRoles({ ...options, apply: false });
     expect(
