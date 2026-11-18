@@ -15,7 +15,13 @@ export type OperatorAlert =
       readonly percent: number;
       readonly month: string;
     }
-  | { readonly kind: 'CRM_SYNC_FAILURES'; readonly count: number };
+  | { readonly kind: 'CRM_SYNC_FAILURES'; readonly count: number }
+  /** ADR 047 amendment "reminder": queued by the subscription scan. */
+  | {
+      readonly kind: 'SUBSCRIPTION_ENDING';
+      readonly periodEnd: string;
+      readonly daysLeft: number;
+    };
 
 const HOUR_MS = 3_600_000;
 

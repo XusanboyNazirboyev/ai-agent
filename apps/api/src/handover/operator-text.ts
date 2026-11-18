@@ -35,6 +35,7 @@ interface Strings {
   digestWaiting: (count: number) => string;
   alertBudget: (percent: number, month: string) => string;
   alertCrmFailures: (count: number) => string;
+  alertSubscriptionEnding: (date: string, daysLeft: number) => string;
 }
 
 const EN: Strings = {
@@ -69,6 +70,8 @@ const EN: Strings = {
     `Alert: ${percent}% of the monthly AI budget is used (${month})`,
   alertCrmFailures: (count) =>
     `Alert: ${count} leads could not be sent to the CRM in the last hour`,
+  alertSubscriptionEnding: (date, daysLeft) =>
+    `Reminder: the subscription ends on ${date} (${daysLeft === 1 ? 'in 1 day' : `in ${daysLeft} days`}). The owner or an admin should renew it so the assistant keeps answering.`,
 };
 
 const RU: Strings = {
@@ -103,6 +106,8 @@ const RU: Strings = {
     `Внимание: использовано ${percent}% месячного бюджета ИИ (${month})`,
   alertCrmFailures: (count) =>
     `Внимание: ${count} лидов не удалось передать в CRM за последний час`,
+  alertSubscriptionEnding: (date, daysLeft) =>
+    `Напоминание: подписка заканчивается ${date} (осталось дней: ${daysLeft}). Владельцу или администратору нужно её продлить, чтобы ассистент продолжал отвечать.`,
 };
 
 const UZ: Strings = {
@@ -137,6 +142,8 @@ const UZ: Strings = {
     `Diqqat: oylik AI byudjetining ${percent}% ishlatildi (${month})`,
   alertCrmFailures: (count) =>
     `Diqqat: oxirgi bir soatda ${count} ta lid CRMga yuborilmadi`,
+  alertSubscriptionEnding: (date, daysLeft) =>
+    `Eslatma: obuna ${date} kuni tugaydi (${daysLeft} kun qoldi). Yordamchi javob berishda davom etishi uchun egasi yoki administrator uni uzaytirsin.`,
 };
 
 export function operatorStrings(locale: string): Strings {

@@ -333,7 +333,7 @@ export class HandoverNotificationService {
       select: {
         id: true,
         operatorChatId: true,
-        tenant: { select: { defaultLocale: true } },
+        tenant: { select: { defaultLocale: true, timezone: true } },
       },
     });
     if (!account?.operatorChatId) return;
@@ -354,6 +354,14 @@ export class HandoverNotificationService {
     } else if (kind === 'CRM_SYNC_FAILURES') {
       const count = number('count');
       if (count !== undefined) text = t.alertCrmFailures(count);
+    } else if (kind === 'SUBSCRIPTION_ENDING') {
+      const end = new Date(field(payload, 'periodEnd') ?? '');
+      const daysLeft = number('daysLeft');
+      if (!Number.isNaN(end.getTime()) && daysLeft !== undefined)
+        text = t.alertSubscriptionEnding(
+          localDate(end, account.tenant.timezone),
+          daysLeft,
+        );
     }
     if (!text) return;
     await this.notifier.postCard(
@@ -470,5 +478,25 @@ export class HandoverNotificationService {
         },
       });
     });
+  }
+}
+
+/** `DD.MM.YYYY` in the tenant's time zone (UTC when the zone is unknown). */
+function localDate(instant: Date, timeZone: string): string {
+  const format = (zone: string): string => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).formatToParts(instant);
+    const part = (type: string): string =>
+      parts.find((entry) => entry.type === type)?.value ?? '';
+    return `${part('day')}.${part('month')}.${part('year')}`;
+  };
+  try {
+    return format(timeZone);
+  } catch {
+    return format('UTC');
   }
 }

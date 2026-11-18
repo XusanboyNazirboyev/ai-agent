@@ -13,6 +13,7 @@ import type {
 } from '../handover/operator-notifier.js';
 import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { AlertsService, OPERATOR_ALERT_EVENT } from './alerts.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
@@ -266,6 +267,94 @@ describe('operator alerts (fixed clock)', () => {
         target: { operatorChatId: '-100777', channelAccountId: ru.accountId },
         text: 'Внимание: 7 лидов не удалось передать в CRM за последний час',
       },
+    ]);
+  });
+});
+
+describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
+  // Long before every other fixture's period end, so the same scan's
+  // past-due step touches no row another test left in the shared database.
+  const R_NOW = new Date('2001-02-10T12:00:00.000Z');
+
+  async function subscribed(f: Fixture, end: Date): Promise<string> {
+    const plan = await db.subscriptionPlan.create({
+      data: {
+        code: `al-${randomUUID()}`,
+        name: 'Alert plan',
+        priceMinor: 100n,
+        periodDays: 30,
+      },
+    });
+    const row = await db.tenantSubscription.create({
+      data: {
+        tenantId: f.tenantId,
+        planId: plan.id,
+        status: 'ACTIVE',
+        currentPeriodStart: new Date(end.getTime() - 30 * 86_400_000),
+        currentPeriodEnd: end,
+      },
+    });
+    return row.id;
+  }
+
+  it('queues one reminder per stage for tenants with an operator group', async () => {
+    const withGroup = await tenant();
+    const noGroup = await tenant({ withChat: false });
+    const end = new Date(R_NOW.getTime() + 3 * 86_400_000);
+    const id = await subscribed(withGroup, end);
+    await subscribed(noGroup, end);
+    const scan = new SubscriptionScanService(prisma, {
+      get: () => 3,
+    } as unknown as ConfigService<AppEnvironment, true>);
+
+    await scan.scanDue(R_NOW);
+    await scan.scanDue(R_NOW);
+    const events = await db.outboxEvent.findMany({
+      where: {
+        tenantId: { in: [withGroup.tenantId, noGroup.tenantId] },
+        type: OPERATOR_ALERT_EVENT,
+      },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      tenantId: withGroup.tenantId,
+      idempotencyKey: `alert:subscription-ending:${id}:${end.toISOString()}:5`,
+      payload: {
+        kind: 'SUBSCRIPTION_ENDING',
+        periodEnd: end.toISOString(),
+        daysLeft: 3,
+      },
+    });
+  });
+
+  it('is delivered with the date in the tenant time zone', async () => {
+    const posted: string[] = [];
+    const notifier = {
+      kind: 'fake',
+      postCard: (_target: NotifierTarget, card: { text: string }) => {
+        posted.push(card.text);
+        return Promise.resolve({ messageId: '1' });
+      },
+    } as unknown as OperatorNotifier;
+    const service = new HandoverNotificationService(prisma, notifier);
+    const uz = await tenant({ locale: 'uz-Latn' });
+    await db.tenant.update({
+      where: { id: uz.tenantId },
+      data: { timezone: 'Asia/Tashkent' },
+    });
+    await service.process({
+      outboxId: randomUUID(),
+      tenantId: uz.tenantId,
+      type: OPERATOR_ALERT_EVENT,
+      // 21:00 UTC is already the next day in Tashkent (UTC+5).
+      payload: {
+        kind: 'SUBSCRIPTION_ENDING',
+        periodEnd: '2031-03-20T21:00:00.000Z',
+        daysLeft: 1,
+      },
+    } as never);
+    expect(posted).toEqual([
+      'Eslatma: obuna 21.03.2031 kuni tugaydi (1 kun qoldi). Yordamchi javob berishda davom etishi uchun egasi yoki administrator uni uzaytirsin.',
     ]);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { OPERATOR_ALERT_EVENT } from '../observability/alerts.service.js';
 import {
   EXPIRED_EVENT,
   PAST_DUE_EVENT,
@@ -14,6 +15,15 @@ interface Row {
   status: string;
   currentPeriodEnd: Date;
   graceUntil: Date | null;
+  /** Active tenant with an operator group (the reminder's relation filter). */
+  operatorGroup?: boolean;
+}
+
+interface Outbox {
+  tenantId: string;
+  type: string;
+  idempotencyKey: string;
+  payload: Record<string, unknown>;
 }
 
 /** Just enough of Prisma for the scan, in memory. */
@@ -21,7 +31,9 @@ function fakeDb(rows: Row[]): {
   db: PrismaService;
   audits: { action: string; entityId: string }[];
   inbox: { tenantId: string; type: string }[];
+  outbox: Outbox[];
 } {
+  const outbox: Outbox[] = [];
   const audits: { action: string; entityId: string }[] = [];
   const inbox: { tenantId: string; type: string }[] = [];
   const matches = (row: Row, where: Record<string, unknown>): boolean => {
@@ -30,8 +42,10 @@ function fakeDb(rows: Row[]): {
     if (status && typeof status === 'object' && !status.in.includes(row.status))
       return false;
     if (where.id && row.id !== where.id) return false;
-    const end = where.currentPeriodEnd as { lte: Date } | undefined;
+    const end = where.currentPeriodEnd as { lte: Date; gt?: Date } | undefined;
     if (end && !(row.currentPeriodEnd <= end.lte)) return false;
+    if (end?.gt && !(row.currentPeriodEnd > end.gt)) return false;
+    if (where.tenant && row.operatorGroup !== true) return false;
     const grace = where.graceUntil as { lte: Date } | undefined;
     if (grace && !(row.graceUntil && row.graceUntil <= grace.lte)) return false;
     return true;
@@ -70,10 +84,26 @@ function fakeDb(rows: Row[]): {
         data: { tenantId: string; type: string };
       }): Promise<void> => void inbox.push(data),
     },
+    outboxEvent: {
+      createMany: async ({
+        data,
+      }: {
+        data: Outbox[];
+      }): Promise<{ count: number }> => {
+        let count = 0;
+        for (const event of data) {
+          if (outbox.some((o) => o.idempotencyKey === event.idempotencyKey))
+            continue;
+          outbox.push(event);
+          count += 1;
+        }
+        return { count };
+      },
+    },
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
       fn(client),
   };
-  return { db: client as unknown as PrismaService, audits, inbox };
+  return { db: client as unknown as PrismaService, audits, inbox, outbox };
 }
 
 const config = (grace?: number): never =>
@@ -155,5 +185,73 @@ describe('subscription scan (ADR 047 §3, fake clock)', () => {
     const { db } = fakeDb(rows);
     const scan = new SubscriptionScanService(db, config(3));
     expect(await scan.scanDue(new Date(end.getTime() + 30 * DAY))).toBe(0);
+  });
+});
+
+describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
+  const end = new Date('2026-11-20T09:00:00Z');
+  const row = (extra: Partial<Row> = {}): Row => ({
+    id: 's1',
+    tenantId: 't1',
+    status: 'ACTIVE',
+    currentPeriodEnd: end,
+    graceUntil: null,
+    operatorGroup: true,
+    ...extra,
+  });
+  const at = (daysBefore: number): Date =>
+    new Date(end.getTime() - daysBefore * DAY);
+
+  it('reminds once five days before and once on the last day', async () => {
+    const rows = [row()];
+    const { db, outbox } = fakeDb(rows);
+    const scan = new SubscriptionScanService(db, config(3));
+
+    expect(await scan.scanDue(at(6))).toBe(0);
+    expect(await scan.scanDue(at(5))).toBe(1);
+    expect(await scan.scanDue(at(4.5))).toBe(0);
+    expect(await scan.scanDue(at(3))).toBe(0);
+    expect(await scan.scanDue(at(1))).toBe(1);
+    expect(await scan.scanDue(at(0.2))).toBe(0);
+    expect(outbox).toHaveLength(2);
+    expect(outbox[0]).toMatchObject({
+      tenantId: 't1',
+      type: OPERATOR_ALERT_EVENT,
+      payload: {
+        kind: 'SUBSCRIPTION_ENDING',
+        periodEnd: end.toISOString(),
+        daysLeft: 5,
+      },
+    });
+    expect(outbox[1]?.payload).toMatchObject({ daysLeft: 1 });
+  });
+
+  it('a scan first run inside the window sends only the latest stage', async () => {
+    const { db, outbox } = fakeDb([row()]);
+    const scan = new SubscriptionScanService(db, config(3));
+    expect(await scan.scanDue(at(0.5))).toBe(1);
+    expect(await scan.scanDue(at(0.4))).toBe(0);
+    expect(outbox.map((o) => o.payload.daysLeft)).toEqual([1]);
+  });
+
+  it('a renewed period is reminded again', async () => {
+    const rows = [row()];
+    const { db, outbox } = fakeDb(rows);
+    const scan = new SubscriptionScanService(db, config(3));
+    await scan.scanDue(at(5));
+    rows[0]!.currentPeriodEnd = new Date(end.getTime() + 30 * DAY);
+    expect(await scan.scanDue(new Date(end.getTime() + 25 * DAY))).toBe(1);
+    expect(outbox).toHaveLength(2);
+  });
+
+  it('skips ended, past due and suspended or group-less tenants', async () => {
+    const { db, outbox } = fakeDb([
+      row({ id: 'a', status: 'PAST_DUE' }),
+      row({ id: 'b', status: 'EXPIRED' }),
+      row({ id: 'c', operatorGroup: false }),
+    ]);
+    const scan = new SubscriptionScanService(db, config(3));
+    await scan.scanDue(at(2));
+    expect(outbox).toHaveLength(0);
   });
 });
