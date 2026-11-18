@@ -2,9 +2,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import {
   PrismaChannelSecretStore,
   SecretsNotConfiguredError,
@@ -19,12 +22,13 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Secret store integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the store on the app role
+// under the tenant of the owner it is given.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const cipher = (): SecretCipher =>
@@ -62,7 +66,7 @@ async function account(): Promise<{
 describe('ChannelSecretStore', () => {
   it('stores only ciphertext, replaces on put, and forgets on deleteAll', async () => {
     const owner = await account();
-    const store = new PrismaChannelSecretStore(prisma, cipher());
+    const store = tenantScoped(new PrismaChannelSecretStore(prisma, cipher()));
     expect(store.configured).toBe(true);
     await store.put(owner, 'bot_token', '123456:PLAINTEXT-TOKEN');
     const row = await db.channelSecret.findFirstOrThrow({
@@ -85,7 +89,7 @@ describe('ChannelSecretStore', () => {
   it('a value copied to another account or purpose does not decrypt', async () => {
     const a = await account();
     const b = await account();
-    const store = new PrismaChannelSecretStore(prisma, cipher());
+    const store = tenantScoped(new PrismaChannelSecretStore(prisma, cipher()));
     await store.put(a, 'bot_token', 'secret-of-a');
     const row = await db.channelSecret.findFirstOrThrow({
       where: { tenantId: a.tenantId },
@@ -120,7 +124,7 @@ describe('ChannelSecretStore', () => {
     await expect(
       unconfigured.put(owner, 'bot_token', 'x'),
     ).rejects.toBeInstanceOf(SecretsNotConfiguredError);
-    const store = new PrismaChannelSecretStore(prisma, cipher());
+    const store = tenantScoped(new PrismaChannelSecretStore(prisma, cipher()));
     await store.put(owner, 'bot_token', 'x');
     await db.channelAccount.delete({ where: { id: owner.channelAccountId } });
     expect(

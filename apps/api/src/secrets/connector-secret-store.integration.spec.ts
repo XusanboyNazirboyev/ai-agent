@@ -2,9 +2,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { SecretsNotConfiguredError } from './channel-secret-store.js';
 import { PrismaConnectorSecretStore } from './connector-secret-store.js';
 import {
@@ -17,12 +20,13 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Secret store integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the store on the app role
+// under the tenant of the owner it is given.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const cipher = (): SecretCipher =>
@@ -58,7 +62,9 @@ async function connector(): Promise<{
 
 describe('ConnectorSecretStore', () => {
   it('stores only ciphertext, round-trips, and gets a new version when replaced', async () => {
-    const store = new PrismaConnectorSecretStore(prisma, cipher());
+    const store = tenantScoped(
+      new PrismaConnectorSecretStore(prisma, cipher()),
+    );
     const owner = await connector();
     const first = url();
     await store.put(owner, 'bitrix24_webhook_url', first);
@@ -83,7 +89,9 @@ describe('ConnectorSecretStore', () => {
   });
 
   it('a value copied to another connector or tenant does not decrypt', async () => {
-    const store = new PrismaConnectorSecretStore(prisma, cipher());
+    const store = tenantScoped(
+      new PrismaConnectorSecretStore(prisma, cipher()),
+    );
     const a = await connector();
     const b = await connector();
     await store.put(a, 'bitrix24_webhook_url', url());
@@ -123,7 +131,9 @@ describe('ConnectorSecretStore', () => {
     ).rejects.toThrow(SecretsNotConfiguredError);
     expect(new PrismaConnectorSecretStore(prisma).configured).toBe(false);
 
-    const store = new PrismaConnectorSecretStore(prisma, cipher());
+    const store = tenantScoped(
+      new PrismaConnectorSecretStore(prisma, cipher()),
+    );
     await store.put(owner, 'bitrix24_webhook_url', url());
     await store.deleteAll(owner);
     expect(await store.exists(owner, 'bitrix24_webhook_url')).toBe(false);

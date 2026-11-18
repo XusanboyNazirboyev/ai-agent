@@ -50,6 +50,8 @@ const STRICT_SPECS = [
   'src/leads/customer-lead.integration.spec.ts',
   'src/tasks/lead-tasks.integration.spec.ts',
   'src/leads/lead-timeline.integration.spec.ts',
+  'src/secrets/channel-secret-store.integration.spec.ts',
+  'src/secrets/connector-secret-store.integration.spec.ts',
 ];
 
 export default defineConfig({
