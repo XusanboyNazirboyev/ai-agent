@@ -5,6 +5,7 @@ import {
   Get,
   HttpException,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -28,7 +29,9 @@ import {
 } from '../channels/meta/meta-oauth-state.js';
 import type { AppEnvironment } from '../config/environment.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { activateChannelAccount, channelSlotFree } from './channel-limit.js';
 import {
   ChannelSecretStore,
@@ -122,7 +125,17 @@ export class FacebookConnectController {
     private readonly graph: InstagramGraphClient,
     private readonly oauth: FacebookOAuthClient,
     private readonly ledger: OAuthStateLedger,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
+
+  /**
+   * RLS plan S9: whether another tenant already connected this Page is a
+   * lookup across tenants (the main pool sees only the caller's rows).
+   */
+  private readonly crossTenant: PrismaClient;
 
   private manager(request: InboxRequest): {
     tenantId: string;
@@ -274,7 +287,7 @@ export class FacebookConnectController {
     if (pages.length > 1) throw refuse('SEVERAL_FACEBOOK_PAGES');
     const page = pages[0]!;
 
-    const existing = await this.prisma.channelAccount.findUnique({
+    const existing = await this.crossTenant.channelAccount.findUnique({
       where: {
         channelType_externalAccountId: {
           channelType: 'facebook',

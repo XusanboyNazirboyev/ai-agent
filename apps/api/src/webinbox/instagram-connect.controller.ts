@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpException,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -34,7 +35,9 @@ import {
 } from '../channels/instagram/instagram-oauth.js';
 import type { AppEnvironment } from '../config/environment.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { activateChannelAccount, channelSlotFree } from './channel-limit.js';
 import {
   ChannelSecretStore,
@@ -149,7 +152,17 @@ export class InstagramConnectController {
     private readonly graph: InstagramGraphClient,
     private readonly oauth: InstagramOAuthClient,
     private readonly ledger: OAuthStateLedger,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
+
+  /**
+   * RLS plan S9: whether another tenant already connected this account is a
+   * lookup across tenants (the main pool sees only the caller's rows).
+   */
+  private readonly crossTenant: PrismaClient;
 
   /** OWNER/ADMIN only; reading the setup is not rate limited. */
   private manager(request: InboxRequest): {
@@ -361,7 +374,7 @@ export class InstagramConnectController {
     token: string,
     via: Via,
   ): Promise<ChannelAccountSummary> {
-    const existing = await this.prisma.channelAccount.findUnique({
+    const existing = await this.crossTenant.channelAccount.findUnique({
       where: {
         channelType_externalAccountId: {
           channelType: 'instagram',

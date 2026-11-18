@@ -6,6 +6,7 @@ import { FacebookOAuthClient } from '../channels/facebook/facebook-oauth.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
 import { OAuthStateLedger } from '../channels/instagram/instagram-oauth-state-ledger.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   appClient,
   ownerClient,
@@ -22,6 +23,8 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
 // the app role under the tenant of the signed-in principal.
 const db = ownerClient();
 const app = appClient();
+/** What PersistenceModule provides next to PrismaService (the owner here). */
+const privileged = { db } as PrivilegedDatabase;
 const prisma = app as unknown as PrismaService;
 afterAll(async () => {
   await Promise.all([db.$disconnect(), app.$disconnect()]);
@@ -152,6 +155,7 @@ function setup(pageId = `1000${randomInt(10 ** 9, 10 ** 10 - 1)}`): {
         request as unknown as typeof fetch,
       ),
       new MemoryLedger(),
+      privileged,
     ),
   );
   return { pageId, controller, store: tenantScoped(store), calls };

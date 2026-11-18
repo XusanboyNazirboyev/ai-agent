@@ -13,6 +13,7 @@ import {
   RedisOAuthStateLedger,
 } from '../channels/instagram/instagram-oauth-state-ledger.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   appClient,
   ownerClient,
@@ -29,6 +30,8 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
 // the app role under the principal's tenant.
 const db = ownerClient();
 const app = appClient();
+/** What PersistenceModule provides next to PrismaService (the owner here). */
+const privileged = { db } as PrivilegedDatabase;
 const prisma = app as unknown as PrismaService;
 const redisConfig = {
   get: () => process.env.REDIS_URL ?? 'redis://localhost:6379',
@@ -235,6 +238,7 @@ function setup(
       new InstagramGraphClient(request as unknown as typeof fetch),
       oauth,
       ledger,
+      privileged,
     ),
   );
   return {

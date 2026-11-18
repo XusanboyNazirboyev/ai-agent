@@ -9,6 +9,7 @@ import {
   HttpException,
   Logger,
   NotFoundException,
+  Optional,
   Param,
   ParseUUIDPipe,
   Post,
@@ -29,7 +30,9 @@ import {
   TelegramManagementError,
 } from '../channels/telegram/telegram-management.js';
 import type { ChannelAccount } from '../generated/prisma/client.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import { activateChannelAccount, channelSlotFree } from './channel-limit.js';
 import {
   ChannelSecretStore,
@@ -127,7 +130,17 @@ export class TelegramConnectController {
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly secrets: ChannelSecretStore,
     private readonly management: TelegramManagement,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
+
+  /**
+   * RLS plan S9: whether another tenant already connected this bot is a
+   * lookup across tenants (the main pool sees only the caller's rows).
+   */
+  private readonly crossTenant: PrismaClient;
 
   private admit(request: InboxRequest): {
     tenantId: string;
@@ -233,7 +246,7 @@ export class TelegramConnectController {
     const bot = await this.telegram(() => this.management.getMe(token));
     const displayName = bot.username ? `@${bot.username}` : bot.name || null;
 
-    const existing = await this.prisma.channelAccount.findFirst({
+    const existing = await this.crossTenant.channelAccount.findFirst({
       where: { channelType: 'telegram', externalAccountId: bot.id },
       select: { id: true, tenantId: true },
     });

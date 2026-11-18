@@ -8,6 +8,7 @@ import { TelegramManagement } from '../channels/telegram/telegram-management.js'
 import { TelegramWebhookService } from '../channels/telegram/telegram-webhook.service.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { runWithTenant } from '../persistence/tenant-context.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   appClient,
   ownerClient,
@@ -27,6 +28,8 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
 // principal) or a routed webhook (the account's tenant) sets.
 const db = ownerClient();
 const app = appClient();
+/** What PersistenceModule provides next to PrismaService (the owner here). */
+const privileged = { db } as PrivilegedDatabase;
 const prisma = app as unknown as PrismaService;
 afterAll(async () => {
   await Promise.all([db.$disconnect(), app.$disconnect()]);
@@ -198,6 +201,7 @@ function setup(
       config,
       store,
       new TelegramManagement(telegram.request as never),
+      privileged,
     ),
   );
   return { bots, telegram, store: tenantScoped(store), controller, config };
@@ -286,6 +290,7 @@ describe('connecting a Telegram bot from the web', () => {
           noBase.config,
           store,
           new TelegramManagement(telegram.request as never),
+          privileged,
         ),
       ).enable(t.request, id),
     ).rejects.toMatchObject({
