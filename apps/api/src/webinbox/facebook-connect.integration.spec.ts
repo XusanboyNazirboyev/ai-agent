@@ -5,9 +5,12 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 import { FacebookOAuthClient } from '../channels/facebook/facebook-oauth.js';
 import { InstagramGraphClient } from '../channels/instagram/instagram-graph.js';
 import { OAuthStateLedger } from '../channels/instagram/instagram-oauth-state-ledger.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../secrets/secret-cipher.js';
 import { FacebookConnectController } from './facebook-connect.controller.js';
@@ -15,11 +18,14 @@ import { FacebookConnectController } from './facebook-connect.controller.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Facebook connect tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: fixtures on the owner, the controller and the secret store on
+// the app role under the tenant of the signed-in principal.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
-const prisma = db as unknown as PrismaService;
-afterAll(async () => db.$disconnect());
 
 /** Generated per run: never real or credential-shaped literals. */
 const CODE = `code-${randomBytes(12).toString('hex')}`;
@@ -134,15 +140,21 @@ function setup(pageId = `1000${randomInt(10 ** 9, 10 ** 10 - 1)}`): {
   );
   const store = new PrismaChannelSecretStore(prisma, cipher);
   const config = { get: (key: string) => SETTINGS[key] } as never;
-  const controller = new FacebookConnectController(
-    prisma,
-    config,
-    store,
-    new InstagramGraphClient(request as unknown as typeof fetch),
-    new FacebookOAuthClient(config, cipher, request as unknown as typeof fetch),
-    new MemoryLedger(),
+  const controller = tenantScoped(
+    new FacebookConnectController(
+      prisma,
+      config,
+      store,
+      new InstagramGraphClient(request as unknown as typeof fetch),
+      new FacebookOAuthClient(
+        config,
+        cipher,
+        request as unknown as typeof fetch,
+      ),
+      new MemoryLedger(),
+    ),
   );
-  return { pageId, controller, store, calls };
+  return { pageId, controller, store: tenantScoped(store), calls };
 }
 
 const stateOf = (s: ReturnType<typeof setup>, request: never): string =>

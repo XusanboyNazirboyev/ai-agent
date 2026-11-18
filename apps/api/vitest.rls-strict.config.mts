@@ -34,6 +34,7 @@ const STRICT_SPECS = [
   'src/webinbox/connector-roles.integration.spec.ts',
   'src/webinbox/connectors.integration.spec.ts',
   'src/webinbox/analytics.integration.spec.ts',
+  'src/webinbox/facebook-connect.integration.spec.ts',
 ];
 
 export default defineConfig({
