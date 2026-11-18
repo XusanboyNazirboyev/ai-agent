@@ -1,9 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { nextState } from '../core/handover/state-machine.js';
 import { Prisma } from '../generated/prisma/client.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { lockConversation } from './conversation-lock.js';
 
 /** Messages the bot answers at once after a return (the pipeline's batch size). */
@@ -26,10 +29,17 @@ const INBOUND_EVENT_TYPE: Record<string, string> = {
 export class OperatorIdleReturnService {
   private readonly logger = new Logger(OperatorIdleReturnService.name);
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   get minutes(): number {
     return (
@@ -51,7 +61,8 @@ export class OperatorIdleReturnService {
     const tenantFilter = options.tenantId
       ? Prisma.sql`AND c.tenant_id = ${options.tenantId}::uuid`
       : Prisma.empty;
-    const candidates = await this.prisma.$queryRaw<
+    const finder = options.tenantId ? this.prisma : this.crossTenant;
+    const candidates = await finder.$queryRaw<
       Array<{ id: string; tenantId: string; version: number }>
     >(Prisma.sql`
       SELECT c.id AS id, c.tenant_id AS "tenantId", c.version AS version
@@ -78,7 +89,12 @@ export class OperatorIdleReturnService {
     `);
     let returned = 0;
     for (const candidate of candidates) {
-      if (await this.returnToBot(candidate, minutes)) returned += 1;
+      if (
+        await runWithTenant(candidate.tenantId, () =>
+          this.returnToBot(candidate, minutes),
+        )
+      )
+        returned += 1;
     }
     return returned;
   }

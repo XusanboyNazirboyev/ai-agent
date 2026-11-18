@@ -40,6 +40,10 @@ const ALLOWED = new Map([
   ['observability/alerts.service.ts', 'tenants to check, platform alerts'],
   ['webinbox/inbox-events.service.ts', 'prunes the feed of every tenant'],
   ['connectors/spreadsheet/sheet-catalog.service.ts', 'lists due a reload'],
+  ['followup/follow-up.service.ts', 'silent conversations to remind'],
+  ['handover/operator-idle-return.service.ts', 'idle operator chats'],
+  ['leads/lead-backfill.scan.ts', 'tenants not yet backfilled'],
+  ['access/subscription-scan.service.ts', 'periods ending or ended'],
 ]);
 
 function sources(dir: string): string[] {

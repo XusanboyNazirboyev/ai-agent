@@ -2,7 +2,10 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { LeadService } from './lead.service.js';
 import { MANUAL_CHANNEL_TYPE } from './manual-lead-rules.js';
 
@@ -30,15 +33,21 @@ export class LeadBackfillScan implements ScheduledScan {
     private readonly prisma: PrismaService,
     private readonly leads: LeadService,
     @Optional() config?: ConfigService<AppEnvironment, true>,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
+    this.crossTenant = privileged?.db ?? prisma;
     // Browser tests seed their own leads and turn this off.
     this.finished =
       config?.get('LEAD_BACKFILL_ENABLED', { infer: true }) === false;
   }
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
   async scanDue(): Promise<number> {
     if (this.finished) return 0;
-    const tenants = await this.prisma.$queryRaw<{ id: string }[]>`
+    const tenants = await this.crossTenant.$queryRaw<{ id: string }[]>`
       SELECT t.id::text AS id FROM tenants t
       WHERE NOT EXISTS (
         SELECT 1 FROM audit_events a
@@ -50,7 +59,8 @@ export class LeadBackfillScan implements ScheduledScan {
       return 0;
     }
     let created = 0;
-    for (const { id } of tenants) created += await this.backfillTenant(id);
+    for (const { id } of tenants)
+      created += await runWithTenant(id, () => this.backfillTenant(id));
     return created;
   }
 

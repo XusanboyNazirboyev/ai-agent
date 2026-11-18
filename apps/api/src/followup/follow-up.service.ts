@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import {
   decideFollowUp,
   type FollowUpPolicy,
@@ -11,6 +11,8 @@ import { lockConversation } from '../handover/conversation-lock.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 
 const LOCALES = new LocaleRegistry(INITIAL_LOCALE_PACKS);
 
@@ -28,10 +30,17 @@ const LOCALES = new LocaleRegistry(INITIAL_LOCALE_PACKS);
 export class FollowUpService implements ScheduledScan {
   private readonly logger = new Logger(FollowUpService.name);
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   get enabled(): boolean {
     return this.config.get('FOLLOWUP_ENABLED', { infer: true }) === true;
@@ -64,7 +73,8 @@ export class FollowUpService implements ScheduledScan {
     // Candidates are chosen in SQL so that old conversations that can never
     // qualify (customer wrote last, opted out, nothing of value, limit
     // reached) cannot crowd the eligible ones out of the first `limit`.
-    const candidates = await this.prisma.$queryRaw<
+    const finder = options.tenantId ? this.prisma : this.crossTenant;
+    const candidates = await finder.$queryRaw<
       Array<{ id: string; tenantId: string }>
     >(Prisma.sql`
       SELECT c.id AS id, c.tenant_id AS "tenantId"
@@ -101,12 +111,14 @@ export class FollowUpService implements ScheduledScan {
       // Blast guard: a tenant never exceeds its rolling 24-hour allowance.
       let today = sentToday.get(candidate.tenantId);
       if (today === undefined) {
-        today = await this.prisma.followUp.count({
-          where: {
-            tenantId: candidate.tenantId,
-            createdAt: { gte: new Date(now.getTime() - 86_400_000) },
-          },
-        });
+        today = await runWithTenant(candidate.tenantId, () =>
+          this.prisma.followUp.count({
+            where: {
+              tenantId: candidate.tenantId,
+              createdAt: { gte: new Date(now.getTime() - 86_400_000) },
+            },
+          }),
+        );
       }
       if (today >= policy.maxPerTenantPerDay) {
         sentToday.set(candidate.tenantId, today);
@@ -114,7 +126,9 @@ export class FollowUpService implements ScheduledScan {
       }
       try {
         if (
-          await this.consider(candidate.tenantId, candidate.id, now, policy)
+          await runWithTenant(candidate.tenantId, () =>
+            this.consider(candidate.tenantId, candidate.id, now, policy),
+          )
         ) {
           sent += 1;
           today += 1;

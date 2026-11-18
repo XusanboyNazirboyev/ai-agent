@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { DigestService } from '../handover/digest.service.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
 import { currentTenant } from './tenant-context.js';
@@ -79,6 +80,37 @@ describe('scheduled scans and the tenant context (RLS plan S7)', () => {
     expect(await events.scanDue(new Date())).toBe(3);
     expect(seen).toEqual([
       { db: 'privileged', call: 'inboxEvent.deleteMany', tenant: null },
+    ]);
+  });
+
+  it('the subscription reminder finds periods without a tenant and queues each in its own', async () => {
+    const seen: Seen = [];
+    const end = new Date('2026-11-20T09:00:00Z');
+    const main = recorder('main', seen, {
+      outboxEvent: { createMany: () => ({ count: 1 }) },
+    });
+    const privileged = recorder('privileged', seen, {
+      tenantSubscription: {
+        // Only the reminder's query (a period still running) finds rows.
+        findMany: (args) =>
+          (args as { where: { currentPeriodEnd?: { gt?: Date } } }).where
+            .currentPeriodEnd?.gt
+            ? [{ id: 's1', tenantId: A, currentPeriodEnd: end }]
+            : [],
+      },
+    });
+    const scan = new SubscriptionScanService(
+      main as never,
+      { get: () => 3 } as never,
+      undefined,
+      { db: privileged } as never,
+    );
+    expect(await scan.scanDue(new Date('2026-11-18T09:00:00Z'))).toBe(1);
+    expect(seen).toEqual([
+      { db: 'privileged', call: 'tenantSubscription.findMany', tenant: null },
+      { db: 'privileged', call: 'tenantSubscription.findMany', tenant: null },
+      { db: 'privileged', call: 'tenantSubscription.findMany', tenant: null },
+      { db: 'main', call: 'outboxEvent.createMany', tenant: A },
     ]);
   });
 });

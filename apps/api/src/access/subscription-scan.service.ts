@@ -1,13 +1,15 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../generated/prisma/client.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import {
   OPERATOR_ALERT_EVENT,
   type OperatorAlert,
 } from '../observability/alerts.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { TenantAccessService } from './tenant-access.service.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -32,12 +34,17 @@ export const REMIND_DAYS_BEFORE = [5, 1] as const;
 @Injectable()
 export class SubscriptionScanService implements ScheduledScan {
   private readonly graceDays: number;
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<AppEnvironment, true>,
     @Optional() private readonly access?: TenantAccessService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
+    this.crossTenant = privileged?.db ?? prisma;
     const configured = Number(
       config.get('SUBSCRIPTION_GRACE_DAYS', { infer: true }),
     );
@@ -61,7 +68,7 @@ export class SubscriptionScanService implements ScheduledScan {
    */
   private async remindEnding(now: Date): Promise<number> {
     const first = Math.max(...REMIND_DAYS_BEFORE);
-    const due = await this.prisma.tenantSubscription.findMany({
+    const due = await this.crossTenant.tenantSubscription.findMany({
       where: {
         status: { in: ['TRIAL', 'ACTIVE'] },
         currentPeriodEnd: {
@@ -94,26 +101,28 @@ export class SubscriptionScanService implements ScheduledScan {
         periodEnd,
         daysLeft,
       };
-      const created = await this.prisma.outboxEvent.createMany({
-        data: [
-          {
-            tenantId: row.tenantId,
-            type: OPERATOR_ALERT_EVENT,
-            aggregateType: 'tenant',
-            aggregateId: row.tenantId,
-            idempotencyKey: `alert:subscription-ending:${row.id}:${periodEnd}:${stage}`,
-            payload: alert satisfies Prisma.InputJsonObject,
-          },
-        ],
-        skipDuplicates: true,
-      });
+      const created = await runWithTenant(row.tenantId, () =>
+        this.prisma.outboxEvent.createMany({
+          data: [
+            {
+              tenantId: row.tenantId,
+              type: OPERATOR_ALERT_EVENT,
+              aggregateType: 'tenant',
+              aggregateId: row.tenantId,
+              idempotencyKey: `alert:subscription-ending:${row.id}:${periodEnd}:${stage}`,
+              payload: alert satisfies Prisma.InputJsonObject,
+            },
+          ],
+          skipDuplicates: true,
+        }),
+      );
       queued += created.count;
     }
     return queued;
   }
 
   private async markPastDue(now: Date): Promise<number> {
-    const due = await this.prisma.tenantSubscription.findMany({
+    const due = await this.crossTenant.tenantSubscription.findMany({
       where: {
         status: { in: ['TRIAL', 'ACTIVE'] },
         currentPeriodEnd: { lte: now },
@@ -132,30 +141,32 @@ export class SubscriptionScanService implements ScheduledScan {
       const graceUntil = new Date(
         row.currentPeriodEnd.getTime() + this.graceDays * DAY_MS,
       );
-      const moved = await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.tenantSubscription.updateMany({
-          where: { id: row.id, tenantId: row.tenantId, status: row.status },
-          data: { status: 'PAST_DUE', graceUntil },
-        });
-        if (updated.count !== 1) return false;
-        await tx.platformAuditEvent.create({
-          data: {
-            action: 'subscription.past_due',
-            tenantId: row.tenantId,
-            entityType: 'tenant_subscription',
-            entityId: row.id,
-            safeSummary: {
-              from: row.status,
-              periodEnd: row.currentPeriodEnd.toISOString(),
-              graceUntil: graceUntil.toISOString(),
+      const moved = await runWithTenant(row.tenantId, () =>
+        this.prisma.$transaction(async (tx) => {
+          const updated = await tx.tenantSubscription.updateMany({
+            where: { id: row.id, tenantId: row.tenantId, status: row.status },
+            data: { status: 'PAST_DUE', graceUntil },
+          });
+          if (updated.count !== 1) return false;
+          await tx.platformAuditEvent.create({
+            data: {
+              action: 'subscription.past_due',
+              tenantId: row.tenantId,
+              entityType: 'tenant_subscription',
+              entityId: row.id,
+              safeSummary: {
+                from: row.status,
+                periodEnd: row.currentPeriodEnd.toISOString(),
+                graceUntil: graceUntil.toISOString(),
+              },
             },
-          },
-        });
-        await tx.inboxEvent.create({
-          data: { tenantId: row.tenantId, type: PAST_DUE_EVENT },
-        });
-        return true;
-      });
+          });
+          await tx.inboxEvent.create({
+            data: { tenantId: row.tenantId, type: PAST_DUE_EVENT },
+          });
+          return true;
+        }),
+      );
       if (moved) {
         changed += 1;
         this.access?.invalidate(row.tenantId);
@@ -165,7 +176,7 @@ export class SubscriptionScanService implements ScheduledScan {
   }
 
   private async markExpired(now: Date): Promise<number> {
-    const due = await this.prisma.tenantSubscription.findMany({
+    const due = await this.crossTenant.tenantSubscription.findMany({
       where: { status: 'PAST_DUE', graceUntil: { lte: now } },
       select: { id: true, tenantId: true, graceUntil: true },
       orderBy: { graceUntil: 'asc' },
@@ -173,26 +184,30 @@ export class SubscriptionScanService implements ScheduledScan {
     });
     let changed = 0;
     for (const row of due) {
-      const moved = await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.tenantSubscription.updateMany({
-          where: { id: row.id, tenantId: row.tenantId, status: 'PAST_DUE' },
-          data: { status: 'EXPIRED' },
-        });
-        if (updated.count !== 1) return false;
-        await tx.platformAuditEvent.create({
-          data: {
-            action: 'subscription.expired',
-            tenantId: row.tenantId,
-            entityType: 'tenant_subscription',
-            entityId: row.id,
-            safeSummary: { graceUntil: row.graceUntil?.toISOString() ?? null },
-          },
-        });
-        await tx.inboxEvent.create({
-          data: { tenantId: row.tenantId, type: EXPIRED_EVENT },
-        });
-        return true;
-      });
+      const moved = await runWithTenant(row.tenantId, () =>
+        this.prisma.$transaction(async (tx) => {
+          const updated = await tx.tenantSubscription.updateMany({
+            where: { id: row.id, tenantId: row.tenantId, status: 'PAST_DUE' },
+            data: { status: 'EXPIRED' },
+          });
+          if (updated.count !== 1) return false;
+          await tx.platformAuditEvent.create({
+            data: {
+              action: 'subscription.expired',
+              tenantId: row.tenantId,
+              entityType: 'tenant_subscription',
+              entityId: row.id,
+              safeSummary: {
+                graceUntil: row.graceUntil?.toISOString() ?? null,
+              },
+            },
+          });
+          await tx.inboxEvent.create({
+            data: { tenantId: row.tenantId, type: EXPIRED_EVENT },
+          });
+          return true;
+        }),
+      );
       if (moved) {
         changed += 1;
         this.access?.invalidate(row.tenantId);

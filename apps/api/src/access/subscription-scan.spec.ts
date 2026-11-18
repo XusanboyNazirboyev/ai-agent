@@ -116,7 +116,7 @@ describe('subscription scan (ADR 047 §3, fake clock)', () => {
     const rows: Row[] = [
       {
         id: 's1',
-        tenantId: 't1',
+        tenantId: '01a1ecc9-0000-7000-8000-000000000001',
         status: 'ACTIVE',
         currentPeriodEnd: end,
         graceUntil: null,
@@ -151,7 +151,7 @@ describe('subscription scan (ADR 047 §3, fake clock)', () => {
     const rows: Row[] = [
       {
         id: 's2',
-        tenantId: 't2',
+        tenantId: '01a1ecc9-0000-7000-8000-000000000002',
         status: 'TRIAL',
         currentPeriodEnd: end,
         graceUntil: null,
@@ -192,7 +192,7 @@ describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
   const end = new Date('2026-11-20T09:00:00Z');
   const row = (extra: Partial<Row> = {}): Row => ({
     id: 's1',
-    tenantId: 't1',
+    tenantId: '01a1ecc9-0000-7000-8000-000000000001',
     status: 'ACTIVE',
     currentPeriodEnd: end,
     graceUntil: null,
@@ -215,7 +215,7 @@ describe('subscription ending reminder (ADR 047 amendment "reminder")', () => {
     expect(await scan.scanDue(at(0.2))).toBe(0);
     expect(outbox).toHaveLength(2);
     expect(outbox[0]).toMatchObject({
-      tenantId: 't1',
+      tenantId: '01a1ecc9-0000-7000-8000-000000000001',
       type: OPERATOR_ALERT_EVENT,
       payload: {
         kind: 'SUBSCRIPTION_ENDING',
