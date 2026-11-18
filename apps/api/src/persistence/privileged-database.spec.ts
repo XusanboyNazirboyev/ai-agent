@@ -51,6 +51,10 @@ const ALLOWED = new Map([
   ['actions/action.service.ts', 'stale proposals, retries, recoveries'],
   ['handover/handover-sla.service.ts', 'overdue handovers'],
   ['webinbox/inbox-event-bus.ts', 'one poller for every open stream'],
+  // S8b: spec worlds wire the test owner in as the handle, as
+  // PersistenceModule does (never imported by production code).
+  ['actions/testing/lifecycle-runner.ts', 'lifecycle eval world'],
+  ['agent/testing/simulation/world.ts', 'simulation world'],
   // S7: start-up check of the account this process serves.
   ['agent/agent-mode.startup.ts', 'served account before any tenant'],
 ]);
