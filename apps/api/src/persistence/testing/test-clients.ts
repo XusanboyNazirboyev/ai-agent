@@ -130,6 +130,12 @@ export interface TenantScopedOptions {
    * take `(tenantId, ...)`; such ids are not guessed otherwise.
    */
   readonly tenantArg?: number;
+  /**
+   * The tenant an object is bound to when it is built (a catalog connector),
+   * for methods whose arguments name none; the agent turn calling it runs
+   * under that tenant.
+   */
+  readonly tenantId?: string;
 }
 
 function tenantAt(
@@ -157,7 +163,10 @@ export function tenantScoped<T extends object>(
       return (...args: unknown[]): unknown => {
         const call = (): unknown =>
           (value as (...a: unknown[]) => unknown).apply(target, args);
-        const tenantId = tenantAt(args, options.tenantArg) ?? tenantOf(args);
+        const tenantId =
+          options.tenantId ??
+          tenantAt(args, options.tenantArg) ??
+          tenantOf(args);
         return tenantId ? runWithTenant(tenantId, call) : call();
       };
     },

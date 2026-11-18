@@ -58,6 +58,9 @@ const STRICT_SPECS = [
   'src/scheduling/scheduling-agent.integration.spec.ts',
   'src/connectors/sync/stored-secrets.integration.spec.ts',
   'src/connectors/bitrix24/bitrix24-lead-sync.integration.spec.ts',
+  'src/connectors/spreadsheet/sheet-catalog.integration.spec.ts',
+  'src/connectors/spreadsheet/sheet-agent.integration.spec.ts',
+  'src/connectors/spreadsheet/sheet-refresh.integration.spec.ts',
 ];
 
 export default defineConfig({

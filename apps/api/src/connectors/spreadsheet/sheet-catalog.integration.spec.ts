@@ -4,9 +4,12 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { parseSheet } from './csv-reader.js';
 import { suggestMapping } from './field-suggest.js';
 import { mapSheet } from './row-mapper.js';
@@ -22,13 +25,16 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
     'Spreadsheet catalog integration tests require agentcore_test',
   );
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const store = new PrismaSheetCatalogStore(prisma);
+// RLS plan S8b: fixtures on the owner; the store on the app role under the
+// tenant each call names, the connector under the tenant it was built for
+// (the agent turn that calls it runs under that tenant).
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const sheetStore = new PrismaSheetCatalogStore(prisma);
+const store = tenantScoped(sheetStore, { tenantArg: 0 });
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const SAMPLE = readFileSync(
@@ -73,10 +79,13 @@ function input(
 }
 
 const connectorFor = (tenantId: string, now: () => Date) =>
-  new SpreadsheetConnector(
-    { tenantId, connectorKey: 'spreadsheet' },
-    store,
-    now,
+  tenantScoped(
+    new SpreadsheetConnector(
+      { tenantId, connectorKey: 'spreadsheet' },
+      sheetStore,
+      now,
+    ),
+    { tenantId },
   );
 
 const NOW = new Date('2026-03-01T08:00:00Z');

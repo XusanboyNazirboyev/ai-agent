@@ -3,9 +3,13 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import {
   SHEET_REFRESH_EVERY_MS,
   SHEET_REFRESH_RETRY_MS,
@@ -17,13 +21,16 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Sheet refresh tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const store = new PrismaSheetCatalogStore(prisma);
+// RLS plan S8b: fixtures on the owner; the service and store on the app
+// role, each call under the tenant it names; the refresh scan finds due lists
+// on the privileged handle and reloads each under its tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const sheetStore = new PrismaSheetCatalogStore(prisma);
+const store = tenantScoped(sheetStore, { tenantArg: 0 });
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const HEADER = 'Destination,Hotel,Nights,Price,Currency,Departure';
@@ -48,7 +55,12 @@ const fetchImpl = (async (input: URL | string) => {
     headers: { 'content-type': sheet.type },
   });
 }) as unknown as typeof fetch;
-const service = new SheetCatalogService(prisma, store, { fetchImpl });
+const service = tenantScoped(
+  new SheetCatalogService(prisma, sheetStore, { fetchImpl }, {
+    db,
+  } as PrivilegedDatabase),
+  { tenantArg: 0 },
+);
 
 function newSheet(text: string): {
   id: string;

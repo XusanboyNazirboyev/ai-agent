@@ -6,10 +6,14 @@ import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { extraction, runTurn } from '../../agent/testing/agent-harness.js';
 import { ScriptedLlmProvider } from '../../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../../generated/prisma/client.js';
 import { TRAVEL_PACK } from '../../packs/travel/travel.pack.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { parseSheet } from './csv-reader.js';
 import { suggestMapping } from './field-suggest.js';
 import { mapSheet } from './row-mapper.js';
@@ -20,13 +24,15 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Sheet agent tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
-const store = new PrismaSheetCatalogStore(prisma);
+// RLS plan S8b: fixtures on the owner; the price list store and the agent
+// turn on the app role, the turn under its tenant as the queue job runs it.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const sheetStore = new PrismaSheetCatalogStore(prisma);
+const store = tenantScoped(sheetStore, { tenantArg: 0 });
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const SAMPLE = readFileSync(
@@ -67,20 +73,25 @@ async function tenantWithList(): Promise<string> {
 const connectorAt = (tenantId: string, now: Date) =>
   new SpreadsheetConnector(
     { tenantId, connectorKey: 'spreadsheet' },
-    store,
+    sheetStore,
     () => now,
   );
 
 const SLOTS = { destination: 'Dubai', travelMonth: 'july', partySize: '2' };
 
-async function priceTurn(options: {
+interface PriceTurn {
   tenantId: string;
   now: Date;
   offerCode: string;
   reply: string;
   second?: string;
   destination?: string;
-}) {
+}
+
+const priceTurn = (options: PriceTurn) =>
+  runWithTenant(options.tenantId, () => priceTurnIn(options));
+
+async function priceTurnIn(options: PriceTurn) {
   const connector = connectorAt(options.tenantId, options.now);
   const rixos = (await connector.searchItems({ title: 'rixos' }))[0]!;
   const offer = (await connector.getOffers(rixos.id)).find(
@@ -219,14 +230,16 @@ describe('the agent answers from an uploaded price list (ADR 064)', () => {
         TRAVEL_PACK,
       ),
     ]);
-    const { result } = await runTurn({
-      provider,
-      text: 'How much is the Paris tour?',
-      connector,
-      pack: TRAVEL_PACK,
-      now: new Date('2026-03-02T10:00:00Z'),
-      scope: { tenantId, conversationId: 'conversation-eval' },
-    });
+    const { result } = await runWithTenant(tenantId, () =>
+      runTurn({
+        provider,
+        text: 'How much is the Paris tour?',
+        connector,
+        pack: TRAVEL_PACK,
+        now: new Date('2026-03-02T10:00:00Z'),
+        scope: { tenantId, conversationId: 'conversation-eval' },
+      }),
+    );
     expect(result.outcome).toBe('NO_RESULTS');
     // ADR 073: the first time, the list's titles are offered instead of a
     // hand-over. Only the code's own searches ran (the filtered ones found
