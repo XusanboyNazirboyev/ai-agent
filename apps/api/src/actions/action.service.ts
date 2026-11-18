@@ -34,13 +34,15 @@ import type {
   HandoverReason,
   LocalePack,
 } from '../core/locales/locale-pack.js';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { lockConversation } from '../handover/conversation-lock.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { extractPhone } from '../leads/phone.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
 import { DOMAIN_PACKS } from '../packs/registry.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import {
   isSchedulingOperation,
   SchedulingActionsService,
@@ -85,7 +87,11 @@ export class ActionService {
     private readonly handovers: HandoverService,
     @Optional() private readonly config?: ConfigService<AppEnvironment, true>,
     @Optional() private readonly scheduling?: SchedulingActionsService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
+    this.crossTenant = privileged?.db ?? prisma;
+    this.crossTenantOperations = new ConnectorOperations(this.crossTenant);
     this.operations = new ConnectorOperations(prisma);
     this.selector = new ConnectorSelector(prisma, loader);
   }
@@ -1013,53 +1019,68 @@ export class ActionService {
       });
   }
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
+  /** Abandoned action attempts of every tenant (RLS plan S7). */
+  private readonly crossTenantOperations: ConnectorOperations;
+
   /** Scheduled scan: expire stale proposals, re-queue due retries and abandoned attempts. */
   async scanDue(now: Date, limit = 25): Promise<number> {
-    const stale = await this.prisma.actionProposal.findMany({
+    const stale = await this.crossTenant.actionProposal.findMany({
       where: { status: 'PROPOSED', expiresAt: { lte: now } },
       take: limit,
       select: { id: true, tenantId: true },
     });
     for (const row of stale)
-      await this.prisma.$transaction(async (tx) => {
-        const changed = await tx.actionProposal.updateMany({
-          where: { tenantId: row.tenantId, id: row.id, status: 'PROPOSED' },
-          data: {
-            status: 'EXPIRED',
-            payload: Prisma.DbNull,
-            payloadClearedAt: now,
-          },
-        });
-        if (changed.count === 1)
-          await this.audit(tx, row.tenantId, row.id, 'action.expired', {});
-      });
+      await runWithTenant(row.tenantId, () =>
+        this.prisma.$transaction(async (tx) => {
+          const changed = await tx.actionProposal.updateMany({
+            where: { tenantId: row.tenantId, id: row.id, status: 'PROPOSED' },
+            data: {
+              status: 'EXPIRED',
+              payload: Prisma.DbNull,
+              payloadClearedAt: now,
+            },
+          });
+          if (changed.count === 1)
+            await this.audit(tx, row.tenantId, row.id, 'action.expired', {});
+        }),
+      );
     let queued = 0;
     const kinds = ['createLead'];
     for (const kind of kinds) {
       const due = [
         ...(
-          await dueRetries(this.prisma, kind, ACTION_SUBJECT, now, limit)
+          await dueRetries(this.crossTenant, kind, ACTION_SUBJECT, now, limit)
         ).map((op) => ({ ...op, why: 'retry' })),
         ...(
-          await this.operations.abandoned(kind, ACTION_SUBJECT, now, limit)
+          await this.crossTenantOperations.abandoned(
+            kind,
+            ACTION_SUBJECT,
+            now,
+            limit,
+          )
         ).map((op) => ({ ...op, why: 'recover' })),
       ];
       for (const op of due) {
-        const created = await this.prisma.outboxEvent.createMany({
-          data: [
-            {
-              tenantId: op.tenantId,
-              type: 'action.execute',
-              aggregateType: 'action_proposal',
-              aggregateId: op.subjectId,
-              idempotencyKey: `action.execute:${op.subjectId}:${op.why}:${op.attempts}`,
-              payload: {
-                proposalId: op.subjectId,
-              } satisfies Prisma.InputJsonObject,
-            },
-          ],
-          skipDuplicates: true,
-        });
+        const created = await runWithTenant(op.tenantId, () =>
+          this.prisma.outboxEvent.createMany({
+            data: [
+              {
+                tenantId: op.tenantId,
+                type: 'action.execute',
+                aggregateType: 'action_proposal',
+                aggregateId: op.subjectId,
+                idempotencyKey: `action.execute:${op.subjectId}:${op.why}:${op.attempts}`,
+                payload: {
+                  proposalId: op.subjectId,
+                } satisfies Prisma.InputJsonObject,
+              },
+            ],
+            skipDuplicates: true,
+          }),
+        );
         queued += created.count;
       }
     }

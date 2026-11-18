@@ -44,6 +44,10 @@ const ALLOWED = new Map([
   ['handover/operator-idle-return.service.ts', 'idle operator chats'],
   ['leads/lead-backfill.scan.ts', 'tenants not yet backfilled'],
   ['access/subscription-scan.service.ts', 'periods ending or ended'],
+  ['tasks/lead-tasks.ts', 'tasks that fell due'],
+  ['leads/lead-sync.service.ts', 'CRM writes to retry or recover'],
+  ['retention/retention.service.ts', 'tenants to purge'],
+  ['actions/action.service.ts', 'stale proposals, retries, recoveries'],
 ]);
 
 function sources(dir: string): string[] {

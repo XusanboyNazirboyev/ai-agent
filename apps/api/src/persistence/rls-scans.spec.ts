@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { DigestService } from '../handover/digest.service.js';
+import { LeadTaskReminders } from '../tasks/lead-tasks.js';
 import { InboxEventsService } from '../webinbox/inbox-events.service.js';
 import { currentTenant } from './tenant-context.js';
 
@@ -111,6 +112,34 @@ describe('scheduled scans and the tenant context (RLS plan S7)', () => {
       { db: 'privileged', call: 'tenantSubscription.findMany', tenant: null },
       { db: 'privileged', call: 'tenantSubscription.findMany', tenant: null },
       { db: 'main', call: 'outboxEvent.createMany', tenant: A },
+    ]);
+  });
+
+  it('task reminders find due tasks without a tenant and claim each in its own', async () => {
+    const seen: Seen = [];
+    const main = recorder('main', seen, {
+      leadTask: { updateMany: () => ({ count: 1 }) },
+      inboxEvent: { create: () => ({}) },
+    });
+    const privileged = recorder('privileged', seen, {
+      leadTask: {
+        findMany: () => [
+          { id: 'k1', tenantId: A, lead: { conversationId: null } },
+          { id: 'k2', tenantId: B, lead: { conversationId: null } },
+        ],
+      },
+    });
+    const reminders = new LeadTaskReminders(
+      main as never,
+      { db: privileged } as never,
+    );
+    expect(await reminders.scanDue(new Date())).toBe(2);
+    expect(seen).toEqual([
+      { db: 'privileged', call: 'leadTask.findMany', tenant: null },
+      { db: 'main', call: 'leadTask.updateMany', tenant: A },
+      { db: 'main', call: 'inboxEvent.create', tenant: A },
+      { db: 'main', call: 'leadTask.updateMany', tenant: B },
+      { db: 'main', call: 'inboxEvent.create', tenant: B },
     ]);
   });
 });

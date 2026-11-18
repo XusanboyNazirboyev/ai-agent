@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '../generated/prisma/client.js';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import type { CrmConnector } from '../connectors/interfaces/crm-connector.js';
 import { writeExecutionOf } from '../connectors/interfaces/errors.js';
 import {
@@ -14,6 +14,8 @@ import {
 import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 
 export const MAX_LEAD_SYNC_ATTEMPTS = 8;
 
@@ -61,10 +63,20 @@ export class LeadSyncService {
   private readonly operations: ConnectorOperations;
   private readonly selector: ConnectorSelector;
 
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
+  /** Abandoned CRM writes of every tenant (RLS plan S7). */
+  private readonly crossTenantOperations: ConnectorOperations;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly loader: TenantConnectorLoader,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
   ) {
+    this.crossTenant = privileged?.db ?? prisma;
+    this.crossTenantOperations = new ConnectorOperations(this.crossTenant);
     this.operations = new ConnectorOperations(prisma);
     this.selector = new ConnectorSelector(prisma, loader);
   }
@@ -315,7 +327,7 @@ export class LeadSyncService {
    * sync itself then decides, by idempotency mode, whether it may try again.
    */
   async scanDue(now: Date, limit = 25): Promise<number> {
-    const due = await this.prisma.lead.findMany({
+    const due = await this.crossTenant.lead.findMany({
       where: {
         archivedAt: null,
         crmSyncStatus: 'FAILED',
@@ -328,32 +340,35 @@ export class LeadSyncService {
     });
     let queued = 0;
     for (const lead of due) {
-      const claimed = await this.prisma.lead.updateMany({
-        where: {
-          id: lead.id,
-          tenantId: lead.tenantId,
-          crmSyncStatus: 'FAILED',
-          attempts: lead.attempts,
-        },
-        data: { crmSyncStatus: 'PENDING', nextAttemptAt: null },
-      });
-      if (claimed.count !== 1) continue;
-      queued += await this.queue(
+      queued += await runWithTenant(
         lead.tenantId,
-        lead.id,
-        `retry:${lead.attempts}`,
+        async (): Promise<number> => {
+          const claimed = await this.prisma.lead.updateMany({
+            where: {
+              id: lead.id,
+              tenantId: lead.tenantId,
+              crmSyncStatus: 'FAILED',
+              attempts: lead.attempts,
+            },
+            data: { crmSyncStatus: 'PENDING', nextAttemptAt: null },
+          });
+          if (claimed.count !== 1) return 0;
+          return this.queue(lead.tenantId, lead.id, `retry:${lead.attempts}`);
+        },
       );
     }
-    for (const op of await this.operations.abandoned(
+    for (const op of await this.crossTenantOperations.abandoned(
       'createLead',
       'lead',
       now,
       limit,
     )) {
-      queued += await this.queue(
-        op.tenantId,
-        op.subjectId,
-        `recover:${op.id}:${op.attempts}`,
+      queued += await runWithTenant(op.tenantId, () =>
+        this.queue(
+          op.tenantId,
+          op.subjectId,
+          `recover:${op.id}:${op.attempts}`,
+        ),
       );
     }
     return queued;

@@ -8,7 +8,7 @@ function fakePrisma() {
   const updated: Array<{ model: string; where?: unknown; data?: unknown }> = [];
   const tenants = [
     {
-      id: 't1',
+      id: '01a1ecc9-0000-7000-8000-000000000001',
       retentionSettings: { inboundEventMinutes: 1440 },
     },
   ];
@@ -54,7 +54,10 @@ describe('RetentionService (unit, P0.6)', () => {
     expect(deleted).toEqual([
       {
         model: 'inboundEvent',
-        where: { tenantId: 't1', id: { in: ['e1', 'e2'] } },
+        where: {
+          tenantId: '01a1ecc9-0000-7000-8000-000000000001',
+          id: { in: ['e1', 'e2'] },
+        },
       },
     ]);
   });

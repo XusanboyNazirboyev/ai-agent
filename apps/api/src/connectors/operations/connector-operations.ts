@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { Prisma } from '../../generated/prisma/client.js';
-import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { Prisma, PrismaClient } from '../../generated/prisma/client.js';
 import type { WriteIdempotency } from '../interfaces/crm-connector.js';
 import type { PreviousAttempt, WriteExecution } from './write-policy.js';
 
@@ -48,7 +47,7 @@ const TERMINAL = new Set([
  * outcome recorded by another.
  */
 export class ConnectorOperations {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaClient) {}
 
   /** The key for every attempt of this logical write: derived, never random. */
   static keyFor(ref: OperationRef): string {
@@ -241,7 +240,7 @@ export class ConnectorOperations {
 
 /** Due retries of one subject type (status RETRY_WAIT, time reached). */
 export function dueRetries(
-  prisma: PrismaService,
+  prisma: PrismaClient,
   kind: string,
   subjectType: string,
   now: Date,

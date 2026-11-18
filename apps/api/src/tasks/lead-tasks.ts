@@ -1,4 +1,5 @@
 import {
+  Optional,
   BadRequestException,
   Body,
   Controller,
@@ -20,7 +21,10 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { SessionGuard, type InboxRequest } from '../webinbox/session.guard.js';
 
 /** At most this many open tasks per lead (a guard, not a product limit). */
@@ -287,10 +291,19 @@ export class LeadTasksController {
 export class LeadTaskReminders implements ScheduledScan {
   private readonly logger = new Logger(LeadTaskReminders.name);
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   async scanDue(now: Date, limit = 100): Promise<number> {
-    const due = await this.prisma.leadTask.findMany({
+    const due = await this.crossTenant.leadTask.findMany({
       where: { doneAt: null, notifiedAt: null, dueAt: { lte: now } },
       orderBy: { dueAt: 'asc' },
       take: limit,
@@ -302,24 +315,30 @@ export class LeadTaskReminders implements ScheduledScan {
     });
     let announced = 0;
     for (const task of due) {
-      const claimed = await this.prisma.leadTask.updateMany({
-        where: {
-          id: task.id,
-          tenantId: task.tenantId,
-          notifiedAt: null,
-          doneAt: null,
+      const done = await runWithTenant(
+        task.tenantId,
+        async (): Promise<boolean> => {
+          const claimed = await this.prisma.leadTask.updateMany({
+            where: {
+              id: task.id,
+              tenantId: task.tenantId,
+              notifiedAt: null,
+              doneAt: null,
+            },
+            data: { notifiedAt: now },
+          });
+          if (claimed.count !== 1) return false;
+          await this.prisma.inboxEvent.create({
+            data: {
+              tenantId: task.tenantId,
+              type: 'task.due',
+              conversationId: task.lead.conversationId,
+            },
+          });
+          return true;
         },
-        data: { notifiedAt: now },
-      });
-      if (claimed.count !== 1) continue;
-      await this.prisma.inboxEvent.create({
-        data: {
-          tenantId: task.tenantId,
-          type: 'task.due',
-          conversationId: task.lead.conversationId,
-        },
-      });
-      announced += 1;
+      );
+      if (done) announced += 1;
     }
     if (announced > 0)
       this.logger.log(

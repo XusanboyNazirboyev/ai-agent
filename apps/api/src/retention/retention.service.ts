@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import type { PrismaClient } from '../generated/prisma/client.js';
 import type { ScheduledScan } from '../handover/handover-runtime.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
 import { parseRetentionSettings } from './retention-settings.js';
 
 const TENANT_BATCH = 50;
@@ -18,14 +21,23 @@ export class RetentionService implements ScheduledScan {
   /** Conversations whose purge failed during the current run (counted, never silent). */
   protected failedConversations = 0;
 
-  constructor(private readonly prisma: PrismaService) {}
+  /** RLS plan S7: finds due work of every tenant; the work runs per tenant. */
+  private readonly crossTenant: PrismaClient;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional only so specs can build it by hand; Nest always provides it.
+    @Optional() privileged?: PrivilegedDatabase,
+  ) {
+    this.crossTenant = privileged?.db ?? prisma;
+  }
 
   async scanDue(now: Date): Promise<number> {
     let total = 0;
     this.failedConversations = 0;
     let cursor: string | undefined;
     for (;;) {
-      const tenants = await this.prisma.tenant.findMany({
+      const tenants = await this.crossTenant.tenant.findMany({
         where: { status: { not: 'ARCHIVED' } },
         select: { id: true, retentionSettings: true },
         orderBy: { id: 'asc' },
@@ -34,7 +46,9 @@ export class RetentionService implements ScheduledScan {
       });
       if (tenants.length === 0) break;
       for (const tenant of tenants) {
-        total += await this.scanTenantRow(tenant, now);
+        total += await runWithTenant(tenant.id, () =>
+          this.scanTenantRow(tenant, now),
+        );
       }
       cursor = tenants[tenants.length - 1]?.id;
       if (tenants.length < TENANT_BATCH) break;
