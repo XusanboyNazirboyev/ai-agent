@@ -43,6 +43,7 @@
     "simulate": "tsx scripts/simulate.ts",
     "knowledge:ingest": "tsx scripts/knowledge-ingest.ts",
     "knowledge:eval": "tsx scripts/knowledge-eval.ts",
+    "knowledge:chunks": "tsx scripts/knowledge-chunk-eval.ts",
     "crm:operations": "tsx scripts/crm-operations.ts"
   },
   "engines": {

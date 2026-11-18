@@ -1,0 +1,33 @@
+{
+  "description": "Fictional multi-paragraph policies (no real tenant data) for the chunk-boundary check: is the sentence that answers a question inside the passages the agent retrieves (top 4), and would adding the neighbouring chunks of the same document help? Uzbek and Russian wording is unreviewed.",
+  "documents": [
+    {
+      "id": "rules-uz",
+      "lang": "uz",
+      "text": "Umumiy qoidalar. Ushbu qoidalar o'quv markazida tahsil oluvchi barcha talabalar uchun amal qiladi. Talaba darsga o'z vaqtida kelishi, telefonini ovozsiz rejimga qo'yishi va boshqa talabalarga xalaqit bermasligi kerak. Markaz ma'muriyati qoidalarni o'zgartirish huquqini saqlab qoladi va o'zgarishlar haqida kamida bir hafta oldin xabar beradi.\n\nDars qoldirish. Uzrli sabab bilan qoldirilgan dars uchun talaba administratorga dars boshlanishidan kamida uch soat oldin yozishi kerak. Bunday holda o'qituvchi qoldirilgan mavzu bo'yicha qo'shimcha materiallar yuboradi. Oyiga uchtadan ortiq sababsiz qoldirilgan darsdan keyin talabaga ogohlantirish yuboriladi.\n\nBoshqa guruhga o'tish.\n\nTalaba bir oyda bir marta guruhini almashtirishi mumkin, agar yangi guruhda bo'sh joy bo'lsa. Buning uchun ariza yozish shart emas: administratorga xabar yozishning o'zi kifoya. O'tish keyingi haftaning dushanba kunidan kuchga kiradi.\n\nSertifikat. Kursni muvaffaqiyatli tamomlagan talabaga markazning sertifikati beriladi. Sertifikat olish uchun yakuniy testdan kamida 70 foiz ball to'plash va darslarning kamida 80 foiziga qatnashish talab qilinadi. Sertifikat test natijalari e'lon qilingandan keyin besh ish kuni ichida tayyor bo'ladi.\n\nKutubxona va xonalar. Talabalar markaz kutubxonasidan bepul foydalanishlari mumkin. Kitoblar ikki haftaga beriladi. Mustaqil tayyorgarlik xonasi har kuni soat 9:00 dan 20:00 gacha ochiq, shanba kunlari esa 14:00 gacha.\n\nOta-onalar uchun. 18 yoshgacha bo'lgan talabalarning ota-onalari har oyning oxirida farzandining davomati va baholari haqida qisqa hisobot oladi. Hisobot Telegram orqali yuboriladi. Ota-onalar o'qituvchi bilan uchrashuvni administrator orqali oldindan kelishib olishlari mumkin.\n\nShikoyatlar. Har qanday shikoyat yoki taklif administratorga yozma ravishda beriladi. Markaz shikoyatni uch ish kuni ichida ko'rib chiqadi va javobni talabaga yozma ravishda yuboradi."
+    },
+    {
+      "id": "payment-uz",
+      "lang": "uz",
+      "text": "To'lov tartibi. Kurs uchun to'lov har oyning birinchi sanasidan beshinchi sanasigacha amalga oshiriladi. To'lovni naqd pul, plastik karta yoki bank o'tkazmasi orqali qilish mumkin. To'lov qilinganini tasdiqlovchi chek administratorga ko'rsatiladi yoki Telegram orqali yuboriladi.\n\nKechikish. Agar to'lov beshinchi sanagacha qilinmasa, talaba darslarga qatnashishda davom etadi, lekin oyning o'ninchi sanasidan keyin ham to'lanmagan bo'lsa, guruhdagi joyi boshqa talabaga berilishi mumkin.\n\nChegirmalar.\n\nBir oiladan ikki va undan ortiq farzand o'qisa, ikkinchi va keyingi farzand uchun 10 foiz chegirma beriladi. Kursning to'liq narxini oldindan to'lagan talabaga 5 foiz chegirma qilinadi. Chegirmalar qo'shilmaydi: bir vaqtda faqat eng kattasi qo'llanadi.\n\nPulni qaytarish. Talaba kursni birinchi hafta ichida tark etsa, foydalanilmagan darslar uchun pul to'liq qaytariladi. Birinchi haftadan keyin pulni qaytarish masalasini direktor har bir holat bo'yicha alohida hal qiladi. Qaytarilgan pul o'n ish kuni ichida talabaning kartasiga o'tkaziladi.\n\nMuzlatish. Kasallik yoki xizmat safari sababli talaba kursni bir oygacha muzlatishi mumkin. Muzlatish davrida to'lov olinmaydi va talabaning guruhdagi joyi saqlanib qoladi. Buning uchun tegishli hujjat nusxasini administratorga topshirish kerak.\n\nDarsliklar. Darsliklar narxi kurs narxiga kirmaydi. Talaba darsliklarni markazdan sotib olishi yoki o'zi topishi mumkin; elektron nusxalari bepul beriladi."
+    },
+    {
+      "id": "online-ru",
+      "lang": "ru",
+      "text": "Онлайн-занятия. Онлайн-уроки проходят в Zoom. Ссылка на занятие приходит в Telegram за 15 минут до начала. Камера во время урока должна быть включена, иначе преподаватель может отметить отсутствие.\n\nТехнические проблемы. Если у ученика пропал интернет, он может вернуться на урок по той же ссылке. Если проблема со стороны преподавателя и урок длился меньше половины времени, урок переносится бесплатно.\n\nЗаписи уроков.\n\nКаждый онлайн-урок записывается. Запись хранится семь дней и доступна только ученикам этой группы. После семи дней запись удаляется без возможности восстановления.\n\nДомашние задания. Домашние задания сдаются через Telegram-бот до 23:00 дня перед следующим уроком. Задания, присланные позже, проверяются, но оценка снижается на один балл.\n\nПереход в офлайн-группу. Ученик онлайн-группы может перейти в офлайн-группу с начала следующего месяца, если в офлайн-группе есть свободные места. Разница в цене оплачивается до перехода.\n\nПробный урок. Первый пробный урок онлайн бесплатный и длится 40 минут. Записаться на пробный урок можно через администратора. После пробного урока администратор поможет выбрать группу по уровню и удобному времени."
+    }
+  ],
+  "queries": [
+    { "lang": "uz", "text": "guruhimni almashtirsam qachondan kuchga kiradi?", "doc": "rules-uz", "answer": "keyingi haftaning dushanba kunidan" },
+    { "lang": "uz", "text": "sertifikat olish uchun necha foiz ball kerak?", "doc": "rules-uz", "answer": "kamida 70 foiz" },
+    { "lang": "uz", "text": "shanba kuni mustaqil o'qish xonasi soat nechagacha ochiq?", "doc": "rules-uz", "answer": "shanba kunlari esa 14:00 gacha" },
+    { "lang": "uz", "text": "aka-ukalar birga o'qisa arzonroq bo'ladimi?", "doc": "payment-uz", "answer": "10 foiz chegirma" },
+    { "lang": "uz", "text": "kursdan chiqsam pulim qachon qaytadi?", "doc": "payment-uz", "answer": "o'n ish kuni ichida" },
+    { "lang": "uz", "text": "kasal bo'lib qolsam kursni to'xtatib tursam bo'ladimi?", "doc": "payment-uz", "answer": "bir oygacha muzlatishi" },
+    { "lang": "uz", "text": "to'lovni kechiktirsam nima bo'ladi?", "doc": "payment-uz", "answer": "guruhdagi joyi boshqa talabaga berilishi mumkin" },
+    { "lang": "ru", "text": "если у учителя пропал интернет, урок перенесут?", "doc": "online-ru", "answer": "урок переносится бесплатно" },
+    { "lang": "ru", "text": "сколько дней можно смотреть запись урока?", "doc": "online-ru", "answer": "Запись хранится семь дней" },
+    { "lang": "ru", "text": "до скольки нужно сдать домашку?", "doc": "online-ru", "answer": "до 23:00 дня перед следующим уроком" },
+    { "lang": "ru", "text": "можно перейти из онлайна в обычную группу?", "doc": "online-ru", "answer": "с начала следующего месяца" }
+  ]
+}
