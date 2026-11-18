@@ -212,8 +212,9 @@ export function responseUserMessage(input: {
     `<known_customer_details>${sanitize(JSON.stringify(known))}</known_customer_details>`,
     `<catalog_context>${input.searchResults}</catalog_context>`,
     input.nextQuestion
-      ? `If you need one more detail, ask exactly this: ${input.nextQuestion}`
+      ? `If you need one more detail, ask for it in your own words as part of your answer, one question only. The detail, as the business would ask it: ${input.nextQuestion}`
       : 'Do not ask for more details unless the customer needs to choose between options.',
+    'Never repeat word for word a question you already asked in the history.',
   ].join('\n');
 }
 

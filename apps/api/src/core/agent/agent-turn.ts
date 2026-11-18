@@ -1354,7 +1354,18 @@ export async function runAgentTurn(
   // 6. Guardrail (also for the code-rendered fallback below), one
   // regeneration, then a safe code-rendered fallback.
   const quoteMissing = firstMissing(pack, slots, 'quote');
-  const nextQuestion = quoteMissing?.questions[localeId];
+  // ADR 073 A2: a detail asked for in the previous reply and still missing is
+  // not asked again; the reply offers the options or a person instead.
+  const askedBefore =
+    quoteMissing !== undefined &&
+    input.progress?.priorTurns.at(-1)?.askedSlot === quoteMissing.key;
+  const nextQuestion = askedBefore
+    ? undefined
+    : quoteMissing?.questions[localeId];
+  const askedNow = (reply: string): Partial<AgentTurnResult> =>
+    nextQuestion !== undefined && quoteMissing && /[?？؟]/u.test(reply)
+      ? { askedSlot: quoteMissing.key }
+      : {};
   const fallback = (extra: Partial<AgentTurnResult> = {}): AgentTurnResult => {
     const tail = nextQuestion ?? locale().templates.offerOperator;
     // AUD-10: options are title-fact references rendered by code and passed
@@ -1369,6 +1380,7 @@ export async function runAgentTurn(
         : undefined;
     return finish(checked?.rendered ?? tail, 'FALLBACK', {
       ...extra,
+      ...askedNow(tail),
       shownFactIds: [...(checked?.references ?? [])],
     });
   };
@@ -1545,6 +1557,19 @@ export async function runAgentTurn(
     if (listed.outcome !== 'FALLBACK' || listed.shownFactIds.length > 0)
       return listed;
   }
+  // ADR 073 A2: never the previous bot message again, word for word.
+  const lastAgentText = [...input.history]
+    .reverse()
+    .find((entry) => entry.role === 'agent')
+    ?.text.trim();
+  if (
+    checked.rendered !== undefined &&
+    lastAgentText !== undefined &&
+    checked.rendered.trim() === lastAgentText
+  ) {
+    const listed = fallback({ violations: checked.violations, regenerated });
+    if (listed.reply.trim() !== lastAgentText) return listed;
+  }
   if (!checked.rendered) {
     return handover('GUARDRAIL', {
       violations: checked.violations,
@@ -1597,7 +1622,9 @@ export async function runAgentTurn(
     'ANSWERED',
     {
       shownFactIds: [...(checked.references ?? [])],
-      ...(schedulingTurn ? { askedSlot: SCHEDULING_MARK } : {}),
+      ...(schedulingTurn
+        ? { askedSlot: SCHEDULING_MARK }
+        : askedNow(checked.rendered)),
       ...(askPhone ? { phoneRequested: true } : {}),
       regenerated,
       ...(firstViolations.length > 0
