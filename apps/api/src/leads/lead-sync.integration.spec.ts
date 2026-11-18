@@ -16,9 +16,13 @@ import {
   ConnectorUnauthorizedError,
 } from '../connectors/interfaces/errors.js';
 import type { TenantConnectorLoader } from '../connectors/sync/tenant-connector-loader.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import {
   CRM_OUTCOME_UNCERTAIN,
   LEAD_SYNC_LEASE_MS,
@@ -29,18 +33,27 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Lead sync integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the workers on the app
+// role, `sync` under the tenant it is given as the job runs it; the due scan
+// finds leads and abandoned operations on the privileged handle and queues
+// each under its tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 // A second client = a second worker process with its own connections.
-const db2 = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+const db2 = appClient();
+const privileged = { db } as PrivilegedDatabase;
 afterAll(async () => {
-  await db.$disconnect();
-  await db2.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect(), db2.$disconnect()]);
 });
+
+const leadSync = (
+  client: PrismaService,
+  loader: TenantConnectorLoader,
+): LeadSyncService =>
+  tenantScoped(new LeadSyncService(client, loader, privileged), {
+    tenantArg: 0,
+  });
 
 type Step =
   | 'ok'
@@ -220,7 +233,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('success: one record, evidence stored, one stable key', async () => {
     const w = await leadWorld();
     const crm = new FakeCrm('none', ['ok']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     expect(await sync.sync(w.tenantId, w.leadId)).toBe('SYNCED');
     expect(await sync.sync(w.tenantId, w.leadId)).toBe('SKIPPED');
     expect(crm.records).toHaveLength(1);
@@ -242,7 +255,7 @@ describe('lead CRM sync: one logical write per lead', () => {
     for (const first of ['reject', 'refuse'] as const) {
       const w = await leadWorld();
       const crm = new FakeCrm('none', [first, 'ok']);
-      const sync = new LeadSyncService(prisma, loaderFor(crm));
+      const sync = leadSync(prisma, loaderFor(crm));
       const t0 = new Date();
       expect(await sync.sync(w.tenantId, w.leadId, t0)).toBe('FAILED');
       const failed = await op(w.tenantId, w.leadId);
@@ -266,7 +279,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('native: CRM committed but the response was lost -> retry with the same key, no second record', async () => {
     const w = await leadWorld();
     const crm = new FakeCrm('native', ['commit-then-timeout', 'ok']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     const t0 = new Date();
     expect(await sync.sync(w.tenantId, w.leadId, t0)).toBe('FAILED');
     const waiting = await op(w.tenantId, w.leadId);
@@ -292,7 +305,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('lookup: after a lost response the record is found, not created again', async () => {
     const w = await leadWorld();
     const crm = new FakeCrm('lookup', ['commit-then-timeout']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     const t0 = new Date();
     expect(await sync.sync(w.tenantId, w.leadId, t0)).toBe('FAILED');
     const waiting = await op(w.tenantId, w.leadId);
@@ -311,7 +324,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('lookup: nothing was created -> create once; a failed lookup keeps the doubt', async () => {
     const w = await leadWorld();
     const crm = new FakeCrm('lookup', ['timeout-before-commit', 'ok']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     expect(await sync.sync(w.tenantId, w.leadId, new Date())).toBe('FAILED');
     // The lookup itself fails (even with an error that proves nothing was sent):
     // the earlier attempt is still unclear, so the next try must look up again.
@@ -338,7 +351,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('none: an unclear outcome is never retried automatically and waits for a person', async () => {
     const w = await leadWorld();
     const crm = new FakeCrm('none', ['commit-then-timeout']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     expect(await sync.sync(w.tenantId, w.leadId)).toBe('UNCERTAIN');
     expect(await op(w.tenantId, w.leadId)).toMatchObject({
       status: 'UNCERTAIN',
@@ -373,7 +386,7 @@ describe('lead CRM sync: one logical write per lead', () => {
     const w = await leadWorld();
     const other = await leadWorld();
     const crm = new FakeCrm('none', ['commit-then-timeout']);
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     expect(await sync.sync(w.tenantId, w.leadId)).toBe('UNCERTAIN');
     expect(
       await sync.resolveUncertain({
@@ -432,11 +445,8 @@ describe('lead CRM sync: one logical write per lead', () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => (release = r));
     const crm = new FakeCrm('none', [{ hold }]);
-    const one = new LeadSyncService(prisma, loaderFor(crm));
-    const two = new LeadSyncService(
-      db2 as unknown as PrismaService,
-      loaderFor(crm),
-    );
+    const one = leadSync(prisma, loaderFor(crm));
+    const two = leadSync(db2 as unknown as PrismaService, loaderFor(crm));
     const first = one.sync(w.tenantId, w.leadId);
     await new Promise((r) => setTimeout(r, 100));
     const results = await Promise.all([
@@ -455,14 +465,14 @@ describe('lead CRM sync: one logical write per lead', () => {
       const w = await leadWorld();
       const hold = new Promise<void>(() => undefined); // never returns: the worker is gone
       const crm = new FakeCrm(mode, [{ hold }, 'ok']);
-      const dead = new LeadSyncService(prisma, loaderFor(crm));
+      const dead = leadSync(prisma, loaderFor(crm));
       void dead.sync(w.tenantId, w.leadId);
       await new Promise((r) => setTimeout(r, 100));
       expect(await op(w.tenantId, w.leadId)).toMatchObject({
         status: 'IN_FLIGHT',
       });
       // Before the lease expires nothing is re-queued or attempted.
-      const recovery = new LeadSyncService(
+      const recovery = leadSync(
         db2 as unknown as PrismaService,
         loaderFor(crm),
       );
@@ -512,7 +522,7 @@ describe('lead CRM sync: one logical write per lead', () => {
           : value;
       },
     }) as PrismaService;
-    const worker = new LeadSyncService(flaky, loaderFor(crm));
+    const worker = leadSync(flaky, loaderFor(crm));
     await expect(worker.sync(w.tenantId, w.leadId)).rejects.toThrow(
       'database unavailable',
     );
@@ -549,10 +559,7 @@ describe('lead CRM sync: one logical write per lead', () => {
       },
     }) as PrismaService;
     expect(
-      await new LeadSyncService(flaky, loaderFor(crm)).sync(
-        w.tenantId,
-        w.leadId,
-      ),
+      await leadSync(flaky, loaderFor(crm)).sync(w.tenantId, w.leadId),
     ).toBe('SYNCED');
     expect(crm.createCalls).toHaveLength(1);
     expect(await leadRow(w.leadId)).toMatchObject({
@@ -566,13 +573,10 @@ describe('lead CRM sync: one logical write per lead', () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => (release = r));
     const crm = new FakeCrm('native', [{ hold }, 'ok']);
-    const slow = new LeadSyncService(prisma, loaderFor(crm));
+    const slow = leadSync(prisma, loaderFor(crm));
     const pending = slow.sync(w.tenantId, w.leadId);
     await new Promise((r) => setTimeout(r, 100));
-    const fast = new LeadSyncService(
-      db2 as unknown as PrismaService,
-      loaderFor(crm),
-    );
+    const fast = leadSync(db2 as unknown as PrismaService, loaderFor(crm));
     expect(
       await fast.sync(
         w.tenantId,
@@ -593,7 +597,7 @@ describe('lead CRM sync: one logical write per lead', () => {
   it('attempts are bounded; an exhausted unclear write becomes UNCERTAIN, a definitive one FAILED', async () => {
     const native = await leadWorld();
     const crm = new FakeCrm('native', Array(8).fill('timeout-before-commit'));
-    const sync = new LeadSyncService(prisma, loaderFor(crm));
+    const sync = leadSync(prisma, loaderFor(crm));
     let now = new Date();
     let last = '';
     for (let i = 0; i < 8; i += 1) {
@@ -609,7 +613,7 @@ describe('lead CRM sync: one logical write per lead', () => {
 
     const definitive = await leadWorld();
     const rejecting = new FakeCrm('none', Array(8).fill('reject'));
-    const sync2 = new LeadSyncService(prisma, loaderFor(rejecting));
+    const sync2 = leadSync(prisma, loaderFor(rejecting));
     now = new Date();
     for (let i = 0; i < 8; i += 1) {
       last = await sync2.sync(definitive.tenantId, definitive.leadId, now);
