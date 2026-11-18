@@ -45,6 +45,7 @@ const STRICT_SPECS = [
   'src/handover/operator-idle-return.integration.spec.ts',
   'src/channels/telegram/operator-webhook.integration.spec.ts',
   'src/channels/telegram/telegram.integration.spec.ts',
+  'src/channels/facebook/facebook-flow.integration.spec.ts',
 ];
 
 export default defineConfig({
