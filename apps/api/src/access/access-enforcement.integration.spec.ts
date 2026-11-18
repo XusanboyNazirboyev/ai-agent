@@ -4,9 +4,14 @@ import { resolve } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { normalizeTelegramUpdate } from '../channels/telegram/telegram-normalizer.js';
 import {
   TelegramProcessor,
@@ -31,14 +36,19 @@ import { TenantAccessService } from './tenant-access.service.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Access enforcement tests require agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the access checks, the
+// gate and the processors on the app role, each event under its tenant as
+// the job runs it; the webhook routes on the privileged handle and accepts
+// under the tenant; the subscription scan finds periods on the privileged
+// handle.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 const tenants: string[] = [];
 afterAll(async () => {
   await retireOutbox(db, tenants);
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -59,7 +69,10 @@ interface World {
   processor: TelegramProcessor;
   agentProcessor: TelegramProcessor;
   run: ReturnType<typeof vi.fn>;
+  /** The access service as a request calls it (under the tenant named). */
   access: TenantAccessService;
+  /** The same service as the scan holds it. */
+  accessService: TenantAccessService;
 }
 
 async function plan(): Promise<string> {
@@ -123,7 +136,8 @@ async function world(
   return {
     tenantId: tenant.id,
     accountId: account.id,
-    access,
+    access: tenantScoped(access, { tenantArg: 0 }),
+    accessService: access,
     run,
     webhook: new TelegramWebhookService(
       prisma,
@@ -132,22 +146,16 @@ async function world(
         TELEGRAM_WEBHOOK_SECRET: 'integration-secret',
         TELEGRAM_RATE_LIMIT_PER_MINUTE: 1_000,
       }),
+      undefined,
+      privileged,
     ),
     // Agent OFF: the Phase 2 echo path.
-    processor: new TelegramProcessor(
-      prisma,
-      sender,
-      undefined,
-      ...optional,
-      gate,
+    processor: tenantScoped(
+      new TelegramProcessor(prisma, sender, undefined, ...optional, gate),
     ),
     // A stub agent: records whether a turn would have started.
-    agentProcessor: new TelegramProcessor(
-      prisma,
-      sender,
-      agent,
-      ...optional,
-      gate,
+    agentProcessor: tenantScoped(
+      new TelegramProcessor(prisma, sender, agent, ...optional, gate),
     ),
   };
 }
@@ -166,7 +174,13 @@ async function receive(w: World, text: string): Promise<TelegramQueueEvent> {
     },
   });
   if (normalized.kind !== 'text') throw new Error('expected text');
-  expect(await w.webhook.accept(w.accountId, normalized)).toBe('accepted');
+  // As the controller: routed on the privileged pool, accepted under it.
+  expect(await w.webhook.routeTenant(w.accountId)).toBe(w.tenantId);
+  expect(
+    await runWithTenant(w.tenantId, () =>
+      w.webhook.accept(w.accountId, normalized),
+    ),
+  ).toBe('accepted');
   const outbox = await db.outboxEvent.findFirstOrThrow({
     where: {
       tenantId: w.tenantId,
@@ -292,7 +306,8 @@ describe('subscription scan on the real database (fake clock)', () => {
     const scan = new SubscriptionScanService(
       prisma,
       config({ SUBSCRIPTION_GRACE_DAYS: 3 }),
-      w.access,
+      w.accessService,
+      privileged,
     );
     const at = (days: number): Date => new Date(end.getTime() + days * DAY);
     expect((await w.access.check(w.tenantId, at(-1))).state).toBe('ok');
