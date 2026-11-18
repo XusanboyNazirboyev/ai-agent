@@ -3,8 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { loadLifecycleCases } from '../agent/testing/lifecycle-cases.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import { appClient, ownerClient } from '../persistence/testing/test-clients.js';
 import {
   runLifecycleCase,
   type LifecycleOutcome,
@@ -18,9 +17,9 @@ import {
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('requires agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// RLS plan S8b: each case seeded and scored on the owner, run on the app role.
+const db = ownerClient();
+const app = appClient();
 const cases = loadLifecycleCases(
   resolve(process.cwd(), '../../eval/lifecycle'),
 );
@@ -46,7 +45,7 @@ afterAll(async () => {
   console.log(
     `EVAL lifecycle: ${summary.passed}/${summary.cases} passed, false success claims = ${falseClaims}`,
   );
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 describe('action lifecycle evaluation', () => {
@@ -60,7 +59,7 @@ describe('action lifecycle evaluation', () => {
   it.each(cases.map((item) => [item.id, item] as const))(
     '%s',
     async (_id, item) => {
-      const outcome = await runLifecycleCase(db, item);
+      const outcome = await runLifecycleCase(db, item, app);
       outcomes.push(outcome);
       expect(outcome.failures).toEqual([]);
     },

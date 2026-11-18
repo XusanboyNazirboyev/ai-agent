@@ -65,6 +65,9 @@ const STRICT_SPECS = [
   'src/leads/lead-sync.integration.spec.ts',
   'src/knowledge/knowledge.integration.spec.ts',
   'src/exports/export.integration.spec.ts',
+  'src/observability/alerts.integration.spec.ts',
+  'src/actions/action-eval.integration.spec.ts',
+  'src/actions/action-pipeline.integration.spec.ts',
 ];
 
 export default defineConfig({

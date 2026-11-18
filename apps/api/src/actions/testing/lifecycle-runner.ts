@@ -39,6 +39,9 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import { HandoverService } from '../../handover/handover.service.js';
 import { INITIAL_LOCALE_PACKS } from '../../locales/locale-packs.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import { runWithTenant } from '../../persistence/tenant-context.js';
+import { tenantScoped } from '../../persistence/testing/test-clients.js';
 import { ActionService } from '../action.service.js';
 
 /** A fictional CRM: catalog reads from the mock, writes scripted per case. */
@@ -159,12 +162,21 @@ export interface LifecycleOutcome {
 
 let updateCounter = 3_000_000;
 
-/** Runs one lifecycle case on the real pipeline and scores it. */
+/**
+ * Runs one lifecycle case on the real pipeline and scores it.
+ *
+ * RLS plan S8b: `db` (the owner) seeds the case and reads the score; `app`
+ * runs the code under test. The webhook routes on the privileged handle and
+ * accepts under the tenant; each queue event and each direct execute runs
+ * under its tenant, as the job does.
+ */
 export async function runLifecycleCase(
   db: PrismaClient,
   item: LifecycleCase,
+  app: PrismaClient = db,
 ): Promise<LifecycleOutcome> {
-  const prisma = db as unknown as PrismaService;
+  const prisma = app as unknown as PrismaService;
+  const privileged = { db } as PrivilegedDatabase;
   const pack = EVAL_PACKS[item.pack];
   const spec = pack.actions[0];
   const config = {
@@ -246,14 +258,19 @@ export async function runLifecycleCase(
         name === 'A' ? [...item.crm.writes] : [],
       ),
     );
-    const webhook = new TelegramWebhookService(prisma, {
-      get: (key: string) =>
-        ({
-          TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
-          TELEGRAM_WEBHOOK_SECRET: 's',
-          TELEGRAM_RATE_LIMIT_PER_MINUTE: 10_000,
-        })[key],
-    } as never);
+    const webhook = new TelegramWebhookService(
+      prisma,
+      {
+        get: (key: string) =>
+          ({
+            TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
+            TELEGRAM_WEBHOOK_SECRET: 's',
+            TELEGRAM_RATE_LIMIT_PER_MINUTE: 10_000,
+          })[key],
+      } as never,
+      undefined,
+      privileged,
+    );
     tenants[name] = {
       tenantId: tenant.id,
       accountId: account.id,
@@ -266,7 +283,9 @@ export async function runLifecycleCase(
   }
 
   const handovers = new HandoverService(prisma);
-  const actions = new ActionService(prisma, loader, handovers, config);
+  const actionService = new ActionService(prisma, loader, handovers, config);
+  /** Direct executes (a retry job, another tenant's job) under their tenant. */
+  const actions = tenantScoped(actionService, { tenantArg: 0 });
   const agent = new AgentConversationService(
     prisma,
     loader,
@@ -276,7 +295,7 @@ export async function runLifecycleCase(
     config,
     undefined,
     undefined,
-    actions,
+    actionService,
   );
   const pipeline = new TelegramAgentPipeline(
     prisma,
@@ -290,17 +309,19 @@ export async function runLifecycleCase(
     },
     handovers,
     undefined,
-    actions,
+    actionService,
   );
-  const processor = new TelegramProcessor(
-    prisma,
-    { sendMessage: vi.fn() } as unknown as TelegramSender,
-    pipeline,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    actions,
+  const processor = tenantScoped(
+    new TelegramProcessor(
+      prisma,
+      { sendMessage: vi.fn() } as unknown as TelegramSender,
+      pipeline,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      actionService,
+    ),
   );
 
   const seen = new Map<string, number>();
@@ -376,7 +397,11 @@ export async function runLifecycleCase(
         },
       });
       if (normalized.kind !== 'text') throw new Error('text update expected');
-      const accepted = await t.webhook.accept(t.accountId, normalized);
+      if ((await t.webhook.routeTenant(t.accountId)) !== t.tenantId)
+        failures.push('webhook routed to another tenant');
+      const accepted = await runWithTenant(t.tenantId, () =>
+        t.webhook.accept(t.accountId, normalized),
+      );
       await ensureContact(t);
       if (step.redeliver) {
         if (accepted !== 'duplicate')
