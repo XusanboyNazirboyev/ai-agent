@@ -25,12 +25,6 @@ const PENDING = new Set([
   'operator_password_resets',
   'operator_sessions',
   'operators',
-  // Leads, audit, billing and the platform.
-  'audit_events',
-  'lead_stages',
-  'platform_audit_events',
-  'subscription_payments',
-  'tenant_subscriptions',
 ]);
 
 const POLICIES = [
