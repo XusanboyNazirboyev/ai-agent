@@ -63,6 +63,7 @@ const STRICT_SPECS = [
   'src/connectors/spreadsheet/sheet-refresh.integration.spec.ts',
   'src/connectors/sync/catalog-sync.integration.spec.ts',
   'src/leads/lead-sync.integration.spec.ts',
+  'src/knowledge/knowledge.integration.spec.ts',
 ];
 
 export default defineConfig({

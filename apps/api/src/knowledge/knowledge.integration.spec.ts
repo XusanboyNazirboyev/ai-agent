@@ -2,10 +2,13 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { HashingEmbeddingProvider } from '../llm/embeddings/hashing-embedding-provider.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { MeteredLlm } from '../core/llm/metered-llm.js';
 import { KnowledgeRetriever } from './knowledge-retriever.js';
 import { KnowledgeService } from './knowledge.service.js';
@@ -14,14 +17,22 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Knowledge integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const service = new KnowledgeService(db as unknown as PrismaService);
+// RLS plan S8b: fixtures and checks on the owner; the knowledge service on
+// the app role under the tenant each call names; a retriever under the
+// tenant it serves, as the agent turn runs it.
+const db = ownerClient();
+const app = appClient();
+const knowledge = new KnowledgeService(app as unknown as PrismaService);
+const service = tenantScoped(knowledge, { tenantArg: 0 });
 const embedder = new HashingEmbeddingProvider(64);
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
+
+const retrieverOf = (
+  ...args: ConstructorParameters<typeof KnowledgeRetriever>
+): KnowledgeRetriever =>
+  tenantScoped(new KnowledgeRetriever(...args), { tenantId: args[3] });
 
 const embed = async (
   texts: readonly string[],
@@ -82,8 +93,8 @@ describe('embedding model changes', () => {
       activeDocuments: 1,
       withModel: 0,
     });
-    const current = new KnowledgeRetriever(
-      service,
+    const current = retrieverOf(
+      knowledge,
       embedder,
       stubLlm(embedder),
       tenantId,
@@ -91,8 +102,8 @@ describe('embedding model changes', () => {
     expect(await current.search('refund lessons cancel')).toMatchObject({
       ok: true,
     });
-    const changed = new KnowledgeRetriever(
-      service,
+    const changed = retrieverOf(
+      knowledge,
       otherModel,
       stubLlm(otherModel),
       tenantId,
@@ -102,8 +113,8 @@ describe('embedding model changes', () => {
       code: 'EMBEDDING_MODEL_MISMATCH',
     });
     // A tenant with no knowledge at all is genuinely empty.
-    const empty = new KnowledgeRetriever(
-      service,
+    const empty = retrieverOf(
+      knowledge,
       otherModel,
       stubLlm(otherModel),
       await tenant(),
@@ -136,8 +147,8 @@ describe('embedding model changes', () => {
         model: otherModel.model,
       }),
     );
-    const retriever = new KnowledgeRetriever(
-      service,
+    const retriever = retrieverOf(
+      knowledge,
       otherModel,
       stubLlm(otherModel),
       tenantId,
