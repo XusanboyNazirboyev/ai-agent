@@ -2,8 +2,12 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
 import { AppointmentService, type HoldInput } from './appointment.service.js';
 import {
@@ -19,10 +23,14 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Scheduling integration tests require agentcore_test');
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const service = new AppointmentService(db as unknown as PrismaService);
+// RLS plan S8b: fixtures and checks on the owner; the service on the app role
+// under the tenant each call names first.
+const db = ownerClient();
+const app = appClient();
+const service = tenantScoped(
+  new AppointmentService(app as unknown as PrismaService),
+  { tenantArg: 0 },
+);
 const suffix = randomUUID().slice(0, 8);
 const DAY = 24 * 3_600_000;
 const tenantIds: string[] = [];
@@ -138,7 +146,7 @@ afterAll(async () => {
     await db.appointment.deleteMany({ where: { tenantId: id } });
     await db.tenant.delete({ where: { id } });
   }
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 describe('appointment service (ADR 046 step 1)', () => {
@@ -228,7 +236,7 @@ describe('appointment service (ADR 046 step 1)', () => {
     const t = new Date(a.startsAt.getTime() + 3 * DAY);
     const racing = {
       $transaction: (fn: (tx: PrismaClient) => Promise<unknown>) =>
-        db.$transaction((tx) =>
+        app.$transaction((tx) =>
           fn({
             contact: tx.contact,
             conversation: tx.conversation,
@@ -260,15 +268,15 @@ describe('appointment service (ADR 046 step 1)', () => {
             },
           } as unknown as PrismaClient),
         ),
-      appointment: db.appointment,
-      tenant: db.tenant,
-      serviceType: db.serviceType,
-      staffMember: db.staffMember,
-      contact: db.contact,
-      conversation: db.conversation,
+      appointment: app.appointment,
+      tenant: app.tenant,
+      serviceType: app.serviceType,
+      staffMember: app.staffMember,
+      contact: app.contact,
+      conversation: app.conversation,
     } as unknown as PrismaService;
     await expect(
-      new AppointmentService(racing).hold(
+      tenantScoped(new AppointmentService(racing), { tenantArg: 0 }).hold(
         a.tenantId,
         holdInput(a, `k-${suffix}-x1`, t),
       ),

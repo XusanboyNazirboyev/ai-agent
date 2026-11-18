@@ -54,6 +54,7 @@ const STRICT_SPECS = [
   'src/secrets/connector-secret-store.integration.spec.ts',
   'src/followup/follow-up.integration.spec.ts',
   'src/persons/people.integration.spec.ts',
+  'src/scheduling/appointment.integration.spec.ts',
 ];
 
 export default defineConfig({
