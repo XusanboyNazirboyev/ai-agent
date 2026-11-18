@@ -11,22 +11,6 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-/**
- * RLS plan S9: tables with a `tenant_id` column that have no tenant isolation
- * policy yet. Each domain slice adds its policies in a migration and removes
- * its tables from this list; a new tenant table must arrive with policies.
- */
-const PENDING = new Set([
-  // Identity: looked up across tenants on the privileged handle.
-  'mfa_challenges',
-  'operator_api_tokens',
-  'operator_credentials',
-  'operator_invites',
-  'operator_password_resets',
-  'operator_sessions',
-  'operators',
-]);
-
 const POLICIES = [
   'tenant_isolation_delete',
   'tenant_isolation_insert',
@@ -35,7 +19,9 @@ const POLICIES = [
 ];
 
 describe('RLS coverage of tenant tables (plan S9)', () => {
-  it('every table with a tenant_id has the four isolation policies, or is pending', async () => {
+  // RLS plan S9 put the four ADR 050 policies on every tenant table; a new
+  // table with a tenant_id must arrive with them in its migration.
+  it('every table with a tenant_id has RLS on and the four isolation policies', async () => {
     const rows = await db.$queryRaw<
       Array<{ table: string; rls: boolean; policies: string[] }>
     >`
@@ -54,9 +40,9 @@ describe('RLS coverage of tenant tables (plan S9)', () => {
       WHERE c.relkind = 'r'
       GROUP BY c.relname, c.relrowsecurity
       ORDER BY c.relname`;
-    const covered = rows.filter((row) => !PENDING.has(row.table));
+    expect(rows.length).toBeGreaterThan(0);
     expect(
-      covered
+      rows
         .filter(
           (row) =>
             !row.rls ||
@@ -64,13 +50,5 @@ describe('RLS coverage of tenant tables (plan S9)', () => {
         )
         .map((row) => row.table),
     ).toEqual([]);
-    // A pending table that already has policies leaves the list.
-    expect(
-      rows
-        .filter((row) => PENDING.has(row.table) && row.policies.length > 0)
-        .map((row) => row.table),
-    ).toEqual([]);
-    const tables = new Set(rows.map((row) => row.table));
-    expect([...PENDING].filter((table) => !tables.has(table))).toEqual([]);
   });
 });
