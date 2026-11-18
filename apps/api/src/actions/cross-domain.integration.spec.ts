@@ -20,14 +20,19 @@ import {
   type ScriptRequest,
   type ScriptStep,
 } from '../core/llm/scripted-llm-provider.js';
-import { PrismaClient } from '../generated/prisma/client.js';
 import { retireOutbox } from '../channels/telegram/testing/outbox.js';
 import { HandoverService } from '../handover/handover.service.js';
 import { UZ_LATN } from '../locales/locale-packs.js';
 import { EDUCATION_PACK } from '../packs/education/education.pack.js';
 import { TRAVEL_PACK } from '../packs/travel/travel.pack.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { runWithTenant } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { ActionService } from './action.service.js';
 
 /**
@@ -38,14 +43,17 @@ import { ActionService } from './action.service.js';
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('requires agentcore_test');
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner; the pipeline on the app
+// role. The webhook routes on the privileged handle and accepts under the
+// tenant; each queue event runs under its tenant, as the job does.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 const createdTenants: string[] = [];
 afterAll(async () => {
   await retireOutbox(db, createdTenants);
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const settings: Record<string, unknown> = {
@@ -138,15 +146,17 @@ const pipeline = new TelegramAgentPipeline(
   undefined,
   actions,
 );
-const processor = new TelegramProcessor(
-  prisma,
-  { sendMessage: vi.fn() } as unknown as TelegramSender,
-  pipeline,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  actions,
+const processor = tenantScoped(
+  new TelegramProcessor(
+    prisma,
+    { sendMessage: vi.fn() } as unknown as TelegramSender,
+    pipeline,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    actions,
+  ),
 );
 
 scripts.set(
@@ -210,14 +220,19 @@ async function tenant(
       isTestAccount: true,
     },
   });
-  const webhook = new TelegramWebhookService(prisma, {
-    get: (key: string) =>
-      ({
-        TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
-        TELEGRAM_WEBHOOK_SECRET: 's',
-        TELEGRAM_RATE_LIMIT_PER_MINUTE: 1_000,
-      })[key],
-  } as never);
+  const webhook = new TelegramWebhookService(
+    prisma,
+    {
+      get: (key: string) =>
+        ({
+          TELEGRAM_CHANNEL_ACCOUNT_ID: account.id,
+          TELEGRAM_WEBHOOK_SECRET: 's',
+          TELEGRAM_RATE_LIMIT_PER_MINUTE: 1_000,
+        })[key],
+    } as never,
+    undefined,
+    privileged,
+  );
   return { tenantId: created.id, accountId: account.id, webhook };
 }
 
@@ -238,7 +253,11 @@ async function say(
     },
   });
   if (normalized.kind !== 'text') throw new Error('text');
-  await t.webhook.accept(t.accountId, normalized);
+  // As the controller: routed on the privileged pool, accepted under it.
+  expect(await t.webhook.routeTenant(t.accountId)).toBe(t.tenantId);
+  await runWithTenant(t.tenantId, () =>
+    t.webhook.accept(t.accountId, normalized),
+  );
   const outbox = await db.outboxEvent.findFirstOrThrow({
     where: {
       tenantId: t.tenantId,
