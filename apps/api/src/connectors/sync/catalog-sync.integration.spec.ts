@@ -5,9 +5,14 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../../config/environment.js';
-import { Prisma, PrismaClient } from '../../generated/prisma/client.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { MockConnector } from '../mock/mock-connector.js';
 import type { MockItemFixture } from '../mock/mock-fixtures.js';
 import { ConnectorRegistry } from '../registry/connector-registry.js';
@@ -31,10 +36,14 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Catalog sync integration tests require agentcore_test');
 }
 
-const prisma = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const database = prisma as unknown as PrismaService;
+// RLS plan S8b: fixtures and checks on the owner (`prisma`); the sync on the
+// app role, each call under the tenant it names, the queue worker under the
+// job's tenant; the scheduler's stale-run sweep and connector list on the
+// privileged handle.
+const prisma = ownerClient();
+const app = appClient();
+const database = app as unknown as PrismaService;
+const privileged = { db: prisma } as PrivilegedDatabase;
 
 /** Mutable, fictional upstream catalog shared by the mock connector. */
 let upstream: MockItemFixture[] = [];
@@ -81,9 +90,16 @@ const environment = config({
   CATALOG_SYNC_INTERVAL_MINUTES: 0,
   REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379',
 });
-const store = new CatalogSyncStore(database);
-const loader = new TenantConnectorLoader(database, registry);
-const service = new CatalogSyncService(store, loader, environment);
+const syncStore = new CatalogSyncStore(database, privileged);
+const store = tenantScoped(syncStore, { tenantArg: 0 });
+const loader = new TenantConnectorLoader(
+  database,
+  registry,
+  undefined,
+  privileged,
+);
+const syncService = new CatalogSyncService(syncStore, loader, environment);
+const service = tenantScoped(syncService);
 
 function items(count: number): MockItemFixture[] {
   return Array.from({ length: count }, (_, index) => ({
@@ -145,7 +161,7 @@ beforeEach(() => {
 });
 
 afterAll(async () => {
-  await prisma.$disconnect();
+  await Promise.all([prisma.$disconnect(), app.$disconnect()]);
 });
 
 describe('catalog sync persistence', () => {
@@ -523,8 +539,8 @@ describe('catalog sync queue', () => {
     const fixture = await tenantWithConnector();
     const runtime = new CatalogSyncQueueRuntime(
       environment,
-      service,
-      store,
+      syncService,
+      syncStore,
       loader,
     );
     runtime.onModuleInit();
@@ -560,8 +576,8 @@ describe('catalog sync queue', () => {
     const enqueued: unknown[] = [];
     const runtime = new CatalogSyncQueueRuntime(
       environment,
-      service,
-      store,
+      syncService,
+      syncStore,
       loader,
     );
     runtime.enqueue = async (request): Promise<void> => {

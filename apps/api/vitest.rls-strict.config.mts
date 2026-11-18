@@ -61,6 +61,7 @@ const STRICT_SPECS = [
   'src/connectors/spreadsheet/sheet-catalog.integration.spec.ts',
   'src/connectors/spreadsheet/sheet-agent.integration.spec.ts',
   'src/connectors/spreadsheet/sheet-refresh.integration.spec.ts',
+  'src/connectors/sync/catalog-sync.integration.spec.ts',
 ];
 
 export default defineConfig({
