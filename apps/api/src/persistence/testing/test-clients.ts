@@ -87,19 +87,29 @@ function tenantIdIn(value: unknown): string | undefined {
   return typeof tenantId === 'string' ? tenantId : undefined;
 }
 
+/** The request field each guard sets: the session's, the API token's. */
+const REQUEST_IDENTITIES = ['principal', 'operator'] as const;
+
+function requestTenant(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  for (const key of REQUEST_IDENTITIES)
+    if (key in value) {
+      const tenantId = tenantIdIn((value as Record<string, unknown>)[key]);
+      if (tenantId) return tenantId;
+    }
+  return undefined;
+}
+
 /**
  * The tenant a call names: `{ tenantId }` in an argument, a request carrying
- * the `principal` the session guard set, or the `(tx, tenantId, ...)` shape.
+ * the `principal` the session guard set or the `operator` the API token guard
+ * set, or the `(tx, tenantId, ...)` shape.
  * A leading id is not guessed (it may be an account or conversation id):
  * such calls pass `tenantArg` or set the tenant explicitly.
  */
 function tenantOf(args: readonly unknown[]): string | undefined {
   for (const arg of args) {
-    const tenantId =
-      tenantIdIn(arg) ??
-      (arg !== null && typeof arg === 'object' && 'principal' in arg
-        ? tenantIdIn((arg as { principal: unknown }).principal)
-        : undefined);
+    const tenantId = tenantIdIn(arg) ?? requestTenant(arg);
     if (tenantId) return tenantId;
   }
   const [first, second] = args;

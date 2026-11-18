@@ -39,6 +39,7 @@ const STRICT_SPECS = [
   'src/webinbox/instagram-connect.integration.spec.ts',
   'src/webinbox/login-limit.integration.spec.ts',
   'src/webinbox/webinbox.integration.spec.ts',
+  'src/handover/operator-api.integration.spec.ts',
 ];
 
 export default defineConfig({

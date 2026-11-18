@@ -3,9 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { ExecutionContext } from '@nestjs/common';
 import { afterAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import { runWithTenantSlot } from '../persistence/tenant-context.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { HandoverService } from './handover.service.js';
 import {
   hashToken,
@@ -19,16 +24,19 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Operator API integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner; the token found on the privileged
+// handle, then the commands on the app role under the token's tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
-const guard = new OperatorTokenGuard(prisma);
-const controller = new OperatorCommandsController(new HandoverService(prisma));
+const guard = new OperatorTokenGuard(prisma, { db } as PrivilegedDatabase);
+const controller = tenantScoped(
+  new OperatorCommandsController(new HandoverService(prisma)),
+);
 
 async function authenticate(
   token: string | undefined,
@@ -44,7 +52,8 @@ async function authenticate(
       getRequest: () => request,
     }),
   } as unknown as ExecutionContext;
-  await guard.canActivate(context);
+  // As main.ts: the request opens a tenant slot the guard fills.
+  await runWithTenantSlot(() => guard.canActivate(context));
   return request.operator!;
 }
 
