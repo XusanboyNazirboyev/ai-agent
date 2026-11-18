@@ -4,29 +4,38 @@ import { resolve } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { OperatorIdleReturnService } from './operator-idle-return.service.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Idle return integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
+// RLS plan S8b: fixtures on the owner; the service on the app role. A scan
+// for one tenant runs under it; the due scan finds work on the privileged
+// handle and returns each conversation under its tenant.
+const db = ownerClient();
+const app = appClient();
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const service = (minutes = 2): OperatorIdleReturnService =>
-  new OperatorIdleReturnService(
-    db as unknown as PrismaService,
-    {
-      get: (key: string) =>
-        key === 'OPERATOR_IDLE_RETURN_MINUTES' ? minutes : undefined,
-    } as unknown as ConfigService<AppEnvironment, true>,
+  tenantScoped(
+    new OperatorIdleReturnService(
+      app as unknown as PrismaService,
+      {
+        get: (key: string) =>
+          key === 'OPERATOR_IDLE_RETURN_MINUTES' ? minutes : undefined,
+      } as unknown as ConfigService<AppEnvironment, true>,
+      { db } as PrivilegedDatabase,
+    ),
   );
 
 const NOW = new Date('2026-11-04T11:00:00Z');

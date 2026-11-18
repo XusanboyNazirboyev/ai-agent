@@ -42,6 +42,7 @@ const STRICT_SPECS = [
   'src/handover/operator-api.integration.spec.ts',
   'src/channels/telegram/operator-group-link.integration.spec.ts',
   'src/handover/digest.integration.spec.ts',
+  'src/handover/operator-idle-return.integration.spec.ts',
 ];
 
 export default defineConfig({
