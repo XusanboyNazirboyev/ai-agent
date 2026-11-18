@@ -51,13 +51,22 @@ describe('RLS tenant context in background work (plan S6/S7)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    // No platform bot, in CI and locally alike (the three keys must be set
+    // together or not at all), and ConfigModule may not refill them from
+    // the env file: everything it needs is already in process.env.
+    for (const key of [
+      'TELEGRAM_CHANNEL_ACCOUNT_ID',
+      'TELEGRAM_BOT_TOKEN',
+      'TELEGRAM_WEBHOOK_SECRET',
+    ])
+      delete process.env[key];
     Object.assign(process.env, {
+      ENV_FILE: resolve(process.cwd(), 'rls-background-no-env-file'),
       NODE_ENV: 'test',
       RLS_CONTEXT_MODE: 'warn',
       // Its own pool as the same test role: unwrapped, so no tenant needed.
       POSTGRES_ADMIN_USER: process.env.TEST_POSTGRES_USER,
       // Nothing may reach Telegram from this test.
-      TELEGRAM_BOT_TOKEN: '000000:placeholder-not-a-token',
       TELEGRAM_API_BASE_URL: 'http://127.0.0.1:9',
       // Every scan does its work, including the ones off by default.
       ALERTS_ENABLED: 'true',
