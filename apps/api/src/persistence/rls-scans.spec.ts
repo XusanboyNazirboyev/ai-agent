@@ -23,7 +23,7 @@ function recorder(
       Object.fromEntries(
         Object.entries(methods).map(([method, result]) => [
           method,
-          (args: unknown) => {
+          (args: unknown): Promise<unknown> => {
             seen.push({
               db: name,
               call: `${model}.${method}`,
