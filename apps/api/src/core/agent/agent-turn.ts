@@ -350,6 +350,25 @@ const WORDING_ONLY: ReadonlySet<string> = new Set([
   'UNSOURCED_CURRENCY',
 ]);
 
+/**
+ * Locale for a model-read reply-language request. Uzbek follows the script
+ * the message is written in, falling back to the other Uzbek script when only
+ * that one is offered.
+ */
+export function modelRequestedLocale(
+  language: 'uz' | 'ru' | 'en',
+  cyrillic: boolean,
+  supported: readonly LocaleId[],
+): LocaleId | undefined {
+  const order: readonly LocaleId[] =
+    language === 'uz'
+      ? cyrillic
+        ? ['uz-Cyrl', 'uz-Latn']
+        : ['uz-Latn', 'uz-Cyrl']
+      : [language];
+  return order.find((id) => supported.includes(id));
+}
+
 function replyLocale(
   input: AgentTurnInput,
   locales: LocaleRegistry,
@@ -397,7 +416,7 @@ export async function runAgentTurn(
     locales,
     input.supportedLocales,
   );
-  const requested = asked?.kind === 'locale' ? asked.locale : undefined;
+  let requested = asked?.kind === 'locale' ? asked.locale : undefined;
   const mirror = asked?.kind === 'mirror';
   const past = languageHistory(
     input.history,
@@ -410,7 +429,7 @@ export async function runAgentTurn(
     languageAssessment.localeId !== undefined &&
     languageAssessment.localeId !== past.pinned;
   const kept = mirror || wroteOther ? undefined : past.pinned;
-  const spoken: typeof past = requested
+  let spoken: typeof past = requested
     ? { ...past, pinned: requested }
     : kept
       ? past
@@ -418,6 +437,7 @@ export async function runAgentTurn(
   const pin = requested ?? kept;
   if (pin) localeId = pin;
   let modelLocale: LocaleId | undefined;
+  let modelRequest: 'uz' | 'ru' | 'en' | undefined;
   let slots: SlotState = input.slots;
   let intent: Intent | undefined;
   let extractionFailure: string | undefined;
@@ -660,6 +680,9 @@ export async function runAgentTurn(
       );
       proposed = { ...deterministic, ...fromModel };
       const { language: lang, script } = result.value;
+      const replyLanguage = result.value.reply_language;
+      if (replyLanguage !== undefined && replyLanguage !== 'none')
+        modelRequest = replyLanguage;
       if (lang !== 'other' && script !== 'other')
         modelLocale = locales.find(lang, script)?.id;
       if (
@@ -737,6 +760,28 @@ export async function runAgentTurn(
   // code; its words ("ingliz tilida") are not what the customer asks about,
   // so nothing extracted from it is kept. The facts gate still applies: a
   // request never makes unreadable text understood.
+  // ADR 073: a request the word lists missed (any wording or spelling) is
+  // read by the extraction model. It is taken only for a supported locale,
+  // never on a question about which languages are spoken, and never when
+  // this message named an item (an item named after a language is not a request).
+  if (asked === undefined && modelRequest !== undefined) {
+    const target = modelRequestedLocale(
+      modelRequest,
+      language.script === 'Cyrl',
+      input.supportedLocales,
+    );
+    const namedItem = pack.slots.some(
+      (slot) =>
+        slot.searchFilter?.kind === 'title' &&
+        slots[slot.key] !== undefined &&
+        before[slot.key]?.value !== slots[slot.key]?.value,
+    );
+    if (target && intent !== 'language_question' && !namedItem) {
+      requested = target;
+      localeId = target;
+      spoken = { ...past, pinned: target };
+    }
+  }
   const previous = past.pinned ?? input.conversationLocale ?? past.established;
   let switchedFor: 'content' | 'repeat' | undefined;
   if (requested && requested !== previous) {

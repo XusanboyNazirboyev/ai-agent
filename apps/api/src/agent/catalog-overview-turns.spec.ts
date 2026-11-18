@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { NO_RESULTS_MARK } from '../core/agent/agent-turn.js';
+import {
+  modelRequestedLocale,
+  NO_RESULTS_MARK,
+} from '../core/agent/agent-turn.js';
 import { extractionSystemPrompt } from '../core/agent/prompts.js';
 import type { PriorTurnSignal } from '../core/agent/stuck.js';
 import { ScriptedLlmProvider } from '../core/llm/scripted-llm-provider.js';
@@ -180,6 +183,86 @@ describe('asking for another language mid-chat (ADR 073)', () => {
     });
     expect(result.locale).toBe('ru');
     expect(result.reply.startsWith(ru.templates.catalogIntro)).toBe(true);
+  });
+
+  describe('model-read request (ADR 073 fallback to the word lists)', () => {
+    const asks = (
+      intent: string,
+      reply: 'uz' | 'ru' | 'en' | 'none',
+      slots: Record<string, string | null> = {},
+    ): { kind: 'structured'; value: unknown } => {
+      const base = extraction(slots, intent) as {
+        kind: 'structured';
+        value: Record<string, unknown>;
+      };
+      return { ...base, value: { ...base.value, reply_language: reply } };
+    };
+    // A wording no word list knows (typos, Russian in Latin letters).
+    const text = 'pa ruski napishi pajalusta';
+
+    it('switches when only the model reads the request', async () => {
+      expect(languageRequest(text, LOCALES, all)).toBeUndefined();
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([asks('other', 'ru')]),
+        text,
+        input: { conversationLocale: 'uz-Latn' },
+      });
+      expect(result.locale).toBe('ru');
+      expect(result.reply).toBe(ru.templates.languageSwitched);
+    });
+
+    it('answers what was asked in the new language', async () => {
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([asks('catalog_overview', 'ru')]),
+        text: 'kurslarni pa ruski napishi',
+        input: { conversationLocale: 'uz-Latn' },
+      });
+      expect(result.locale).toBe('ru');
+      expect(result.reply.startsWith(ru.templates.catalogIntro)).toBe(true);
+    });
+
+    it('is ignored for "none", a languages question and a named item', async () => {
+      for (const [intent, reply, slots] of [
+        ['other', 'none', {}],
+        ['language_question', 'ru', {}],
+        ['search', 'en', { subject: 'English' }],
+      ] as const) {
+        const { result } = await runTurn({
+          provider: new ScriptedLlmProvider([asks(intent, reply, slots)]),
+          text: 'ingliz tili kursi bormi',
+          input: { conversationLocale: 'uz-Latn' },
+        });
+        expect(result.locale, `${intent}/${reply}`).toBe('uz-Latn');
+        expect(result.reply).not.toBe(ru.templates.languageSwitched);
+      }
+    });
+
+    it('is ignored for a locale the tenant does not offer', async () => {
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([asks('other', 'en')]),
+        text,
+        input: {
+          conversationLocale: 'uz-Latn',
+          supportedLocales: ['uz-Latn', 'ru'],
+        },
+      });
+      expect(result.locale).toBe('uz-Latn');
+    });
+
+    it('Uzbek follows the script the message is written in', () => {
+      expect(modelRequestedLocale('uz', true, all)).toBe('uz-Cyrl');
+      expect(modelRequestedLocale('uz', false, all)).toBe('uz-Latn');
+      expect(modelRequestedLocale('uz', true, ['uz-Latn', 'ru'])).toBe(
+        'uz-Latn',
+      );
+      expect(modelRequestedLocale('en', false, ['ru'])).toBeUndefined();
+    });
+
+    it('the extraction schema asks for it', () => {
+      expect(extractionSystemPrompt(EDUCATION_PACK, LOCALES.all())).toContain(
+        'reply_language:',
+      );
+    });
   });
 
   it('a bare request is still acknowledged in the new language', async () => {

@@ -55,6 +55,7 @@ const StepSchema = z.union([
       intent: z.string().default('search'),
       language: z.string().default('uz'),
       script: z.string().default('Latn'),
+      replyLanguage: z.enum(['uz', 'ru', 'en', 'none']).optional(),
     })
     .strict(),
   z
@@ -232,14 +233,24 @@ function toStep(
   pack: EvalCase['pack'],
 ): ScriptStep {
   switch (step.kind) {
-    case 'extract':
-      return extraction(
+    case 'extract': {
+      const scripted = extraction(
         step.slots,
         step.intent,
         step.language,
         step.script,
         EVAL_PACKS[pack],
       );
+      return step.replyLanguage === undefined
+        ? scripted
+        : {
+            ...scripted,
+            value: {
+              ...(scripted.value as Record<string, unknown>),
+              reply_language: step.replyLanguage,
+            },
+          };
+    }
     case 'extract_failure':
       return { kind: 'structured', failure: step.failure };
     case 'respond':

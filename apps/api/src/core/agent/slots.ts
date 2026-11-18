@@ -49,6 +49,12 @@ export interface Extraction {
   readonly script: 'Latn' | 'Cyrl' | 'other';
   readonly intent: Intent;
   readonly slots: Readonly<Record<string, string | null>>;
+  /**
+   * ADR 073: the language the latest message asks to be answered in, read by
+   * the model in any spelling; a fallback to the locale packs' word lists.
+   * Optional so that recorded extractions from before it stay valid.
+   */
+  readonly reply_language?: 'uz' | 'ru' | 'en' | 'none';
 }
 
 /** Zod validator plus the matching JSON Schema for constrained decoding. */
@@ -71,12 +77,13 @@ export function extractionSchema(pack: DomainPack): {
       script: z.enum(['Latn', 'Cyrl', 'other']),
       intent: z.enum(INTENTS),
       slots: z.object(slotShape).strict(),
+      reply_language: z.enum(['uz', 'ru', 'en', 'none']).optional(),
     })
     .strict() as unknown as z.ZodType<Extraction>;
   const jsonSchema = {
     type: 'object',
     additionalProperties: false,
-    required: ['language', 'script', 'intent', 'slots'],
+    required: ['language', 'script', 'intent', 'slots', 'reply_language'],
     properties: {
       language: { type: 'string', enum: ['uz', 'ru', 'en', 'other'] },
       script: { type: 'string', enum: ['Latn', 'Cyrl', 'other'] },
@@ -87,6 +94,7 @@ export function extractionSchema(pack: DomainPack): {
         required: pack.slots.map((slot) => slot.key),
         properties: slotProps,
       },
+      reply_language: { type: 'string', enum: ['uz', 'ru', 'en', 'none'] },
     },
   };
   return { schema, jsonSchema };

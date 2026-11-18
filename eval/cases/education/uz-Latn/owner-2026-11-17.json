@@ -310,5 +310,73 @@
       "replyScript": "Latn",
       "handover": null
     }
+  },
+  {
+    "id": "edu-uz-latn-o14",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "ADR 073 fallback: a request no word list knows (Russian written in Latin letters with typos) is read by the extraction model and switches to Russian",
+    "input": {
+      "text": "pa ruski napishi pajalusta",
+      "conversationLocale": "uz-Latn",
+      "history": [
+        {
+          "role": "customer",
+          "text": "salom"
+        },
+        {
+          "role": "agent",
+          "text": "Assalomu alaykum! Qaysi fan yoki kurs sizni qiziqtiradi?"
+        }
+      ]
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {},
+        "intent": "other",
+        "language": "ru",
+        "script": "Latn",
+        "replyLanguage": "ru"
+      }
+    ],
+    "expect": {
+      "locale": "ru",
+      "replyScript": "Cyrl",
+      "handover": null
+    }
+  },
+  {
+    "id": "edu-uz-latn-o15",
+    "pack": "education",
+    "locale": "uz-Latn",
+    "category": "explicit_language_request",
+    "description": "ADR 073 fallback: asking about a course taught in a language is not a request to switch the reply language",
+    "input": {
+      "text": "ingliz tili kursi bormi",
+      "conversationLocale": "uz-Latn"
+    },
+    "scripted": [
+      {
+        "kind": "extract",
+        "slots": {
+          "subject": "ingliz tili"
+        },
+        "intent": "search",
+        "language": "uz",
+        "script": "Latn",
+        "replyLanguage": "none"
+      },
+      {
+        "kind": "respond",
+        "text": "Ha, bor."
+      }
+    ],
+    "expect": {
+      "locale": "uz-Latn",
+      "replyScript": "Latn",
+      "handover": null
+    }
   }
 ]
