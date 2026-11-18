@@ -46,6 +46,7 @@ const STRICT_SPECS = [
   'src/channels/telegram/operator-webhook.integration.spec.ts',
   'src/channels/telegram/telegram.integration.spec.ts',
   'src/channels/facebook/facebook-flow.integration.spec.ts',
+  'src/channels/instagram/instagram-comment-flow.integration.spec.ts',
 ];
 
 export default defineConfig({

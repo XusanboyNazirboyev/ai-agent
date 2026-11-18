@@ -16,13 +16,15 @@ import {
   ScriptedLlmProvider,
   type ScriptStep,
 } from '../../core/llm/scripted-llm-provider.js';
-import {
-  PrismaClient,
-  type InstagramComment,
-} from '../../generated/prisma/client.js';
+import type { InstagramComment } from '../../generated/prisma/client.js';
 import { UZ_LATN } from '../../locales/locale-packs.js';
-import { createPostgresAdapter } from '../../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../../persistence/testing/test-clients.js';
 import { PrismaChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { createKeyring, SecretCipher } from '../../secrets/secret-cipher.js';
 import { TelegramAgentPipeline } from '../telegram/telegram-agent-pipeline.js';
@@ -51,11 +53,16 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test')
   throw new Error('Instagram comment integration tests require agentcore_test');
 
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
+// RLS plan S8b: fixtures and checks on the owner; the code under test on the
+// app role. Intake routes on the privileged handle and accepts under the
+// account's tenant; each queue job runs under its tenant.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
+afterAll(async () => {
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
-const prisma = db as unknown as PrismaService;
-afterAll(async () => db.$disconnect());
 
 const PRODUCTION = agentModePolicy({
   NODE_ENV: 'production',
@@ -152,7 +159,7 @@ async function fixture(options: {
       createKeyring({ SECRETS_MASTER_KEY: randomBytes(32).toString('base64') }),
     ),
   );
-  await secrets.put(
+  await tenantScoped(secrets).put(
     { tenantId: tenant.id, channelAccountId: account.id },
     options.unified === false
       ? 'instagram_access_token'
@@ -219,8 +226,9 @@ async function fixture(options: {
     tenantId: tenant.id,
     channelAccountId: account.id,
     igUserId,
-    intake: new InstagramWebhookService(prisma),
-    processor,
+    intake: new InstagramWebhookService(prisma, privileged),
+    // As the queue job: each event runs under its tenant.
+    processor: tenantScoped(processor),
     calls,
   };
 }
