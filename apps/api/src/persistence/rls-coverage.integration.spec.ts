@@ -44,14 +44,6 @@ const PENDING = new Set([
   'sheet_catalog_offers',
   'sheet_catalogs',
   'tenant_connectors',
-  // Actions and scheduling.
-  'action_proposals',
-  'appointments',
-  'availability_exceptions',
-  'availability_rules',
-  'bookings',
-  'service_types',
-  'staff_members',
   // Leads, audit, billing and the platform.
   'audit_events',
   'lead_stages',
