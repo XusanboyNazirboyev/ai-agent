@@ -41,6 +41,7 @@ const STRICT_SPECS = [
   'src/webinbox/webinbox.integration.spec.ts',
   'src/handover/operator-api.integration.spec.ts',
   'src/channels/telegram/operator-group-link.integration.spec.ts',
+  'src/handover/digest.integration.spec.ts',
 ];
 
 export default defineConfig({

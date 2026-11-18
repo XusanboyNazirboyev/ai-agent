@@ -4,9 +4,13 @@ import { resolve } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { createPostgresAdapter } from '../persistence/postgres-adapter.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaService } from '../persistence/prisma.service.js';
+import {
+  appClient,
+  ownerClient,
+  tenantScoped,
+} from '../persistence/testing/test-clients.js';
 import { DigestService, localDate } from './digest.service.js';
 import { HandoverNotificationService } from './handover-notification.service.js';
 import type { NotifierTarget, OperatorNotifier } from './operator-notifier.js';
@@ -15,18 +19,25 @@ loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
 if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Digest integration tests require agentcore_test');
 }
-const db = new PrismaClient({
-  adapter: createPostgresAdapter(process.env, 'TEST_'),
-});
-const prisma = db as unknown as PrismaService;
+// RLS plan S8b: fixtures on the owner. The scan finds tenants on the
+// privileged handle and queues each digest under its tenant; the card is
+// built under the job's tenant. Both on the app role, as in production.
+const db = ownerClient();
+const app = appClient();
+const prisma = app as unknown as PrismaService;
+const privileged = { db } as PrivilegedDatabase;
 afterAll(async () => {
-  await db.$disconnect();
+  await Promise.all([db.$disconnect(), app.$disconnect()]);
 });
 
 const digest = (): DigestService =>
-  new DigestService(prisma, {
-    get: (key: string) => (key === 'DIGEST_ENABLED' ? true : 9),
-  } as unknown as ConfigService<AppEnvironment, true>);
+  new DigestService(
+    prisma,
+    {
+      get: (key: string) => (key === 'DIGEST_ENABLED' ? true : 9),
+    } as unknown as ConfigService<AppEnvironment, true>,
+    privileged,
+  );
 
 async function tenant(
   withChat = true,
@@ -98,9 +109,13 @@ describe('morning digest', () => {
 
   it('does nothing unless enabled', async () => {
     const t = await tenant();
-    const off = new DigestService(prisma, {
-      get: (key: string) => (key === 'DIGEST_ENABLED' ? false : 9),
-    } as unknown as ConfigService<AppEnvironment, true>);
+    const off = new DigestService(
+      prisma,
+      {
+        get: (key: string) => (key === 'DIGEST_ENABLED' ? false : 9),
+      } as unknown as ConfigService<AppEnvironment, true>,
+      privileged,
+    );
     expect(await off.scanDue(new Date('2026-10-26T05:00:00Z'))).toBe(0);
     expect(await queued(t.tenantId)).toBe(0);
   });
@@ -149,7 +164,9 @@ describe('morning digest', () => {
         return Promise.resolve({ messageId: '1' });
       },
     } as unknown as OperatorNotifier;
-    await new HandoverNotificationService(prisma, notifier).process({
+    await tenantScoped(
+      new HandoverNotificationService(prisma, notifier),
+    ).process({
       outboxId: randomUUID(),
       tenantId: t.tenantId,
       type: 'digest.morning',
@@ -161,7 +178,9 @@ describe('morning digest', () => {
     expect(cards[0]).toContain('HOT Dilnoza: PHONE_PROVIDED, ASKED_TO_BOOK');
     // An empty day says so.
     const empty = await tenant();
-    await new HandoverNotificationService(prisma, notifier).process({
+    await tenantScoped(
+      new HandoverNotificationService(prisma, notifier),
+    ).process({
       outboxId: randomUUID(),
       tenantId: empty.tenantId,
       type: 'digest.morning',
