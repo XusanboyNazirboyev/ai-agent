@@ -25,18 +25,6 @@ const PENDING = new Set([
   'operator_password_resets',
   'operator_sessions',
   'operators',
-  // Catalog, connectors and knowledge.
-  'catalog_aliases',
-  'catalog_items',
-  'catalog_sync_runs',
-  'connector_operations',
-  'connector_secrets',
-  'knowledge_documents',
-  'offers',
-  'sheet_catalog_items',
-  'sheet_catalog_offers',
-  'sheet_catalogs',
-  'tenant_connectors',
   // Leads, audit, billing and the platform.
   'audit_events',
   'lead_stages',
