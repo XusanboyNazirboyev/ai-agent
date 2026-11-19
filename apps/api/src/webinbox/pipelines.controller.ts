@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
-import { Prisma } from '../generated/prisma/client.js';
+import { LeadFilterQuery, leadFilterWhere } from '../pipelines/lead-filters.js';
 import {
   ensureCodedStages,
   ensureDefaultPipeline,
@@ -27,9 +27,7 @@ import {
   notFound,
 } from '../pipelines/pipeline-errors.js';
 import {
-  isCalendarDate,
   MAX_PIPELINES,
-  toDateOnly,
   validateStageOrder,
 } from '../pipelines/pipeline-rules.js';
 import { SessionGuard, type InboxRequest } from './session.guard.js';
@@ -54,12 +52,7 @@ const OrderBody = z
   .object({ stageIds: z.array(z.string().uuid()).max(100) })
   .strict();
 
-const BoardQuery = z
-  .object({
-    from: z.string().refine(isCalendarDate).optional(),
-    to: z.string().refine(isCalendarDate).optional(),
-  })
-  .strict();
+const BoardQuery = LeadFilterQuery.strict();
 
 export interface BoardStageView {
   id: string;
@@ -165,14 +158,6 @@ export class PipelinesController {
       select: { id: true },
     });
     if (!pipeline) throw notFound();
-    const { from, to } = parsed.data;
-    const range = Prisma.sql`${
-      from ? Prisma.sql`AND "created_at" >= ${toDateOnly(from)}` : Prisma.empty
-    } ${
-      to
-        ? Prisma.sql`AND "created_at" < ${new Date(toDateOnly(to).getTime() + 86_400_000)}`
-        : Prisma.empty
-    }`;
     const [stages, rows] = await Promise.all([
       this.prisma.leadStage.findMany({
         where: { tenantId, pipelineId: id, archivedAt: null },
@@ -185,31 +170,38 @@ export class PipelinesController {
           position: true,
         },
       }),
-      this.prisma.$queryRaw<
-        Array<{
-          stage_id: string;
-          currency: string | null;
-          n: number;
-          total: string | null;
-        }>
-      >`SELECT "pipeline_stage_id" AS stage_id, "currency", COUNT(*)::int AS n,
-          SUM("amount")::text AS total
-        FROM "leads"
-        WHERE "tenant_id" = ${tenantId}::uuid AND "pipeline_id" = ${id}::uuid
-          AND "archived_at" IS NULL
-          AND "pipeline_stage_id" IS NOT NULL ${range}
-        GROUP BY "pipeline_stage_id", "currency"
-        ORDER BY "currency" ASC NULLS LAST`,
+      // ADR 076: the list's filters, so a column count matches its leads.
+      this.prisma.lead.groupBy({
+        by: ['pipelineStageId', 'currency'],
+        where: {
+          tenantId,
+          pipelineId: id,
+          archivedAt: null,
+          pipelineStageId: { not: null },
+          ...leadFilterWhere(tenantId, parsed.data, new Date()),
+        },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
     ]);
     return {
       stages: stages.map((stage) => {
-        const mine = rows.filter((row) => row.stage_id === stage.id);
+        const mine = rows
+          .filter((row) => row.pipelineStageId === stage.id)
+          .sort((a, b) =>
+            (a.currency ?? '\uffff').localeCompare(b.currency ?? '\uffff'),
+          );
         return {
           ...stage,
-          count: mine.reduce((sum, row) => sum + row.n, 0),
+          count: mine.reduce((sum, row) => sum + row._count._all, 0),
           totals: mine.flatMap((row) =>
-            row.currency !== null && row.total !== null
-              ? [{ currency: row.currency.trim(), amount: row.total }]
+            row.currency !== null && row._sum.amount !== null
+              ? [
+                  {
+                    currency: row.currency.trim(),
+                    amount: row._sum.amount.toFixed(2),
+                  },
+                ]
               : [],
           ),
         };

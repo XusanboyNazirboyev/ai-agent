@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -35,7 +36,6 @@ import {
 import {
   checkLostReason,
   fromDateOnly,
-  isCalendarDate,
   MAX_LOST_REASON,
   MAX_STAGES_PER_PIPELINE,
   parseOpportunityPatch,
@@ -50,6 +50,7 @@ import {
   CustomFieldsService,
   type FieldValueView,
 } from '../tags/custom-fields.service.js';
+import { LeadFilterQuery, leadFilterWhere } from '../pipelines/lead-filters.js';
 import { parseFieldFilter } from '../tags/field-filter.js';
 import {
   activeFieldDefs,
@@ -65,21 +66,35 @@ import {
   parseValues,
 } from './tag-assignment.js';
 
-const ListQuery = z.object({
+const ListQuery = LeadFilterQuery.extend({
   stageId: z.string().uuid().optional(),
   pipelineId: z.string().uuid().optional(),
-  ownerOperatorId: z.string().uuid().optional(),
-  source: z.string().trim().min(1).max(60).optional(),
-  closeBefore: z.string().refine(isCalendarDate).optional(),
-  closeAfter: z.string().refine(isCalendarDate).optional(),
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
-  tagId: z.string().uuid().optional(),
   fieldKey: z.string().max(64).optional(),
   fieldValue: z.string().max(600).optional(),
   /** ADR 062: `true` lists the archive (OWNER, ADMIN); default hides it. */
   archived: z.enum(['true', 'false']).optional(),
 });
+/** ADR 076: at most this many leads per bulk request. */
+export const MAX_BULK_LEADS = 100;
+const BulkBody = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('assign'),
+      leadIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_LEADS),
+      ownerOperatorId: z.string().uuid().nullable(),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('move'),
+      leadIds: z.array(z.string().uuid()).min(1).max(MAX_BULK_LEADS),
+      stageId: z.string().uuid(),
+      lostReason: z.string().trim().max(MAX_LOST_REASON).optional(),
+    })
+    .strict(),
+]);
 const StageKind = z.enum(['OPEN', 'WON', 'LOST']);
 const StageBody = z
   .object({
@@ -648,6 +663,113 @@ export class LeadPipelineController {
     return item;
   }
 
+  /**
+   * ADR 076: assigns many leads to one owner (OWNER, ADMIN) or moves them to
+   * one stage, possibly of another pipeline (any role but VIEWER). Each move
+   * runs as the single move does, in its own transaction; a lead that cannot
+   * be changed (archived, gone, a reason missing) is reported, not fatal.
+   */
+  @Post('bulk')
+  @HttpCode(200)
+  async bulk(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<{ updated: number; failed: Array<{ id: string; code: string }> }> {
+    const who = request.principal!;
+    if (who.role === 'VIEWER') throw forbidden();
+    const parsed = BulkBody.safeParse(body);
+    if (!parsed.success) throw invalidBody();
+    const ids = [...new Set(parsed.data.leadIds)];
+    const active = new Set(
+      (
+        await this.prisma.lead.findMany({
+          where: { tenantId: who.tenantId, id: { in: ids }, archivedAt: null },
+          select: { id: true },
+        })
+      ).map((lead) => lead.id),
+    );
+    const failed = ids
+      .filter((id) => !active.has(id))
+      .map((id) => ({ id, code: 'NOT_FOUND' }));
+    const targets = ids.filter((id) => active.has(id));
+    if (parsed.data.action === 'assign') {
+      this.requireManager(request);
+      const ownerOperatorId = parsed.data.ownerOperatorId;
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (ownerOperatorId) {
+          // FOR SHARE, as the single update: a deactivation waits for us.
+          const owner = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT "id" FROM "operators"
+            WHERE "tenant_id" = ${who.tenantId}::uuid
+              AND "id" = ${ownerOperatorId}::uuid AND "is_active" = true
+            FOR SHARE`;
+          if (owner.length === 0) throw unknownOperator();
+        }
+        const changed = await tx.lead.updateMany({
+          where: {
+            tenantId: who.tenantId,
+            id: { in: targets },
+            archivedAt: null,
+          },
+          data: { ownerOperatorId },
+        });
+        await tx.auditEvent.createMany({
+          data: targets.map((leadId) => ({
+            tenantId: who.tenantId,
+            actorType: 'OPERATOR' as const,
+            actorId: who.operatorId,
+            action: 'lead.opportunity.updated',
+            entityType: 'lead',
+            entityId: leadId,
+            safeInputSummary: { fields: 'ownerOperatorId', bulk: true },
+          })),
+        });
+        return changed.count;
+      });
+      return { updated, failed };
+    }
+    const { stageId, lostReason } = parsed.data;
+    // One stage for every lead: an unknown or archived stage fails them all.
+    const stage = await this.prisma.leadStage.findFirst({
+      where: {
+        tenantId: who.tenantId,
+        id: stageId,
+        archivedAt: null,
+        pipeline: { archivedAt: null },
+      },
+      select: { id: true },
+    });
+    if (!stage) throw notFound();
+    let updated = 0;
+    for (const leadId of targets) {
+      try {
+        await this.prisma.$transaction((tx) =>
+          moveLeadToStage(tx, {
+            tenantId: who.tenantId,
+            leadId,
+            stageId,
+            actor: 'OPERATOR',
+            actorId: who.operatorId,
+            lostReason,
+          }),
+        );
+        updated += 1;
+      } catch (error: unknown) {
+        if (!(error instanceof HttpException)) throw error;
+        const response = error.getResponse();
+        const code =
+          typeof response === 'object' &&
+          response !== null &&
+          'code' in response &&
+          typeof response.code === 'string'
+            ? response.code
+            : 'FAILED';
+        failed.push({ id: leadId, code });
+      }
+    }
+    return { updated, failed };
+  }
+
   @Get()
   async list(
     @Req() request: InboxRequest,
@@ -658,16 +780,12 @@ export class LeadPipelineController {
     const {
       stageId,
       pipelineId: requestedPipeline,
-      ownerOperatorId,
-      source,
-      closeBefore,
-      closeAfter,
       cursor,
       limit,
-      tagId,
       fieldKey,
       fieldValue,
       archived,
+      ...filters
     } = parsed.data;
     const tenantId = request.principal!.tenantId;
     const wantsArchive = archived === 'true';
@@ -705,17 +823,7 @@ export class LeadPipelineController {
         archivedAt: wantsArchive ? { not: null } : null,
         ...(pipelineId ? { pipelineId } : {}),
         ...(stageId ? { pipelineStageId: stageId } : {}),
-        ...(ownerOperatorId ? { ownerOperatorId } : {}),
-        ...(source ? { source: { equals: source, mode: 'insensitive' } } : {}),
-        ...(closeBefore || closeAfter
-          ? {
-              expectedCloseDate: {
-                ...(closeBefore ? { lte: toDateOnly(closeBefore) } : {}),
-                ...(closeAfter ? { gte: toDateOnly(closeAfter) } : {}),
-              },
-            }
-          : {}),
-        ...(tagId ? { tags: { some: { tenantId, tagId } } } : {}),
+        ...leadFilterWhere(tenantId, filters, new Date()),
         ...(field
           ? { customFields: { path: [field.key], equals: field.value } }
           : {}),
