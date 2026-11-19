@@ -1,7 +1,8 @@
 import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
-export type NavKey = 'today' | 'inbox' | 'leads' | 'analytics' | 'settings';
+export type NavKey =
+  'today' | 'inbox' | 'leads' | 'tasks' | 'analytics' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -28,6 +29,11 @@ export const NAV: NavItem[] = [
   {
     key: 'leads',
     icon: 'target',
+    roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
+  },
+  {
+    key: 'tasks',
+    icon: 'check',
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
   },
   { key: 'analytics', icon: 'chart', roles: ['OWNER', 'ADMIN'] },

@@ -26,6 +26,8 @@ export interface LiveEvent {
   type: (typeof EVENT_TYPES)[number];
   conversationId: string | null;
   handoverId: string | null;
+  /** `task.due` only: the task title, when the server sent it. */
+  taskTitle?: string | null;
 }
 
 const UUID =
@@ -45,8 +47,26 @@ export function parseLiveEvent(
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
     return null;
   const keys = Object.keys(raw);
-  const allowed = ['conversationId', 'handoverId', 'messageId'];
-  if (keys.length !== 3 || !keys.every((key) => allowed.includes(key)))
+  const allowed =
+    type === 'task.due'
+      ? ['conversationId', 'handoverId', 'messageId', 'taskTitle']
+      : ['conversationId', 'handoverId', 'messageId'];
+  // Events written before task titles existed carry three keys.
+  const minimum = 3;
+  if (
+    keys.length < minimum ||
+    keys.length > allowed.length ||
+    !keys.every((key) => allowed.includes(key))
+  )
+    return null;
+  if (!['conversationId', 'handoverId', 'messageId'].every((k) => k in raw))
+    return null;
+  const rawTitle = (raw as Record<string, unknown>).taskTitle;
+  if (
+    rawTitle !== undefined &&
+    rawTitle !== null &&
+    (typeof rawTitle !== 'string' || rawTitle.length > 200)
+  )
     return null;
   const { conversationId, handoverId, messageId } = raw as Record<
     string,
@@ -68,6 +88,7 @@ export function parseLiveEvent(
     type,
     conversationId: conversationId as string | null,
     handoverId: handoverId as string | null,
+    ...(typeof rawTitle === 'string' ? { taskTitle: rawTitle } : {}),
   };
 }
 

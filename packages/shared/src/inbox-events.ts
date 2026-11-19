@@ -67,6 +67,18 @@ const subscriptionExpiredSchema = z
   })
   .strict();
 
+/** ADR 068: a task's time came; the title is for the browser notification. */
+const taskDueSchema = z
+  .object({
+    type: z.literal('task.due'),
+    conversationId: nullableUuidSchema,
+    handoverId: z.null(),
+    messageId: z.null(),
+    // Events written before the title existed carry none.
+    taskTitle: z.string().max(200).nullable().optional(),
+  })
+  .strict();
+
 const eventDataVariants = [
   conversationUpdatedSchema,
   messageCreatedSchema,
@@ -75,6 +87,7 @@ const eventDataVariants = [
   subscriptionBotPausedSchema,
   subscriptionPastDueSchema,
   subscriptionExpiredSchema,
+  taskDueSchema,
 ] as const;
 
 /** Validated JSON payload carried in the SSE data field (event name is separate). */
@@ -92,6 +105,7 @@ export const InboxEventRecordSchema = z.discriminatedUnion('type', [
   subscriptionBotPausedSchema.extend({ id: eventIdSchema }),
   subscriptionPastDueSchema.extend({ id: eventIdSchema }),
   subscriptionExpiredSchema.extend({ id: eventIdSchema }),
+  taskDueSchema.extend({ id: eventIdSchema }),
 ]);
 
 export type InboxEventData = z.infer<typeof InboxEventDataSchema>;

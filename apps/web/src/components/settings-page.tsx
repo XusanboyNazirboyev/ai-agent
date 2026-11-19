@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { THEMES, usePreferences, type Theme } from '@/lib/preferences';
+import { NotificationControl } from './notification-control';
 import { useShell } from './app-shell';
 import { Avatar } from './ui/avatar';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Icon, type IconName } from './ui/icons';
 import { SettingsSectionNav } from './settings-section-nav';
@@ -51,30 +51,11 @@ function Row(props: { label: string; children: ReactNode }): ReactNode {
   );
 }
 
-type Permission = 'granted' | 'denied' | 'default' | 'unsupported';
-
-function readPermission(): Permission {
-  return typeof Notification === 'undefined'
-    ? 'unsupported'
-    : Notification.permission;
-}
-
 /** Account details and per-browser preferences (nothing here is sent to the server). */
 export function SettingsPage(): ReactNode {
   const { t } = useI18n();
   const { operator, timeZone } = useShell();
   const { sound, setSound, theme, setTheme } = usePreferences();
-  const [permission, setPermission] = useState<Permission>('unsupported');
-  useEffect(() => {
-    // Notification exists only in the browser; read after hydration.
-    setPermission(readPermission());
-  }, []);
-
-  async function enableNotifications(): Promise<void> {
-    await Notification.requestPermission();
-    setPermission(readPermission());
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <SettingsSectionNav active="general" />
@@ -122,31 +103,8 @@ export function SettingsPage(): ReactNode {
                 {sound ? t('header.soundOn') : t('header.soundOff')}
               </Button>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
-              <span className="flex items-center gap-2 text-sm font-medium">
-                {t('settings.browserAlerts')}
-                <Badge
-                  tone={
-                    permission === 'granted'
-                      ? 'success'
-                      : permission === 'denied'
-                        ? 'danger'
-                        : 'neutral'
-                  }
-                  dot
-                >
-                  {t(`permission.${permission}`)}
-                </Badge>
-              </span>
-              {permission === 'default' ? (
-                <Button
-                  size="sm"
-                  icon="bell"
-                  onClick={() => void enableNotifications()}
-                >
-                  {t('header.notifications')}
-                </Button>
-              ) : null}
+            <div className="border-t border-line pt-3">
+              <NotificationControl />
             </div>
           </Card>
 
