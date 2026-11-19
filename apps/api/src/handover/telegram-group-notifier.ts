@@ -42,6 +42,18 @@ export class TelegramGroupNotifier implements OperatorNotifier {
     });
   }
 
+  postDirect(
+    userId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<PostedCard> {
+    return this.api.sendMessage({
+      chatId: userId,
+      text,
+      ...(channelAccountId ? { channelAccountId } : {}),
+    });
+  }
+
   updateButtons(
     target: NotifierTarget,
     messageId: string,

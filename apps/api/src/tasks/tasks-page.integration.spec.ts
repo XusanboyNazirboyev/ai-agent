@@ -319,8 +319,18 @@ describe('reminder before the due time', () => {
 
 describe('Telegram message for a due task', () => {
   const posted: Array<{ chat: string; text: string }> = [];
+  const direct: Array<{ user: string; text: string }> = [];
+  let refuse = false;
   const notifier = {
     kind: 'fake',
+    postDirect: (user: string, text: string) => {
+      if (refuse)
+        return Promise.reject(
+          Object.assign(new Error('Forbidden'), { errorCode: 403 }),
+        );
+      direct.push({ user, text });
+      return Promise.resolve({ messageId: '2' });
+    },
     postCard: (target: { operatorChatId: string }, card: { text: string }) => {
       posted.push({ chat: target.operatorChatId, text: card.text });
       return Promise.resolve({ messageId: '1' });
@@ -440,5 +450,59 @@ describe('Telegram message for a due task', () => {
     expect(posted[0]!.text).toBe(
       '⏰ Пора выполнить задачу: Позвонить\nКлиент: Customer\nОтветственный: не назначен\nСрок: 21.03.2031 02:00',
     );
+  });
+
+  it('also messages the assignee privately; a refusal is a skip; no other tenant', async () => {
+    posted.length = 0;
+    direct.length = 0;
+    const w = await world({ chat: true });
+    const other = await world({ chat: true });
+    const tg = `tg-${randomUUID()}`;
+    await db.operator.update({
+      where: { id: w.ops.OPERATOR },
+      data: { telegramUserId: tg },
+    });
+    // The same Telegram id in another workspace is never messaged.
+    await db.operator.update({
+      where: { id: other.ops.OPERATOR },
+      data: { telegramUserId: `other-${randomUUID()}` },
+    });
+    const mk = async (assignee: string | null) => {
+      const task = await tasks.create(w.as('ADMIN'), w.leadId, {
+        title: 'Call',
+        dueAt: ahead(HOUR),
+      });
+      await db.leadTask.update({
+        where: { id: task.id },
+        data: { assigneeOperatorId: assignee },
+      });
+      await service.process({
+        outboxId: randomUUID(),
+        tenantId: w.tenantId,
+        type: OPERATOR_ALERT_EVENT,
+        payload: { kind: 'TASK_DUE', taskId: task.id },
+      } as never);
+    };
+    await mk(w.ops.OPERATOR);
+    expect(posted).toHaveLength(1);
+    expect(direct).toHaveLength(1);
+    expect(direct[0]!.user).toBe(tg);
+    expect(direct[0]!.text).toBe(posted[0]!.text);
+
+    // No Telegram id on the assignee, or no assignee: group only.
+    await mk(w.ops.VIEWER);
+    await mk(null);
+    expect(posted).toHaveLength(3);
+    expect(direct).toHaveLength(1);
+
+    // Telegram refuses (not started): the group message stands, nothing throws.
+    refuse = true;
+    await mk(w.ops.OPERATOR);
+    refuse = false;
+    expect(posted).toHaveLength(4);
+    expect(direct).toHaveLength(1);
+
+    // A task of this workspace never reaches the other workspace's operator.
+    expect(direct.some((d) => d.user.startsWith('other-'))).toBe(false);
   });
 });

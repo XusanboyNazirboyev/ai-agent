@@ -31,6 +31,15 @@ export interface OperatorNotifier {
     replyToMessageId: string,
     text: string,
   ): Promise<PostedCard>;
+  /**
+   * A private message to one person (the user id is the private chat id).
+   * Telegram refuses it unless that person has started a chat with the bot.
+   */
+  postDirect(
+    userId: string,
+    text: string,
+    channelAccountId?: string,
+  ): Promise<PostedCard>;
   /** Replaces the card's buttons (e.g. after take-over). */
   updateButtons(
     target: NotifierTarget,
