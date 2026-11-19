@@ -12,15 +12,22 @@ import { useToast } from './ui/toast';
 import { stageLabel } from './lead-board-utils';
 
 /** Plain-words key for the error code of the last run. */
-function errorWords(code: string): string {
+function errorWords(code: string, amocrm: boolean): string {
   if (code === 'MAPPING_INVALID') return 'crmSync.err.mapping';
+  if (amocrm && code === 'AMOCRM_FORBIDDEN') return 'amocrm.sync.err.blocked';
+  if (amocrm && (code.includes('UNAUTHORIZED') || code.includes('PAYMENT')))
+    return 'amocrm.sync.err.auth';
   if (code.includes('NO_AUTH') || code.includes('INVALID_CREDENTIALS'))
     return 'crmSync.err.auth';
   return 'crmSync.err.other';
 }
 
-/** Stage sync of a connected Bitrix24 (ADR 079): on/off and the stage mapping. */
-export function CrmStageSync(props: { connectorId: string }): ReactNode {
+/** Stage sync of a connected CRM (ADR 079, 081): on/off and the stage mapping. */
+export function CrmStageSync(props: {
+  connectorId: string;
+  provider?: 'bitrix24' | 'amocrm';
+}): ReactNode {
+  const amocrm = props.provider === 'amocrm';
   const { t, formatDateTime } = useI18n();
   const toast = useToast();
   const client = useQueryClient();
@@ -68,7 +75,9 @@ export function CrmStageSync(props: { connectorId: string }): ReactNode {
       className="flex min-w-0 flex-col gap-3 border-t border-line pt-3"
     >
       <h3 className="font-medium">{t('crmSync.title')}</h3>
-      <p className="text-sm text-muted">{t('crmSync.desc')}</p>
+      <p className="text-sm text-muted">
+        {t(amocrm ? 'amocrm.sync.desc' : 'crmSync.desc')}
+      </p>
       {query.isPending ? <SkeletonRows rows={3} /> : null}
       {query.isError ? (
         <p role="alert" className="text-sm text-danger-fg">
@@ -85,18 +94,26 @@ export function CrmStageSync(props: { connectorId: string }): ReactNode {
               checked={enabled}
               onChange={(event) => setEnabled(event.target.checked)}
             />
-            {t('crmSync.enable')}
+            {t(amocrm ? 'amocrm.sync.enable' : 'crmSync.enable')}
           </label>
           {!view.portalReachable ? (
             <p className="text-sm text-warning-fg">
-              {t('crmSync.unreachable')}
+              {t(amocrm ? 'amocrm.sync.unreachable' : 'crmSync.unreachable')}
+            </p>
+          ) : null}
+          {amocrm && view.stages.length === 0 ? (
+            <p
+              className="text-sm text-muted"
+              data-testid="stage-sync-no-pipeline"
+            >
+              {t('amocrm.sync.noPipeline')}
             </p>
           ) : null}
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-muted">
                 <th className="py-1 pr-2 font-normal">
-                  {t('crmSync.portalStage')}
+                  {t(amocrm ? 'amocrm.sync.stage' : 'crmSync.portalStage')}
                 </th>
                 <th className="py-1 font-normal">{t('crmSync.ourStage')}</th>
               </tr>
@@ -141,7 +158,7 @@ export function CrmStageSync(props: { connectorId: string }): ReactNode {
               className="text-sm text-danger-fg"
               data-testid="stage-sync-error"
             >
-              {t(errorWords(view.lastErrorCode))}
+              {t(errorWords(view.lastErrorCode, amocrm))}
             </p>
           ) : null}
           {save.error ? (

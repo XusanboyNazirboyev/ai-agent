@@ -44,10 +44,19 @@ const REFUSAL: Record<
   CRM_REJECTED: { status: 502, i18nKey: 'errors.crmRejected' },
 };
 
+/** amoCRM has its own wording; the generic keys name Bitrix24. */
+const AMOCRM_KEYS: Partial<Record<StageSyncRefusal['code'], string>> = {
+  CRM_UNREACHABLE: 'amocrm.err.unreachable',
+  CRM_REJECTED: 'amocrm.err.rejected',
+};
+
 function refusal(error: StageSyncRefusal): HttpException {
   const spec = REFUSAL[error.code];
+  const i18nKey =
+    (error.provider === 'amocrm' ? AMOCRM_KEYS[error.code] : undefined) ??
+    spec.i18nKey;
   return new HttpException(
-    { code: error.code, message: error.code, i18nKey: spec.i18nKey },
+    { code: error.code, message: error.code, i18nKey },
     spec.status,
   );
 }

@@ -1,4 +1,5 @@
 import { MockConnectorConfigSchema } from '@agentcore/shared';
+import { AmocrmConnector } from '../amocrm/amocrm-connector.js';
 import { Bitrix24Connector } from '../bitrix24/bitrix24-connector.js';
 import { GenericRestConnector } from '../generic-rest/generic-rest-connector.js';
 import { OutboundUrlPolicy } from '../generic-rest/ssrf-protection.js';
@@ -15,6 +16,7 @@ import type { ConnectorRegistration } from './connector-registry.js';
 export const MOCK_CONNECTOR_KEY = 'mock';
 export const GENERIC_REST_CONNECTOR_KEY = 'generic-rest';
 export const BITRIX24_CONNECTOR_KEY = 'bitrix24';
+export const AMOCRM_CONNECTOR_KEY = 'amocrm';
 
 /** Fictional in-memory catalog for development, demos and tests. */
 export function mockConnectorRegistration(): ConnectorRegistration {
@@ -93,6 +95,27 @@ export function bitrix24ConnectorRegistration(): ConnectorRegistration {
     },
     factory: (context, config, dependencies) =>
       new Bitrix24Connector(context, config, {
+        resolveSecret: dependencies.resolveSecret,
+      }),
+  };
+}
+
+/** amoCRM as a lead sink: lead creation only (ADR 081). */
+export function amocrmConnectorRegistration(): ConnectorRegistration {
+  return {
+    key: AMOCRM_CONNECTOR_KEY,
+    capabilities: {
+      sync: false,
+      search: false,
+      liveQuote: false,
+      availability: false,
+      createLead: true,
+      updateLead: false,
+      createBooking: false,
+      webhooks: false,
+    },
+    factory: (context, config, dependencies) =>
+      new AmocrmConnector(context, config, {
         resolveSecret: dependencies.resolveSecret,
       }),
   };

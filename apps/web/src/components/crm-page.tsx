@@ -9,6 +9,8 @@ import { useShell } from './app-shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
+import { AmocrmCard } from './amocrm-card';
+import { Card } from './crm-card';
 import { ConnectorRoles } from './connector-roles';
 import { CrmStageSync } from './crm-stage-sync';
 import { fieldClass } from './ui/fields';
@@ -20,27 +22,7 @@ import { useToast } from './ui/toast';
 const URL_EXAMPLE = 'https://your-portal.bitrix24.ru/rest/1/…/';
 
 /** Product names are not translated. */
-const SOON = ['amoCRM', 'HubSpot'];
-
-function Card(props: {
-  name: string;
-  badge: ReactNode;
-  testId: string;
-  children: ReactNode;
-}): ReactNode {
-  return (
-    <section
-      data-testid={props.testId}
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
-    >
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-        <h2 className="min-w-0 font-semibold break-words">{props.name}</h2>
-        {props.badge}
-      </div>
-      {props.children}
-    </section>
-  );
-}
+const SOON = ['HubSpot'];
 
 function Bitrix24Card(props: {
   row: ConnectorSummary | undefined;
@@ -212,6 +194,7 @@ export function CrmPage(): ReactNode {
   const bitrix = query.data?.items.find(
     (item) => item.connectorKey === 'bitrix24',
   );
+  const amo = query.data?.items.find((item) => item.connectorKey === 'amocrm');
   const changed = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['connectors'] });
   };
@@ -272,6 +255,13 @@ export function CrmPage(): ReactNode {
           {query.isSuccess ? (
             <Bitrix24Card
               row={bitrix}
+              secretsConfigured={query.data.secretsConfigured}
+              onChanged={changed}
+            />
+          ) : null}
+          {query.isSuccess ? (
+            <AmocrmCard
+              row={amo}
               secretsConfigured={query.data.secretsConfigured}
               onChanged={changed}
             />

@@ -23,12 +23,12 @@ import {
   LEAD_STATUS_ENTITY_ID,
   type Bitrix24ClientOptions,
 } from './bitrix24-client.js';
-import {
-  parseChanges,
-  parseStages,
-  type PortalLeadChange,
-  type PortalStage,
-} from './stage-sync-rules.js';
+import type {
+  PortalStage,
+  StageSyncSource,
+  SyncLeadChange,
+} from '../interfaces/stage-sync-source.js';
+import { PAGE_SIZE, parseChanges, parseStages } from './stage-sync-rules.js';
 
 /** Stamped on every lead this connector creates (lead field `originatorId`). */
 export const BITRIX24_ORIGINATOR_ID = 'tezda';
@@ -60,7 +60,7 @@ export interface Bitrix24ConnectorOptions {
  * otherwise a new lead. The idempotency key is stored in `originId`, which
  * `crm.item.list` can filter (probe 2026-10-27), so writes are `lookup`.
  */
-export class Bitrix24Connector implements CrmConnector {
+export class Bitrix24Connector implements CrmConnector, StageSyncSource {
   private readonly logger = new Logger(Bitrix24Connector.name);
   readonly connectorKey: string;
   readonly context: ConnectorContext;
@@ -75,6 +75,8 @@ export class Bitrix24Connector implements CrmConnector {
     webhooks: false,
   };
   readonly writeIdempotency = 'lookup' as const;
+  readonly stageSyncLabel = 'Bitrix24';
+  readonly stageSyncPageSize = PAGE_SIZE;
   private readonly config: Bitrix24ConnectorConfig;
   private readonly client: Bitrix24Client;
   private leadsEnabled: Promise<void> | undefined;
@@ -109,7 +111,7 @@ export class Bitrix24Connector implements CrmConnector {
   }
 
   /** The portal's lead stages (read only; ADR 079). */
-  async listLeadStages(): Promise<PortalStage[]> {
+  async listStages(): Promise<PortalStage[]> {
     const { result } = await this.client.call('crm.status.list', {
       filter: { ENTITY_ID: LEAD_STATUS_ENTITY_ID },
     });
@@ -118,17 +120,21 @@ export class Bitrix24Connector implements CrmConnector {
 
   /**
    * One page (50 rows, oldest change first) of leads changed since `since`,
-   * for the stage sync (ADR 079). `start` is the row offset.
+   * for the stage sync (ADR 079). `page` is 0-based.
    */
-  async listChangedLeads(since: Date, start = 0): Promise<PortalLeadChange[]> {
+  async listChangedLeads(since: Date, page = 0): Promise<SyncLeadChange[]> {
     const { result } = await this.client.call('crm.item.list', {
       entityTypeId: LEAD_ENTITY_TYPE_ID,
       filter: { '>=updatedTime': since.toISOString() },
       select: ['id', 'stageId', 'updatedTime'],
       order: { updatedTime: 'ASC', id: 'ASC' },
-      start,
+      start: page * PAGE_SIZE,
     });
-    return parseChanges(result);
+    return parseChanges(result).map((change) => ({
+      externalId: String(change.id),
+      stageId: change.stageId,
+      updatedAt: change.updatedAt,
+    }));
   }
 
   /** Reads the CRM mode; simple CRM (no leads) is a configuration error. */

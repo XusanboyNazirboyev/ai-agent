@@ -4,14 +4,12 @@
  * No I/O, so they are unit tested on their own.
  */
 
-export type StageSemantics = 'process' | 'success' | 'failure' | 'apology';
+import type {
+  PortalStage,
+  StageSemantics,
+} from '../interfaces/stage-sync-source.js';
 
-export interface PortalStage {
-  readonly id: string;
-  readonly name: string;
-  readonly sort: number;
-  readonly semantics: StageSemantics;
-}
+export type { PortalStage, StageSemantics };
 
 export interface PortalLeadChange {
   readonly id: number;
@@ -121,7 +119,7 @@ export function scanSince(cursor: Date): Date {
  */
 export function advanceCursor(
   current: Date,
-  processed: readonly PortalLeadChange[],
+  processed: readonly { readonly updatedAt: Date }[],
 ): Date {
   let next = current;
   for (const change of processed)
@@ -130,6 +128,10 @@ export function advanceCursor(
 }
 
 /** The reason of a LOST move; capped like operator-typed reasons. */
-export function lostReasonFor(stageName: string, max = 200): string {
-  return `Bitrix24: ${stageName}`.slice(0, max);
+export function lostReasonFor(
+  stageName: string,
+  max = 200,
+  label = 'Bitrix24',
+): string {
+  return `${label}: ${stageName}`.slice(0, max);
 }

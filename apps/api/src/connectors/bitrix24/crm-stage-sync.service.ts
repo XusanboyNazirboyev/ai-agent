@@ -14,20 +14,25 @@ import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import { runWithTenant } from '../../persistence/tenant-context.js';
 import { ConnectorError } from '../interfaces/errors.js';
 import { TenantConnectorLoader } from '../sync/tenant-connector-loader.js';
-import { Bitrix24Connector } from './bitrix24-connector.js';
+import {
+  isStageSyncSource,
+  type StageSyncSource,
+  type SyncLeadChange,
+} from '../interfaces/stage-sync-source.js';
 import {
   advanceCursor,
   defaultTarget,
   LEASE_MS,
   lostReasonFor,
   MAX_ITEMS_PER_RUN,
-  PAGE_SIZE,
   scanSince,
   SCAN_INTERVAL_MS,
-  type PortalLeadChange,
   type PortalStage,
   type StageSemantics,
 } from './stage-sync-rules.js';
+
+/** Connector kinds the stage sync can read (each implements StageSyncSource). */
+const STAGE_SYNC_KEYS = ['bitrix24', 'amocrm'];
 
 export interface OurStageView {
   id: string;
@@ -67,6 +72,8 @@ export class StageSyncRefusal extends Error {
   constructor(
     readonly code:
       'NOT_FOUND' | 'INVALID_BODY' | 'CRM_UNREACHABLE' | 'CRM_REJECTED',
+    /** The connector key, so the message names the right CRM. */
+    readonly provider?: string,
   ) {
     super(code);
   }
@@ -114,7 +121,7 @@ export class CrmStageSyncService implements ScheduledScan {
     const savedById = new Map(saved.map((m) => [m.externalStageId, m]));
     let portal: PortalStage[] | null = null;
     try {
-      portal = await connector.listLeadStages();
+      portal = await connector.listStages();
     } catch (error) {
       this.logger.warn(
         JSON.stringify({
@@ -165,12 +172,13 @@ export class CrmStageSyncService implements ScheduledScan {
     const ourIds = new Set(ours.map((s) => s.id));
     let portal: PortalStage[];
     try {
-      portal = await connector.listLeadStages();
+      portal = await connector.listStages();
     } catch (error) {
       throw new StageSyncRefusal(
         error instanceof ConnectorError && error.retryable
           ? 'CRM_UNREACHABLE'
           : 'CRM_REJECTED',
+        connector.connectorKey,
       );
     }
     const names = new Map(portal.map((s) => [s.id, s.name]));
@@ -232,7 +240,7 @@ export class CrmStageSyncService implements ScheduledScan {
           entityType: 'tenant_connector',
           entityId: connectorId,
           safeInputSummary: {
-            connectorKey: 'bitrix24',
+            connectorKey: connector.connectorKey,
             enabled: input.enabled,
             mappings: input.mappings.length,
           },
@@ -245,19 +253,18 @@ export class CrmStageSyncService implements ScheduledScan {
   private async connector(
     tenantId: string,
     connectorId: string,
-  ): Promise<Bitrix24Connector> {
+  ): Promise<StageSyncSource & { connectorKey: string }> {
     const row = await this.prisma.tenantConnector.findFirst({
       where: {
         id: connectorId,
         tenantId,
-        connectorKey: 'bitrix24',
+        connectorKey: { in: STAGE_SYNC_KEYS },
         status: 'ACTIVE',
       },
     });
     if (!row) throw new StageSyncRefusal('NOT_FOUND');
     const connector = await this.loader.create(row);
-    if (!(connector instanceof Bitrix24Connector))
-      throw new StageSyncRefusal('NOT_FOUND');
+    if (!isStageSyncSource(connector)) throw new StageSyncRefusal('NOT_FOUND');
     return connector;
   }
 
@@ -401,16 +408,21 @@ export class CrmStageSyncService implements ScheduledScan {
     let seen = 0;
     let warning: string | null = null;
     try {
-      for (let start = 0; seen < MAX_ITEMS_PER_RUN; start += PAGE_SIZE) {
-        const page = await connector.listChangedLeads(since, start);
+      for (let index = 0; seen < MAX_ITEMS_PER_RUN; index += 1) {
+        const page = await connector.listChangedLeads(since, index);
         for (const change of page) {
-          const outcome = await this.apply(tenantId, byStage, change);
+          const outcome = await this.apply(
+            tenantId,
+            byStage,
+            change,
+            connector,
+          );
           moved += outcome.moved;
           warning = outcome.warning ?? warning;
           seen += 1;
           cursor = advanceCursor(cursor, [change]);
         }
-        if (page.length < PAGE_SIZE) break;
+        if (page.length < connector.stageSyncPageSize) break;
       }
     } catch (caught) {
       // Keep what was processed: the cursor only moves past finished items.
@@ -430,7 +442,8 @@ export class CrmStageSyncService implements ScheduledScan {
         leadStage: { id: string; kind: string } | null;
       }
     >,
-    change: PortalLeadChange,
+    change: SyncLeadChange,
+    source: StageSyncSource & { connectorKey: string },
   ): Promise<{ moved: number; warning?: string }> {
     const mapping = byStage.get(change.stageId);
     if (!mapping?.leadStageId || !mapping.leadStage) return { moved: 0 };
@@ -440,7 +453,7 @@ export class CrmStageSyncService implements ScheduledScan {
         kind: 'createLead',
         subjectType: 'lead',
         status: { in: ['SUCCEEDED', 'RESOLVED_SUCCEEDED'] },
-        externalId: String(change.id),
+        externalId: change.externalId,
       },
       select: { subjectId: true },
     });
@@ -466,10 +479,14 @@ export class CrmStageSyncService implements ScheduledScan {
             actor: 'OPERATOR',
             lostReason:
               mapping.leadStage!.kind === 'LOST'
-                ? lostReasonFor(mapping.externalStageName)
+                ? lostReasonFor(
+                    mapping.externalStageName,
+                    200,
+                    source.stageSyncLabel,
+                  )
                 : null,
             auditExtra: {
-              source: 'bitrix24',
+              source: source.connectorKey,
               externalStageId: change.stageId.slice(0, 100),
             },
           }),

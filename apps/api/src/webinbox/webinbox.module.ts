@@ -7,6 +7,7 @@ import {
   BITRIX24_CONNECT_TRANSPORT,
   ConnectorsController,
 } from './connectors.controller.js';
+import { AmocrmController } from './amocrm.controller.js';
 import { CrmStageSyncController } from './crm-stage-sync.controller.js';
 import { ConnectorsModule } from '../connectors/connectors.module.js';
 import { ConnectorRolesController } from './connector-roles.controller.js';
@@ -97,6 +98,7 @@ import { ExportLock } from '../exports/export-lock.js';
     TagsController,
     CustomFieldsController,
     ConnectorsController,
+    AmocrmController,
     CrmStageSyncController,
     ConnectorRolesController,
     LeadsController,
