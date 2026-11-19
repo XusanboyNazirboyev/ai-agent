@@ -72,6 +72,8 @@ export class StageSyncRefusal extends Error {
   constructor(
     readonly code:
       'NOT_FOUND' | 'INVALID_BODY' | 'CRM_UNREACHABLE' | 'CRM_REJECTED',
+    /** The connector key, so the message names the right CRM. */
+    readonly provider?: string,
   ) {
     super(code);
   }
@@ -176,6 +178,7 @@ export class CrmStageSyncService implements ScheduledScan {
         error instanceof ConnectorError && error.retryable
           ? 'CRM_UNREACHABLE'
           : 'CRM_REJECTED',
+        connector.connectorKey,
       );
     }
     const names = new Map(portal.map((s) => [s.id, s.name]));
