@@ -49,6 +49,7 @@ import { ManualLeadService } from '../leads/manual-lead.service.js';
 import { SheetCatalogController } from './sheet-catalog.controller.js';
 import { LeadsController } from './leads.controller.js';
 import { LeadPipelineController } from './lead-pipeline.controller.js';
+import { LeadImportController } from '../leads/lead-import.controller.js';
 import { PipelinesController } from './pipelines.controller.js';
 import { FacebookConnectController } from './facebook-connect.controller.js';
 import { FacebookOAuthClient } from '../channels/facebook/facebook-oauth.js';
@@ -104,6 +105,7 @@ import { ExportLock } from '../exports/export-lock.js';
     CannedResponsesController,
     ConversationTagsController,
     CrmTemplateController,
+    LeadImportController,
     LeadPipelineController,
     PipelinesController,
     FacebookConnectController,

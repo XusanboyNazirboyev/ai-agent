@@ -29,6 +29,7 @@ Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing tha
 - External audit follow-ups (AUD-01/02/08/11/12/13 done; AUD-09/14 in `feat/knowledge-only-tenants`).
 
 ### Open work
+- **2026-11-19 (`feat/lead-csv-import`, [ADR 077](adr/077-lead-csv-import.md)):** CSV import of leads: `POST /api/v1/leads/import` (OWNER/ADMIN, up to 200 rows, every row checked with the manual lead rules, duplicate phone in the pipeline skipped, audit with counts only) and `LeadsImportDialog` (column mapping, stage, preview, chunks of 200). The toolbar button is wired separately.
 - **Console gaps for selling subscriptions (owner 2026-11-17: "consoleda kamchiliklar bo'lsa o'zing to'g'irla"), next session, in this order:**
   1. ~~Plan limits enforced nowhere~~ done 2026-11-17 (branch `feat/ui-words-menu`, ADR 047 amendment "plan limits"): enabling a channel beyond `maxChannelAccounts` is refused (`CHANNEL_LIMIT`, checked under a per-tenant lock), the plan's `monthlyLlmBudgetUsd` is the tenant's AI cap (else the server default), the plan form has an AI budget field, and the customer page shows use against the limits. No migration.
   2. ~~No password reset~~ done 2026-11-17: one-time reset links from the console and the Team page (ADR 047 amendment).
