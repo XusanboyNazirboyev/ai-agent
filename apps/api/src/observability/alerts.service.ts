@@ -25,7 +25,15 @@ export type OperatorAlert =
       readonly daysLeft: number;
     }
   /** ADR 068 amendment: a task's time came (text is read from the row). */
-  | { readonly kind: 'TASK_DUE'; readonly taskId: string };
+  | { readonly kind: 'TASK_DUE'; readonly taskId: string }
+  /** ADR 080: queued by the lead limit scan at 80 % and 100 %. */
+  | {
+      readonly kind: 'LEAD_LIMIT';
+      readonly percent: number;
+      readonly count: number;
+      readonly limit: number;
+      readonly month: string;
+    };
 
 const HOUR_MS = 3_600_000;
 

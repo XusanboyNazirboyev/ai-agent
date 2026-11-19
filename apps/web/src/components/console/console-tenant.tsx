@@ -129,6 +129,14 @@ export function ConsoleTenant(): ReactNode {
                 : String(detail.limits.maxOperators),
             )}
           </Field>
+          <Field label={t('console.usage.newLeads')} testId="usage-new-leads">
+            {usedOf(
+              String(detail.limits.newLeadsThisMonth),
+              detail.limits.monthlyNewLeads === null
+                ? null
+                : String(detail.limits.monthlyNewLeads),
+            )}
+          </Field>
           <Field label={t('console.usage.channels')} testId="usage-channels">
             {usedOf(
               String(

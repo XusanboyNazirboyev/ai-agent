@@ -130,6 +130,8 @@ export interface Me {
   tenant: { timezone: string; defaultLocale: string } | null;
   /** Absent on an API older than ADR 047. */
   access?: TenantAccess;
+  /** ADR 080: OWNER/ADMIN only; null without a plan limit. */
+  leadLimit?: { newLeadsThisMonth: number; monthlyNewLeads: number } | null;
 }
 
 export interface TeamMember {

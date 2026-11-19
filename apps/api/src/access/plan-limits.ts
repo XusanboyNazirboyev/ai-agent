@@ -9,6 +9,8 @@ export interface PlanLimits {
   readonly maxOperators?: number;
   readonly maxChannelAccounts?: number;
   readonly monthlyLlmBudgetUsd?: number;
+  /** ADR 080: new leads per calendar month (tenant time zone); warned, never blocked. */
+  readonly monthlyNewLeads?: number;
 }
 
 /** Subscription states whose plan limits apply. */
@@ -37,7 +39,14 @@ export function planLimitsOf(raw: unknown): PlanLimits {
   const maxOperators = nonNegativeInt(record.maxOperators);
   const maxChannelAccounts = nonNegativeInt(record.maxChannelAccounts);
   const monthlyLlmBudgetUsd = nonNegativeAmount(record.monthlyLlmBudgetUsd);
+  const monthlyNewLeads =
+    typeof record.monthlyNewLeads === 'number' &&
+    Number.isInteger(record.monthlyNewLeads) &&
+    record.monthlyNewLeads > 0
+      ? record.monthlyNewLeads
+      : undefined;
   return {
+    ...(monthlyNewLeads !== undefined ? { monthlyNewLeads } : {}),
     ...(maxOperators !== undefined ? { maxOperators } : {}),
     ...(maxChannelAccounts !== undefined ? { maxChannelAccounts } : {}),
     ...(monthlyLlmBudgetUsd !== undefined ? { monthlyLlmBudgetUsd } : {}),

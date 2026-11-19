@@ -32,6 +32,7 @@ const Limits = z
     maxOperators: z.number().int().min(0).max(10_000).optional(),
     maxChannelAccounts: z.number().int().min(0).max(10_000).optional(),
     monthlyLlmBudgetUsd: z.number().min(0).max(1_000_000).optional(),
+    monthlyNewLeads: z.number().int().min(1).max(100_000_000).optional(),
   })
   .strict();
 
@@ -45,6 +46,8 @@ const CreatePlan = z.object({
     .default('UZS'),
   periodDays: z.number().int().min(1).max(3_660),
   limits: Limits.default({}),
+  isPublic: z.boolean().default(false),
+  position: z.number().int().min(0).max(10_000).default(0),
 });
 
 const PatchPlan = z
@@ -54,6 +57,8 @@ const PatchPlan = z
     periodDays: z.number().int().min(1).max(3_660).optional(),
     limits: Limits.optional(),
     isActive: z.boolean().optional(),
+    isPublic: z.boolean().optional(),
+    position: z.number().int().min(0).max(10_000).optional(),
   })
   .refine((body) => Object.keys(body).length > 0);
 
@@ -66,6 +71,8 @@ export interface PlanView {
   periodDays: number;
   limits: unknown;
   isActive: boolean;
+  isPublic: boolean;
+  position: number;
   createdAt: Date;
 }
 
@@ -79,6 +86,8 @@ function view(plan: SubscriptionPlan): PlanView {
     periodDays: plan.periodDays,
     limits: plan.limits,
     isActive: plan.isActive,
+    isPublic: plan.isPublic,
+    position: plan.position,
     createdAt: plan.createdAt,
   };
 }
@@ -123,6 +132,8 @@ export class PlatformPlansController {
             currency: input.currency,
             periodDays: input.periodDays,
             limits: input.limits,
+            isPublic: input.isPublic,
+            position: input.position,
           },
         });
         await recordPlatformAudit(tx, {
@@ -168,6 +179,8 @@ export class PlatformPlansController {
             : {}),
           ...(input.limits !== undefined ? { limits: input.limits } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          ...(input.isPublic !== undefined ? { isPublic: input.isPublic } : {}),
+          ...(input.position !== undefined ? { position: input.position } : {}),
         },
       });
       await recordPlatformAudit(tx, {

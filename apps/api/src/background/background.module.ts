@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessModule } from '../access/access.module.js';
+import { LeadLimitScanService } from '../access/lead-limit-scan.service.js';
 import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { FollowUpService } from '../followup/follow-up.service.js';
 import {
@@ -61,6 +62,7 @@ import { RetentionService } from '../retention/retention.service.js';
         AlertsService,
         OperatorIdleReturnService,
         SubscriptionScanService,
+        LeadLimitScanService,
         RetentionService,
         SheetCatalogService,
         LeadTaskReminders,
@@ -76,6 +78,7 @@ import { RetentionService } from '../retention/retention.service.js';
         alerts: AlertsService,
         idle: OperatorIdleReturnService,
         subscriptions: SubscriptionScanService,
+        leadLimits: LeadLimitScanService,
         retention: RetentionService,
         sheets: SheetCatalogService,
         reminders: LeadTaskReminders,
@@ -90,6 +93,7 @@ import { RetentionService } from '../retention/retention.service.js';
         alerts,
         idle,
         subscriptions,
+        leadLimits,
         retention,
         sheets,
         reminders,

@@ -23,6 +23,7 @@ import { usePreferences } from '@/lib/preferences';
 import { canManageTeam } from '@/lib/roles';
 import type { ConversationPage, Me, Role, TenantAccess } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
+import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
 import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
@@ -332,6 +333,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
             access={me.data.access}
             manager={canManageTeam(operator.role)}
           />
+          <LeadLimitBanner info={me.data.leadLimit} />
           {overdue > 0 ? (
             <div
               role="alert"

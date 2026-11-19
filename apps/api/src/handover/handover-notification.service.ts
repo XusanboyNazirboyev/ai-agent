@@ -354,6 +354,12 @@ export class HandoverNotificationService {
     } else if (kind === 'CRM_SYNC_FAILURES') {
       const count = number('count');
       if (count !== undefined) text = t.alertCrmFailures(count);
+    } else if (kind === 'LEAD_LIMIT') {
+      const percent = number('percent');
+      const count = number('count');
+      const limit = number('limit');
+      if (percent !== undefined && count !== undefined && limit !== undefined)
+        text = t.alertLeadLimit(percent, count, limit);
     } else if (kind === 'SUBSCRIPTION_ENDING') {
       const end = new Date(field(payload, 'periodEnd') ?? '');
       const daysLeft = number('daysLeft');

@@ -46,6 +46,7 @@ const ALLOWED = new Map([
   ['handover/operator-idle-return.service.ts', 'idle operator chats'],
   ['leads/lead-backfill.scan.ts', 'tenants not yet backfilled'],
   ['access/subscription-scan.service.ts', 'periods ending or ended'],
+  ['access/lead-limit-scan.service.ts', 'plans with a lead limit'],
   ['tasks/lead-tasks.ts', 'tasks that fell due'],
   ['connectors/bitrix24/crm-stage-sync.service.ts', 'stage syncs due a poll'],
   ['leads/lead-sync.service.ts', 'CRM writes to retry or recover'],
