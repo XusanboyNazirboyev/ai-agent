@@ -32,6 +32,7 @@ const ALLOWED = new Map([
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],
   ['signup/signup.service.ts', 'self-serve signup creates a tenant (ADR 080)'],
+  ['signup/signup-cleanup.scan.ts', 'purges expired signups (platform table)'],
 
   ['platform/platform-overview.controller.ts', 'platform overview totals'],
   // S6: queues. The relay and the scheduler find due work of every tenant;
