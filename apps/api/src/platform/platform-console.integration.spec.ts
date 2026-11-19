@@ -1069,3 +1069,324 @@ describe('tenant invites from the console', () => {
     expect(await pending()).toEqual(['OWNER']);
   });
 });
+
+/**
+ * Overview (ADR 047 amendment 2026-11-19). The shared test database holds
+ * other tests' tenants, so company/trial/churn/activity counts are compared
+ * as deltas before/after seeding; money uses two currency codes no other
+ * test uses (XTA, XTB), so those figures are exact.
+ */
+describe('platform overview', () => {
+  interface OverviewBody {
+    companies: {
+      total: number;
+      byStatus: Record<string, number>;
+      bySubscription: Record<string, number>;
+    };
+    trialsEndingSoon: number;
+    months: {
+      month: string;
+      newCompanies: number;
+      trialsStarted: number;
+      convertedToPaid: number;
+      churned: number;
+      activeCompanies: number;
+      revenue: Record<string, string>;
+    }[];
+    revenue: Record<
+      'allTime' | 'thisMonth' | 'lastMonth' | 'mrr',
+      Record<string, string>
+    >;
+    usageThisMonth: { conversations: number; inboundMessages: number };
+    recent: { kind: string; tenantName: string; tenantId: string }[];
+  }
+  const ovr = async (session: Session, query = ''): Promise<OverviewBody> => {
+    const result = await call('GET', `/api/v1/platform/overview${query}`, {
+      session,
+    });
+    expect(result.status).toBe(200);
+    return result.body as unknown as OverviewBody;
+  };
+  const letter = (index: number): string =>
+    String.fromCharCode(65 + (Number.parseInt(suffix[index]!, 16) % 26));
+  // Random per run, so earlier runs' rows never mix into the exact sums.
+  const CUR_A = `X${letter(0)}${letter(1)}`;
+  const CUR_B = `Y${letter(2)}${letter(3)}`;
+  const seededTenants: string[] = [];
+  const seededPlans: string[] = [];
+  afterAll(async () => {
+    await db.tenant.deleteMany({ where: { id: { in: seededTenants } } });
+    await db.subscriptionPlan.deleteMany({
+      where: { id: { in: seededPlans } },
+    });
+  });
+  const ago = (days: number): Date => new Date(Date.now() - days * 86_400_000);
+
+  it('aggregates companies, trials, conversions, churn and revenue', async () => {
+    const support = await platformLogin(SUPPORT_EMAIL);
+    const before = await ovr(support);
+    const keys = before.months.map((m) => m.month);
+    expect(keys).toHaveLength(12);
+    const m0 = keys[11]!;
+    const m1 = keys[10]!;
+    const lastMonth = new Date(`${m1}-15T07:00:00Z`);
+    const thisMonth = new Date(`${m0}-02T07:00:00Z`);
+    const planA = await db.subscriptionPlan.create({
+      data: {
+        code: `ov-a-${suffix}`,
+        name: 'Overview A',
+        priceMinor: 3_000_000n,
+        currency: CUR_A,
+        periodDays: 30,
+      },
+    });
+    const planB = await db.subscriptionPlan.create({
+      data: {
+        code: `ov-b-${suffix}`,
+        name: 'Overview B',
+        priceMinor: 36_500n,
+        currency: CUR_B,
+        periodDays: 365,
+      },
+    });
+    seededPlans.push(planA.id, planB.id);
+    const mk = (
+      key: string,
+      createdAt: Date,
+      status: 'ACTIVE' | 'ARCHIVED' = 'ACTIVE',
+    ): Promise<{ id: string; name: string }> =>
+      db.tenant
+        .create({
+          data: {
+            slug: `ov-${key}-${suffix}`,
+            name: `Overview ${key} ${suffix}`,
+            status,
+            defaultLocale: 'en',
+            supportedLocales: ['en'],
+            timezone: 'UTC',
+            packKey: PACK,
+            packVersion: '1',
+            createdAt,
+          },
+          select: { id: true, name: true },
+        })
+        .then((row) => {
+          seededTenants.push(row.id);
+          return row;
+        });
+    const sub = (
+      tenantId: string,
+      planId: string,
+      status: 'TRIAL' | 'ACTIVE' | 'EXPIRED',
+      createdAt: Date,
+      end: Date,
+    ): Promise<unknown> =>
+      db.tenantSubscription.create({
+        data: {
+          tenantId,
+          planId,
+          status,
+          currentPeriodStart: createdAt,
+          currentPeriodEnd: end,
+          createdAt,
+        },
+      });
+    const audit = (
+      tenantId: string,
+      action: string,
+      createdAt: Date,
+      safeSummary: Record<string, string> = {},
+    ): Promise<unknown> =>
+      db.platformAuditEvent.create({
+        data: {
+          action,
+          tenantId,
+          entityType: 'tenant_subscription',
+          entityId: 'x',
+          safeSummary,
+          createdAt,
+        },
+      });
+    const pay = (
+      tenantId: string,
+      currency: string,
+      amountMinor: bigint,
+      status: 'PAID' | 'REFUNDED',
+      paidAt: Date,
+      ref: string,
+    ): Promise<unknown> =>
+      db.subscriptionPayment.create({
+        data: {
+          tenantId,
+          provider: 'MANUAL',
+          providerRef: `manual:ov-${ref}-${suffix}`,
+          amountMinor,
+          currency,
+          status,
+          paidAt,
+        },
+      });
+
+    // A: trial last month, converted (first payment last month), pays again now.
+    const a = await mk('a', lastMonth);
+    await audit(a.id, 'subscription.started', lastMonth, { status: 'TRIAL' });
+    await sub(a.id, planA.id, 'ACTIVE', lastMonth, ago(-20));
+    await pay(a.id, CUR_A, 3_000_000n, 'PAID', lastMonth, 'a1');
+    await pay(a.id, CUR_A, 3_000_000n, 'PAID', thisMonth, 'a2');
+    // B: trial last month, ends in two days.
+    const b = await mk('b', lastMonth);
+    await audit(b.id, 'subscription.started', lastMonth, { status: 'TRIAL' });
+    await sub(b.id, planA.id, 'TRIAL', lastMonth, ago(-2));
+    // C: trial this month, expired this month: churned.
+    const c = await mk('c', thisMonth);
+    await audit(c.id, 'subscription.started', thisMonth, { status: 'TRIAL' });
+    await audit(c.id, 'subscription.expired', thisMonth);
+    await sub(c.id, planA.id, 'EXPIRED', thisMonth, ago(1));
+    // D: paid without a trial, cancel event last month but an open row now
+    // (re-subscribed): not churned. A refunded payment is excluded.
+    const d = await mk('d', lastMonth);
+    await audit(d.id, 'subscription.canceled', lastMonth);
+    await sub(d.id, planB.id, 'ACTIVE', lastMonth, ago(-300));
+    await pay(d.id, CUR_B, 36_500n, 'PAID', lastMonth, 'd1');
+    await pay(d.id, CUR_B, 99_999n, 'REFUNDED', lastMonth, 'd2');
+    // E: archived, never subscribed.
+    const e = await mk('e', thisMonth, 'ARCHIVED');
+    // Activity of A: one customer message last month and one this month.
+    const channel = await db.channelAccount.create({
+      data: {
+        tenantId: a.id,
+        channelType: 'telegram',
+        externalAccountId: `ov-${suffix}`,
+        status: 'DISABLED',
+      },
+    });
+    const contact = await db.contact.create({
+      data: {
+        tenantId: a.id,
+        channelAccountId: channel.id,
+        providerUserId: `ov-${suffix}`,
+      },
+    });
+    const conversation = await db.conversation.create({
+      data: {
+        tenantId: a.id,
+        channelAccountId: channel.id,
+        contactId: contact.id,
+        providerChatId: `ov-${suffix}`,
+        createdAt: thisMonth,
+      },
+    });
+    for (const [sequence, createdAt] of [lastMonth, thisMonth].entries())
+      await db.message.create({
+        data: {
+          tenantId: a.id,
+          conversationId: conversation.id,
+          channelAccountId: channel.id,
+          authorType: 'CUSTOMER',
+          direction: 'INBOUND',
+          text: 'hi',
+          sequence: sequence + 1,
+          providerChatId: `ov-${suffix}`,
+          createdAt,
+        },
+      });
+    // The newest event wins the "recent" list.
+    await db.platformAuditEvent.create({
+      data: {
+        action: 'payment.recorded',
+        tenantId: d.id,
+        entityType: 'subscription_payment',
+        entityId: 'y',
+        createdAt: new Date(Date.now() + 120_000),
+      },
+    });
+
+    const after = await ovr(support);
+    const delta = (pick: (o: OverviewBody) => number): number =>
+      pick(after) - pick(before);
+    expect(delta((o) => o.companies.total)).toBe(5);
+    expect(delta((o) => o.companies.byStatus.ARCHIVED!)).toBe(1);
+    expect(delta((o) => o.companies.bySubscription.TRIAL!)).toBe(1);
+    expect(delta((o) => o.companies.bySubscription.ACTIVE!)).toBe(2);
+    expect(delta((o) => o.companies.bySubscription.EXPIRED!)).toBe(1);
+    expect(delta((o) => o.companies.bySubscription.NONE!)).toBe(1);
+    expect(delta((o) => o.trialsEndingSoon)).toBe(1);
+    expect(e.id).toBeTruthy();
+    const month = (
+      o: OverviewBody,
+      key: string,
+    ): OverviewBody['months'][number] => o.months.find((m) => m.month === key)!;
+    const md = (
+      key: string,
+      field:
+        | 'newCompanies'
+        | 'trialsStarted'
+        | 'convertedToPaid'
+        | 'churned'
+        | 'activeCompanies',
+    ): number => month(after, key)[field] - month(before, key)[field];
+    expect(md(m1, 'newCompanies')).toBe(3);
+    expect(md(m0, 'newCompanies')).toBe(2);
+    expect(md(m1, 'trialsStarted')).toBe(2);
+    expect(md(m0, 'trialsStarted')).toBe(1);
+    expect(md(m1, 'convertedToPaid')).toBe(1);
+    expect(md(m0, 'convertedToPaid')).toBe(0);
+    expect(md(m1, 'churned')).toBe(0);
+    expect(md(m0, 'churned')).toBe(1);
+    expect(md(m1, 'activeCompanies')).toBe(1);
+    expect(md(m0, 'activeCompanies')).toBe(1);
+    // Exact money (a random currency code per run).
+    expect(month(after, m1).revenue).toMatchObject({
+      [CUR_A]: '30000.00',
+      [CUR_B]: '365.00',
+    });
+    expect(month(after, m0).revenue[CUR_A]).toBe('30000.00');
+    expect(month(after, m0).revenue.XTB).toBeUndefined();
+    expect(after.revenue.allTime).toMatchObject({
+      [CUR_A]: '60000.00',
+      [CUR_B]: '365.00',
+    });
+    expect(after.revenue.thisMonth[CUR_A]).toBe('30000.00');
+    expect(after.revenue.lastMonth).toMatchObject({
+      [CUR_A]: '30000.00',
+      [CUR_B]: '365.00',
+    });
+    // MRR: A pays 3 000 000 / 30 days; D 36 500 per 365 days = 3 000 per 30.
+    expect(after.revenue.mrr).toMatchObject({
+      [CUR_A]: '30000.00',
+      [CUR_B]: '30.00',
+    });
+    expect(delta((o) => o.usageThisMonth.conversations)).toBe(1);
+    expect(delta((o) => o.usageThisMonth.inboundMessages)).toBe(1);
+    expect(after.recent).toHaveLength(10);
+    expect(after.recent[0]).toMatchObject({
+      kind: 'payment.recorded',
+      tenantId: d.id,
+      tenantName: d.name,
+    });
+    // months=1 still knows last month.
+    const one = await ovr(support, '?months=1');
+    expect(one.months).toHaveLength(1);
+    expect(one.revenue.lastMonth[CUR_A]).toBe('30000.00');
+  });
+
+  it('refuses bad queries and non-platform callers', async () => {
+    const owner = await platformLogin(OWNER_EMAIL);
+    for (const query of ['?months=0', '?months=25', '?months=x', '?foo=1'])
+      expect(
+        (
+          await call('GET', `/api/v1/platform/overview${query}`, {
+            session: owner,
+          })
+        ).status,
+      ).toBe(400);
+    expect((await call('GET', '/api/v1/platform/overview')).status).toBe(401);
+    expect(
+      (
+        await call('GET', '/api/v1/platform/overview', {
+          session: { cookie: `ac_session=${randomUUID()}`, csrf: '' },
+        })
+      ).status,
+    ).toBe(401);
+  });
+});
