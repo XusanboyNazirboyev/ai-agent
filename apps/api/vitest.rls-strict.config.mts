@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
  * under test `appClient()`, and its calls set the tenant as production does.
  */
 const STRICT_SPECS = [
+  'src/access/lead-limit.integration.spec.ts',
   'src/persistence/rls-http-context.integration.spec.ts',
   'src/persistence/rls-background.integration.spec.ts',
   'src/handover/handover.integration.spec.ts',

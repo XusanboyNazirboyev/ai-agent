@@ -71,6 +71,8 @@ export interface TenantDetail {
   limits: {
     maxOperators: number | null;
     maxChannelAccounts: number | null;
+    monthlyNewLeads: number | null;
+    newLeadsThisMonth: number;
     /** The AI budget the assistant enforces: the plan's, else the server's. */
     monthlyLlmBudgetUsd: number | null;
   };
@@ -115,6 +117,7 @@ export interface PlanLimits {
   maxOperators?: number;
   maxChannelAccounts?: number;
   monthlyLlmBudgetUsd?: number;
+  monthlyNewLeads?: number;
 }
 
 export interface Plan {
@@ -126,6 +129,8 @@ export interface Plan {
   periodDays: number;
   limits: PlanLimits | null;
   isActive: boolean;
+  isPublic: boolean;
+  position: number;
   createdAt: string;
 }
 
