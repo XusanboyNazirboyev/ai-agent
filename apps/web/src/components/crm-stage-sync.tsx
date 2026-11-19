@@ -6,7 +6,7 @@ import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import type { StageSyncView } from '@/lib/types';
 import { Button } from './ui/button';
-import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 import { stageLabel } from './lead-board-utils';
@@ -106,8 +106,8 @@ export function CrmStageSync(props: { connectorId: string }): ReactNode {
                 <tr key={stage.externalStageId}>
                   <td className="py-1 pr-2 break-words">{stage.name}</td>
                   <td className="py-1">
-                    <select
-                      className={fieldClass}
+                    <Select
+                      compact
                       aria-label={stage.name}
                       data-testid={`stage-map-${stage.externalStageId}`}
                       value={draft[stage.externalStageId] ?? ''}
@@ -124,7 +124,7 @@ export function CrmStageSync(props: { connectorId: string }): ReactNode {
                           {stageLabel(ours, t)}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </td>
                 </tr>
               ))}
