@@ -144,7 +144,7 @@ export function LeadCard(props: {
           if (props.selecting) props.onToggleSelect?.(item.id);
           else openRef.current?.click();
         }}
-        className={`flex min-w-0 cursor-pointer flex-col gap-2 rounded-xl border p-3 hover:border-primary hover:shadow-card ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
+        className={`flex min-w-0 cursor-pointer flex-col gap-2.5 rounded-xl border px-3.5 py-3 hover:border-primary hover:shadow-card ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
           pickedUp || (props.selecting && props.selected)
             ? 'border-primary bg-primary-soft ring-1 ring-primary'
             : isDraggedHere
@@ -177,7 +177,7 @@ export function LeadCard(props: {
                 props.onToggleSelect?.(item.id);
               }
             }}
-            className="inline-flex min-h-9 min-w-0 flex-1 items-center truncate rounded-md text-left text-[0.9375rem] font-semibold hover:text-primary-fg"
+            className="inline-flex min-h-9 min-w-0 flex-1 items-center truncate rounded-md text-left text-base font-semibold hover:text-primary-fg"
           >
             <span className="truncate">{name}</span>
           </Link>
@@ -211,12 +211,12 @@ export function LeadCard(props: {
         {item.contact.phone ? (
           <p
             data-testid="lead-card-phone"
-            className="-mt-1 min-w-0 truncate text-xs text-muted"
+            className="-mt-1.5 min-w-0 truncate text-sm text-muted"
           >
             {item.contact.phone}
           </p>
         ) : null}
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
           {LEAD_AMOUNT_ENABLED && item.amount ? (
             <span
               data-testid="lead-card-amount"
@@ -242,7 +242,7 @@ export function LeadCard(props: {
               })}
               className="ml-auto"
             >
-              <Avatar name={item.owner.displayName} size="xs" />
+              <Avatar name={item.owner.displayName} size="sm" />
             </span>
           ) : null}
         </div>

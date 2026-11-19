@@ -103,7 +103,7 @@ export function LeadColumn(props: {
           ? 'w-full'
           : props.collapsed
             ? 'w-[min(85vw,14rem)] md:w-56'
-            : 'w-[min(85vw,21rem)] md:w-80 md:min-w-[16rem]'
+            : 'w-[min(85vw,21rem)] md:w-80 md:min-w-[18rem]'
       } md:flex-1 md:min-h-0 ${isDraggingInto ? 'bg-primary-soft ring-2 ring-primary' : ''}`}
     >
       <header className="flex min-w-0 flex-col gap-1 border-b border-line px-3 py-2.5 md:sticky md:top-0 md:z-20 bg-surface/90">
