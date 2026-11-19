@@ -244,6 +244,8 @@ model Tenant {
   connectors      TenantConnector[]
   catalogSyncRuns CatalogSyncRun[]
   connectorRoles TenantConnectorRole[]
+  crmStageSyncs  CrmStageSync[]
+  crmStageMappings CrmStageMapping[]
   llmUsage        LlmUsageRecord[]
   llmBudgetReservations LlmBudgetReservation[]
   internalNotes         InternalNote[]
@@ -319,6 +321,8 @@ model TenantConnector {
   syncRuns      CatalogSyncRun[]
   secrets       ConnectorSecret[]
   roles         TenantConnectorRole[]
+  stageSync     CrmStageSync?
+  stageMappings CrmStageMapping[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, connectorKey])
@@ -1000,6 +1004,7 @@ model LeadStage {
   pipeline  Pipeline @relation(fields: [tenantId, pipelineId], references: [tenantId, id], onDelete: Restrict)
   leads     Lead[]
   suggestedFor Lead[] @relation("LeadSuggestedStage")
+  crmMappings CrmStageMapping[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, pipelineId, id])
@@ -2029,4 +2034,46 @@ model ConversationTag {
   @@id([tenantId, conversationId, tagId])
   @@index([tenantId, tagId])
   @@map("conversation_tags")
+}
+
+/// ADR 079: per-connector state of the stage sync from the CRM (one row per connector).
+model CrmStageSync {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  tenantId          String          @map("tenant_id") @db.Uuid
+  tenantConnectorId String          @map("tenant_connector_id") @db.Uuid
+  enabled           Boolean         @default(false)
+  /// Newest portal updatedTime processed; the scan re-reads 60 s before it.
+  cursorAt          DateTime?       @map("cursor_at") @db.Timestamptz(6)
+  lastRunAt         DateTime?       @map("last_run_at") @db.Timestamptz(6)
+  /// Error code of the latest run (never a message or URL); null when it succeeded.
+  lastErrorCode     String?         @map("last_error_code") @db.VarChar(100)
+  /// Claim so two scans never poll the same connector at once.
+  leaseUntil        DateTime?       @map("lease_until") @db.Timestamptz(6)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connector         TenantConnector @relation(fields: [tenantId, tenantConnectorId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, tenantConnectorId])
+  @@index([enabled, leaseUntil])
+  @@map("crm_stage_syncs")
+}
+
+/// ADR 079: a CRM lead stage and the stage of ours it moves a lead to (null = ignore).
+model CrmStageMapping {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  tenantId          String          @map("tenant_id") @db.Uuid
+  tenantConnectorId String          @map("tenant_connector_id") @db.Uuid
+  externalStageId   String          @map("external_stage_id") @db.VarChar(100)
+  externalStageName String          @map("external_stage_name") @db.VarChar(200)
+  leadStageId       String?         @map("lead_stage_id") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connector         TenantConnector @relation(fields: [tenantId, tenantConnectorId], references: [tenantId, id], onDelete: Cascade)
+  leadStage         LeadStage?      @relation(fields: [tenantId, leadStageId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, tenantConnectorId, externalStageId])
+  @@index([tenantId, leadStageId])
+  @@map("crm_stage_mappings")
 }

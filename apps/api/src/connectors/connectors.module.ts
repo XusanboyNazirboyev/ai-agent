@@ -26,6 +26,7 @@ import { CatalogSyncQueueRuntime } from './sync/catalog-sync.queue.js';
 import { CatalogSyncService } from './sync/catalog-sync.service.js';
 import { CatalogSyncStore } from './sync/catalog-sync.store.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
+import { CrmStageSyncService } from './bitrix24/crm-stage-sync.service.js';
 import { TenantConnectorLoader } from './sync/tenant-connector-loader.js';
 
 export function createConnectorRegistry(
@@ -74,6 +75,7 @@ export function createConnectorRegistry(
   providers: [
     CatalogSyncStore,
     TenantConnectorLoader,
+    CrmStageSyncService,
     ConnectorSelector,
     CatalogSyncService,
     CatalogSyncQueueRuntime,
@@ -125,6 +127,7 @@ export function createConnectorRegistry(
     CatalogSyncQueueRuntime,
     CatalogSyncStore,
     TenantConnectorLoader,
+    CrmStageSyncService,
     ConnectorSelector,
   ],
 })

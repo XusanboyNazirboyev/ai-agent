@@ -105,7 +105,7 @@ describe('Bitrix24 method allow-list', () => {
     expect(() =>
       assertAllowed('crm.item.add', { entityTypeId: LEAD_ENTITY_TYPE_ID }),
     ).not.toThrow();
-    expect(BITRIX24_METHODS).toHaveLength(7);
+    expect(BITRIX24_METHODS).toHaveLength(8);
   });
 });
 

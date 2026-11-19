@@ -12,6 +12,7 @@ import { HandoverModule } from '../handover/handover.module.js';
 import { OperatorIdleReturnService } from '../handover/operator-idle-return.service.js';
 import { ConnectorsModule } from '../connectors/connectors.module.js';
 import { SheetCatalogService } from '../connectors/spreadsheet/sheet-catalog.service.js';
+import { CrmStageSyncService } from '../connectors/bitrix24/crm-stage-sync.service.js';
 import { LeadTaskReminders } from '../tasks/lead-tasks.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadBackfillScan } from '../leads/lead-backfill.scan.js';
@@ -64,6 +65,7 @@ import { RetentionService } from '../retention/retention.service.js';
         SheetCatalogService,
         LeadTaskReminders,
         LeadBackfillScan,
+        CrmStageSyncService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -78,6 +80,7 @@ import { RetentionService } from '../retention/retention.service.js';
         sheets: SheetCatalogService,
         reminders: LeadTaskReminders,
         leadBackfill: LeadBackfillScan,
+        crmStageSync: CrmStageSyncService,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -91,6 +94,7 @@ import { RetentionService } from '../retention/retention.service.js';
         sheets,
         reminders,
         leadBackfill,
+        crmStageSync,
       ],
     },
     HandoverRuntime,

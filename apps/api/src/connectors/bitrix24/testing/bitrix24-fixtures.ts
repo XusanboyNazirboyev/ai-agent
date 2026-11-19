@@ -86,3 +86,29 @@ export const INVALID_CREDENTIALS = {
 /** Synthetic webhook URL used by every test (no real portal). */
 export const TEST_WEBHOOK_URL =
   'https://portal.example.test/rest/1/REDACTED0000test/';
+
+/**
+ * DOCS shape (crm.status.list, apidocs.bitrix24.com, read 2026-11-19): rows
+ * with ID, ENTITY_ID, STATUS_ID, NAME, SORT and SEMANTICS. NOT recorded on a
+ * live portal yet (the ENTITY_ID value is expected to be STATUS).
+ */
+export function statusListResponse(
+  rows: ReadonlyArray<{
+    statusId: string;
+    name: string;
+    sort?: number;
+    semantics?: string | null;
+  }>,
+): { result: Array<Record<string, unknown>>; total: number } {
+  return {
+    result: rows.map((row, index) => ({
+      ID: String(index + 1),
+      ENTITY_ID: 'STATUS',
+      STATUS_ID: row.statusId,
+      NAME: row.name,
+      SORT: String(row.sort ?? (index + 1) * 10),
+      SEMANTICS: row.semantics ?? null,
+    })),
+    total: rows.length,
+  };
+}
