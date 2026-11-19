@@ -87,3 +87,18 @@ export function formatDate(value: string, locale: string): string {
     return value.slice(0, 10);
   }
 }
+
+/**
+ * A decimal string from the API ("30000.00") as money. It is parsed into
+ * minor units without floating point; text that does not parse is shown as is.
+ */
+export function formatDecimalMoney(
+  decimal: string,
+  currency: string,
+  locale: string,
+): string {
+  const minor = parseMoneyInput(decimal, currency);
+  return minor === undefined
+    ? `${decimal} ${currency}`
+    : formatMoney(minor, currency, locale);
+}

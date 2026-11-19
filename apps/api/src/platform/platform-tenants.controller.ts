@@ -133,6 +133,8 @@ export interface TenantRow {
   packKey: string;
   packVersion: string;
   createdAt: Date;
+  /** Newest inbound customer message over all conversations; null = none yet. */
+  lastInboundAt: Date | null;
   subscription: {
     id: string;
     status: string;
@@ -208,9 +210,19 @@ export class PlatformTenantsController {
     const ids = tenants.map((tenant) => tenant.id);
     const usage = await this.usage(ids, new Date());
     const subscriptions = await this.currentSubscriptions(ids);
+    // One grouped query for every listed tenant (no N+1).
+    const activity = await this.prisma.conversation.groupBy({
+      by: ['tenantId'],
+      where: { tenantId: { in: ids }, lastInboundAt: { not: null } },
+      _max: { lastInboundAt: true },
+    });
+    const lastInbound = new Map(
+      activity.map((row) => [row.tenantId, row._max.lastInboundAt]),
+    );
     return {
       tenants: tenants.map((tenant) => ({
         ...tenant,
+        lastInboundAt: lastInbound.get(tenant.id) ?? null,
         subscription: subscriptions.get(tenant.id) ?? null,
         usage: usage.get(tenant.id) ?? {
           conversations: 0,

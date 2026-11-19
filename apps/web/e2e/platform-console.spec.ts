@@ -135,6 +135,14 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
   });
   await expect(admin.getByTestId('plan-dialog')).toBeHidden();
 
+  // The overview (business numbers) opens from the console nav.
+  await admin.goto('/console/overview');
+  await expect(admin.getByTestId('overview')).toBeVisible();
+  await expect(admin.getByTestId('state-TRIAL')).toHaveAttribute(
+    'href',
+    '/console?subscription=TRIAL',
+  );
+
   // New customer with that plan; the owner's invite link is shown once.
   await admin.goto('/console');
   await admin.getByTestId('new-customer').click();

@@ -30,9 +30,11 @@ export function useConsole(): ConsoleValue {
   return value;
 }
 
-type Section = 'tenants' | 'plans' | 'admins' | 'audit' | 'security';
+type Section =
+  'overview' | 'tenants' | 'plans' | 'admins' | 'audit' | 'security';
 
 const NAV: { key: Section; href: string; icon: IconName; owner?: boolean }[] = [
+  { key: 'overview', href: '/console/overview', icon: 'chart' },
   { key: 'tenants', href: '/console', icon: 'users' },
   { key: 'plans', href: '/console/plans', icon: 'database' },
   { key: 'admins', href: '/console/admins', icon: 'user', owner: true },
@@ -40,7 +42,15 @@ const NAV: { key: Section; href: string; icon: IconName; owner?: boolean }[] = [
   { key: 'security', href: '/console/security', icon: 'lock' },
 ];
 
+/** The nav label; the overview's text lives with the rest of its page. */
+function navKey(section: Section): string {
+  return section === 'overview'
+    ? 'console.overview.nav'
+    : `console.nav.${section}`;
+}
+
 function sectionOf(pathname: string): Section {
+  if (pathname.startsWith('/console/overview')) return 'overview';
   if (pathname.startsWith('/console/plans')) return 'plans';
   if (pathname.startsWith('/console/admins')) return 'admins';
   if (pathname.startsWith('/console/audit')) return 'audit';
@@ -68,7 +78,7 @@ export function ConsoleShell({ children }: { children: ReactNode }): ReactNode {
   }, [me.error, router]);
 
   const section = sectionOf(pathname);
-  const title = t(`console.nav.${section}`);
+  const title = t(navKey(section));
   useEffect(() => {
     document.title = `${title} · ${t('console.title')}`;
   }, [title, t]);
@@ -176,7 +186,7 @@ export function ConsoleShell({ children }: { children: ReactNode }): ReactNode {
                   }`}
                 >
                   <Icon name={item.icon} className="h-4 w-4" />
-                  {t(`console.nav.${item.key}`)}
+                  {t(navKey(item.key))}
                 </Link>
               </li>
             ))}

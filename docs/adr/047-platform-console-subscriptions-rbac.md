@@ -94,3 +94,22 @@ Unit tests for access decisions, scan transitions, invite tokens and role rules;
 - **Trade-off:** operators in the group see it too (the in-app banner is OWNER/ADMIN only); the group is the only out-of-app channel a tenant has today. A personal message to the owner needs their Telegram account or e-mail.
 - **Checked:** unit tests of the stages, repeats, renewal and skipped rows (`subscription-scan.spec.ts`); integration tests on the real database (one reminder for the tenant with a group, none without, filter mutation-checked; delivery text and the Tashkent date across midnight UTC) in `alerts.integration.spec.ts`.
 
+## Amendment (2026-11-19): Overview page
+
+Owner request: "an admin panel for ourselves: all companies, those coming in and leaving, trials, who subscribed and left, total revenue." Done: `GET /api/v1/platform/overview?months=1..24` (default 12; PLATFORM_OWNER and PLATFORM_SUPPORT; strict query) in `src/platform/platform-overview.controller.ts`, page `/console/overview` (first nav item; `/console` stays the customers list, which now reads `?subscription=<state>`), and the customers list shows created date and last customer message (`lastInboundAt`, max over conversations, one grouped query).
+
+Everything is a SQL aggregate on the privileged connection. Calendar months use the fixed platform time zone **Asia/Tashkent**. Subscription rows are updated in place (a paid extension turns a TRIAL row ACTIVE; expiry and cancel change the status), so transitions are read from `platform_audit_events`, which the console and the expiry scan write:
+
+- Company state: each tenant's latest subscription row by `created_at`; NONE = no row. Tenant status counts come from `tenants.status`.
+- `trialsEndingSoon`: TRIAL rows whose period ends between now and now + 3 days.
+- `newCompanies`: tenants created in the month.
+- `trialsStarted`: distinct tenants with a `subscription.started` event whose summary status is TRIAL in the month.
+- `convertedToPaid`: tenants whose first PAID payment (by `paid_at`) falls in the month and who had a TRIAL start event at or before it. (Not "first ACTIVE row after a TRIAL": rows are mutated, so that is not observable.)
+- `churned`: distinct tenants with a `subscription.canceled` or `subscription.expired` event in the month who have no open row (TRIAL, ACTIVE, PAST_DUE) now. As-of-now: a tenant that came back is not counted, also for past months.
+- `revenue`: sum of PAID payments by `paid_at` month per currency (REFUNDED and others excluded), as decimal strings rendered by code from minor units; `allTime`, `thisMonth`, `lastMonth` likewise.
+- `mrr`: **estimate**: sum over open ACTIVE and PAST_DUE subscriptions of the plan price normalised to 30 days (rounded per plan), per currency.
+- `activeCompanies`: tenants with at least one INBOUND message that month. `usageThisMonth`: conversations created, inbound messages, LLM cost, since the Tashkent month start.
+- `recent`: the last 10 audit events of tenant created, subscription started, changed, extended, canceled, expired and payment recorded, with tenant id and name only.
+
+Not done: payments by the Click adapter are counted when they are PAID but were not exercised here; churn for tenants deleted later is lost (audit `tenant_id` becomes null). The web e2e step was added but not run in this session. Checked: integration spec (normal and RLS strict; counts as deltas on the shared database, money in a random currency code per run, seeded rows deleted afterwards), unit tests for month and money math, web unit tests.
+

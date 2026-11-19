@@ -46,6 +46,8 @@ export interface TenantRow {
   packKey: string;
   packVersion: string;
   createdAt: string;
+  /** Newest inbound customer message; null when none yet. */
+  lastInboundAt: string | null;
   subscription: TenantSubscriptionSummary | null;
   usage: TenantUsage;
 }
@@ -160,4 +162,52 @@ export interface AuditPage {
 export interface TenantOptions {
   packs: string[];
   locales: string[];
+}
+
+/** Money per currency as decimal strings rendered by the API from minor units. */
+export type DecimalMoney = Record<string, string>;
+
+export type OverviewState =
+  'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED' | 'CANCELED' | 'NONE';
+
+export interface OverviewMonth {
+  /** "YYYY-MM" in the platform time zone. */
+  month: string;
+  newCompanies: number;
+  trialsStarted: number;
+  convertedToPaid: number;
+  churned: number;
+  activeCompanies: number;
+  revenue: DecimalMoney;
+}
+
+export interface PlatformOverview {
+  timeZone: string;
+  generatedAt: string;
+  companies: {
+    total: number;
+    byStatus: Record<TenantStatus, number>;
+    bySubscription: Record<OverviewState, number>;
+  };
+  trialsEndingSoon: number;
+  months: OverviewMonth[];
+  revenue: {
+    allTime: DecimalMoney;
+    thisMonth: DecimalMoney;
+    lastMonth: DecimalMoney;
+    /** An estimate: open ACTIVE/PAST_DUE plan prices normalised to 30 days. */
+    mrr: DecimalMoney;
+  };
+  usageThisMonth: {
+    conversations: number;
+    inboundMessages: number;
+    llmCostUsd: number;
+  };
+  recent: {
+    id: string;
+    kind: string;
+    tenantId: string;
+    tenantName: string;
+    at: string;
+  }[];
 }

@@ -7,6 +7,7 @@ import { PlatformAdminsController } from './platform-admins.controller.js';
 import { PlatformAuditController } from './platform-audit.controller.js';
 import { PlatformAuthController } from './platform-auth.controller.js';
 import { PlatformBillingController } from './platform-billing.controller.js';
+import { PlatformOverviewController } from './platform-overview.controller.js';
 import { PlatformPlansController } from './platform-plans.controller.js';
 import { PlatformSessionGuard } from './platform-session.guard.js';
 import { PlatformSessionService } from './platform-session.service.js';
@@ -31,6 +32,7 @@ import { SecretsModule } from '../secrets/secrets.module.js';
     PlatformAuthController,
     PlatformTenantsController,
     PlatformBillingController,
+    PlatformOverviewController,
     PlatformPlansController,
     PlatformAdminsController,
     PlatformAuditController,
