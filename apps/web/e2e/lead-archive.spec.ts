@@ -39,7 +39,7 @@ test('an admin archives and restores a lead; only the owner deletes it for good'
     await card(admin.page, name).getByTestId('lead-card-open').click();
     await admin.page.getByTestId('lead-archive').click();
     await admin.page.getByTestId('confirm-accept').click();
-    await expect(admin.page.getByTestId('lead-panel')).toBeHidden();
+    await expect(admin.page).toHaveURL(/\/leads(\?|$)/u);
     await expect(card(admin.page, name)).toHaveCount(0);
 
     // The archive lists it; an admin can restore but not delete for good.
@@ -100,7 +100,7 @@ test('an operator cannot archive and has no archive view', async ({
   await card(page, f.a.conversations[0]!.contactName)
     .getByTestId('lead-card-open')
     .click();
-  await expect(page.getByTestId('lead-panel')).toBeVisible();
+  await expect(page.getByTestId('lead-page')).toBeVisible();
   await expect(page.getByTestId('lead-archive')).toHaveCount(0);
   await context.close();
 });

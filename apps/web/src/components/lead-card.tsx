@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { channelName } from '@/lib/channel-names';
@@ -37,7 +38,6 @@ export function LeadCard(props: {
   /** One column at a time (mobile): swipe the card to the next/previous stage. */
   swipe: boolean;
   onSwipe: (item: LeadPipelineItem, direction: 'next' | 'prev') => void;
-  onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   /** Move (or, for a LOST stage, ask for the reason) from the keyboard path. */
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
   /** Announces a drop on the board's live region: the card may unmount. */
@@ -50,7 +50,7 @@ export function LeadCard(props: {
   const { t } = useI18n();
   const { operator } = useShell();
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
-  const openRef = useRef<HTMLButtonElement>(null);
+  const openRef = useRef<HTMLAnchorElement>(null);
   const { item, stages } = props;
   const stageId = currentStageId(item, stages);
   const isDragging = props.draggedId === item.id;
@@ -142,7 +142,7 @@ export function LeadCard(props: {
           if (drag.consumeClick()) return;
           if ((event.target as HTMLElement).closest('button, a, input')) return;
           if (props.selecting) props.onToggleSelect?.(item.id);
-          else props.onOpen(item, openRef.current);
+          else openRef.current?.click();
         }}
         className={`flex min-w-0 cursor-pointer flex-col gap-2 rounded-xl border p-3 hover:border-primary hover:shadow-card ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
           pickedUp || (props.selecting && props.selected)
@@ -163,17 +163,24 @@ export function LeadCard(props: {
               className="h-5 w-5 shrink-0 accent-primary"
             />
           ) : null}
-          <button
+          <Link
             ref={openRef}
-            type="button"
+            href={`/leads/${item.id}`}
             data-testid="lead-card-open"
             data-lead-open={item.id}
             aria-label={t('leads.openLead', { name })}
-            onClick={() => props.onOpen(item, openRef.current)}
-            className="min-h-9 min-w-0 flex-1 truncate rounded-md text-left text-[0.9375rem] font-semibold hover:text-primary-fg"
+            draggable={false}
+            onClick={(event) => {
+              // Select mode toggles the card instead of leaving the board.
+              if (props.selecting) {
+                event.preventDefault();
+                props.onToggleSelect?.(item.id);
+              }
+            }}
+            className="inline-flex min-h-9 min-w-0 flex-1 items-center truncate rounded-md text-left text-[0.9375rem] font-semibold hover:text-primary-fg"
           >
-            {name}
-          </button>
+            <span className="truncate">{name}</span>
+          </Link>
           {canEdit && !props.selecting ? (
             <>
               <button
@@ -277,14 +284,13 @@ export function LeadCard(props: {
           ) : null}
         </div>
         {suggested ? (
-          <button
-            type="button"
+          <Link
+            href={`/leads/${item.id}`}
             data-testid="lead-card-stage-suggested"
-            onClick={() => props.onOpen(item, openRef.current)}
             className="inline-flex min-h-9 min-w-0 max-w-full items-center rounded-full bg-warning-soft px-2.5 text-left text-xs font-medium text-warning-fg"
           >
             <span className="truncate">{t('leads.aiSuggestionChip')}</span>
-          </button>
+          </Link>
         ) : null}
       </article>
     </li>

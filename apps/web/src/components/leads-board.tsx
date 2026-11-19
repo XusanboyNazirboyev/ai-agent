@@ -30,14 +30,12 @@ import {
   findCachedLead,
   readCollapsed,
   stageLabel,
-  useCachedLead,
   writeCollapsed,
   type LeadFilters,
 } from './lead-board-utils';
 import { AddLeadDialog } from './add-lead-dialog';
 import { LeadColumn } from './lead-column';
 import { useLeadMove } from './lead-move';
-import { LeadPanel } from './lead-panel';
 import { BulkAssignDialog, BulkMoveDialog } from './leads-bulk-dialogs';
 import { FilterChips, FiltersMenu } from './leads-filters';
 import { LeadsImportDialog } from './leads-import-dialog';
@@ -196,15 +194,6 @@ export function LeadsBoard(): ReactNode {
       return;
     }
     move.mutate({ leadId: item.id, fromStageId: from, toStageId });
-  }
-
-  // The lead panel: the live copy of the lead comes from the query cache.
-  const [openItem, setOpenItem] = useState<LeadPipelineItem | null>(null);
-  const [opener, setOpener] = useState<HTMLElement | null>(null);
-  const liveItem = useCachedLead(openItem?.id ?? null, openItem);
-  function openLead(item: LeadPipelineItem, from: HTMLElement | null): void {
-    setOpener(from);
-    setOpenItem(item);
   }
 
   function choose(next: PipelineView): void {
@@ -608,7 +597,6 @@ export function LeadsBoard(): ReactNode {
           pipelineId={active!.id}
           stages={columns}
           filters={filters}
-          onOpen={openLead}
           selecting={selecting}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
@@ -670,7 +658,6 @@ export function LeadsBoard(): ReactNode {
               onDragOver={setDraggedToStageId}
               onSwipe={handleSwipe}
               onDrop={handleDrop}
-              onOpen={openLead}
               onRequestMove={requestMove}
               onAnnounce={setDragStatus}
               onAdd={canAdd ? (id) => setAdding({ stageId: id }) : undefined}
@@ -681,14 +668,6 @@ export function LeadsBoard(): ReactNode {
           ))}
         </div>
       ) : null}
-
-      <LeadPanel
-        item={openItem ? liveItem : null}
-        stages={columns}
-        opener={opener}
-        onClose={() => setOpenItem(null)}
-        onRequestMove={requestMove}
-      />
 
       {/* Mounted only while open, so its fields are not on the page otherwise. */}
       {active && adding ? (

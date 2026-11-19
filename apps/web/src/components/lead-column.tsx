@@ -58,7 +58,6 @@ export function LeadColumn(props: {
   onDragOver: (stageId: string | null) => void;
   onDrop: (targetStageId: string) => void;
   onSwipe: (item: LeadPipelineItem, direction: 'next' | 'prev') => void;
-  onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
   onAnnounce: (message: string) => void;
   /** Opens the add-lead dialog on this stage (open stages, editors only). */
@@ -197,7 +196,6 @@ export function LeadColumn(props: {
             onDrop={props.onDrop}
             swipe={!!props.single}
             onSwipe={props.onSwipe}
-            onOpen={props.onOpen}
             onRequestMove={props.onRequestMove}
             onAnnounce={props.onAnnounce}
             selecting={props.selecting}

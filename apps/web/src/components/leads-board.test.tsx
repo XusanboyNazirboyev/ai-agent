@@ -158,13 +158,6 @@ afterEach(() => {
 });
 
 const column = (code: string) => screen.findByTestId(`lead-column-${code}`);
-const patchCalls = () =>
-  vi
-    .mocked(api)
-    .mock.calls.filter(
-      ([, o]) => (o as { method?: string } | undefined)?.method === 'PATCH',
-    );
-
 describe('LeadsBoard columns', () => {
   it('shows the count and no amount totals (the amount is hidden)', async () => {
     mount();
@@ -212,123 +205,24 @@ describe('LeadsBoard columns', () => {
   });
 });
 
-describe('LeadsBoard panel and moves', () => {
-  it('opens the panel from the name button and from the card area', async () => {
+describe('LeadsBoard opens the lead page', () => {
+  it('the card name is a real link to /leads/<id>', async () => {
     mount();
-    const dialog = await screen.findByTestId('lead-panel');
-    expect(dialog).not.toHaveAttribute('open');
-    fireEvent.click(
-      await screen.findByRole('button', {
-        name: 'leads.openLead|Ada Lovelace',
-      }),
-    );
-    expect(dialog).toHaveAttribute('open');
-    expect(
-      within(dialog).getByRole('heading', { name: 'Ada Lovelace' }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('lead-panel-close'));
-    expect(dialog).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByTestId('lead-card'));
-    expect(dialog).toHaveAttribute('open');
-  });
-
-  it('closing the panel focuses the card button again', async () => {
-    mount();
-    const button = await screen.findByRole('button', {
+    const link = await screen.findByRole('link', {
       name: 'leads.openLead|Ada Lovelace',
     });
-    fireEvent.click(button);
-    fireEvent.click(screen.getByTestId('lead-panel-close'));
-    await waitFor(() => expect(document.activeElement).toBe(button));
+    expect(link.getAttribute('href')).toBe('/leads/lead-1');
+    expect(link.getAttribute('data-lead-open')).toBe('lead-1');
   });
 
-  it('the progress bar moves the lead: exact PATCH body, card changes column', async () => {
-    mount();
-    fireEvent.click(await screen.findByTestId('lead-card-open'));
-    fireEvent.click(screen.getByTestId('lead-panel-stage-QUALIFIED'));
-    await waitFor(() => expect(patchCalls()).toHaveLength(1));
-    expect(patchCalls()[0]).toEqual([
-      '/api/v1/leads/lead-1/stage',
-      { method: 'PATCH', body: { stageId: 'stage-qual' } },
-    ]);
-    await waitFor(() => {
-      expect(
-        within(screen.getByTestId('lead-column-NEW')).queryByTestId(
-          'lead-card',
-        ),
-      ).toBeNull();
-      expect(
-        within(screen.getByTestId('lead-column-QUALIFIED')).getByTestId(
-          'lead-card',
-        ),
-      ).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('lead-panel-stage-QUALIFIED')).toHaveAttribute(
-      'aria-current',
-      'step',
-    );
-  });
-
-  it('rolls the card back when the move fails', async () => {
-    failMove = true;
-    mount();
-    fireEvent.click(await screen.findByTestId('lead-card-open'));
-    fireEvent.click(screen.getByTestId('lead-panel-stage-QUALIFIED'));
-    await waitFor(() => expect(patchCalls()).toHaveLength(1));
-    await waitFor(() =>
-      expect(
-        within(screen.getByTestId('lead-column-NEW')).getByTestId('lead-card'),
-      ).toBeInTheDocument(),
-    );
-    expect(
-      within(screen.getByTestId('lead-column-QUALIFIED')).queryByTestId(
-        'lead-card',
-      ),
-    ).toBeNull();
-  });
-
-  it('a LOST step asks for the reason first and sends it', async () => {
-    mount();
-    fireEvent.click(await screen.findByTestId('lead-card-open'));
-    fireEvent.click(screen.getByTestId('lead-panel-stage-LOST'));
-    const dialog = await screen.findByTestId('lead-lost-dialog');
-    expect(dialog).toHaveAttribute('open');
-    expect(patchCalls()).toHaveLength(0);
-    fireEvent.submit(dialog.querySelector('form')!);
-    expect(patchCalls()).toHaveLength(0);
-    fireEvent.change(within(dialog).getByLabelText('opportunity.lostReason'), {
-      target: { value: '  too expensive ' },
-    });
-    fireEvent.submit(dialog.querySelector('form')!);
-    await waitFor(() => expect(patchCalls()).toHaveLength(1));
-    expect(patchCalls()[0]).toEqual([
-      '/api/v1/leads/lead-1/stage',
-      {
-        method: 'PATCH',
-        body: { stageId: 'stage-lost', lostReason: 'too expensive' },
-      },
-    ]);
-  });
-
-  it('cancelling the LOST dialog moves nothing', async () => {
-    mount();
-    fireEvent.click(await screen.findByTestId('lead-card-open'));
-    fireEvent.click(screen.getByTestId('lead-panel-stage-LOST'));
-    const dialog = await screen.findByTestId('lead-lost-dialog');
-    fireEvent.click(within(dialog).getByText('app.cancel'));
-    expect(dialog).not.toHaveAttribute('open');
-    expect(patchCalls()).toHaveLength(0);
-  });
-
-  it('a VIEWER can open the panel but not move, drag or hand back', async () => {
+  it('a VIEWER has no drag handle but can still open the lead', async () => {
     state.role = 'VIEWER';
     leads = [makeLead({ suggestedStageId: 'stage-qual' })];
     mount();
     expect(screen.queryByTestId('lead-card-handle')).toBeNull();
-    fireEvent.click(await screen.findByTestId('lead-card-open'));
-    expect(screen.getByTestId('lead-panel-stage-QUALIFIED')).toBeDisabled();
-    expect(screen.queryByTestId('lead-panel-ai')).toBeNull();
-    expect(screen.queryByTestId('lead-accept-suggestion')).toBeNull();
+    expect(
+      (await screen.findByTestId('lead-card-open')).getAttribute('href'),
+    ).toBe('/leads/lead-1');
   });
 });
 
@@ -495,7 +389,7 @@ describe('LeadsBoard filters and views', () => {
     );
   });
 
-  it('the list view lists the pipeline without a stage filter and opens the panel', async () => {
+  it('the list view lists the pipeline without a stage filter and links to the lead page', async () => {
     leads = [
       makeLead(),
       makeLead({ id: 'lead-2', contact: { name: 'Bob', phone: null } }),
@@ -510,12 +404,9 @@ describe('LeadsBoard filters and views', () => {
       'New',
     );
     expect(within(rows[0]).queryByTestId('lead-list-amount')).toBeNull();
-    fireEvent.click(within(rows[1]).getByTestId('lead-list-open'));
     expect(
-      within(screen.getByTestId('lead-panel')).getByRole('heading', {
-        name: 'Bob',
-      }),
-    ).toBeInTheDocument();
+      within(rows[1]).getByTestId('lead-list-open').getAttribute('href'),
+    ).toBe('/leads/lead-2');
   });
 
   it('the funnel strip is a disclosure, open by default on desktop', async () => {

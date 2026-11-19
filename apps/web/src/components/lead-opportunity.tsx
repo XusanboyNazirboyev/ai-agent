@@ -41,6 +41,8 @@ export function LeadOpportunity(props: {
   onChange?: () => void;
   /** The lead panel shows owner and amount in the fields below. */
   hideSummary?: boolean;
+  /** The lead page shows the responsible operator in its own block. */
+  hideOwner?: boolean;
 }): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();
@@ -205,7 +207,7 @@ export function LeadOpportunity(props: {
       </div>
       {showReadonly ? (
         <div className="grid grid-cols-1 gap-3">
-          {ownerSelect}
+          {props.hideOwner ? null : ownerSelect}
           {LEAD_AMOUNT_ENABLED ? (
             <div className="flex min-w-0 flex-1 basis-44 flex-col gap-1 text-xs text-muted">
               <span>{t('opportunity.amount')}</span>

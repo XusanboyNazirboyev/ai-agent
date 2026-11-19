@@ -147,7 +147,7 @@ test.describe('no overflow in the signed-in pages', () => {
       });
       expect(await findOverflow(page), 'leads').toEqual([]);
       await page.getByTestId('lead-card-open').first().click();
-      await expect(page.getByTestId('lead-panel')).toBeVisible();
+      await expect(page.getByTestId('lead-page')).toBeVisible();
       expect(await findOverflow(page), 'lead panel').toEqual([]);
       await context.close();
     });

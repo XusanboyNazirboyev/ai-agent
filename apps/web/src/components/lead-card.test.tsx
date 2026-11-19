@@ -44,7 +44,6 @@ function renderCard(
     draggedToStageId: null,
     onDragStart: vi.fn(),
     onDragEnd: vi.fn(),
-    onOpen: vi.fn(),
     onRequestMove: vi.fn(),
     onAnnounce: vi.fn(),
     onDragOver: vi.fn(),
@@ -97,6 +96,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** Counts clicks that reach the card's open link (navigation is stubbed). */
+function watchOpen(): ReturnType<typeof vi.fn> {
+  const opened = vi.fn();
+  const link = screen.getByTestId('lead-card-open');
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    opened();
+  });
+  return opened;
+}
+
 describe('LeadCard', () => {
   it('has no inline controls other than the name button and the drag handle', () => {
     renderCard(
@@ -112,19 +122,20 @@ describe('LeadCard', () => {
     expect(card.getAttribute('tabindex')).toBeNull();
   });
 
-  it('opens the panel from the name button and from the empty card area', () => {
-    const props = renderCard(makeLead());
-    const button = screen.getByRole('button', {
+  it('opens the lead page from the name link and from the empty card area', () => {
+    renderCard(makeLead());
+    const link = screen.getByRole('link', {
       name: 'leads.openLead|Ada Lovelace',
     });
-    fireEvent.click(button);
-    expect(props.onOpen).toHaveBeenCalledTimes(1);
-    expect(props.onOpen).toHaveBeenLastCalledWith(props.item, button);
+    expect(link.getAttribute('href')).toBe('/leads/lead-1');
+    const opened = watchOpen();
+    fireEvent.click(link);
+    expect(opened).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByTestId('lead-card'));
-    expect(props.onOpen).toHaveBeenCalledTimes(2);
+    expect(opened).toHaveBeenCalledTimes(2);
     // The drag handle is not an open gesture.
     fireEvent.click(screen.getByTestId('lead-card-handle'));
-    expect(props.onOpen).toHaveBeenCalledTimes(2);
+    expect(opened).toHaveBeenCalledTimes(2);
   });
 
   it('shows no amount while the product hides it (owner decision 2026-11-13)', () => {
@@ -185,12 +196,11 @@ describe('LeadCard', () => {
     expect(screen.queryByTestId('lead-card-age')).toBeNull();
   });
 
-  it('shows one generic "AI suggestion" chip, without a stage name, that opens the panel', () => {
-    const props = renderCard(makeLead({ suggestedStageId: 'stage-qual' }));
+  it('shows one generic "AI suggestion" chip, without a stage name, that links to the lead page', () => {
+    renderCard(makeLead({ suggestedStageId: 'stage-qual' }));
     const chip = screen.getByTestId('lead-card-stage-suggested');
     expect(chip.textContent).toBe('leads.aiSuggestionChip');
-    fireEvent.click(chip);
-    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(chip.getAttribute('href')).toBe('/leads/lead-1');
   });
 
   it('never shows a stage name or stage control on the card', () => {
@@ -303,15 +313,17 @@ describe('LeadCard', () => {
     });
     expect(props.onDrop).toHaveBeenCalledWith('stage-qual');
     expect(props.onDragEnd).toHaveBeenCalled();
-    // The click that ends a drag does not open the panel.
+    // The click that ends a drag does not open the lead.
+    const opened = watchOpen();
     fireEvent.click(card);
-    expect(props.onOpen).not.toHaveBeenCalled();
+    expect(opened).not.toHaveBeenCalled();
     column.remove();
     Reflect.deleteProperty(document, 'elementsFromPoint');
   });
 
-  it('a plain click still opens the panel (no drag below the slop)', () => {
+  it('a plain click still opens the lead (no drag below the slop)', () => {
     const props = renderCard(makeLead());
+    const opened = watchOpen();
     const card = screen.getByTestId('lead-card');
     pointer(card, 'pointerDown', {
       pointerId: 1,
@@ -327,7 +339,7 @@ describe('LeadCard', () => {
       clientY: 10,
     });
     fireEvent.click(card);
-    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(opened).toHaveBeenCalledTimes(1);
     expect(props.onDragStart).not.toHaveBeenCalled();
   });
 

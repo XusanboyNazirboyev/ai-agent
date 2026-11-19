@@ -88,14 +88,14 @@ test('an operator moves a lead with the panel progress bar', async ({
     await expect(card.getByTestId('lead-card-status')).toHaveCount(0);
     await expect(card.getByTestId('lead-accept-suggestion')).toHaveCount(0);
 
-    // Open the panel with the mouse on the empty card area, close it, then
-    // open it again from the name button.
-    const panel = page.getByTestId('lead-panel');
+    // Open the lead page with the mouse on the empty card area, go back to
+    // the board, then open it again from the name link.
+    const panel = page.getByTestId('lead-page');
     await card.click({ position: { x: 4, y: 4 } });
     await expect(panel).toBeVisible();
-    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/\/leads\/[^/?]+/u);
+    await panel.getByTestId('lead-page-back').click();
     await expect(panel).toBeHidden();
-    await expect(card.getByTestId('lead-card-open')).toBeFocused();
     await card.getByTestId('lead-card-open').click();
     await expect(
       panel.getByRole('heading', { name: contactName }),
@@ -118,6 +118,7 @@ test('an operator moves a lead with the panel progress bar', async ({
       'aria-current',
       'step',
     );
+    await panel.getByTestId('lead-page-back').click();
     await expect(
       page.getByTestId(`lead-column-${code}`).getByTestId('lead-card').filter({
         hasText: contactName,
@@ -138,7 +139,7 @@ test('marking a lead lost asks for a reason first', async ({ browser }) => {
     await page.goto('/leads?view=funnel');
     originalStageId = await stageOf(page, conversationId);
     await cardOf(page, contactName).getByTestId('lead-card-open').click();
-    const panel = page.getByTestId('lead-panel');
+    const panel = page.getByTestId('lead-page');
     await panel.getByTestId('lead-panel-stage-LOST').click();
     const dialog = page.getByTestId('lead-lost-dialog');
     await expect(dialog).toBeVisible();
@@ -149,14 +150,15 @@ test('marking a lead lost asks for a reason first', async ({ browser }) => {
       .getByRole('button', { name: /save|Сохранить|Saqlash/i })
       .click();
     await expect(dialog).toBeHidden();
+    await expect(panel.getByTestId('lead-panel-lost-reason')).toContainText(
+      'Too expensive',
+    );
+    await panel.getByTestId('lead-page-back').click();
     await expect(
       page.getByTestId('lead-column-LOST').getByTestId('lead-card').filter({
         hasText: contactName,
       }),
     ).toHaveCount(1);
-    await expect(panel.getByTestId('lead-panel-lost-reason')).toContainText(
-      'Too expensive',
-    );
     // Closed columns show no age chip.
     await expect(
       page
@@ -190,9 +192,9 @@ test('the list view and the filters share the same panel', async ({
   await expect(row).toBeVisible();
   await row.getByTestId('lead-list-open').click();
   await expect(
-    page.getByTestId('lead-panel').getByRole('heading', { name: contactName }),
+    page.getByTestId('lead-page').getByRole('heading', { name: contactName }),
   ).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByTestId('lead-page-back').click();
 
   // A filter with no match empties the list; its chip removes it.
   await page.getByTestId('leads-filters-button').click();
@@ -221,7 +223,7 @@ test('a viewer sees the funnel and the panel but cannot change a lead', async ({
   await expect(card).toBeVisible();
   await expect(card.getByTestId('lead-card-handle')).toHaveCount(0);
   await card.getByTestId('lead-card-open').click();
-  const panel = page.getByTestId('lead-panel');
+  const panel = page.getByTestId('lead-page');
   await expect(panel).toBeVisible();
   await expect(panel.getByTestId('lead-panel-ai')).toHaveCount(0);
   const steps = panel.getByTestId('lead-panel-stages').getByRole('button');
@@ -257,7 +259,7 @@ test('a lead card is dragged to another column with the mouse', async ({
     await expect(
       target.getByTestId('lead-card').filter({ hasText: contactName }),
     ).toHaveCount(1);
-    await expect(page.getByTestId('lead-panel')).toBeHidden();
+    await expect(page.getByTestId('lead-page')).toBeHidden();
   } finally {
     await resetLead(page, conversationId, originalStageId);
     await context.close();

@@ -33,11 +33,11 @@ test('an operator adds a lead from the toolbar and from a column', async ({
   await expect(card).toBeVisible();
   await expect(card).toContainText('Manual');
 
-  // The panel of a manual lead has no conversation link.
+  // The page of a manual lead has no conversation link.
   await card.getByTestId('lead-card-open').click();
-  await expect(page.getByTestId('lead-panel')).toBeVisible();
+  await expect(page.getByTestId('lead-page')).toBeVisible();
   await expect(page.getByTestId('lead-panel-conversation')).toHaveCount(0);
-  await page.getByTestId('lead-panel-close').click();
+  await page.getByTestId('lead-page-back').click();
 
   // Column "+": the stage is preselected.
   const second = `Referral ${Date.now()}`;
