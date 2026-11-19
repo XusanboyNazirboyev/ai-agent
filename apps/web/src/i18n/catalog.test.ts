@@ -272,6 +272,29 @@ describe('source uses the catalog', () => {
       expect(CATALOGS.en, code).toHaveProperty(`errors.${code}`);
   });
 
+  it('every specific error key the API sends has a message', () => {
+    // A key outside `errors.` has no fallback in the web (errorKey falls back
+    // to `errors.<code>` only for missing keys), so it must exist.
+    const apiRoot = resolve(import.meta.dirname, '../../../api/src');
+    const missing: string[] = [];
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((entry) => {
+        const path = join(dir, entry);
+        if (entry === 'generated') return [];
+        if (statSync(path).isDirectory()) return walk(path);
+        return entry.endsWith('.ts') && !entry.includes('.spec.') ? [path] : [];
+      });
+    for (const file of walk(apiRoot)) {
+      const text = readFileSync(file, 'utf8');
+      for (const match of text.matchAll(/i18nKey:\s*'([A-Za-z0-9_.]+)'/gu)) {
+        const key = match[1];
+        if (!key.startsWith('errors.') && !(key in CATALOGS.en))
+          missing.push(`${key} (${file.slice(apiRoot.length + 1)})`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
   it('every rule error key the ADR 047 API sends has a message', () => {
     // i18nKey values of team.controller, platform-http `conflict()` and the
     // platform admin/auth controllers, plus the tenant login refusal.
