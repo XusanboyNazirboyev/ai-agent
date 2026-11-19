@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import {
@@ -17,6 +17,7 @@ import {
 import type { ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
 import { MyTasksCard } from './lead-tasks';
+import { SetupGuide } from './setup-guide';
 import { Badge, type Tone } from './ui/badge';
 import { buttonClass } from './ui/button';
 import { Icon } from './ui/icons';
@@ -60,6 +61,12 @@ export function TodayPage(): ReactNode {
   const light: AssistantLight | null = channels.data
     ? assistantLight(channels.data.items)
     : null;
+  const [welcome, setWelcome] = useState(false);
+  useEffect(() => {
+    setWelcome(
+      new URLSearchParams(window.location.search).get('welcome') === '1',
+    );
+  }, []);
   const today = summary.data;
   const name = operator.displayName.split(' ')[0] ?? operator.displayName;
   const part = greetingPart(hourIn(new Date(), timeZone));
@@ -125,6 +132,14 @@ export function TodayPage(): ReactNode {
           <AssistantCard light={light} manager={manager} />
         ) : channels.isPending ? (
           <SkeletonRows rows={1} />
+        ) : null}
+
+        {today?.checklist && light ? (
+          <SetupGuide
+            checklist={today.checklist}
+            light={light}
+            welcome={welcome}
+          />
         ) : null}
 
         {today?.checklist && light ? (

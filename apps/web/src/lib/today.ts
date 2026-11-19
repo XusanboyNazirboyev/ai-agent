@@ -11,6 +11,8 @@ export interface TodaySummary {
     teamInvited: boolean;
     operatorGroup: boolean;
     testedAssistant: boolean;
+    /** Workspace created by the public signup (ADR 080). */
+    selfSignup?: boolean;
   } | null;
 }
 

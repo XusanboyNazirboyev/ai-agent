@@ -1706,7 +1706,8 @@ model SubscriptionPlan {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  subscriptions TenantSubscription[]
+  subscriptions  TenantSubscription[]
+  pendingSignups PendingSignup[]
 
   @@map("subscription_plans")
 }
@@ -2041,6 +2042,59 @@ model ConversationTag {
   @@id([tenantId, conversationId, tagId])
   @@index([tenantId, tagId])
   @@map("conversation_tags")
+}
+
+enum SignupStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  REFUSED
+}
+
+/// ADR 080: a self-serve signup waiting for the person to confirm in the
+/// platform Telegram bot. Platform level: no tenant yet, so no tenant_id and no
+/// RLS; only the privileged connection touches it. Only SHA-256 of the one-time
+/// token and of the browser binding secret are stored.
+model PendingSignup {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  tokenHash        String       @unique @map("token_hash") @db.VarChar(64)
+  bindingHash      String       @map("binding_hash") @db.VarChar(64)
+  businessName     String       @map("business_name") @db.VarChar(120)
+  personName       String       @map("person_name") @db.VarChar(80)
+  email            String       @db.VarChar(254)
+  passwordHash     String       @map("password_hash") @db.VarChar(255)
+  planId           String       @map("plan_id") @db.Uuid
+  status           SignupStatus @default(PENDING)
+  telegramUserId   String?      @map("telegram_user_id") @db.VarChar(32)
+  telegramChatId   String?      @map("telegram_chat_id") @db.VarChar(32)
+  phone            String?      @db.VarChar(32)
+  createdTenantId  String?      @map("created_tenant_id") @db.Uuid
+  refusalReason    String?      @map("refusal_reason") @db.VarChar(40)
+  lastUpdateId     BigInt?      @map("last_update_id")
+  signedInAt       DateTime?    @map("signed_in_at") @db.Timestamptz(6)
+  expiresAt        DateTime     @map("expires_at") @db.Timestamptz(6)
+  confirmedAt      DateTime?    @map("confirmed_at") @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt])
+  @@index([telegramUserId, status])
+  @@map("pending_signups")
+}
+
+/// ADR 080: one free trial per Telegram user and per phone number. A row is
+/// written in the same transaction that creates the tenant; the unique indexes
+/// refuse a second trial. Kept after the tenant is gone (no cascade) so a
+/// deleted account does not hand out a new trial.
+model TrialClaim {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  telegramUserId String   @unique @map("telegram_user_id") @db.VarChar(32)
+  phone          String   @unique @db.VarChar(32)
+  tenantId       String?  @map("claimed_tenant_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("trial_claims")
 }
 
 /// ADR 079: per-connector state of the stage sync from the CRM (one row per connector).

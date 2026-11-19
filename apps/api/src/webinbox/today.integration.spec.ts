@@ -160,6 +160,7 @@ describe('Today summary (UX review A4)', () => {
       teamInvited: false,
       operatorGroup: false,
       testedAssistant: false,
+      selfSignup: false,
     });
     for (const role of ['OPERATOR', 'VIEWER'] as Role[])
       expect((await controller.summary(w.request(role))).checklist).toBeNull();

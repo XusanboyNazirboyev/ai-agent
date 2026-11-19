@@ -14,6 +14,8 @@ export interface TodayChecklist {
   operatorGroup: boolean;
   /** Someone tried the assistant in the test chat (ADR 065). */
   testedAssistant: boolean;
+  /** The workspace came from the public signup (ADR 080): the page offers the guided setup. */
+  selfSignup: boolean;
 }
 
 export interface TodaySummary {
@@ -67,37 +69,53 @@ export class TodayController {
     tenantId: string,
     now: Date,
   ): Promise<TodayChecklist> {
-    const [channels, groups, prices, knowledge, operators, invites, tests] =
-      await Promise.all([
-        this.prisma.channelAccount.count({
-          where: { tenantId, isTestAccount: false },
-        }),
-        this.prisma.channelAccount.count({
-          where: { tenantId, operatorChatId: { not: null } },
-        }),
-        this.prisma.sheetCatalog.count({ where: { tenantId } }),
-        this.prisma.knowledgeDocument.count({
-          where: { tenantId, status: 'ACTIVE' },
-        }),
-        this.prisma.operator.count({ where: { tenantId, isActive: true } }),
-        this.prisma.operatorInvite.count({
-          where: {
-            tenantId,
-            acceptedAt: null,
-            revokedAt: null,
-            expiresAt: { gt: now },
-          },
-        }),
-        this.prisma.auditEvent.count({
-          where: { tenantId, action: 'assistant.test_chat_used' },
-        }),
-      ]);
+    const [
+      channels,
+      groups,
+      prices,
+      knowledge,
+      operators,
+      invites,
+      tests,
+      tenant,
+    ] = await Promise.all([
+      this.prisma.channelAccount.count({
+        where: { tenantId, isTestAccount: false },
+      }),
+      this.prisma.channelAccount.count({
+        where: { tenantId, operatorChatId: { not: null } },
+      }),
+      this.prisma.sheetCatalog.count({ where: { tenantId } }),
+      this.prisma.knowledgeDocument.count({
+        where: { tenantId, status: 'ACTIVE' },
+      }),
+      this.prisma.operator.count({ where: { tenantId, isActive: true } }),
+      this.prisma.operatorInvite.count({
+        where: {
+          tenantId,
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+      }),
+      this.prisma.auditEvent.count({
+        where: { tenantId, action: 'assistant.test_chat_used' },
+      }),
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { config: true },
+      }),
+    ]);
     return {
       channelConnected: channels > 0,
       hasContent: prices + knowledge > 0,
       teamInvited: operators > 1 || invites > 0,
       operatorGroup: groups > 0,
       testedAssistant: tests > 0,
+      selfSignup:
+        typeof tenant?.config === 'object' &&
+        tenant.config !== null &&
+        (tenant.config as { selfSignup?: unknown }).selfSignup === true,
     };
   }
 }

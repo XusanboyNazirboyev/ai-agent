@@ -13,6 +13,7 @@ import { BackgroundModule } from './background/background.module.js';
 import { PersistenceModule } from './persistence/persistence.module.js';
 import { PublicModule } from './public/public.module.js';
 import { PlatformModule } from './platform/platform.module.js';
+import { SignupModule } from './signup/signup.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,8 @@ import { PlatformModule } from './platform/platform.module.js';
     ConnectorsModule,
     AgentModule,
     PlatformModule,
+    SignupModule,
+
     PublicModule,
     ConfigModule.forRoot({
       isGlobal: true,
