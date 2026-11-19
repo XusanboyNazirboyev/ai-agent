@@ -78,35 +78,34 @@ export class TodayController {
       invites,
       tests,
       tenant,
-    ] =
-      await Promise.all([
-        this.prisma.channelAccount.count({
-          where: { tenantId, isTestAccount: false },
-        }),
-        this.prisma.channelAccount.count({
-          where: { tenantId, operatorChatId: { not: null } },
-        }),
-        this.prisma.sheetCatalog.count({ where: { tenantId } }),
-        this.prisma.knowledgeDocument.count({
-          where: { tenantId, status: 'ACTIVE' },
-        }),
-        this.prisma.operator.count({ where: { tenantId, isActive: true } }),
-        this.prisma.operatorInvite.count({
-          where: {
-            tenantId,
-            acceptedAt: null,
-            revokedAt: null,
-            expiresAt: { gt: now },
-          },
-        }),
-        this.prisma.auditEvent.count({
-          where: { tenantId, action: 'assistant.test_chat_used' },
-        }),
-        this.prisma.tenant.findUnique({
-          where: { id: tenantId },
-          select: { config: true },
-        }),
-      ]);
+    ] = await Promise.all([
+      this.prisma.channelAccount.count({
+        where: { tenantId, isTestAccount: false },
+      }),
+      this.prisma.channelAccount.count({
+        where: { tenantId, operatorChatId: { not: null } },
+      }),
+      this.prisma.sheetCatalog.count({ where: { tenantId } }),
+      this.prisma.knowledgeDocument.count({
+        where: { tenantId, status: 'ACTIVE' },
+      }),
+      this.prisma.operator.count({ where: { tenantId, isActive: true } }),
+      this.prisma.operatorInvite.count({
+        where: {
+          tenantId,
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+      }),
+      this.prisma.auditEvent.count({
+        where: { tenantId, action: 'assistant.test_chat_used' },
+      }),
+      this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { config: true },
+      }),
+    ]);
     return {
       channelConnected: channels > 0,
       hasContent: prices + knowledge > 0,
