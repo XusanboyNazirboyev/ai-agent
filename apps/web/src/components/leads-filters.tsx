@@ -341,11 +341,14 @@ export function FiltersMenu(props: {
 
   useEffect(() => {
     if (!open || props.isMobile) return;
-    const onDown = (event: MouseEvent): void => {
+    // On click, not mousedown: closing the panel can move the page (a
+    // scrolled board springs back), and a click on a filter chip below must
+    // still land on that chip (e2e, a 450px-high window).
+    const onClick = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
   }, [open, props.isMobile]);
 
   const clear = (): void => props.onChange(clearedFilters(props.filters));
@@ -386,7 +389,7 @@ export function FiltersMenu(props: {
           id={panelId}
           role="group"
           aria-label={t('leads.filters')}
-          className="absolute left-0 top-full z-30 mt-1 flex max-h-[min(80dvh,42rem)] w-[min(92vw,24rem)] flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-pop"
+          className="absolute left-0 top-full z-30 mt-1 flex max-h-[min(60dvh,40rem)] w-[min(92vw,24rem)] flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-pop"
         >
           <FilterFields filters={props.filters} onChange={props.onChange} />
           <div className="flex flex-wrap justify-end gap-2">

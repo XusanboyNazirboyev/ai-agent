@@ -440,6 +440,20 @@ describe('LeadsBoard filters and views', () => {
     expect(document.activeElement).toBe(button);
   });
 
+  it('a click outside closes the popover, and a chip click below it still lands', async () => {
+    mount();
+    await screen.findByTestId('lead-card');
+    fireEvent.click(screen.getByTestId('leads-filters-button'));
+    fireEvent.click(screen.getByTestId('leads-channel-telegram'));
+    const chip = await screen.findByTestId('leads-filter-chip-channel');
+    // mousedown alone no longer closes it (closing could move the page).
+    fireEvent.mouseDown(chip);
+    expect(screen.getByRole('group', { name: 'leads.filters' })).toBeTruthy();
+    fireEvent.click(chip);
+    expect(screen.queryByTestId('leads-filter-chip-channel')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'leads.filters' })).toBeNull();
+  });
+
   it('searches by name or phone after a pause, in the list and the board counts (ADR 076)', async () => {
     mount();
     await screen.findByTestId('lead-card');
