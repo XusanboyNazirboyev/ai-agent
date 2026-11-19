@@ -25,3 +25,12 @@ Bitrix24 deals (`entityTypeId 2`, pipelines by `CATEGORY_ID`) and converted lead
 
 ## Open
 - **Q-CRM (owner):** which CRMs do your customers use: Bitrix24 leads, Bitrix24 deals, amoCRM, something else? It decides slice 2.
+
+## Implementation notes (slice 1, built 2026-11-19)
+- Migration `20261129100000_crm_stage_sync`: `crm_stage_syncs` (per connector: enabled, cursor_at, last_run_at, last_error_code, lease_until) and `crm_stage_mappings` (external stage id and name, our stage or null = ignore); composite tenant FKs, RLS policies on both.
+- Allow-list: `crm.status.list` only with `filter.ENTITY_ID = 'STATUS'`. The connector gained `listLeadStages()` and `listChangedLeads(since, start)`; the service is `CrmStageSyncService` (connectors/bitrix24), registered as a scheduled scan.
+- API: `GET`/`PUT /api/v1/connectors/:id/stage-sync` (OWNER/ADMIN). Our stages are those of the tenant's default pipeline. Switching on sets the cursor to now (no history replay). Audit `connector.stage_sync_saved` carries counts only.
+- Scan: the shared 30 s tick calls it; each connector is claimed by a conditional update (lease 5 min) and polled at most every 2 minutes. Up to 500 items per run, 50 per page, oldest change first; the cursor moves only past processed items; re-reading the one-minute overlap is idempotent (a lead already in the mapped stage is skipped). Failures store the error code only and never stop other tenants.
+- Deviations: the existing audit action is `lead.stage.moved` (not `lead.stage.changed`); it now also carries `source: 'bitrix24'` and `externalStageId` through `moveLeadToStage`'s `auditExtra`. When several of our leads share one Bitrix24 lead (duplicate-phone comment case), all non-archived ones follow it.
+- Known limit: more than 500 changes inside one 60 s overlap window would stall the cursor; not expected.
+- Unverified (fake portal uses docs shapes): `ENTITY_ID` value, `updatedTime` filter and `order`, the `SEMANTICS` encoding (words and S/F/A are both accepted).

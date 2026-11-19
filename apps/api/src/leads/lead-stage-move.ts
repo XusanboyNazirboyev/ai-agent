@@ -14,6 +14,8 @@ export interface MoveLeadInput {
   readonly actorId?: string;
   readonly lostReason?: string | null;
   readonly reasonCodes?: readonly string[];
+  /** Extra audit fields, e.g. the CRM a change came from (strings only, never URLs or tokens). */
+  readonly auditExtra?: Readonly<Record<string, string>>;
 }
 
 export interface MoveLeadResult {
@@ -117,6 +119,7 @@ export async function moveLeadToStage(
         toPipelineId: stage.pipelineId,
         actor,
         reasonCodes: (input.reasonCodes ?? []).join(','),
+        ...input.auditExtra,
       },
     },
   });

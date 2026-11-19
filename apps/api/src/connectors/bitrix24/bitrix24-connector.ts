@@ -20,8 +20,15 @@ import type { SecretResolver } from '../interfaces/secret-resolver.js';
 import {
   Bitrix24Client,
   LEAD_ENTITY_TYPE_ID,
+  LEAD_STATUS_ENTITY_ID,
   type Bitrix24ClientOptions,
 } from './bitrix24-client.js';
+import {
+  parseChanges,
+  parseStages,
+  type PortalLeadChange,
+  type PortalStage,
+} from './stage-sync-rules.js';
 
 /** Stamped on every lead this connector creates (lead field `originatorId`). */
 export const BITRIX24_ORIGINATOR_ID = 'tezda';
@@ -99,6 +106,29 @@ export class Bitrix24Connector implements CrmConnector {
       });
     }
     this.client = new Bitrix24Client({ ...options.client, webhookUrl });
+  }
+
+  /** The portal's lead stages (read only; ADR 079). */
+  async listLeadStages(): Promise<PortalStage[]> {
+    const { result } = await this.client.call('crm.status.list', {
+      filter: { ENTITY_ID: LEAD_STATUS_ENTITY_ID },
+    });
+    return parseStages(result);
+  }
+
+  /**
+   * One page (50 rows, oldest change first) of leads changed since `since`,
+   * for the stage sync (ADR 079). `start` is the row offset.
+   */
+  async listChangedLeads(since: Date, start = 0): Promise<PortalLeadChange[]> {
+    const { result } = await this.client.call('crm.item.list', {
+      entityTypeId: LEAD_ENTITY_TYPE_ID,
+      filter: { '>=updatedTime': since.toISOString() },
+      select: ['id', 'stageId', 'updatedTime'],
+      order: { updatedTime: 'ASC', id: 'ASC' },
+      start,
+    });
+    return parseChanges(result);
   }
 
   /** Reads the CRM mode; simple CRM (no leads) is a configuration error. */

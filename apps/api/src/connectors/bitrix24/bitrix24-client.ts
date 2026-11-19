@@ -32,6 +32,7 @@ export const BITRIX24_METHODS = [
   'crm.duplicate.findbycomm',
   'crm.item.add',
   'crm.item.list',
+  'crm.status.list',
   'crm.item.fields',
   'crm.timeline.comment.add',
   'crm.timeline.comment.list',
@@ -41,6 +42,9 @@ export type Bitrix24Method = (typeof BITRIX24_METHODS)[number];
 
 /** Lead is the only CRM entity this connector may touch (entityTypeId 1). */
 export const LEAD_ENTITY_TYPE_ID = 1;
+
+/** `ENTITY_ID` of the lead stage dictionary (docs; not yet checked on a live portal). */
+export const LEAD_STATUS_ENTITY_ID = 'STATUS';
 
 const SOURCE = 'bitrix24';
 const WEBHOOK_PATH = /^\/rest\/\d{1,10}\/[A-Za-z0-9]{8,64}\/$/u;
@@ -118,6 +122,12 @@ export function assertAllowed(method: string, params: unknown): void {
     case 'crm.timeline.comment.list': {
       const filter = (p.filter ?? {}) as Record<string, unknown>;
       if (filter.ENTITY_TYPE !== 'lead') throw notAllowed(method);
+      break;
+    }
+    case 'crm.status.list': {
+      // Read only, and only the lead stage dictionary (ADR 079).
+      const filter = (p.filter ?? {}) as Record<string, unknown>;
+      if (filter.ENTITY_ID !== LEAD_STATUS_ENTITY_ID) throw notAllowed(method);
       break;
     }
     case 'crm.duplicate.findbycomm':
