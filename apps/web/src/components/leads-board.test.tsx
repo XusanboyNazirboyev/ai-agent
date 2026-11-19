@@ -141,6 +141,10 @@ beforeEach(() => {
     getItem: (k: string) => state.store.get(k) ?? null,
     setItem: (k: string, v: string) => void state.store.set(k, v),
   });
+  vi.stubGlobal('sessionStorage', {
+    getItem: (k: string) => state.store.get(`session:${k}`) ?? null,
+    setItem: (k: string, v: string) => void state.store.set(`session:${k}`, v),
+  });
   leads = [makeLead()];
   failMove = false;
   freezeLists = false;
@@ -206,6 +210,23 @@ describe('LeadsBoard columns', () => {
 });
 
 describe('LeadsBoard opens the lead page', () => {
+  it('keeps the table view after a visit to a lead page', async () => {
+    mount();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'leads.view.table' }),
+    );
+    expect(state.store.get('session:leads-board-view')).toBe('list');
+    cleanup();
+    mount();
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: 'leads.view.table' })
+          .getAttribute('aria-pressed'),
+      ).toBe('true'),
+    );
+  });
+
   it('the card name is a real link to /leads/<id>', async () => {
     mount();
     const link = await screen.findByRole('link', {

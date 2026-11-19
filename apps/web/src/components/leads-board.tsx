@@ -66,6 +66,9 @@ function toggleClass(selected: boolean): string {
 
 /** The sales funnel: a Kanban to scan and move leads (ADR 058, UX standard).
  * Editing happens in the lead panel; the board has no inline controls. */
+
+type BoardView = 'board' | 'list' | 'archive';
+const BOARD_VIEW_KEY = 'leads-board-view';
 export function LeadsBoard(): ReactNode {
   const { t } = useI18n();
   const router = useRouter();
@@ -128,7 +131,25 @@ export function LeadsBoard(): ReactNode {
   const columns = board.data?.stages ?? [];
   const boardTotal = columns.reduce((sum, stage) => sum + stage.count, 0);
 
-  const [view, setView] = useState<'board' | 'list' | 'archive'>('board');
+  const [view, setViewState] = useState<BoardView>('board');
+  // The chosen view outlives a visit to a lead page (back link or the
+  // browser's back button) within this tab.
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(BOARD_VIEW_KEY);
+      if (saved === 'list' || saved === 'archive') setViewState(saved);
+    } catch {
+      // Storage blocked: the board view.
+    }
+  }, []);
+  function setView(next: BoardView): void {
+    setViewState(next);
+    try {
+      window.sessionStorage.setItem(BOARD_VIEW_KEY, next);
+    } catch {
+      // Storage blocked: the choice lasts until the page is left.
+    }
+  }
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
   const [funnelOpen, setFunnelOpen] = useState<boolean | null>(null);
   const showFunnel = funnelOpen ?? !isMobile;
