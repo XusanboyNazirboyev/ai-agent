@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useDeferredValue, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
@@ -27,11 +28,17 @@ const STATUSES: TenantStatus[] = ['ACTIVE', 'SUSPENDED', 'ARCHIVED'];
 
 /** Every customer business with its plan, subscription and this month's usage. */
 export function ConsoleTenants(): ReactNode {
-  const { t, locale } = useI18n();
+  const { t, locale, formatDateTime } = useI18n();
   const { canWrite } = useConsole();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'' | TenantStatus>('');
-  const [subscription, setSubscription] = useState<'' | SubscriptionFilter>('');
+  // The overview links here with ?subscription=<state>.
+  const initial = useSearchParams().get('subscription') ?? '';
+  const [subscription, setSubscription] = useState<'' | SubscriptionFilter>(
+    (SUBSCRIPTION_FILTERS as readonly string[]).includes(initial)
+      ? (initial as SubscriptionFilter)
+      : '',
+  );
   const now = useNow(60 * 60_000);
   const [creating, setCreating] = useState(false);
   const q = useDeferredValue(search.trim());
@@ -157,7 +164,15 @@ export function ConsoleTenants(): ReactNode {
                 <SubscriptionBadge status={tenant.subscription?.status} />
               </span>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
+              <Field label={t('console.overview.tenants.created')}>
+                {formatDate(tenant.createdAt, locale)}
+              </Field>
+              <Field label={t('console.overview.tenants.lastActivity')}>
+                {tenant.lastInboundAt
+                  ? formatDateTime(tenant.lastInboundAt)
+                  : t('console.overview.tenants.noActivity')}
+              </Field>
               <Field label={t('console.field.plan')}>
                 {tenant.subscription?.planName ?? '—'}
               </Field>

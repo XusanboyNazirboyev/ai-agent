@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, minorDigits, parseMoneyInput } from './money';
+import {
+  formatDecimalMoney,
+  formatMoney,
+  minorDigits,
+  parseMoneyInput,
+} from './money';
 
 const nbsp = (text: string): string => text.replace(/[\u00a0\u202f]/gu, ' ');
 
@@ -40,5 +45,14 @@ describe('parsing a typed amount (no floating point)', () => {
     expect(parseMoneyInput('-5', 'UZS')).toBeUndefined();
     expect(parseMoneyInput('1e5', 'UZS')).toBeUndefined();
     expect(parseMoneyInput('9'.repeat(20), 'UZS')).toBeUndefined();
+  });
+});
+
+describe('formatDecimalMoney', () => {
+  it('formats an API decimal string without floating point', () => {
+    expect(nbsp(formatDecimalMoney('30000.00', 'USD', 'en'))).toContain(
+      '30,000',
+    );
+    expect(formatDecimalMoney('not money', 'USD', 'en')).toBe('not money USD');
   });
 });
