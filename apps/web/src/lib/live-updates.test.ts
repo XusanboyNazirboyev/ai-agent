@@ -75,3 +75,33 @@ describe('parseLiveEvent', () => {
       expect(parseLiveEvent('conversation.updated', raw)).toBeNull();
   });
 });
+
+describe('parseLiveEvent task.due (ADR 068)', () => {
+  const base = { conversationId: c, handoverId: null, messageId: null };
+  it('accepts an old payload without a title and a new one with it', () => {
+    expect(parseLiveEvent('task.due', base)).toEqual({
+      type: 'task.due',
+      conversationId: c,
+      handoverId: null,
+    });
+    expect(
+      parseLiveEvent('task.due', { ...base, taskTitle: 'Call' }),
+    ).toMatchObject({
+      taskTitle: 'Call',
+    });
+    expect(
+      parseLiveEvent('task.due', { ...base, taskTitle: null }),
+    ).not.toBeNull();
+  });
+  it('rejects a title on other types, a non-text title and unknown keys', () => {
+    expect(
+      parseLiveEvent('message.created', {
+        ...base,
+        messageId: m,
+        taskTitle: 'x',
+      }),
+    ).toBeNull();
+    expect(parseLiveEvent('task.due', { ...base, taskTitle: 5 })).toBeNull();
+    expect(parseLiveEvent('task.due', { ...base, extra: 1 })).toBeNull();
+  });
+});
