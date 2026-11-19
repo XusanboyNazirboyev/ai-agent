@@ -17,6 +17,9 @@ Status: accepted (2026-11-19). The owner asked on 2026-11-19, with screenshots o
   - Response `{ updated, failed: [{ id, code }] }`: an archived, missing or other tenant's lead, or a move the rules refuse, is reported, not fatal.
 - Web: a search box in the leads toolbar (debounced), a **Select** mode with checkboxes on cards and rows and an action bar (change owner, move to a stage of any pipeline), lead counts on the pipeline switcher and the total over all pipelines, and the filters panel grouped into a few compact sections (quick date ranges, channel, owner incl. "mine"/"unassigned", score, tasks).
 
+- The selection survives a search or filter change on purpose, so leads found by separate searches can be moved together; the bar always shows how many are selected, and the dialogs repeat the count. When a later chunk of 100 fails, the dialog shows what the earlier chunks changed next to the error.
+- Review follow-ups (2026-11-19): an owner change updates and audits only leads whose owner actually changes; a CSV row refused at create time is reported as skipped instead of failing the whole import.
+
 ## Not done
 - No "select all matching the filter" beyond the loaded cards; at most 100 leads per request.
 - No search in message text or lead summary; no saved filter views.
