@@ -23,6 +23,14 @@ export type OperatorAlert =
       readonly kind: 'SUBSCRIPTION_ENDING';
       readonly periodEnd: string;
       readonly daysLeft: number;
+    }
+  /** ADR 080: queued by the lead limit scan at 80 % and 100 %. */
+  | {
+      readonly kind: 'LEAD_LIMIT';
+      readonly percent: number;
+      readonly count: number;
+      readonly limit: number;
+      readonly month: string;
     };
 
 const HOUR_MS = 3_600_000;

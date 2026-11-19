@@ -21,6 +21,9 @@ import { z } from 'zod';
 import type { AppEnvironment } from '../config/environment.js';
 import { loginClientAddress, type AddressedRequest } from './client-address.js';
 import { PrismaService } from '../persistence/prisma.service.js';
+import { countNewLeadsThisMonth } from '../access/lead-limit.js';
+import { openPlanLimits } from '../access/plan-limits.js';
+import { canManageTeam } from '../team/team-rules.js';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { OperatorInviteService } from '../team/operator-invite.service.js';
 import { PasswordResetService } from '../team/password-reset.service.js';
@@ -427,6 +430,24 @@ export class AuthController {
     const access = this.access
       ? await this.access.check(principal.tenantId)
       : undefined;
+    // ADR 080: the new-leads banner, for OWNER and ADMIN only; null without a limit.
+    let leadLimit: {
+      newLeadsThisMonth: number;
+      monthlyNewLeads: number;
+    } | null = null;
+    if (operator && canManageTeam(operator.role) && tenant) {
+      const limits = await openPlanLimits(this.prisma, principal.tenantId);
+      if (limits.monthlyNewLeads !== undefined)
+        leadLimit = {
+          newLeadsThisMonth: await countNewLeadsThisMonth(
+            this.prisma,
+            principal.tenantId,
+            tenant.timezone,
+            new Date(),
+          ),
+          monthlyNewLeads: limits.monthlyNewLeads,
+        };
+    }
     return {
       operator,
       tenant,
@@ -435,6 +456,7 @@ export class AuthController {
         periodEnd: access?.periodEnd ?? null,
         graceUntil: access?.graceUntil ?? null,
       },
+      leadLimit,
     };
   }
 

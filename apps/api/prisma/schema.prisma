@@ -1690,9 +1690,12 @@ model SubscriptionPlan {
   priceMinor BigInt   @map("price_minor")
   currency   String   @default("UZS") @db.VarChar(3)
   periodDays Int      @map("period_days")
-  /// { maxOperators?, maxChannelAccounts?, monthlyLlmBudgetUsd? }
+  /// { maxOperators?, maxChannelAccounts?, monthlyLlmBudgetUsd?, monthlyNewLeads? }
   limits     Json     @default("{}") @db.JsonB
   isActive   Boolean  @default(true) @map("is_active")
+  /// ADR 080: listed on the public sales page.
+  isPublic   Boolean  @default(false) @map("is_public")
+  position   Int      @default(0)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -36,6 +36,7 @@ interface Strings {
   alertBudget: (percent: number, month: string) => string;
   alertCrmFailures: (count: number) => string;
   alertSubscriptionEnding: (date: string, daysLeft: number) => string;
+  alertLeadLimit: (percent: number, count: number, limit: number) => string;
 }
 
 const EN: Strings = {
@@ -72,6 +73,10 @@ const EN: Strings = {
     `Alert: ${count} leads could not be sent to the CRM in the last hour`,
   alertSubscriptionEnding: (date, daysLeft) =>
     `Reminder: the subscription ends on ${date} (${daysLeft === 1 ? 'in 1 day' : `in ${daysLeft} days`}). The owner or an admin should renew it so the assistant keeps answering.`,
+  alertLeadLimit: (percent, count, limit) =>
+    percent >= 100
+      ? `Notice: the plan's monthly limit of new leads is reached (${count} of ${limit}). Nothing is blocked; consider a bigger plan.`
+      : `Notice: ${percent}% of the plan's monthly new leads is used (${count} of ${limit}).`,
 };
 
 const RU: Strings = {
@@ -108,6 +113,10 @@ const RU: Strings = {
     `Внимание: ${count} лидов не удалось передать в CRM за последний час`,
   alertSubscriptionEnding: (date, daysLeft) =>
     `Напоминание: подписка заканчивается ${date} (осталось дней: ${daysLeft}). Владельцу или администратору нужно её продлить, чтобы ассистент продолжал отвечать.`,
+  alertLeadLimit: (percent, count, limit) =>
+    percent >= 100
+      ? `Внимание: достигнут месячный лимит новых лидов по тарифу (${count} из ${limit}). Ничего не блокируется; подумайте о тарифе побольше.`
+      : `Внимание: использовано ${percent}% месячного лимита новых лидов по тарифу (${count} из ${limit}).`,
 };
 
 const UZ: Strings = {
@@ -144,6 +153,10 @@ const UZ: Strings = {
     `Diqqat: oxirgi bir soatda ${count} ta lid CRMga yuborilmadi`,
   alertSubscriptionEnding: (date, daysLeft) =>
     `Eslatma: obuna ${date} kuni tugaydi (${daysLeft} kun qoldi). Yordamchi javob berishda davom etishi uchun egasi yoki administrator uni uzaytirsin.`,
+  alertLeadLimit: (percent, count, limit) =>
+    percent >= 100
+      ? `Diqqat: tarifdagi oylik yangi lidlar limiti tugadi (${count}/${limit}). Hech narsa bloklanmaydi; kattaroq tarifni ko\u2018rib chiqing.`
+      : `Diqqat: tarifdagi oylik yangi lidlar limitining ${percent}% ishlatildi (${count}/${limit}).`,
 };
 
 export function operatorStrings(locale: string): Strings {
