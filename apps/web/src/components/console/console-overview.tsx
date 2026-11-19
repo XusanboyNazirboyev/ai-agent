@@ -67,19 +67,21 @@ function Tile(props: {
   return (
     <div
       data-testid={props.testId}
-      className="flex min-w-0 flex-col gap-1 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
+      className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
     >
-      <dt className="text-sm text-muted">{props.label}</dt>
-      <dd className="min-w-0 text-3xl font-semibold tracking-tight">
+      <dt className="text-base text-muted">{props.label}</dt>
+      <dd className="min-w-0 text-3xl font-semibold sm:text-4xl tracking-tight">
         {props.children}
       </dd>
-      {props.hint ? <dd className="text-sm text-muted">{props.hint}</dd> : null}
+      {props.hint ? (
+        <dd className="text-base text-muted">{props.hint}</dd>
+      ) : null}
     </div>
   );
 }
 
 const W = 480;
-const H = 220;
+const H = 240;
 const PAD = { top: 8, bottom: 28, left: 4, right: 4 };
 
 /**
@@ -114,10 +116,10 @@ function BarChart(props: {
   return (
     <figure
       data-testid={props.testId}
-      className="flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
+      className="flex min-w-0 flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
     >
-      <figcaption className="text-base font-semibold">{props.label}</figcaption>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+      <figcaption className="text-lg font-semibold">{props.label}</figcaption>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-base text-muted">
         {props.series.map((s) => (
           <li key={s.id} className="flex items-center gap-1.5">
             <span
@@ -167,7 +169,7 @@ function BarChart(props: {
                 x={PAD.left + index * group + group / 2}
                 y={H - 6}
                 textAnchor="middle"
-                className="fill-muted text-[12px]"
+                className="fill-muted text-[13px]"
               >
                 {monthName(month.month)}
               </text>
@@ -217,7 +219,7 @@ export function ConsoleOverview(): ReactNode {
   const thisMonth = data?.months[data.months.length - 1];
 
   return (
-    <div className="flex flex-col gap-6" data-testid="overview">
+    <div className="flex flex-col gap-8" data-testid="overview">
       <QueryState
         pending={query.isPending}
         error={query.error}
@@ -230,7 +232,7 @@ export function ConsoleOverview(): ReactNode {
           <>
             <dl
               aria-label={t('console.overview.kpis')}
-              className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
+              className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4"
             >
               <Tile
                 testId="kpi-companies"
@@ -280,7 +282,7 @@ export function ConsoleOverview(): ReactNode {
               </Tile>
             </dl>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
               <BarChart
                 testId="chart-companies"
                 label={t('console.overview.chart.companies')}
@@ -343,26 +345,26 @@ export function ConsoleOverview(): ReactNode {
 
             <section
               aria-labelledby="overview-states"
-              className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
+              className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
             >
-              <h2 id="overview-states" className="text-base font-semibold">
+              <h2 id="overview-states" className="text-lg font-semibold">
                 {t('console.overview.states.title')}
               </h2>
-              <p className="text-sm text-muted">
+              <p className="text-base text-muted">
                 {t('console.overview.states.hint')}
               </p>
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
                 {STATES.map((state) => (
                   <li key={state}>
                     <Link
                       href={`/console?subscription=${state}`}
                       data-testid={`state-${state}`}
-                      className="flex min-h-16 flex-col rounded-xl border border-line px-4 py-3 hover:bg-surface-2"
+                      className="flex min-h-20 flex-col rounded-xl border border-line px-5 py-4 hover:bg-surface-2"
                     >
-                      <span className="text-sm text-muted">
+                      <span className="text-base text-muted">
                         {stateLabel(t, state)}
                       </span>
-                      <span className="text-2xl font-semibold">
+                      <span className="text-3xl font-semibold">
                         {data.companies.bySubscription[state]}
                       </span>
                     </Link>
@@ -371,41 +373,41 @@ export function ConsoleOverview(): ReactNode {
               </ul>
             </section>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-6 lg:grid-cols-2">
               <section
                 aria-labelledby="overview-usage"
-                className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
+                className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
               >
-                <h2 id="overview-usage" className="text-base font-semibold">
+                <h2 id="overview-usage" className="text-lg font-semibold">
                   {t('console.overview.usage.title')}
                 </h2>
-                <dl className="grid grid-cols-3 gap-2 text-base">
+                <dl className="grid grid-cols-3 gap-4 text-base">
                   <div className="flex min-w-0 flex-col">
-                    <dt className="text-sm text-muted">
+                    <dt className="text-base text-muted">
                       {t('console.overview.usage.conversations')}
                     </dt>
-                    <dd className="text-xl font-semibold">
+                    <dd className="text-2xl font-semibold">
                       {data.usageThisMonth.conversations}
                     </dd>
                   </div>
                   <div className="flex min-w-0 flex-col">
-                    <dt className="text-sm text-muted">
+                    <dt className="text-base text-muted">
                       {t('console.overview.usage.inbound')}
                     </dt>
-                    <dd className="text-xl font-semibold">
+                    <dd className="text-2xl font-semibold">
                       {data.usageThisMonth.inboundMessages}
                     </dd>
                   </div>
                   <div className="flex min-w-0 flex-col">
-                    <dt className="text-sm text-muted">
+                    <dt className="text-base text-muted">
                       {t('console.overview.usage.llmCost')}
                     </dt>
-                    <dd className="text-xl font-semibold">
+                    <dd className="text-2xl font-semibold">
                       {formatUsd(data.usageThisMonth.llmCostUsd, locale)}
                     </dd>
                   </div>
                 </dl>
-                <p className="text-sm text-muted">
+                <p className="text-base text-muted">
                   {t('console.overview.usage.active', {
                     count: thisMonth?.activeCompanies ?? 0,
                   })}
@@ -414,9 +416,9 @@ export function ConsoleOverview(): ReactNode {
 
               <section
                 aria-labelledby="overview-recent"
-                className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5"
+                className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
               >
-                <h2 id="overview-recent" className="text-base font-semibold">
+                <h2 id="overview-recent" className="text-lg font-semibold">
                   {t('console.overview.recent.title')}
                 </h2>
                 {data.recent.length === 0 ? (
@@ -429,7 +431,7 @@ export function ConsoleOverview(): ReactNode {
                       <li
                         key={event.id}
                         data-testid="recent-event"
-                        className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 py-2 text-base"
+                        className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 py-3 text-lg"
                       >
                         <Link
                           href={`/console/tenants/${event.tenantId}`}
