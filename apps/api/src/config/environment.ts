@@ -64,6 +64,20 @@ const environmentSchema = postgresEnvironmentSchema
       .regex(/^[A-Za-z0-9_-]{1,256}$/)
       .optional(),
     /**
+     * ADR 080: the platform bot (tezda's own, not a tenant bot) that confirms
+     * self-serve signups. All three are set together or the signup is
+     * unavailable (503 SIGNUP_UNAVAILABLE). Server secrets, never logged.
+     */
+    PLATFORM_TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+    PLATFORM_TELEGRAM_BOT_USERNAME: z
+      .string()
+      .regex(/^[A-Za-z][A-Za-z0-9_]{3,31}$/u)
+      .optional(),
+    PLATFORM_TELEGRAM_WEBHOOK_SECRET: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16,256}$/)
+      .optional(),
+    /**
      * The Meta app's App Secret (App Dashboard → Settings → Basic): signs the
      * Instagram webhooks and buys Unified login tokens. Server only.
      */

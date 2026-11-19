@@ -41,6 +41,7 @@
     "dev:mock-connector": "tsx scripts/dev-mock-connector.ts",
     "ops:backfill-persons": "tsx src/ops/backfill-persons.cli.ts",
     "ops:platform-admin": "tsx src/platform/create-platform-admin.cli.ts",
+    "ops:platform-bot-webhook": "tsx src/signup/set-platform-webhook.cli.ts",
     "ops:platform-admin-reset-mfa": "tsx src/platform/reset-platform-admin-mfa.cli.ts",
     "simulate": "tsx scripts/simulate.ts",
     "knowledge:ingest": "tsx scripts/knowledge-ingest.ts",

@@ -31,6 +31,7 @@ const ALLOWED = new Map([
   ['platform/platform-plans.controller.ts', 'plans'],
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],
+  ['signup/signup.service.ts', 'self-serve signup creates a tenant (ADR 080)'],
   // S6: queues. The relay and the scheduler find due work of every tenant;
   // each job then runs under runWithTenant.
   ['channels/telegram/telegram-queue.runtime.ts', 'outbox relay'],

@@ -197,6 +197,47 @@ export class SessionService {
   }
 
   /**
+   * ADR 080: a session for an operator the caller has already authenticated by
+   * other means (a confirmed self-serve signup bound to this browser). Never
+   * reachable with a password or a guessable id: the signup service proves it.
+   */
+  async openSession(
+    tenantId: string,
+    operatorId: string,
+    now = new Date(),
+  ): Promise<Extract<LoginResult, { ok: true }> | { ok: false }> {
+    const operator = await this.db.operator.findFirst({
+      where: { id: operatorId, tenantId, isActive: true },
+    });
+    if (!operator) return { ok: false };
+    const sessionToken = randomBytes(32).toString('base64url');
+    const csrfToken = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
+    await this.db.operatorSession.create({
+      data: {
+        tenantId,
+        operatorId,
+        tokenHash: sha256(sessionToken),
+        csrfHash: sha256(csrfToken),
+        lastSeenAt: now,
+        expiresAt,
+      },
+    });
+    return {
+      ok: true,
+      sessionToken,
+      csrfToken,
+      expiresAt,
+      principal: {
+        tenantId,
+        operatorId,
+        role: operator.role,
+        displayName: operator.displayName,
+      },
+    };
+  }
+
+  /**
    * Second step of a sign-in (ADR 048): verifies the code or recovery code of
    * a challenge, then opens the session exactly like `login`. Throws MfaError.
    */
