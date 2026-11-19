@@ -84,7 +84,9 @@ describe('cursor', () => {
       ],
     });
     expect(changes).toHaveLength(1);
-    expect(changes[0]?.updatedAt.toISOString()).toBe('2026-11-19T07:00:00.000Z');
+    expect(changes[0]?.updatedAt.toISOString()).toBe(
+      '2026-11-19T07:00:00.000Z',
+    );
     expect(parseChanges(null)).toEqual([]);
   });
 

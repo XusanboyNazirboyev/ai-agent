@@ -79,7 +79,10 @@ interface World {
   connectorId: string;
   operatorId: string;
   stages: Record<string, string>;
-  newLead(externalId: string, options?: { archived?: boolean }): Promise<string>;
+  newLead(
+    externalId: string,
+    options?: { archived?: boolean },
+  ): Promise<string>;
 }
 
 async function world(): Promise<World> {
@@ -198,9 +201,17 @@ async function enable(
   });
 }
 
-const stateOf = (leadId: string) =>
-  db.lead.findFirstOrThrow({ where: { id: leadId } });
-const movedAudits = (leadId: string) =>
+const stateOf = (
+  leadId: string,
+): Promise<{
+  status: string;
+  pipelineStageId: string | null;
+  lostReason: string | null;
+  stageSetBy: string | null;
+}> => db.lead.findFirstOrThrow({ where: { id: leadId } });
+const movedAudits = (
+  leadId: string,
+): Promise<Array<{ safeInputSummary: unknown }>> =>
   db.auditEvent.findMany({
     where: { entityId: leadId, action: 'lead.stage.moved' },
   });
@@ -258,7 +269,9 @@ describe('Bitrix24 stage sync (ADR 079, fake portal)', () => {
     const audit = await db.auditEvent.findFirstOrThrow({
       where: { tenantId: w.tenantId, action: 'connector.stage_sync_saved' },
     });
-    expect(JSON.stringify(audit.safeInputSummary)).not.toMatch(/https?:|rest\//u);
+    expect(JSON.stringify(audit.safeInputSummary)).not.toMatch(
+      /https?:|rest\//u,
+    );
     // Nothing of this tenant's mapping reached the other tenant.
     expect(
       await db.crmStageMapping.count({ where: { tenantId: other.tenantId } }),
@@ -330,16 +343,22 @@ describe('Bitrix24 stage sync (ADR 079, fake portal)', () => {
 
     // Within the interval: not polled. Later: polled again over the
     // overlap, and nothing moves twice.
-    expect(await service.scanDue(new Date(t0.getTime() + MIN), w.tenantId)).toBe(0);
+    expect(
+      await service.scanDue(new Date(t0.getTime() + MIN), w.tenantId),
+    ).toBe(0);
     expect(portal.callsOf('crm.item.list')).toHaveLength(1);
-    expect(await service.scanDue(new Date(t0.getTime() + 3 * MIN), w.tenantId)).toBe(0);
+    expect(
+      await service.scanDue(new Date(t0.getTime() + 3 * MIN), w.tenantId),
+    ).toBe(0);
     expect(portal.callsOf('crm.item.list')).toHaveLength(2);
     expect(await movedAudits(won)).toHaveLength(1);
     expect(await movedAudits(lost)).toHaveLength(1);
 
     // A manager moves it on in the portal: the lead follows.
     portal.moveLead(12, 'CONVERTED', at(60_000));
-    expect(await service.scanDue(new Date(t0.getTime() + 6 * MIN), w.tenantId)).toBe(1);
+    expect(
+      await service.scanDue(new Date(t0.getTime() + 6 * MIN), w.tenantId),
+    ).toBe(1);
     expect((await stateOf(unmapped)).status).toBe('WON');
   });
 

@@ -10,6 +10,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { ConnectorRoles } from './connector-roles';
+import { CrmStageSync } from './crm-stage-sync';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { SkeletonRows } from './ui/skeleton';
@@ -169,6 +170,9 @@ function Bitrix24Card(props: {
           </Button>
         </div>
       )}
+      {active && !editing && props.row ? (
+        <CrmStageSync connectorId={props.row.id} />
+      ) : null}
       {failure ? (
         <p
           role="alert"

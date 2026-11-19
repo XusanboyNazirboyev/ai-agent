@@ -66,10 +66,7 @@ export interface StageSyncSave {
 export class StageSyncRefusal extends Error {
   constructor(
     readonly code:
-      | 'NOT_FOUND'
-      | 'INVALID_BODY'
-      | 'CRM_UNREACHABLE'
-      | 'CRM_REJECTED',
+      'NOT_FOUND' | 'INVALID_BODY' | 'CRM_UNREACHABLE' | 'CRM_REJECTED',
   ) {
     super(code);
   }
@@ -349,18 +346,19 @@ export class CrmStageSyncService implements ScheduledScan {
     if (claimed.count !== 1) return 0;
     let moved = 0;
     let cursor: Date | undefined;
-    let error: string | null = null;
+    let error: string | null;
     try {
       const result = await this.poll(tenantId, syncId, connectorId, now);
       moved = result.moved;
       cursor = result.cursor;
       error = result.error;
     } catch (caught) {
-      error = errorCode(caught);
       if (caught instanceof PollInterrupted) {
         moved = caught.moved;
         cursor = caught.cursor;
         error = errorCode(caught.reason);
+      } else {
+        error = errorCode(caught);
       }
     }
     await this.prisma.crmStageSync.updateMany({
