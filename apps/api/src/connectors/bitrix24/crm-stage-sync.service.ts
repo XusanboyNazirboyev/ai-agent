@@ -279,11 +279,15 @@ export class CrmStageSyncService implements ScheduledScan {
 
   // ---- the scan ----
 
-  /** Returns how many leads were moved. */
-  async scanDue(now: Date): Promise<number> {
+  /**
+   * Returns how many leads were moved. `onlyTenantId` limits the pass to one
+   * tenant (specs, manual runs); the scheduler passes nothing.
+   */
+  async scanDue(now: Date, onlyTenantId?: string): Promise<number> {
     const due = await this.crossTenant.crmStageSync.findMany({
       where: {
         enabled: true,
+        ...(onlyTenantId ? { tenantId: onlyTenantId } : {}),
         AND: [
           { OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] },
           {
