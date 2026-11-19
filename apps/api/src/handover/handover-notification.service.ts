@@ -347,6 +347,7 @@ export class HandoverNotificationService {
       return undefined;
     };
     let text: string | undefined;
+    let directTo: string | undefined;
     if (kind === 'BUDGET_NEAR_LIMIT') {
       const percent = number('percent');
       const month = field(payload, 'month');
@@ -376,13 +377,21 @@ export class HandoverNotificationService {
             select: {
               title: true,
               dueAt: true,
-              assignee: { select: { displayName: true } },
+              assignee: {
+                select: {
+                  displayName: true,
+                  telegramUserId: true,
+                  isActive: true,
+                },
+              },
               lead: { select: { contact: { select: { name: true } } } },
             },
           })
         : null;
       // The card is plain text (no parse mode), so customer and task text
       // cannot inject markup; control characters are still dropped.
+      if (task?.assignee?.isActive && task.assignee.telegramUserId)
+        directTo = task.assignee.telegramUserId;
       if (task)
         text = t.taskDue({
           title: plain(task.title),
@@ -396,6 +405,33 @@ export class HandoverNotificationService {
       { operatorChatId: account.operatorChatId, channelAccountId: account.id },
       { text: text.slice(0, 4_000), buttons: [] },
     );
+    if (directTo) await this.ping(directTo, text, account.id);
+  }
+
+  /**
+   * The same alert as a private message to the task's assignee (ADR 068).
+   * A bot can only write to a person who started a chat with it, so any
+   * refusal is a normal skip: logged by code only, never thrown (so the
+   * group message is not repeated) and never retried.
+   */
+  private async ping(
+    userId: string,
+    text: string,
+    channelAccountId: string,
+  ): Promise<void> {
+    try {
+      await this.notifier.postDirect(
+        userId,
+        text.slice(0, 4_000),
+        channelAccountId,
+      );
+    } catch (error) {
+      const code =
+        error instanceof Error && 'errorCode' in error
+          ? String((error as { errorCode: unknown }).errorCode)
+          : 'error';
+      this.logger.log(`Task reminder direct message skipped (${code})`);
+    }
   }
 
   private async forward(tenantId: string, messageId: string): Promise<void> {

@@ -79,6 +79,9 @@ class FakeNotifier implements OperatorNotifier {
     this.threaded.push({ replyTo, text });
     return Promise.resolve({ messageId: String(++this.n) });
   }
+  postDirect(): Promise<{ messageId: string }> {
+    return Promise.resolve({ messageId: String(++this.n) });
+  }
   updateButtons(
     _target: NotifierTarget,
     messageId: string,
