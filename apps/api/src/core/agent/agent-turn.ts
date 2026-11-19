@@ -957,8 +957,9 @@ export async function runAgentTurn(
     }
   };
   const guard = (text: string): ReturnType<typeof checkDraft> =>
-    stopwatch.timeSync('guardrail', () =>
-      checkDraft(text, {
+    stopwatch.timeSync('guardrail', () => {
+      facts.addClockIfReferenced(text, now(), deps.scope);
+      return checkDraft(text, {
         facts,
         locale: locale(),
         customerTexts: [
@@ -981,8 +982,8 @@ export async function runAgentTurn(
             deps.displayPolicy,
           ),
         },
-      }),
-    );
+      });
+    });
 
   // Catalog titles as fact references rendered by code (AUD-10): a title
   // that states a price or availability is left out.

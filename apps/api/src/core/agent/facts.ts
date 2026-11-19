@@ -35,6 +35,8 @@ export type FactValue =
   | { readonly kind: 'seats'; readonly count: number }
   | { readonly kind: 'availability'; readonly status: AvailabilityStatus }
   | { readonly kind: 'datetime'; readonly iso: string }
+  /** The current date and time, read from the server clock in this turn. */
+  | { readonly kind: 'clock'; readonly iso: string }
   | {
       /** A retrieved knowledge passage; rendered verbatim by code. */
       readonly kind: 'knowledge';
@@ -71,6 +73,14 @@ export interface Fact {
 
 export const FACT_REFERENCE = /\{\{\s*(F\d{1,4})\s*\}\}/gu;
 
+/**
+ * The reserved id of the clock fact. Prompts offer it on every turn, and
+ * code registers it only when a draft uses it, so numbered tool facts keep
+ * their ids and a turn that never mentions the time records no clock fact.
+ */
+export const CLOCK_FACT_ID = 'F0';
+const CLOCK_REFERENCE = /\{\{\s*F0\s*\}\}/u;
+
 /** Locale rendering of one fact value; the only way facts reach text. */
 export function renderFactValue(
   value: FactValue,
@@ -88,6 +98,12 @@ export function renderFactValue(
       return locale.templates.availability[value.status];
     case 'datetime':
       return formatDateTime(locale, value.iso, timeZone);
+    case 'clock':
+      return new Intl.DateTimeFormat(locale.intlLocale, {
+        dateStyle: 'full',
+        timeStyle: 'short',
+        timeZone,
+      }).format(new Date(value.iso));
     case 'knowledge': {
       // A regulated statement always carries where it comes from and when it
       // was last verified; other passages are attributed internally only.
@@ -104,6 +120,7 @@ export function renderFactValue(
 export class FactStore {
   private readonly facts = new Map<string, Fact>();
   private readonly byKey = new Map<string, string>();
+  private sequence = 0;
 
   add(value: FactValue, provenance: FactProvenance): string {
     // The same value from the same source keeps one id within a turn.
@@ -114,7 +131,8 @@ export class FactStore {
     ]);
     const existing = this.byKey.get(key);
     if (existing) return existing;
-    const id = `F${this.facts.size + 1}`;
+    this.sequence += 1;
+    const id = `F${this.sequence}`;
     this.facts.set(id, { id, value, provenance });
     this.byKey.set(key, id);
     return id;
@@ -122,6 +140,32 @@ export class FactStore {
 
   get(id: string): Fact | undefined {
     return this.facts.get(id);
+  }
+
+  /**
+   * Registers the clock fact when a draft references it (D5: the model
+   * never types the date; code renders it from the server clock).
+   */
+  addClockIfReferenced(
+    draft: string,
+    now: Date,
+    scope: { readonly tenantId: string; readonly conversationId: string },
+  ): void {
+    if (this.facts.has(CLOCK_FACT_ID) || !CLOCK_REFERENCE.test(draft)) return;
+    const iso = now.toISOString();
+    this.facts.set(CLOCK_FACT_ID, {
+      id: CLOCK_FACT_ID,
+      value: { kind: 'clock', iso },
+      provenance: {
+        tool: 'clock',
+        connectorKey: 'system',
+        sourceSystem: 'clock',
+        sourceEntityId: 'now',
+        retrievedAt: iso,
+        tenantId: scope.tenantId,
+        conversationId: scope.conversationId,
+      },
+    });
   }
 
   list(): Fact[] {

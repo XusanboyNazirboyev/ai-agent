@@ -62,6 +62,40 @@ describe('conversational turns (ADR 041)', () => {
     expect(result.askedSlot).toBe('subject');
   });
 
+  it("states today's date and time through the clock fact, rendered by code (DEF-021)", async () => {
+    const now = new Date('2027-02-03T10:00:00Z');
+    const provider = new ScriptedLlmProvider([
+      extraction({}, 'small_talk'),
+      {
+        kind: 'tools',
+        text: "Bugun {{F0}}. Qaysi fanni o'rganmoqchisiz?",
+      },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'bugun nechanchi sana?',
+      now,
+      input: {
+        conversationLocale: 'uz-Latn',
+        progress: { priorTurns: [asked('subject')] },
+      },
+    });
+    const shown = new Intl.DateTimeFormat('uz-Latn-UZ', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Asia/Tashkent',
+    }).format(now);
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.reply).toBe(`Bugun ${shown}. Qaysi fanni o'rganmoqchisiz?`);
+    expect(result.facts).toEqual([
+      expect.objectContaining({
+        id: 'F0',
+        value: { kind: 'clock', iso: now.toISOString() },
+      }),
+    ]);
+    expect(JSON.stringify(provider.calls[1]!.request)).toContain('{{F0}}');
+  });
+
   it('never sends the previous bot message again verbatim', async () => {
     const repeated = "Rahmat, yaxshi! Qaysi fanni o'rganmoqchisiz?";
     const { result } = await runTurn({
