@@ -149,9 +149,9 @@ function LeadPageBody(props: {
             aria-label={t('opportunity.title')}
             className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 shadow-card"
           >
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
               {t('opportunity.title')}
-            </h3>
+            </h2>
             <LeadOpportunity
               leadId={item.id}
               item={item}

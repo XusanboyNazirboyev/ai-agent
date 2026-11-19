@@ -927,7 +927,7 @@ test.describe('pipelines (P1.3)', () => {
     await audit(page, 'leads board with pipeline');
     await context.close();
   });
-  test('lead panel: no violations, focus trapped, Escape returns focus', async ({
+  test('lead page: no violations, keyboard open, back link returns to the board', async ({
     browser,
   }) => {
     const f = fixtures();
@@ -945,11 +945,15 @@ test.describe('pipelines (P1.3)', () => {
     const panel = page.getByTestId('lead-page');
     await expect(panel).toBeVisible();
     await expect(
-      panel.getByRole('heading', { name: f.a.conversations[0]!.contactName }),
+      panel.getByRole('heading', {
+        name: f.a.conversations[0]!.contactName,
+        level: 1,
+      }),
     ).toBeVisible();
     await audit(page, 'lead page');
     await panel.getByTestId('lead-page-back').click();
     await expect(panel).toBeHidden();
+    await expect(page.getByTestId('lead-column-NEW')).toBeVisible();
     await context.close();
   });
 

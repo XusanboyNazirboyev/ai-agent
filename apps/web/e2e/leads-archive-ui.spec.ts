@@ -134,12 +134,13 @@ test('confirm dialog: focus inside, Escape closes without request, focus returns
   expect(archiveRequests).toBe(0);
   // Focus returns to the archive button.
   await expect(page.getByTestId('lead-archive')).toBeFocused();
-  // The lead is still on the board.
-  await expect(card(page, name)).toBeVisible();
+  // The lead page stays open and the lead is not archived.
+  await expect(page.getByTestId('lead-page')).toBeVisible();
 
   // Clean up: an admin archives it, only the owner may delete it for good.
   await page.getByTestId('lead-archive').click();
   await page.getByTestId('confirm-accept').click();
+  await expect(page).toHaveURL(/\/leads\?/u);
   await expect(card(page, name)).toHaveCount(0);
   await context.close();
   const owner = await newSession(browser, f.a.operators.owner.email);

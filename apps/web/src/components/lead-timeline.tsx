@@ -46,6 +46,7 @@ export function LeadTimeline(props: {
       title={t('timeline.title')}
       icon="clock"
       testId="lead-timeline"
+      level={props.flat ? 2 : 3}
       collapsible={!props.flat}
       defaultOpen={props.flat ? true : false}
       storageKey={props.flat ? undefined : 'lead-timeline'}

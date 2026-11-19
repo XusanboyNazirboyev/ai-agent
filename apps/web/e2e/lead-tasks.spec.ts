@@ -15,6 +15,7 @@ test('an operator adds a task to a lead, sees it on Today, and finishes it', asy
     await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
     await page.goto('/leads');
     await page.getByTestId('lead-card-open').first().click();
+    await page.getByTestId('lead-tab-tasks').click();
     const panel = page.getByTestId('lead-tasks');
     await panel.getByTestId('task-title').fill(title);
     // Due one hour ago: overdue, and on today's list.
@@ -30,8 +31,8 @@ test('an operator adds a task to a lead, sees it on Today, and finishes it', asy
     await expect(row).toBeVisible();
     await expect(row).toContainText('Overdue');
     // The lead's history (P1.7) shows the new task with who added it.
+    await page.getByTestId('lead-tab-history').click();
     const history = page.getByTestId('lead-timeline');
-    await history.locator('summary').click();
     await expect(
       history
         .getByTestId('timeline-entry')
