@@ -28,7 +28,11 @@ const ICON: Record<TimelineEntry['kind'], IconName> = {
  * stage changes, tasks, notes and handovers in one list. Text is shown as
  * plain text; customer words are never rendered as markup.
  */
-export function LeadTimeline(props: { leadId: string }): ReactNode {
+export function LeadTimeline(props: {
+  leadId: string;
+  /** A tab body: always open, no accordion. */
+  flat?: boolean;
+}): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { timeZone } = useShell();
   const list = useQuery({
@@ -42,9 +46,9 @@ export function LeadTimeline(props: { leadId: string }): ReactNode {
       title={t('timeline.title')}
       icon="clock"
       testId="lead-timeline"
-      collapsible
-      defaultOpen={false}
-      storageKey="lead-timeline"
+      collapsible={!props.flat}
+      defaultOpen={props.flat ? true : false}
+      storageKey={props.flat ? undefined : 'lead-timeline'}
       summary={t('timeline.summary', { count: items.length })}
     >
       {list.isError ? (

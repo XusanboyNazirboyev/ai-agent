@@ -1,7 +1,8 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useRef, type ReactNode } from 'react';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { formatAmount } from '@/lib/currencies';
@@ -30,7 +31,6 @@ export function LeadsList(props: {
   pipelineId: string;
   stages: BoardStageView[];
   filters: LeadFilters;
-  onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   /** ADR 076 select mode. */
   selecting?: boolean;
   selectedIds?: ReadonlySet<string>;
@@ -94,7 +94,6 @@ export function LeadsList(props: {
             key={item.id}
             item={item}
             stages={props.stages}
-            onOpen={props.onOpen}
             selecting={props.selecting}
             selected={props.selectedIds?.has(item.id) ?? false}
             onToggleSelect={props.onToggleSelect}
@@ -116,14 +115,12 @@ export function LeadsList(props: {
 function ListRow(props: {
   item: LeadPipelineItem;
   stages: BoardStageView[];
-  onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
   selecting?: boolean;
   selected: boolean;
   onToggleSelect?: (id: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const { item } = props;
-  const ref = useRef<HTMLButtonElement>(null);
   const stage = props.stages.find(
     (s) => s.id === currentStageId(item, props.stages),
   );
@@ -148,17 +145,17 @@ function ListRow(props: {
           className="h-5 w-5 shrink-0 accent-primary"
         />
       ) : null}
-      <button
-        ref={ref}
-        type="button"
+      <Link
+        href={`/leads/${item.id}`}
         data-testid="lead-list-open"
         data-lead-open={item.id}
         aria-label={t('leads.openLead', { name })}
-        onClick={() =>
-          props.selecting
-            ? props.onToggleSelect?.(item.id)
-            : props.onOpen(item, ref.current)
-        }
+        onClick={(event) => {
+          if (props.selecting) {
+            event.preventDefault();
+            props.onToggleSelect?.(item.id);
+          }
+        }}
         className="flex min-h-9 min-w-0 flex-1 basis-40 flex-col justify-center text-left hover:text-primary-fg"
       >
         <span className="truncate text-sm font-semibold">{name}</span>
@@ -170,7 +167,7 @@ function ListRow(props: {
             {item.contact.phone}
           </span>
         ) : null}
-      </button>
+      </Link>
       {stage ? (
         <Badge
           tone={

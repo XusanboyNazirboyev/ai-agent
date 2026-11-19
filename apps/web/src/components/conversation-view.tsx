@@ -102,6 +102,8 @@ export function ConversationViewPane(props: {
   me: { id: string; role: Role };
   timeZone?: string;
   onBack: () => void;
+  /** Inside the lead page: no back button and no details side panel. */
+  embedded?: boolean;
 }): ReactNode {
   const { t, formatDateTime, locale } = useI18n();
   const ownReplies = useCannedResponses();
@@ -341,15 +343,17 @@ export function ConversationViewPane(props: {
         data-testid="conversation-header"
         className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-surface px-3 py-1.5 sm:gap-2.5 sm:px-4"
       >
-        <Button
-          size="sm"
-          variant="ghost"
-          icon="chevronLeft"
-          className="shrink-0 md:hidden"
-          onClick={props.onBack}
-        >
-          <span className="sr-only">{t('view.back')}</span>
-        </Button>
+        {props.embedded ? null : (
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="chevronLeft"
+            className="shrink-0 md:hidden"
+            onClick={props.onBack}
+          >
+            <span className="sr-only">{t('view.back')}</span>
+          </Button>
+        )}
         <Avatar name={view.contact.name} size="sm" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
           <h2 className="min-w-0 truncate text-sm leading-5 font-semibold">
@@ -423,34 +427,40 @@ export function ConversationViewPane(props: {
             </button>
           </div>
         ) : null}
-        <Button
-          size="sm"
-          variant={panelHidden ? 'secondary' : 'ghost'}
-          icon="panel"
-          className="shrink-0 max-xl:hidden"
-          aria-expanded={!panelHidden}
-          aria-controls="conversation-details"
-          data-testid="details-panel-toggle"
-          title={panelHidden ? t('view.panelShow') : t('view.panelHide')}
-          onClick={togglePanel}
-        >
-          <span className="sr-only">
-            {panelHidden ? t('view.panelShow') : t('view.panelHide')}
-          </span>
-        </Button>
-        <Button
-          size="sm"
-          variant={showDetails ? 'primary' : 'secondary'}
-          icon="panel"
-          className="shrink-0 xl:hidden"
-          aria-expanded={showDetails}
-          aria-controls="conversation-details"
-          onClick={() => setShowDetails(!showDetails)}
-        >
-          <span className="sr-only sm:not-sr-only">
-            {showDetails ? t('view.showConversation') : t('view.showDetails')}
-          </span>
-        </Button>
+        {props.embedded ? null : (
+          <>
+            <Button
+              size="sm"
+              variant={panelHidden ? 'secondary' : 'ghost'}
+              icon="panel"
+              className="shrink-0 max-xl:hidden"
+              aria-expanded={!panelHidden}
+              aria-controls="conversation-details"
+              data-testid="details-panel-toggle"
+              title={panelHidden ? t('view.panelShow') : t('view.panelHide')}
+              onClick={togglePanel}
+            >
+              <span className="sr-only">
+                {panelHidden ? t('view.panelShow') : t('view.panelHide')}
+              </span>
+            </Button>
+            <Button
+              size="sm"
+              variant={showDetails ? 'primary' : 'secondary'}
+              icon="panel"
+              className="shrink-0 xl:hidden"
+              aria-expanded={showDetails}
+              aria-controls="conversation-details"
+              onClick={() => setShowDetails(!showDetails)}
+            >
+              <span className="sr-only sm:not-sr-only">
+                {showDetails
+                  ? t('view.showConversation')
+                  : t('view.showDetails')}
+              </span>
+            </Button>
+          </>
+        )}
       </div>
 
       {error ? (
@@ -711,332 +721,338 @@ export function ConversationViewPane(props: {
           </div>
         </div>
 
-        <aside
-          id="conversation-details"
-          aria-label={t('view.details')}
-          className={`${showDetails ? 'flex' : 'hidden'} ${panelHidden ? 'xl:hidden' : 'xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
-        >
-          <Section
-            title={t('view.chatTags')}
-            icon="tag"
-            collapsible
-            storageKey="chatTags"
-            testId="conversation-tags-section"
-            defaultOpen={(view.conversation.tags ?? []).length > 0}
-            summary={
-              (view.conversation.tags ?? []).length > 0
-                ? (view.conversation.tags ?? [])
-                    .map((tag) => tag.name)
-                    .join(', ')
-                : t('leads.noTags')
-            }
+        {props.embedded ? null : (
+          <aside
+            id="conversation-details"
+            aria-label={t('view.details')}
+            className={`${showDetails ? 'flex' : 'hidden'} ${panelHidden ? 'xl:hidden' : 'xl:flex'} min-h-0 w-full shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-canvas p-3 xl:w-80`}
           >
-            <LeadTagsEditor
-              conversationId={props.id}
-              tags={view.conversation.tags ?? []}
-              role={props.me.role}
-              hideLabel
-            />
-          </Section>
-          <Section
-            title={t('view.handover')}
-            icon="headset"
-            collapsible
-            storageKey="handover"
-            summary={
-              view.handover
-                ? reasonLabel(t, view.handover.reasonCode)
-                : t('view.noHandover')
-            }
-          >
-            {view.handover ? (
-              <>
-                <p>
-                  {t('view.reason', {
-                    code: reasonLabel(t, view.handover.reasonCode),
-                  })}
-                </p>
-                {slaDue ? (
-                  <p
-                    className={`flex items-center gap-1.5 ${slaOverdue ? 'font-medium text-danger-fg' : 'text-muted'}`}
-                  >
-                    <Icon name="clock" />
-                    {slaOverdue
-                      ? t('list.sla')
-                      : t('view.slaDue', {
-                          date: formatDateTime(slaDue, props.timeZone),
-                        })}
+            <Section
+              title={t('view.chatTags')}
+              icon="tag"
+              collapsible
+              storageKey="chatTags"
+              testId="conversation-tags-section"
+              defaultOpen={(view.conversation.tags ?? []).length > 0}
+              summary={
+                (view.conversation.tags ?? []).length > 0
+                  ? (view.conversation.tags ?? [])
+                      .map((tag) => tag.name)
+                      .join(', ')
+                  : t('leads.noTags')
+              }
+            >
+              <LeadTagsEditor
+                conversationId={props.id}
+                tags={view.conversation.tags ?? []}
+                role={props.me.role}
+                hideLabel
+              />
+            </Section>
+            <Section
+              title={t('view.handover')}
+              icon="headset"
+              collapsible
+              storageKey="handover"
+              summary={
+                view.handover
+                  ? reasonLabel(t, view.handover.reasonCode)
+                  : t('view.noHandover')
+              }
+            >
+              {view.handover ? (
+                <>
+                  <p>
+                    {t('view.reason', {
+                      code: reasonLabel(t, view.handover.reasonCode),
+                    })}
                   </p>
-                ) : null}
-                {headline.asked || headline.said ? (
-                  <div
-                    data-testid="handover-headline"
-                    className="rounded-lg bg-surface-2 p-2"
-                  >
-                    {headline.asked ? (
-                      <p className="font-medium">{headline.asked}</p>
-                    ) : null}
-                    {headline.said ? (
-                      <p className="text-muted">{headline.said}</p>
-                    ) : null}
-                  </div>
-                ) : null}
-                {summaryGroups.length > 0
-                  ? summaryGroups.map((group) => (
-                      <div key={group.title} className="mt-1">
-                        <p className="text-xs font-medium text-muted">
-                          {group.title}
+                  {slaDue ? (
+                    <p
+                      className={`flex items-center gap-1.5 ${slaOverdue ? 'font-medium text-danger-fg' : 'text-muted'}`}
+                    >
+                      <Icon name="clock" />
+                      {slaOverdue
+                        ? t('list.sla')
+                        : t('view.slaDue', {
+                            date: formatDateTime(slaDue, props.timeZone),
+                          })}
+                    </p>
+                  ) : null}
+                  {headline.asked || headline.said ? (
+                    <div
+                      data-testid="handover-headline"
+                      className="rounded-lg bg-surface-2 p-2"
+                    >
+                      {headline.asked ? (
+                        <p className="font-medium">{headline.asked}</p>
+                      ) : null}
+                      {headline.said ? (
+                        <p className="text-muted">{headline.said}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {summaryGroups.length > 0
+                    ? summaryGroups.map((group) => (
+                        <div key={group.title} className="mt-1">
+                          <p className="text-xs font-medium text-muted">
+                            {group.title}
+                          </p>
+                          <ul className="list-disc pl-4">
+                            {group.items.map((line) => (
+                              <li key={line}>{line}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))
+                    : summaryLines.map((line) => (
+                        <p key={line} className="text-muted">
+                          {line}
                         </p>
-                        <ul className="list-disc pl-4">
-                          {group.items.map((line) => (
-                            <li key={line}>{line}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))
-                  : summaryLines.map((line) => (
-                      <p key={line} className="text-muted">
-                        {line}
-                      </p>
-                    ))}
-              </>
-            ) : (
-              <p className="text-muted">{t('view.noHandover')}</p>
-            )}
-          </Section>
-          <Section
-            title={t('view.contact')}
-            icon="user"
-            collapsible
-            defaultOpen={false}
-            storageKey="contact"
-            summary={view.contact.phone ?? t('view.noPhone')}
-          >
-            <p>
-              {view.contact.phone
-                ? t('view.phone', { phone: view.contact.phone })
-                : t('view.noPhone')}
-            </p>
-          </Section>
-          <Section
-            title={t('view.lead')}
-            icon="inbox"
-            collapsible
-            storageKey="lead"
-            summary={
-              view.lead
-                ? `${t(`score.${view.lead.score}`)} · ${t(`leadStatus.${view.lead.status}`)}`
-                : t('view.noLead')
-            }
-          >
-            {view.lead ? (
-              <>
-                <p className="flex flex-wrap items-center gap-2">
-                  <Badge tone={SCORE_TONE[view.lead.score]}>
-                    {t(`score.${view.lead.score}`)}
-                  </Badge>
-                  <span className="text-xs text-muted">
-                    {view.lead.scoreSetByOperator
-                      ? t('view.scoreByOperator')
-                      : t('view.scoreAutomatic')}
-                  </span>
-                </p>
-                <label className="flex flex-col gap-1 text-xs text-muted">
-                  {t('view.leadScore')}
-                  <Select
-                    value={
-                      view.lead.scoreSetByOperator ? view.lead.score : 'AUTO'
-                    }
-                    disabled={!operating || busy || !handoverId}
-                    onChange={(e) =>
-                      command.mutate({
-                        action: 'lead-score',
-                        body: {
-                          score:
-                            e.target.value === 'AUTO' ? null : e.target.value,
-                        },
-                      })
-                    }
-                  >
-                    <option value="AUTO">{t('view.scoreAuto')}</option>
-                    {LEAD_SCORES.map((score) => (
-                      <option key={score} value={score}>
-                        {t(`score.${score}`)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                {view.lead.crmSyncStatus === 'NOT_REQUIRED' ? (
-                  <div className="flex flex-col gap-1 text-xs text-muted">
-                    <span>{t('view.crmNotSent')}</span>
-                    <Button
-                      size="sm"
+                      ))}
+                </>
+              ) : (
+                <p className="text-muted">{t('view.noHandover')}</p>
+              )}
+            </Section>
+            <Section
+              title={t('view.contact')}
+              icon="user"
+              collapsible
+              defaultOpen={false}
+              storageKey="contact"
+              summary={view.contact.phone ?? t('view.noPhone')}
+            >
+              <p>
+                {view.contact.phone
+                  ? t('view.phone', { phone: view.contact.phone })
+                  : t('view.noPhone')}
+              </p>
+            </Section>
+            <Section
+              title={t('view.lead')}
+              icon="inbox"
+              collapsible
+              storageKey="lead"
+              summary={
+                view.lead
+                  ? `${t(`score.${view.lead.score}`)} · ${t(`leadStatus.${view.lead.status}`)}`
+                  : t('view.noLead')
+              }
+            >
+              {view.lead ? (
+                <>
+                  <p className="flex flex-wrap items-center gap-2">
+                    <Badge tone={SCORE_TONE[view.lead.score]}>
+                      {t(`score.${view.lead.score}`)}
+                    </Badge>
+                    <span className="text-xs text-muted">
+                      {view.lead.scoreSetByOperator
+                        ? t('view.scoreByOperator')
+                        : t('view.scoreAutomatic')}
+                    </span>
+                  </p>
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    {t('view.leadScore')}
+                    <Select
+                      value={
+                        view.lead.scoreSetByOperator ? view.lead.score : 'AUTO'
+                      }
                       disabled={!operating || busy || !handoverId}
-                      data-testid="lead-crm-sync"
-                      onClick={() =>
-                        command.mutate({ action: 'lead-crm-sync' })
+                      onChange={(e) =>
+                        command.mutate({
+                          action: 'lead-score',
+                          body: {
+                            score:
+                              e.target.value === 'AUTO' ? null : e.target.value,
+                          },
+                        })
                       }
                     >
-                      {t('view.crmSend')}
-                    </Button>
-                  </div>
-                ) : null}
-                <label className="flex flex-col gap-1 text-xs text-muted">
-                  {t('view.leadStatus')}
-                  <Select
-                    value={view.lead.status}
-                    disabled={!operating || busy || !handoverId}
-                    onChange={(e) => {
-                      if (
-                        e.target.value === 'LOST' &&
-                        view.lead?.status !== 'LOST'
-                      ) {
-                        setLostDraft('');
-                        setLostDialog(true);
-                        return;
-                      }
-                      command.mutate({
-                        action: 'lead-status',
-                        body: { status: e.target.value },
-                      });
-                    }}
-                  >
-                    {LEAD_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {t(`leadStatus.${status}`)}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <FormDialog
-                  open={lostDialog}
-                  title={t('opportunity.lostReason')}
-                  description={t('opportunity.lostReasonBody')}
-                  testId="lead-lost-dialog"
-                  onClose={() => setLostDialog(false)}
-                  onSubmit={() => {
-                    const reason = lostDraft.trim();
-                    if (!reason) return;
-                    command.mutate(
-                      {
-                        action: 'lead-status',
-                        body: { status: 'LOST', lostReason: reason },
-                      },
-                      { onSuccess: () => setLostDialog(false) },
-                    );
-                  }}
-                  footer={
-                    <>
-                      <Button
-                        variant="secondary"
-                        onClick={() => setLostDialog(false)}
-                      >
-                        {t('app.cancel')}
-                      </Button>
-                      <Button type="submit" variant="primary" loading={busy}>
-                        {t('app.save')}
-                      </Button>
-                    </>
-                  }
-                >
-                  <label className="flex flex-col gap-1 text-sm font-medium">
-                    {t('opportunity.lostReason')}
-                    <input
-                      value={lostDraft}
-                      onChange={(e) => setLostDraft(e.target.value)}
-                      maxLength={200}
-                      className={fieldClass}
-                      autoFocus
-                      aria-label={t('opportunity.lostReason')}
-                    />
+                      <option value="AUTO">{t('view.scoreAuto')}</option>
+                      {LEAD_SCORES.map((score) => (
+                        <option key={score} value={score}>
+                          {t(`score.${score}`)}
+                        </option>
+                      ))}
+                    </Select>
                   </label>
-                </FormDialog>
-                <LeadTagsEditor
-                  leadId={view.lead.id}
-                  tags={view.lead.tags ?? []}
-                  role={props.me.role}
-                />
-                <LeadCustomFieldsEditor
-                  leadId={view.lead.id}
-                  fields={view.lead.customFields ?? []}
-                  role={props.me.role}
-                />
-                {operating ? <MoveToPipeline leadId={view.lead.id} /> : null}
-              </>
-            ) : (
-              <p className="text-muted">{t('view.noLead')}</p>
-            )}
-          </Section>
-          <ActionsPanel
-            conversationId={props.id}
-            actions={view.actions ?? []}
-            canResolve={operating}
-            timeZone={props.timeZone}
-          />
-          <Section
-            title={t('view.slots')}
-            icon="message"
-            collapsible
-            storageKey="slots"
-            defaultOpen={slots.length > 0}
-            summary={
-              slots.length > 0 ? String(slots.length) : t('view.noneYet')
-            }
-          >
-            {slots.length === 0 ? (
-              <p className="text-muted">{t('view.noSlots')}</p>
-            ) : (
-              slots.map((slot) => (
-                <p key={slot.label}>
-                  <span className="text-muted">{slot.label}: </span>
-                  {slot.value}
-                </p>
-              ))
-            )}
-          </Section>
-          <Section
-            title={t('view.notes')}
-            icon="note"
-            collapsible
-            storageKey="notes"
-            defaultOpen={view.notes.length > 0}
-            summary={
-              view.notes.length > 0
-                ? String(view.notes.length)
-                : t('view.noNotes')
-            }
-          >
-            {view.notes.length === 0 ? (
-              <p className="text-muted">{t('view.noNotes')}</p>
-            ) : null}
-            <ul className="flex flex-col gap-1.5" data-testid="notes">
-              {view.notes.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="rounded-lg bg-warning-soft p-2 break-words whitespace-pre-wrap text-warning-fg"
-                >
-                  {entry.text}
-                </li>
-              ))}
-            </ul>
-            {operating && handoverId ? (
-              <form onSubmit={addNote} className="mt-1 flex flex-col gap-2">
-                <textarea
-                  aria-label={t('action.notePlaceholder')}
-                  placeholder={t('action.notePlaceholder')}
-                  value={note}
-                  maxLength={4096}
-                  rows={2}
-                  onChange={(e) => setNote(e.target.value)}
-                  className={`${textareaClass} text-sm`}
-                />
-                <Button type="submit" size="sm" disabled={busy || !note.trim()}>
-                  {t('action.addNote')}
-                </Button>
-              </form>
-            ) : null}
-          </Section>
-        </aside>
+                  {view.lead.crmSyncStatus === 'NOT_REQUIRED' ? (
+                    <div className="flex flex-col gap-1 text-xs text-muted">
+                      <span>{t('view.crmNotSent')}</span>
+                      <Button
+                        size="sm"
+                        disabled={!operating || busy || !handoverId}
+                        data-testid="lead-crm-sync"
+                        onClick={() =>
+                          command.mutate({ action: 'lead-crm-sync' })
+                        }
+                      >
+                        {t('view.crmSend')}
+                      </Button>
+                    </div>
+                  ) : null}
+                  <label className="flex flex-col gap-1 text-xs text-muted">
+                    {t('view.leadStatus')}
+                    <Select
+                      value={view.lead.status}
+                      disabled={!operating || busy || !handoverId}
+                      onChange={(e) => {
+                        if (
+                          e.target.value === 'LOST' &&
+                          view.lead?.status !== 'LOST'
+                        ) {
+                          setLostDraft('');
+                          setLostDialog(true);
+                          return;
+                        }
+                        command.mutate({
+                          action: 'lead-status',
+                          body: { status: e.target.value },
+                        });
+                      }}
+                    >
+                      {LEAD_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {t(`leadStatus.${status}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <FormDialog
+                    open={lostDialog}
+                    title={t('opportunity.lostReason')}
+                    description={t('opportunity.lostReasonBody')}
+                    testId="lead-lost-dialog"
+                    onClose={() => setLostDialog(false)}
+                    onSubmit={() => {
+                      const reason = lostDraft.trim();
+                      if (!reason) return;
+                      command.mutate(
+                        {
+                          action: 'lead-status',
+                          body: { status: 'LOST', lostReason: reason },
+                        },
+                        { onSuccess: () => setLostDialog(false) },
+                      );
+                    }}
+                    footer={
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => setLostDialog(false)}
+                        >
+                          {t('app.cancel')}
+                        </Button>
+                        <Button type="submit" variant="primary" loading={busy}>
+                          {t('app.save')}
+                        </Button>
+                      </>
+                    }
+                  >
+                    <label className="flex flex-col gap-1 text-sm font-medium">
+                      {t('opportunity.lostReason')}
+                      <input
+                        value={lostDraft}
+                        onChange={(e) => setLostDraft(e.target.value)}
+                        maxLength={200}
+                        className={fieldClass}
+                        autoFocus
+                        aria-label={t('opportunity.lostReason')}
+                      />
+                    </label>
+                  </FormDialog>
+                  <LeadTagsEditor
+                    leadId={view.lead.id}
+                    tags={view.lead.tags ?? []}
+                    role={props.me.role}
+                  />
+                  <LeadCustomFieldsEditor
+                    leadId={view.lead.id}
+                    fields={view.lead.customFields ?? []}
+                    role={props.me.role}
+                  />
+                  {operating ? <MoveToPipeline leadId={view.lead.id} /> : null}
+                </>
+              ) : (
+                <p className="text-muted">{t('view.noLead')}</p>
+              )}
+            </Section>
+            <ActionsPanel
+              conversationId={props.id}
+              actions={view.actions ?? []}
+              canResolve={operating}
+              timeZone={props.timeZone}
+            />
+            <Section
+              title={t('view.slots')}
+              icon="message"
+              collapsible
+              storageKey="slots"
+              defaultOpen={slots.length > 0}
+              summary={
+                slots.length > 0 ? String(slots.length) : t('view.noneYet')
+              }
+            >
+              {slots.length === 0 ? (
+                <p className="text-muted">{t('view.noSlots')}</p>
+              ) : (
+                slots.map((slot) => (
+                  <p key={slot.label}>
+                    <span className="text-muted">{slot.label}: </span>
+                    {slot.value}
+                  </p>
+                ))
+              )}
+            </Section>
+            <Section
+              title={t('view.notes')}
+              icon="note"
+              collapsible
+              storageKey="notes"
+              defaultOpen={view.notes.length > 0}
+              summary={
+                view.notes.length > 0
+                  ? String(view.notes.length)
+                  : t('view.noNotes')
+              }
+            >
+              {view.notes.length === 0 ? (
+                <p className="text-muted">{t('view.noNotes')}</p>
+              ) : null}
+              <ul className="flex flex-col gap-1.5" data-testid="notes">
+                {view.notes.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="rounded-lg bg-warning-soft p-2 break-words whitespace-pre-wrap text-warning-fg"
+                  >
+                    {entry.text}
+                  </li>
+                ))}
+              </ul>
+              {operating && handoverId ? (
+                <form onSubmit={addNote} className="mt-1 flex flex-col gap-2">
+                  <textarea
+                    aria-label={t('action.notePlaceholder')}
+                    placeholder={t('action.notePlaceholder')}
+                    value={note}
+                    maxLength={4096}
+                    rows={2}
+                    onChange={(e) => setNote(e.target.value)}
+                    className={`${textareaClass} text-sm`}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={busy || !note.trim()}
+                  >
+                    {t('action.addNote')}
+                  </Button>
+                </form>
+              ) : null}
+            </Section>
+          </aside>
+        )}
       </div>
 
       <ConfirmDialog

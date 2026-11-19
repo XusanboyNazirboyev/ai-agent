@@ -863,6 +863,22 @@ export class LeadPipelineController {
     };
   }
 
+  /** One lead as the same item the list returns; archived leads included. */
+  @Get(':id')
+  async one(
+    @Req() request: InboxRequest,
+    @Param('id') id: string,
+  ): Promise<LeadPipelineItem> {
+    const tenantId = request.principal!.tenantId;
+    const row = await this.prisma.lead.findFirst({
+      where: { tenantId, id: parseId(id) },
+      select: LEAD_ITEM_SELECT,
+    });
+    if (!row) throw notFound();
+    const [item] = await this.toItems(tenantId, [row]);
+    return item;
+  }
+
   /** Maps lead rows (selected with LEAD_ITEM_SELECT) to board/list items. */
   private async toItems(
     tenantId: string,

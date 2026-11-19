@@ -942,37 +942,14 @@ test.describe('pipelines (P1.3)', () => {
     const opener = card.getByTestId('lead-card-open');
     await opener.focus();
     await page.keyboard.press('Enter');
-    const panel = page.getByTestId('lead-panel');
+    const panel = page.getByTestId('lead-page');
     await expect(panel).toBeVisible();
     await expect(
       panel.getByRole('heading', { name: f.a.conversations[0]!.contactName }),
     ).toBeVisible();
-    await audit(page, 'lead panel');
-    // Tabbing never reaches the page behind the modal panel (past the last
-    // control the browser may hand focus to its own chrome: body).
-    for (let i = 0; i < 40; i += 1) {
-      await page.keyboard.press('Tab');
-      const where = await page.evaluate(() => {
-        const active = document.activeElement;
-        if (!active || active === document.body) return 'chrome';
-        return document
-          .querySelector('[data-testid="lead-panel"]')
-          ?.contains(active)
-          ? 'panel'
-          : 'page';
-      });
-      expect(where, `focus reached the page on Tab ${i + 1}`).not.toBe('page');
-    }
-    await page.evaluate(() =>
-      (
-        document.querySelector(
-          '[data-testid="lead-panel-close"]',
-        ) as HTMLElement
-      ).focus(),
-    );
-    await page.keyboard.press('Escape');
+    await audit(page, 'lead page');
+    await panel.getByTestId('lead-page-back').click();
     await expect(panel).toBeHidden();
-    await expect(opener).toBeFocused();
     await context.close();
   });
 

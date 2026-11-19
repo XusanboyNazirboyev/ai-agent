@@ -47,15 +47,13 @@ test('the lead panel shows stage, deal and archive first; the rest is folded und
     await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
     await page.goto('/leads');
     await page.getByTestId('lead-card-open').first().click();
-    const panel = page.getByTestId('lead-panel');
+    const panel = page.getByTestId('lead-page');
     await expect(panel.getByTestId('lead-panel-stages')).toBeVisible();
     await expect(panel).toContainText('Deal');
     await expect(panel).not.toContainText('Opportunity');
-    const more = panel.getByTestId('lead-panel-more');
-    await expect(more.locator('summary')).toContainText('More details');
-    await expect(more.locator('summary')).toContainText(/tags?/u);
-    await expect(panel.getByTestId('lead-tags')).toBeHidden();
-    await more.locator('summary').click();
+    // The card is always open: responsible, main information and tags.
+    await expect(panel.getByTestId('lead-responsible')).toBeVisible();
+    await expect(panel.getByTestId('lead-main-info')).toBeVisible();
     await expect(panel.getByTestId('lead-tags')).toBeVisible();
     expect(await findOverflow(page)).toEqual([]);
   } finally {

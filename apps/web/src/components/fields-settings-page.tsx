@@ -44,7 +44,7 @@ const TYPES: CustomFieldType[] = [
   'SELECT',
 ];
 
-function slugKey(label: string): string {
+export function slugKey(label: string): string {
   return label
     .toLowerCase()
     .trim()

@@ -116,7 +116,7 @@ test('confirm dialog: focus inside, Escape closes without request, focus returns
   await expect(card(page, name)).toBeVisible();
 
   await card(page, name).getByTestId('lead-card-open').click();
-  await expect(page.getByTestId('lead-panel')).toBeVisible();
+  await expect(page.getByTestId('lead-page')).toBeVisible();
   await page.getByTestId('lead-archive').click();
   const dialog = page.getByTestId('confirm-dialog');
   await expect(dialog).toBeVisible();
