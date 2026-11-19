@@ -705,16 +705,36 @@ export class LeadPipelineController {
             FOR SHARE`;
           if (owner.length === 0) throw unknownOperator();
         }
+        // Only leads whose owner changes are updated and audited.
+        const changing = (
+          await tx.lead.findMany({
+            where: {
+              tenantId: who.tenantId,
+              id: { in: targets },
+              archivedAt: null,
+              ...(ownerOperatorId
+                ? {
+                    OR: [
+                      { ownerOperatorId: null },
+                      { ownerOperatorId: { not: ownerOperatorId } },
+                    ],
+                  }
+                : { ownerOperatorId: { not: null } }),
+            },
+            select: { id: true },
+          })
+        ).map((lead) => lead.id);
+        if (changing.length === 0) return 0;
         const changed = await tx.lead.updateMany({
           where: {
             tenantId: who.tenantId,
-            id: { in: targets },
+            id: { in: changing },
             archivedAt: null,
           },
           data: { ownerOperatorId },
         });
         await tx.auditEvent.createMany({
-          data: targets.map((leadId) => ({
+          data: changing.map((leadId) => ({
             tenantId: who.tenantId,
             actorType: 'OPERATOR' as const,
             actorId: who.operatorId,

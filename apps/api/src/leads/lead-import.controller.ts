@@ -1,4 +1,11 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpException,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { PHONE_KEY_SQL, phoneKey } from '../persons/person-merge.js';
@@ -87,8 +94,15 @@ export class LeadImportController {
         }
         seen.add(key);
       }
-      await this.manualLeads.create({ tenantId, operatorId }, input);
-      created += 1;
+      try {
+        await this.manualLeads.create({ tenantId, operatorId }, input);
+        created += 1;
+      } catch (error: unknown) {
+        // A row the rules refuse now (the stage archived meanwhile, an
+        // owner deactivated) is reported; the rows before it stay created.
+        if (!(error instanceof HttpException)) throw error;
+        skipped.push({ row: index, code: errorCode(error) });
+      }
     }
     skipped.sort((a, b) => a.row - b.row);
 
@@ -165,6 +179,16 @@ export class LeadImportController {
     );
     return new Set(rows.map((r) => r.key));
   }
+}
+
+function errorCode(error: HttpException): string {
+  const response = error.getResponse();
+  return typeof response === 'object' &&
+    response !== null &&
+    'code' in response &&
+    typeof response.code === 'string'
+    ? response.code
+    : 'INVALID_VALUE';
 }
 
 function parseOk(

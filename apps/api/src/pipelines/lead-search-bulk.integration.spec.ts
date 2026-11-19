@@ -249,6 +249,23 @@ describe('bulk lead actions (ADR 076)', () => {
       },
     });
     expect(audits).toBe(2);
+    // The same owner again changes nothing and writes no audit row.
+    expect(
+      await leadsApi.bulk(w.as.ADMIN, {
+        action: 'assign',
+        leadIds: [a.id, b.id],
+        ownerOperatorId: w.operatorIds.OPERATOR,
+      }),
+    ).toEqual({ updated: 0, failed: [] });
+    expect(
+      await db.auditEvent.count({
+        where: {
+          tenantId: w.tenantId,
+          action: 'lead.opportunity.updated',
+          entityId: { in: [a.id, b.id] },
+        },
+      }),
+    ).toBe(2);
     // Unassign works too.
     expect(
       await leadsApi.bulk(w.as.OWNER, {

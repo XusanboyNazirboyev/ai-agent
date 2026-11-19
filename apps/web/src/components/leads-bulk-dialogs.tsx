@@ -22,21 +22,27 @@ type BulkBody =
 interface BulkResult {
   updated: number;
   failed: Array<{ id: string; code: string }>;
+  /** Set when a chunk failed; the chunks before it were applied. */
+  error?: unknown;
 }
 
-/** Sends the leads in chunks; the totals of every chunk. */
+/** Sends the leads in chunks; the totals of the chunks that went through. */
 export async function runBulk(
   leadIds: readonly string[],
   body: BulkBody,
 ): Promise<BulkResult> {
   const total: BulkResult = { updated: 0, failed: [] };
   for (let i = 0; i < leadIds.length; i += BULK_CHUNK) {
-    const result = await api<BulkResult>('/api/v1/leads/bulk', {
-      method: 'POST',
-      body: { ...body, leadIds: leadIds.slice(i, i + BULK_CHUNK) },
-    });
-    total.updated += result.updated;
-    total.failed.push(...result.failed);
+    try {
+      const result = await api<BulkResult>('/api/v1/leads/bulk', {
+        method: 'POST',
+        body: { ...body, leadIds: leadIds.slice(i, i + BULK_CHUNK) },
+      });
+      total.updated += result.updated;
+      total.failed.push(...result.failed);
+    } catch (error: unknown) {
+      return { ...total, error };
+    }
   }
   return total;
 }
@@ -55,14 +61,22 @@ function useBulkSubmit(onDone: () => void) {
     setError('');
     try {
       const result = await runBulk(leadIds, body);
+      const done = t('leads.bulkDone', { count: result.updated });
+      if (result.error !== undefined) {
+        // Earlier chunks went through: say so next to the error.
+        setError(
+          result.updated > 0
+            ? `${done}. ${t(errorKey(result.error))}`
+            : t(errorKey(result.error)),
+        );
+        return;
+      }
       toast(
         result.failed.length > 0
-          ? `${t('leads.bulkDone', { count: result.updated })}. ${t('leads.bulkSkipped', { count: result.failed.length })}`
-          : t('leads.bulkDone', { count: result.updated }),
+          ? `${done}. ${t('leads.bulkSkipped', { count: result.failed.length })}`
+          : done,
       );
       onDone();
-    } catch (e: unknown) {
-      setError(t(errorKey(e)));
     } finally {
       setBusy(false);
       for (const key of ['board', 'leads', 'pipelines', 'lead'])
