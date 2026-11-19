@@ -4,8 +4,15 @@ import { fixtures, newSession } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-const OPERATOR_ITEMS = ['Today', 'Inbox', 'Leads', 'Settings'];
-const ADMIN_ITEMS = ['Today', 'Inbox', 'Leads', 'Analytics', 'Settings'];
+const OPERATOR_ITEMS = ['Today', 'Inbox', 'Leads', 'Tasks', 'Settings'];
+const ADMIN_ITEMS = [
+  'Today',
+  'Inbox',
+  'Leads',
+  'Tasks',
+  'Analytics',
+  'Settings',
+];
 
 async function openAs(
   browser: Parameters<typeof newSession>[0],
@@ -35,7 +42,9 @@ test.describe('role-based menu', () => {
       await expect(links).toHaveCount(items.length);
       for (const name of items)
         await expect(rail.getByRole('link', { name })).toHaveCount(1);
-      const hidden = items.length === 5 ? [] : ['Analytics'];
+      const hidden = (items as readonly string[]).includes('Analytics')
+        ? []
+        : ['Analytics'];
       for (const name of hidden)
         await expect(rail.getByRole('link', { name })).toHaveCount(0);
     });
