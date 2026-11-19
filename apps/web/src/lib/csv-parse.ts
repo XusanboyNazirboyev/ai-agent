@@ -20,6 +20,8 @@ export interface ParsedCsv {
   headers: string[];
   /** Data rows; blank lines are dropped. */
   rows: string[][];
+  /** The 1-based file line each data row starts on (blank lines counted). */
+  lines: number[];
 }
 
 const DELIMITERS = [',', ';', '\t'] as const;
@@ -42,6 +44,9 @@ export function parseCsv(input: string): ParsedCsv {
   const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
   const delimiter = detectDelimiter(text);
   const records: string[][] = [];
+  const starts: number[] = [];
+  let line = 1;
+  let rowStart = 1;
   let row: string[] = [];
   let field = '';
   let quoted = false;
@@ -53,6 +58,7 @@ export function parseCsv(input: string): ParsedCsv {
   const endRow = (): void => {
     endField();
     records.push(row);
+    starts.push(rowStart);
     row = [];
     touched = false;
   };
@@ -64,7 +70,11 @@ export function parseCsv(input: string): ParsedCsv {
           field += '"';
           i += 1;
         } else quoted = false;
-      } else field += ch;
+      } else {
+        // A line break inside quotes is part of the field, still a file line.
+        if (ch === '\n') line += 1;
+        field += ch;
+      }
       continue;
     }
     if (ch === '"' && field === '') {
@@ -76,6 +86,8 @@ export function parseCsv(input: string): ParsedCsv {
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && text[i + 1] === '\n') i += 1;
       endRow();
+      line += 1;
+      rowStart = line;
     } else {
       field += ch;
       touched = true;
@@ -84,9 +96,16 @@ export function parseCsv(input: string): ParsedCsv {
   if (touched || field !== '' || row.length > 0) endRow();
 
   const blank = (r: string[]): boolean => r.every((c) => c.trim() === '');
-  const nonBlank = records.filter((r) => !blank(r));
-  const [headers = [], ...rows] = nonBlank;
-  return { delimiter, headers: headers.map((h) => h.trim()), rows };
+  const kept = records.flatMap((r, i) =>
+    blank(r) ? [] : [{ cells: r, line: starts[i]! }],
+  );
+  const [header, ...data] = kept;
+  return {
+    delimiter,
+    headers: (header?.cells ?? []).map((h) => h.trim()),
+    rows: data.map((r) => r.cells),
+    lines: data.map((r) => r.line),
+  };
 }
 
 const SYNONYMS: Record<ImportField, string[]> = {

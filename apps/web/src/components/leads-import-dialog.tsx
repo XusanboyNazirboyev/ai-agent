@@ -169,9 +169,12 @@ export function LeadsImportDialog(props: {
           },
         });
         created += res.created;
-        // +2: rows are 0-based here, the file counts from 1 and has a header.
+        // The file line of the row, blank lines and the header counted.
         for (const s of res.skipped)
-          skipped.push({ row: at + s.row + 2, code: s.code });
+          skipped.push({
+            row: csv?.lines[at + s.row] ?? at + s.row + 2,
+            code: s.code,
+          });
       }
       setPhase({ kind: 'done', created, skipped });
     } catch (error) {

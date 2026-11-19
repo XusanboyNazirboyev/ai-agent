@@ -73,3 +73,12 @@ describe('detectColumns', () => {
     });
   });
 });
+
+describe('parseCsv file lines', () => {
+  it('gives each data row the file line it starts on, counting blank lines and quoted breaks', () => {
+    const text = 'name,phone\r\n\r\nAli,1\n"Vali\nAka",2\n\n\nGani,3\n';
+    const parsed = parseCsv(text);
+    expect(parsed.rows.map((r) => r[0])).toEqual(['Ali', 'Vali\nAka', 'Gani']);
+    expect(parsed.lines).toEqual([3, 4, 8]);
+  });
+});
