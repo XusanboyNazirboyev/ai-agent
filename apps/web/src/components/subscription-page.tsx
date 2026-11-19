@@ -9,6 +9,7 @@ import { canManageTeam } from '@/lib/roles';
 import type { OwnSubscription } from '@/lib/types';
 import { useShell } from './app-shell';
 import { SubscriptionBadge } from './console/console-format';
+import { SubscriptionPay } from './subscription-pay';
 import { SettingsSubPage } from './settings-section-nav';
 import { EmptyState, QueryState } from './ui/error-note';
 import { Icon } from './ui/icons';
@@ -115,6 +116,9 @@ export function SubscriptionPage(): ReactNode {
                   : t('banner.expired')}
               </p>
             </section>
+          ) : null}
+          {data ? (
+            <SubscriptionPay data={data} refetch={() => void query.refetch()} />
           ) : null}
           {data ? (
             <section

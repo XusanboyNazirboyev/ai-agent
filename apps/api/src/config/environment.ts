@@ -80,6 +80,24 @@ const environmentSchema = postgresEnvironmentSchema
       .regex(/^[A-Za-z0-9_-]{16,256}$/)
       .optional(),
     /**
+     * ADR 082: subscription payments through Click. SERVICE_ID, MERCHANT_ID
+     * and SECRET_KEY are set together; without them the pay button is hidden
+     * and the callbacks answer -8. Server secrets, never logged or returned.
+     */
+    CLICK_SERVICE_ID: z
+      .string()
+      .regex(/^\d{1,12}$/u)
+      .optional(),
+    CLICK_MERCHANT_ID: z
+      .string()
+      .regex(/^\d{1,12}$/u)
+      .optional(),
+    CLICK_SECRET_KEY: z.string().min(1).max(200).optional(),
+    CLICK_MERCHANT_USER_ID: z
+      .string()
+      .regex(/^\d{1,12}$/u)
+      .optional(),
+    /**
      * The Meta app's App Secret (App Dashboard → Settings → Basic): signs the
      * Instagram webhooks and buys Unified login tokens. Server only.
      */

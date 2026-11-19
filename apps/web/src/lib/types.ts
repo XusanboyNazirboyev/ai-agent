@@ -201,6 +201,16 @@ export interface OwnSubscription {
     graceUntil: string | null;
     canceledAt: string | null;
   } | null;
+  /** ADR 082: the pay button is offered only when Click is configured. */
+  clickConfigured: boolean;
+  plans: {
+    code: string;
+    name: string;
+    priceMinor: number;
+    currency: string;
+    periodDays: number;
+  }[];
+  currentPlanCode: string | null;
   payments: PaymentRow[];
 }
 

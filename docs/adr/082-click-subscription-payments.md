@@ -22,3 +22,11 @@ Sign the Click merchant contract; put the four values into the server's secret s
 
 ## Not done
 Payme; card storage and automatic charging (owner decision); refunds through `payment/reversal`; fiscal receipts (Click fiscalization); invoices.
+
+## Implementation notes (2026-11-19)
+- Code: `apps/api/src/billing/` (`click-rules.ts` pure sign/amount/link rules, `click-payments.service.ts`, `click.controllers.ts`, `billing.module.ts`); migration `20261129110000_click_transactions` (BIGSERIAL id, tenant policies); `GET /api/v1/subscription` now also returns `clickConfigured`, public `plans` and `currentPlanCode`; web `subscription-pay.tsx`.
+- Validation order on both stages: -8 (missing field, foreign service_id), -1 (md5, constant time), -3 (action), -5 (unknown or non-uuid merchant_trans_id), -2 (amount in minor units), -4 (paid), -9 (failed), then Complete only -6 (prepare id/click_trans_id mismatch). Unexpected errors answer -7 and log only the error name.
+- The payment's plan is stored in `safe_summary` (`planId`, `planCode`, `periodDays`); an hourly-old PENDING order of the same plan and amount is reused by the next checkout press.
+- Complete wins by a conditional `PENDING -> PAID` update, so two concurrent Completes extend once (tested). A trial is replaced by the paid plan and keeps its remaining days; PAST_DUE/EXPIRED/none start from now.
+- Only UZS plans can be paid. Return URL uses the first `WEB_ORIGINS` entry.
+- Verified: simulated Click in integration tests (normal and strict RLS). Not verified: Click's real test service, signature of real traffic, behaviour on repeated error answers.
