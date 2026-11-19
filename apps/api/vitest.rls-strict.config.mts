@@ -16,6 +16,7 @@ const STRICT_SPECS = [
   'src/pipelines/pipelines.integration.spec.ts',
   'src/pipelines/funnel.integration.spec.ts',
   'src/pipelines/lead-search-bulk.integration.spec.ts',
+  'src/tasks/tasks-page.integration.spec.ts',
   'src/persons/person-merge.integration.spec.ts',
   'src/tags/tags.integration.spec.ts',
   'src/handover/phase5.integration.spec.ts',

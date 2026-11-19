@@ -23,7 +23,9 @@ export type OperatorAlert =
       readonly kind: 'SUBSCRIPTION_ENDING';
       readonly periodEnd: string;
       readonly daysLeft: number;
-    };
+    }
+  /** ADR 068 amendment: a task's time came (text is read from the row). */
+  | { readonly kind: 'TASK_DUE'; readonly taskId: string };
 
 const HOUR_MS = 3_600_000;
 

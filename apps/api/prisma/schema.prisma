@@ -1350,6 +1350,8 @@ model InboxEvent {
   conversationId String?  @map("conversation_id") @db.Uuid
   handoverId     String?  @map("handover_id") @db.Uuid
   messageId      String?  @map("message_id") @db.Uuid
+  /// `task.due` only: the task title, for the browser notification.
+  taskTitle      String?  @map("task_title") @db.VarChar(200)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1990,6 +1992,8 @@ model LeadTask {
   createdByOperatorId String?   @map("created_by_operator_id") @db.Uuid
   doneAt              DateTime? @map("done_at") @db.Timestamptz(6)
   notifiedAt          DateTime? @map("notified_at") @db.Timestamptz(6)
+  /// Announce at this time instead of at the due time (ADR 068 amendment).
+  remindAt            DateTime? @map("remind_at") @db.Timestamptz(6)
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead                Lead      @relation(fields: [tenantId, leadId], references: [tenantId, id], onDelete: Cascade)
