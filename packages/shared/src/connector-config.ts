@@ -570,6 +570,25 @@ export type FieldMappings = z.infer<typeof FieldMappingsSchema>;
 export type GenericRestConnectorConfig = z.infer<
   typeof GenericRestConnectorConfigSchema
 >;
+/**
+ * amoCRM as a lead sink (ADR 081). The long-lived token is a secret: only its
+ * reference is stored (`store:amocrm_token`). The host is always
+ * `<subdomain>.amocrm.ru`, so the subdomain is the only address setting.
+ */
+export const AmocrmSubdomainSchema = z.string().regex(/^[a-z0-9-]{1,63}$/);
+
+export const AmocrmConnectorConfigSchema = z
+  .object({
+    subdomain: AmocrmSubdomainSchema,
+    tokenSecretRef: SecretRefSchema,
+    /** The amoCRM pipeline new leads go to (chosen after connecting). */
+    pipelineId: z.number().int().positive().optional(),
+    /** Start of every lead name, e.g. "Telegram". */
+    titlePrefix: z.string().trim().min(1).max(60).default('Telegram'),
+  })
+  .strict();
+
+export type AmocrmConnectorConfig = z.infer<typeof AmocrmConnectorConfigSchema>;
 export type MockConnectorConfig = z.infer<typeof MockConnectorConfigSchema>;
 export type Bitrix24ConnectorConfig = z.infer<
   typeof Bitrix24ConnectorConfigSchema
@@ -583,6 +602,7 @@ export const TenantConnectorConfigSchemas = {
   'generic-rest': GenericRestConnectorConfigSchema,
   mock: MockConnectorConfigSchema,
   bitrix24: Bitrix24ConnectorConfigSchema,
+  amocrm: AmocrmConnectorConfigSchema,
   // ADR 064: the uploaded price list needs no settings (the data is in the
   // database); the schema stays strict so nothing can be smuggled into it.
   spreadsheet: z.object({}).strict(),

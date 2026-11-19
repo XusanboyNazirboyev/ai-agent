@@ -7,7 +7,7 @@ import {
 } from './channel-secret-store.js';
 import { SecretCipher } from './secret-cipher.js';
 
-const PURPOSES = ['bitrix24_webhook_url'] as const;
+const PURPOSES = ['bitrix24_webhook_url', 'amocrm_token'] as const;
 export type ConnectorSecretPurpose = (typeof PURPOSES)[number];
 
 export function isConnectorSecretPurpose(

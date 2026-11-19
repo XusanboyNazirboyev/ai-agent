@@ -7,6 +7,7 @@ import { OutboundUrlPolicy } from './generic-rest/ssrf-protection.js';
 import type { SecretResolver } from './interfaces/secret-resolver.js';
 import { ConnectorRegistry } from './registry/connector-registry.js';
 import {
+  amocrmConnectorRegistration,
   bitrix24ConnectorRegistration,
   genericRestConnectorRegistration,
   mockConnectorRegistration,
@@ -48,6 +49,7 @@ export function createConnectorRegistry(
     }),
   );
   registry.register(bitrix24ConnectorRegistration());
+  registry.register(amocrmConnectorRegistration());
   // The mock serves fictional catalog data and prices; it must never be
   // selectable for real customers. A staging server with test data only may
   // opt in explicitly (CONNECTOR_DEMO_CATALOG=on).
