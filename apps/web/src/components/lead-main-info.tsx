@@ -67,9 +67,9 @@ export function LeadMainInfo(props: {
       aria-label={t('leadPage.mainInfo')}
       className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-card"
     >
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
         {t('leadPage.mainInfo')}
-      </h3>
+      </h2>
       {props.fields.length === 0 ? (
         <p className="text-sm text-muted">{t('leadPage.noFields')}</p>
       ) : (

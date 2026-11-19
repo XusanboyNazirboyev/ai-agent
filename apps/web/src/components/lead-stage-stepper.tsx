@@ -41,12 +41,12 @@ export function LeadStageStepper(props: {
   const headingId = useId();
   return (
     <nav aria-labelledby={headingId} className="flex flex-col gap-2">
-      <h3
+      <h2
         id={headingId}
         className="text-xs font-semibold uppercase tracking-wide text-muted"
       >
         {t('leads.stageProgress')}
-      </h3>
+      </h2>
       <ol
         data-testid="lead-panel-stages"
         className="flex min-w-0 flex-wrap gap-1.5"
