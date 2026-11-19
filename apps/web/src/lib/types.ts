@@ -657,3 +657,10 @@ export interface StageSyncView {
     saved: boolean;
   }[];
 }
+
+/** GET/PUT /api/v1/connectors/:id/amocrm/pipelines|pipeline (ADR 081). */
+export interface AmocrmPipelineView {
+  pipelines: { id: number; name: string; isMain: boolean }[];
+  /** Where new leads go; null until one is chosen. */
+  pipelineId: number | null;
+}

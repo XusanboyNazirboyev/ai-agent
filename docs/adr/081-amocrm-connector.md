@@ -20,3 +20,16 @@ Status: accepted (2026-11-19). Owner request 2026-11-19: "if the Bitrix integrat
 
 ## Not in this slice
 OAuth app for the amoCRM marketplace, kommo.com accounts, webhooks for instant updates, writing our stage changes to amoCRM, tasks and notes in amoCRM, the agent reading amoCRM as a catalog.
+
+## Implementation notes (2026-11-19)
+Docs read with `tvly extract` on 2026-11-19 (all official, www.amocrm.ru/developers/content/):
+- `crm_platform/account`: `GET /api/v4/account`, available to every user; used to check the token (answer needs a numeric `id`).
+- `crm_platform/leads-api`: `POST /api/v4/leads/complex` body is an array; `name`, `status_id`, `pipeline_id`, `request_id`, `_embedded.contacts[]`; answer is an array with `id`, `contact_id`, `request_id[]`, `merged`. `GET /api/v4/leads`: `page`, `limit` (max 250), `order[updated_at]=asc`.
+- `crm_platform/contacts-api` and the complex example: phone is `custom_fields_values: [{ field_code: "PHONE", values: [{ enum_code: "WORK", value: "+7..." }] }]`.
+- `crm_platform/filters-api`: `filter[updated_at][from]=<unix>` and `filter[pipeline_id][0]=<id>`.
+- `crm_platform/leads_pipelines`: `_embedded.pipelines[]` with `is_main`, `is_archive`, `_embedded.statuses[]` (`type` 1 unsorted, 0 normal; ids 142/143).
+- `api/recommendations`: 429 over the limit, 403 after repeated violations, 402 unpaid account.
+
+Decisions: no migration (the chosen pipeline lives in the connector config `pipelineId`; the existing stage-sync tables are reused; no new tenant table, so no new RLS policy). Write idempotency is `none`: the docs show no lookup by our key, so an unclear create is never repeated automatically; the key is sent as `request_id` only. Rate gate is shared per subdomain (200 ms); 429 retried with the shared `retryWithBackoff`; 403 blocks the subdomain for 10 minutes and the run records `AMOCRM_FORBIDDEN`. Lead summary and slots are not written (notes API is outside the allow-list); only name, contact name and phone. The unsorted inbox stage (`type` 1) is not offered for mapping. Pipeline change deletes that connector's stage mappings. Web check seam: `AMOCRM_CONNECT_TRANSPORT` (no env base URL yet; no Playwright flow for amoCRM).
+
+Not verified (no live account): real response shapes against a live account, `204` with an empty body for an empty lead list (handled defensively, not in the docs read), `filter[pipeline_id][0]` array syntax and `request_id` behaviour on a live account, the token Bearer scheme on `*.amocrm.ru` for long-lived tokens, duplicate-control merging (`merged`) on `leads/complex`.

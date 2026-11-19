@@ -59,9 +59,7 @@ test('an admin connects Bitrix24 with an incoming webhook, sees each refusal, th
   const card = page.getByTestId('crm-bitrix24');
   await expect(card).toContainText('Not connected');
   await expect(page.getByTestId('crm-internal')).toContainText('Active');
-  await expect(page.getByTestId('crm-soon-amocrm')).toContainText(
-    'Coming soon',
-  );
+  await expect(page.getByTestId('crm-amocrm')).toContainText('Not connected');
   await expect(page.getByTestId('crm-soon-hubspot')).toContainText(
     'Coming soon',
   );

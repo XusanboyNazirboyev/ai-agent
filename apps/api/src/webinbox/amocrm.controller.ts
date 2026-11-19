@@ -48,7 +48,7 @@ const PipelineBody = z
 const REFUSAL: Record<string, { status: number; i18nKey: string }> = {
   INVALID_BODY: { status: 400, i18nKey: 'amocrm.err.invalid' },
   TOKEN_INVALID: { status: 400, i18nKey: 'amocrm.err.token' },
-  CRM_UNREACHABLE: { status: 502, i18nKey: 'errors.crmUnreachable' },
+  CRM_UNREACHABLE: { status: 502, i18nKey: 'amocrm.err.unreachable' },
   CRM_REJECTED: { status: 502, i18nKey: 'amocrm.err.rejected' },
   NOT_FOUND: { status: 404, i18nKey: 'errors.notFound' },
   SECRETS_NOT_CONFIGURED: {
