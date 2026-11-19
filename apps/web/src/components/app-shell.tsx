@@ -23,7 +23,9 @@ import { usePreferences } from '@/lib/preferences';
 import { canManageTeam } from '@/lib/roles';
 import type { ConversationPage, Me, Role, TenantAccess } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
+import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
+import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
@@ -151,9 +153,15 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       if (event.type === 'task.due') {
         // A task's time came: refresh the lists and say so once.
         void queryClient.invalidateQueries({ queryKey: ['tasks-mine'] });
+        void queryClient.invalidateQueries({ queryKey: ['tasks-page'] });
         void queryClient.invalidateQueries({ queryKey: ['lead-tasks'] });
         if (soundRef.current) beep();
         toast(tRef.current('notify.task.due'));
+        showTaskNotification({
+          title: tRef.current('tasks.notify.title'),
+          body: event.taskTitle || tRef.current('notify.task.due'),
+          onClick: () => router.push('/tasks'),
+        });
         return;
       }
       if (event.type.startsWith('subscription.')) {
@@ -169,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       }
       onHandover(event);
     },
-    [queryClient, toast],
+    [queryClient, toast, router],
   );
   const connection = useLiveUpdates(me.isSuccess, onEvent);
 
@@ -325,6 +333,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
             access={me.data.access}
             manager={canManageTeam(operator.role)}
           />
+          <LeadLimitBanner info={me.data.leadLimit} />
           {overdue > 0 ? (
             <div
               role="alert"

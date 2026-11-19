@@ -11,6 +11,7 @@ import { AgentModule } from './agent/agent.module.js';
 import { ConnectorsModule } from './connectors/connectors.module.js';
 import { BackgroundModule } from './background/background.module.js';
 import { PersistenceModule } from './persistence/persistence.module.js';
+import { PublicModule } from './public/public.module.js';
 import { PlatformModule } from './platform/platform.module.js';
 import { SignupModule } from './signup/signup.module.js';
 
@@ -26,6 +27,8 @@ import { SignupModule } from './signup/signup.module.js';
     AgentModule,
     PlatformModule,
     SignupModule,
+
+    PublicModule,
     ConfigModule.forRoot({
       isGlobal: true,
       // ENV_FILE lets an isolated run (e2e) use its own file instead of .env.

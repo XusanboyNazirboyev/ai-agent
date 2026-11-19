@@ -33,6 +33,8 @@ const environmentSchema = postgresEnvironmentSchema
      * computed (ADR 021). Without it, logins are attributed to the TCP peer.
      */
     WEB_PROXY_SECRET: z.string().min(32).max(512).optional(),
+    /** ADR 080: where "All included" enterprise enquiries go (https link, e.g. a Telegram chat). */
+    PUBLIC_SALES_CONTACT_URL: z.url({ protocol: /^https$/u }).optional(),
     /** Login attempts allowed per client address and minute. */
     LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()

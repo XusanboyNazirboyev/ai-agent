@@ -40,6 +40,15 @@ function optionalInt(text: string): number | undefined | null {
     : null;
 }
 
+/** Positive whole number of new leads a month; '' is no limit. */
+function optionalLeads(text: string): number | undefined | null {
+  if (text.trim() === '') return undefined;
+  const value = Number(text);
+  return Number.isInteger(value) && value >= 1 && value <= 100_000_000
+    ? value
+    : null;
+}
+
 /** A USD amount up to the API's maximum; '' is "use the server default". */
 function optionalUsd(text: string): number | undefined | null {
   if (text.trim() === '') return undefined;
@@ -64,6 +73,9 @@ export function ConsolePlans(): ReactNode {
   const [maxOperators, setMaxOperators] = useState('');
   const [maxChannels, setMaxChannels] = useState('');
   const [aiBudget, setAiBudget] = useState('');
+  const [monthlyLeads, setMonthlyLeads] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+  const [position, setPosition] = useState('0');
   const [invalid, setInvalid] = useState(false);
 
   const query = useQuery({
@@ -116,6 +128,13 @@ export function ConsolePlans(): ReactNode {
         ? String(plan.limits.maxChannelAccounts)
         : '',
     );
+    setMonthlyLeads(
+      plan?.limits?.monthlyNewLeads !== undefined
+        ? String(plan.limits.monthlyNewLeads)
+        : '',
+    );
+    setIsPublic(plan?.isPublic ?? false);
+    setPosition(String(plan?.position ?? 0));
     setAiBudget(
       plan?.limits?.monthlyLlmBudgetUsd !== undefined
         ? String(plan.limits.monthlyLlmBudgetUsd)
@@ -131,6 +150,8 @@ export function ConsolePlans(): ReactNode {
   const operators = optionalInt(maxOperators);
   const channels = optionalInt(maxChannels);
   const budget = optionalUsd(aiBudget);
+  const leadsLimit = optionalLeads(monthlyLeads);
+  const order = Number(position);
   const valid =
     (!isNew || CODE.test(code)) &&
     name.trim().length > 0 &&
@@ -140,7 +161,11 @@ export function ConsolePlans(): ReactNode {
     periodDays <= 3660 &&
     operators !== null &&
     channels !== null &&
-    budget !== null;
+    budget !== null &&
+    leadsLimit !== null &&
+    Number.isInteger(order) &&
+    order >= 0 &&
+    order <= 10_000;
 
   function submit(): void {
     if (!valid || priceMinor === undefined) {
@@ -154,6 +179,9 @@ export function ConsolePlans(): ReactNode {
     delete limits.maxOperators;
     delete limits.maxChannelAccounts;
     delete limits.monthlyLlmBudgetUsd;
+    delete limits.monthlyNewLeads;
+    if (leadsLimit !== undefined && leadsLimit !== null)
+      limits.monthlyNewLeads = leadsLimit;
     if (operators !== undefined && operators !== null)
       limits.maxOperators = operators;
     if (channels !== undefined && channels !== null)
@@ -166,6 +194,8 @@ export function ConsolePlans(): ReactNode {
       priceMinor,
       periodDays,
       limits,
+      isPublic,
+      position: order,
     });
   }
 
@@ -228,6 +258,14 @@ export function ConsolePlans(): ReactNode {
               <Field label={t('console.plans.maxChannels')}>
                 {plan.limits?.maxChannelAccounts ??
                   t('console.plans.unlimited')}
+              </Field>
+              <Field label={t('console.plans.monthlyNewLeads')}>
+                {plan.limits?.monthlyNewLeads ?? t('console.plans.unlimited')}
+              </Field>
+              <Field label={t('console.plans.public')}>
+                {plan.isPublic
+                  ? `${t('site.yes')} (#${plan.position})`
+                  : t('site.no')}
               </Field>
               <Field label={t('console.plans.aiBudget')}>
                 {plan.limits?.monthlyLlmBudgetUsd !== undefined
@@ -396,6 +434,39 @@ export function ConsolePlans(): ReactNode {
                   onChange={(e) => setMaxChannels(e.target.value)}
                   className={fieldClass}
                 />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                {t('console.plans.monthlyNewLeads')}
+                <input
+                  data-testid="plan-monthly-leads"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={monthlyLeads}
+                  onChange={(e) => setMonthlyLeads(e.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                {t('console.plans.position')}
+                <input
+                  data-testid="plan-position"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium sm:col-span-2">
+                <input
+                  data-testid="plan-public"
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                />
+                {t('console.plans.isPublic')}
               </label>
               <p className="text-xs text-muted sm:col-span-2">
                 {t('console.plans.limitHint')}

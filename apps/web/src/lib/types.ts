@@ -130,6 +130,8 @@ export interface Me {
   tenant: { timezone: string; defaultLocale: string } | null;
   /** Absent on an API older than ADR 047. */
   access?: TenantAccess;
+  /** ADR 080: OWNER/ADMIN only; null without a plan limit. */
+  leadLimit?: { newLeadsThisMonth: number; monthlyNewLeads: number } | null;
 }
 
 export interface TeamMember {
@@ -633,4 +635,25 @@ export interface AuditLogPage {
   pageSize: number;
   total: number;
   events: AuditLogEvent[];
+}
+
+/** GET/PUT /api/v1/connectors/:id/stage-sync (ADR 079). */
+export interface StageSyncView {
+  enabled: boolean;
+  lastRunAt: string | null;
+  lastErrorCode: string | null;
+  portalReachable: boolean;
+  ourStages: {
+    id: string;
+    code: string | null;
+    name: string | null;
+    kind: 'OPEN' | 'WON' | 'LOST';
+  }[];
+  stages: {
+    externalStageId: string;
+    name: string;
+    semantics: 'process' | 'success' | 'failure' | 'apology';
+    leadStageId: string | null;
+    saved: boolean;
+  }[];
 }

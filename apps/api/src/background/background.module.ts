@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessModule } from '../access/access.module.js';
+import { LeadLimitScanService } from '../access/lead-limit-scan.service.js';
 import { SubscriptionScanService } from '../access/subscription-scan.service.js';
 import { FollowUpService } from '../followup/follow-up.service.js';
 import {
@@ -12,6 +13,7 @@ import { HandoverModule } from '../handover/handover.module.js';
 import { OperatorIdleReturnService } from '../handover/operator-idle-return.service.js';
 import { ConnectorsModule } from '../connectors/connectors.module.js';
 import { SheetCatalogService } from '../connectors/spreadsheet/sheet-catalog.service.js';
+import { CrmStageSyncService } from '../connectors/bitrix24/crm-stage-sync.service.js';
 import { LeadTaskReminders } from '../tasks/lead-tasks.js';
 import { LeadSyncService } from '../leads/lead-sync.service.js';
 import { LeadBackfillScan } from '../leads/lead-backfill.scan.js';
@@ -60,10 +62,12 @@ import { RetentionService } from '../retention/retention.service.js';
         AlertsService,
         OperatorIdleReturnService,
         SubscriptionScanService,
+        LeadLimitScanService,
         RetentionService,
         SheetCatalogService,
         LeadTaskReminders,
         LeadBackfillScan,
+        CrmStageSyncService,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -74,10 +78,12 @@ import { RetentionService } from '../retention/retention.service.js';
         alerts: AlertsService,
         idle: OperatorIdleReturnService,
         subscriptions: SubscriptionScanService,
+        leadLimits: LeadLimitScanService,
         retention: RetentionService,
         sheets: SheetCatalogService,
         reminders: LeadTaskReminders,
         leadBackfill: LeadBackfillScan,
+        crmStageSync: CrmStageSyncService,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -87,10 +93,12 @@ import { RetentionService } from '../retention/retention.service.js';
         alerts,
         idle,
         subscriptions,
+        leadLimits,
         retention,
         sheets,
         reminders,
         leadBackfill,
+        crmStageSync,
       ],
     },
     HandoverRuntime,

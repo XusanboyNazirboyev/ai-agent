@@ -7,6 +7,7 @@ import { defineConfig } from 'vitest/config';
  * under test `appClient()`, and its calls set the tenant as production does.
  */
 const STRICT_SPECS = [
+  'src/access/lead-limit.integration.spec.ts',
   'src/persistence/rls-http-context.integration.spec.ts',
   'src/signup/signup.integration.spec.ts',
   'src/persistence/rls-background.integration.spec.ts',
@@ -18,6 +19,7 @@ const STRICT_SPECS = [
   'src/pipelines/funnel.integration.spec.ts',
   'src/pipelines/lead-search-bulk.integration.spec.ts',
   'src/pipelines/lead-one.integration.spec.ts',
+  'src/tasks/tasks-page.integration.spec.ts',
   'src/persons/person-merge.integration.spec.ts',
   'src/tags/tags.integration.spec.ts',
   'src/handover/phase5.integration.spec.ts',
@@ -52,6 +54,7 @@ const STRICT_SPECS = [
   'src/channels/instagram/instagram-comment-flow.integration.spec.ts',
   'src/leads/customer-lead.integration.spec.ts',
   'src/tasks/lead-tasks.integration.spec.ts',
+  'src/connectors/bitrix24/crm-stage-sync.integration.spec.ts',
   'src/leads/lead-timeline.integration.spec.ts',
   'src/secrets/channel-secret-store.integration.spec.ts',
   'src/secrets/connector-secret-store.integration.spec.ts',

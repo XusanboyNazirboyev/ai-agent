@@ -32,6 +32,8 @@ const ALLOWED = new Map([
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],
   ['signup/signup.service.ts', 'self-serve signup creates a tenant (ADR 080)'],
+
+  ['platform/platform-overview.controller.ts', 'platform overview totals'],
   // S6: queues. The relay and the scheduler find due work of every tenant;
   // each job then runs under runWithTenant.
   ['channels/telegram/telegram-queue.runtime.ts', 'outbox relay'],
@@ -46,7 +48,9 @@ const ALLOWED = new Map([
   ['handover/operator-idle-return.service.ts', 'idle operator chats'],
   ['leads/lead-backfill.scan.ts', 'tenants not yet backfilled'],
   ['access/subscription-scan.service.ts', 'periods ending or ended'],
+  ['access/lead-limit-scan.service.ts', 'plans with a lead limit'],
   ['tasks/lead-tasks.ts', 'tasks that fell due'],
+  ['connectors/bitrix24/crm-stage-sync.service.ts', 'stage syncs due a poll'],
   ['leads/lead-sync.service.ts', 'CRM writes to retry or recover'],
   ['retention/retention.service.ts', 'tenants to purge'],
   ['actions/action.service.ts', 'stale proposals, retries, recoveries'],

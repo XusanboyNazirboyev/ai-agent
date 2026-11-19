@@ -15,6 +15,7 @@ import {
 import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 import { z } from 'zod';
 import { TenantAccessService } from '../access/tenant-access.service.js';
+import { countNewLeadsThisMonth } from '../access/lead-limit.js';
 import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
@@ -260,30 +261,38 @@ export class PlatformTenantsController {
     });
     if (!tenant) throw notFound();
     const now = new Date();
-    const [usage, subscriptions, access, operators, channels, planLimits] =
-      await Promise.all([
-        this.usage([id], now),
-        this.currentSubscriptions([id]),
-        this.access.check(id, now),
-        this.prisma.operator.findMany({
-          where: { tenantId: id },
-          orderBy: { createdAt: 'asc' },
-          take: 200,
-          select: {
-            id: true,
-            displayName: true,
-            role: true,
-            isActive: true,
-            createdAt: true,
-          },
-        }),
-        this.prisma.channelAccount.findMany({
-          where: { tenantId: id, channelType: { not: MANUAL_CHANNEL_TYPE } },
-          select: { id: true, channelType: true, status: true },
-          take: 50,
-        }),
-        openPlanLimits(this.prisma, id),
-      ]);
+    const [
+      usage,
+      subscriptions,
+      access,
+      operators,
+      channels,
+      planLimits,
+      newLeadsThisMonth,
+    ] = await Promise.all([
+      this.usage([id], now),
+      this.currentSubscriptions([id]),
+      this.access.check(id, now),
+      this.prisma.operator.findMany({
+        where: { tenantId: id },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+        select: {
+          id: true,
+          displayName: true,
+          role: true,
+          isActive: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.channelAccount.findMany({
+        where: { tenantId: id, channelType: { not: MANUAL_CHANNEL_TYPE } },
+        select: { id: true, channelType: true, status: true },
+        take: 50,
+      }),
+      openPlanLimits(this.prisma, id),
+      countNewLeadsThisMonth(this.prisma, id, tenant.timezone, now),
+    ]);
     return {
       tenant,
       access: {
@@ -302,6 +311,8 @@ export class PlatformTenantsController {
       limits: {
         maxOperators: planLimits.maxOperators ?? null,
         maxChannelAccounts: planLimits.maxChannelAccounts ?? null,
+        monthlyNewLeads: planLimits.monthlyNewLeads ?? null,
+        newLeadsThisMonth,
         monthlyLlmBudgetUsd: budgetUsd(
           monthlyLlmBudgetNano(
             planLimits,

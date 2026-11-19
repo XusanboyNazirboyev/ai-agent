@@ -136,7 +136,7 @@ export class SignupService {
     const email = normalizeEmail(input.email);
     if (!email) throw new SignupError('PLAN_INVALID');
     const plan = await this.db.subscriptionPlan.findFirst({
-      where: { code: input.planCode, isActive: true },
+      where: { code: input.planCode, isActive: true, isPublic: true },
       select: { id: true },
     });
     if (!plan) throw new SignupError('PLAN_INVALID');
@@ -413,7 +413,7 @@ export class SignupService {
     )
       throw new Refusal('emailTaken', 'EMAIL_TAKEN');
     const plan = await this.db.subscriptionPlan.findFirst({
-      where: { id: signup.planId, isActive: true },
+      where: { id: signup.planId, isActive: true, isPublic: true },
     });
     if (!plan) throw new Refusal('unavailable', 'PLAN_INVALID');
     const pack = [...DOMAIN_PACKS.values()][0];

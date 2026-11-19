@@ -49,9 +49,9 @@ export function LeadResponsible(props: { item: LeadPipelineItem }): ReactNode {
       aria-label={t('leadPage.responsible')}
       className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 shadow-card"
     >
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
         {t('leadPage.responsible')}
-      </h3>
+      </h2>
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         {name ? <Avatar name={name} size="sm" /> : null}
         <span

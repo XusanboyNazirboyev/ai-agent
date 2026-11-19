@@ -354,6 +354,12 @@ export class HandoverNotificationService {
     } else if (kind === 'CRM_SYNC_FAILURES') {
       const count = number('count');
       if (count !== undefined) text = t.alertCrmFailures(count);
+    } else if (kind === 'LEAD_LIMIT') {
+      const percent = number('percent');
+      const count = number('count');
+      const limit = number('limit');
+      if (percent !== undefined && count !== undefined && limit !== undefined)
+        text = t.alertLeadLimit(percent, count, limit);
     } else if (kind === 'SUBSCRIPTION_ENDING') {
       const end = new Date(field(payload, 'periodEnd') ?? '');
       const daysLeft = number('daysLeft');
@@ -362,11 +368,33 @@ export class HandoverNotificationService {
           localDate(end, account.tenant.timezone),
           daysLeft,
         );
+    } else if (kind === 'TASK_DUE') {
+      const taskId = field(payload, 'taskId');
+      const task = taskId
+        ? await this.prisma.leadTask.findFirst({
+            where: { tenantId, id: taskId },
+            select: {
+              title: true,
+              dueAt: true,
+              assignee: { select: { displayName: true } },
+              lead: { select: { contact: { select: { name: true } } } },
+            },
+          })
+        : null;
+      // The card is plain text (no parse mode), so customer and task text
+      // cannot inject markup; control characters are still dropped.
+      if (task)
+        text = t.taskDue({
+          title: plain(task.title),
+          lead: plain(task.lead.contact.name ?? '-'),
+          assignee: task.assignee ? plain(task.assignee.displayName) : null,
+          due: localDateTime(task.dueAt, account.tenant.timezone),
+        });
     }
     if (!text) return;
     await this.notifier.postCard(
       { operatorChatId: account.operatorChatId, channelAccountId: account.id },
-      { text, buttons: [] },
+      { text: text.slice(0, 4_000), buttons: [] },
     );
   }
 
@@ -478,6 +506,35 @@ export class HandoverNotificationService {
         },
       });
     });
+  }
+}
+
+/** Untrusted text on one line: control characters become spaces. */
+function plain(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]+/gu, ' ').trim();
+}
+
+/** `DD.MM.YYYY HH:mm` in the tenant's time zone (UTC when the zone is unknown). */
+export function localDateTime(instant: Date, timeZone: string): string {
+  const format = (zone: string): string => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(instant);
+    const part = (type: string): string =>
+      parts.find((entry) => entry.type === type)?.value ?? '';
+    return `${part('day')}.${part('month')}.${part('year')} ${part('hour')}:${part('minute')}`;
+  };
+  try {
+    return format(timeZone);
+  } catch {
+    return format('UTC');
   }
 }
 

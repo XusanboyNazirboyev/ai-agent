@@ -9,6 +9,8 @@ export interface InboxEventRow {
   readonly conversationId: string | null;
   readonly handoverId: string | null;
   readonly messageId: string | null;
+  /** Only on `task.due`. */
+  readonly taskTitle?: string | null;
 }
 
 export const EVENT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -73,6 +75,7 @@ export class InboxEventsService {
         conversationId: row.conversationId,
         handoverId: row.handoverId,
         messageId: row.messageId,
+        ...(row.type === 'task.due' ? { taskTitle: row.taskTitle } : {}),
       })),
     };
   }

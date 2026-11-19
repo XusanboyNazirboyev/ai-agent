@@ -31,6 +31,10 @@ describe('inbox SSE event schemas', () => {
       { type: 'subscription.bot_paused', conversationId, ...base },
       { type: 'subscription.past_due', conversationId: null, ...base },
       { type: 'subscription.expired', conversationId: null, ...base },
+      // ADR 068: old events carry no title, new ones carry it.
+      { type: 'task.due', conversationId, ...base },
+      { type: 'task.due', conversationId, ...base, taskTitle: 'Call back' },
+      { type: 'task.due', conversationId, ...base, taskTitle: null },
     ] as const;
     for (const event of cases)
       expect(InboxEventDataSchema.safeParse(event).success).toBe(true);

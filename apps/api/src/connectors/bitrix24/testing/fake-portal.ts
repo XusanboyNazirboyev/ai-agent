@@ -4,6 +4,7 @@ import {
   MODE_CLASSIC,
   itemAddResponse,
   itemListResponse,
+  statusListResponse,
 } from './bitrix24-fixtures.js';
 
 export interface FakeLead {
@@ -30,6 +31,17 @@ export class FakePortal {
   /** Phone -> matching IDs per entity type (contacts seeded by tests). */
   readonly contactsByPhone = new Map<string, number>();
   mode = 1;
+  /** Lead stages answered by crm.status.list (DOCS shape). */
+  stages: Array<{
+    statusId: string;
+    name: string;
+    semantics?: string | null;
+  }> = [
+    { statusId: 'NEW', name: 'Not processed' },
+    { statusId: 'IN_PROCESS', name: 'In progress' },
+    { statusId: 'CONVERTED', name: 'Qualified', semantics: 'success' },
+    { statusId: 'JUNK', name: 'Junk lead', semantics: 'failure' },
+  ];
   private nextId = 10;
   private readonly queued = new Map<string, Reply[]>();
 
@@ -62,14 +74,27 @@ export class FakePortal {
       case 'crm.item.list': {
         const filter = (params.filter ?? {}) as Record<string, unknown>;
         const select = (params.select ?? ['id']) as string[];
-        const items = this.leads
+        const start = Number(params.start ?? 0);
+        const matching = this.leads
           .filter((lead) =>
-            Object.entries(filter).every(([key, value]) =>
-              key === '@id'
-                ? (value as number[]).includes(lead.id)
-                : lead.fields[key] === value,
-            ),
+            Object.entries(filter).every(([key, value]) => {
+              if (key === '@id') return (value as number[]).includes(lead.id);
+              if (key === '>=updatedTime')
+                return (
+                  Date.parse(String(lead.fields.updatedTime ?? '')) >=
+                  Date.parse(String(value))
+                );
+              return lead.fields[key] === value;
+            }),
           )
+          .sort(
+            (a, b) =>
+              Date.parse(String(a.fields.updatedTime ?? '')) -
+                Date.parse(String(b.fields.updatedTime ?? '')) || a.id - b.id,
+          );
+        // Pages are 50 rows (docs).
+        const items = matching
+          .slice(start, start + 50)
           .map((lead) =>
             Object.fromEntries(
               select.map((field) => [
@@ -84,6 +109,8 @@ export class FakePortal {
           );
         return itemListResponse(items);
       }
+      case 'crm.status.list':
+        return statusListResponse(this.stages);
       case 'crm.duplicate.findbycomm': {
         const phone = (params.values as string[])[0] ?? '';
         const leads = this.leads
@@ -124,6 +151,14 @@ export class FakePortal {
       default:
         return { error: 'ERROR_METHOD_NOT_FOUND' };
     }
+  }
+
+  /** A manager moves a lead to a stage in the portal (stage and time change). */
+  moveLead(id: number, stageId: string, updatedTime: string): void {
+    const lead = this.leads.find((candidate) => candidate.id === id);
+    if (!lead) throw new Error(`no fake lead ${id}`);
+    lead.fields.stageId = stageId;
+    lead.fields.updatedTime = updatedTime;
   }
 
   callsOf(method: string): FakeCall[] {

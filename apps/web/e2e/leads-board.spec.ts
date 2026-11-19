@@ -98,7 +98,7 @@ test('an operator moves a lead with the panel progress bar', async ({
     await expect(panel).toBeHidden();
     await card.getByTestId('lead-card-open').click();
     await expect(
-      panel.getByRole('heading', { name: contactName }),
+      panel.getByRole('heading', { name: contactName, level: 1 }),
     ).toBeVisible();
 
     // Click a different open step.
@@ -192,9 +192,17 @@ test('the list view and the filters share the same panel', async ({
   await expect(row).toBeVisible();
   await row.getByTestId('lead-list-open').click();
   await expect(
-    page.getByTestId('lead-page').getByRole('heading', { name: contactName }),
+    page
+      .getByTestId('lead-page')
+      .getByRole('heading', { name: contactName, level: 1 }),
   ).toBeVisible();
   await page.getByTestId('lead-page-back').click();
+  // Back lands on the funnel; the list view is picked again.
+  await page
+    .getByTestId('leads-view-toggle')
+    .getByRole('button')
+    .last()
+    .click();
 
   // A filter with no match empties the list; its chip removes it.
   await page.getByTestId('leads-filters-button').click();

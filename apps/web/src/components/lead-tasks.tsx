@@ -8,6 +8,7 @@ import { useShell } from './app-shell';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
+import { Select } from './ui/select';
 
 export interface LeadTask {
   id: string;
@@ -16,6 +17,8 @@ export interface LeadTask {
   dueAt: string;
   assignee: { id: string; displayName: string } | null;
   doneAt: string | null;
+  /** When the reminder fires if earlier than the due time. */
+  remindAt?: string | null;
   overdue: boolean;
   contactName?: string | null;
 }
@@ -28,7 +31,57 @@ function localInput(hours: number): string {
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:00`;
 }
 
+/** Reminder choices, in minutes before the due time (the API's fixed set). */
+export const REMIND_OPTIONS = [0, 15, 60, 1440] as const;
+
+/** The reminder choice of a task as a select value ('0' = at the due time). */
+export function remindValue(
+  task: Pick<LeadTask, 'dueAt' | 'remindAt'>,
+): string {
+  if (!task.remindAt) return '0';
+  const minutes = Math.round(
+    (Date.parse(task.dueAt) - Date.parse(task.remindAt)) / 60_000,
+  );
+  return (REMIND_OPTIONS as readonly number[]).includes(minutes)
+    ? String(minutes)
+    : '0';
+}
+
+/** "Remind" select for the add and edit forms. */
+export function RemindSelect(props: {
+  value: string;
+  onChange: (value: string) => void;
+  testId?: string;
+}): ReactNode {
+  const { t } = useI18n();
+  return (
+    <Select
+      field
+      icon="bell"
+      aria-label={t('tasks.remind')}
+      data-testid={props.testId ?? 'task-remind'}
+      value={props.value}
+      onChange={(e) => props.onChange(e.target.value)}
+      className="w-auto min-w-0"
+    >
+      {REMIND_OPTIONS.map((minutes) => (
+        <option key={minutes} value={String(minutes)}>
+          {t(`tasks.remind.${minutes}`)}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
+/** "YYYY-MM-DDTHH:mm" in the browser's zone for a datetime-local field. */
+export function toLocalInput(iso: string): string {
+  const at = new Date(iso);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
 export function invalidateTasks(qc: ReturnType<typeof useQueryClient>): void {
+  void qc.invalidateQueries({ queryKey: ['tasks-page'] });
   void qc.invalidateQueries({ queryKey: ['lead-tasks'] });
   void qc.invalidateQueries({ queryKey: ['tasks-mine'] });
   void qc.invalidateQueries({ queryKey: ['lead-timeline'] });
@@ -95,6 +148,7 @@ export function LeadTasks(props: { leadId: string }): ReactNode {
   const canEdit = operator.role !== 'VIEWER';
   const [title, setTitle] = useState('');
   const [due, setDue] = useState(() => localInput(24));
+  const [remind, setRemind] = useState('0');
   const list = useQuery({
     queryKey: ['lead-tasks', props.leadId],
     queryFn: () =>
@@ -104,7 +158,11 @@ export function LeadTasks(props: { leadId: string }): ReactNode {
     mutationFn: () =>
       api<LeadTask>(`/api/v1/leads/${props.leadId}/tasks`, {
         method: 'POST',
-        body: { title: title.trim(), dueAt: new Date(due).toISOString() },
+        body: {
+          title: title.trim(),
+          dueAt: new Date(due).toISOString(),
+          remindBefore: Number(remind),
+        },
       }),
     onSuccess: () => {
       setTitle('');
@@ -155,6 +213,7 @@ export function LeadTasks(props: { leadId: string }): ReactNode {
             onChange={(e) => setDue(e.target.value)}
             className={`${fieldClass} w-auto min-w-0`}
           />
+          <RemindSelect value={remind} onChange={setRemind} />
           <Button
             type="submit"
             icon="plus"
