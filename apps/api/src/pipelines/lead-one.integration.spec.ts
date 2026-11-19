@@ -3,6 +3,7 @@ import { config as loadEnv } from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { LeadNotesController } from '../leads/lead-notes.controller.js';
 import { LeadArchiveService } from '../leads/lead-archive.service.js';
 import { ensureLeadStages } from '../leads/lead-stage.util.js';
 import { ManualLeadService } from '../leads/manual-lead.service.js';
@@ -36,6 +37,8 @@ const leadsApi = tenantScoped(
     new LeadArchiveService(prisma),
   ),
 );
+
+const notesApi = tenantScoped(new LeadNotesController(prisma));
 
 async function tenantWithOwner() {
   const tenant = await db.tenant.create({
@@ -100,5 +103,23 @@ describe('GET /leads/:id', () => {
     })) as { id: string };
     expect(await status(leadsApi.one(b.as, lead.id))).toBe(404);
     expect(await status(leadsApi.one(a.as, randomUUID()))).toBe(404);
+  });
+});
+
+describe('lead notes', () => {
+  it('adds and lists notes of a hand-added lead, tenant-scoped', async () => {
+    const a = await tenantWithOwner();
+    const b = await tenantWithOwner();
+    const lead = (await leadsApi.createManually(a.as, {
+      name: 'Noted',
+    })) as { id: string };
+    const added = await notesApi.add(a.as, lead.id, { text: '  call back  ' });
+    expect(added.text).toBe('call back');
+    expect(added.author?.displayName).toBe('Op');
+    const listed = await notesApi.list(a.as, lead.id);
+    expect(listed.items.map((n) => n.text)).toEqual(['call back']);
+    expect(await status(notesApi.list(b.as, lead.id))).toBe(404);
+    expect(await status(notesApi.add(b.as, lead.id, { text: 'x' }))).toBe(404);
+    expect(await status(notesApi.add(a.as, lead.id, { text: '  ' }))).toBe(400);
   });
 });
