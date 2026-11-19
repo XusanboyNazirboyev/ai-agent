@@ -126,6 +126,9 @@ export async function eraseTenantData(
     throw new Error(
       `tenant erasure: tables without tenant_id block the delete: ${outsiders.join(', ')}`,
     );
+  // audit_events is append-only; its trigger lets this transaction delete
+  // the rows of this tenant only (migration 20261129120000).
+  await tx.$executeRaw`SELECT set_config('agentcore.erasing_tenant', ${tenantId}, true)`;
   let rows = 0;
   for (const table of deletionOrder(tables, keys)) {
     // The name comes from the catalog, never from a request; quoted anyway.

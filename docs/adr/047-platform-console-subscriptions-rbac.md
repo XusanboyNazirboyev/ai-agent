@@ -113,3 +113,8 @@ Everything is a SQL aggregate on the privileged connection. Calendar months use 
 
 Not done: payments by the Click adapter are counted when they are PAID but were not exercised here; churn for tenants deleted later is lost (audit `tenant_id` becomes null). The web e2e step was added but not run in this session. Checked: integration spec (normal and RLS strict; counts as deltas on the shared database, money in a random currency code per run, seeded rows deleted afterwards), unit tests for month and money math, web unit tests.
 
+
+## Amendment (2026-11-19): deleting a tenant with audit rows
+- **Defect (staging 2026-11-19, owner):** deleting an archived tenant answered 500: `audit_events` is append-only (trigger `reject_audit_event_mutation`, phase 1), and every real tenant has audit rows; the erasure's `DELETE FROM audit_events` raised 55000 and the transaction rolled back (nothing was deleted; the tenant had no Telegram bots, so no webhook was touched). The integration test had passed because its tenant had no audit rows.
+- **Fix:** migration `20261129120000_audit_events_tenant_erasure` replaces the trigger function: a DELETE passes only for rows whose `tenant_id` equals the transaction-local setting `agentcore.erasing_tenant`, which `eraseTenantData` sets for the tenant it erases; any UPDATE and any other DELETE are still refused. The platform audit log keeps the deletion record as before.
+- **Checked:** the delete test now seeds an audit row and proves, before the delete, that a plain delete, a delete under another tenant's erasure setting and an update are refused; after the delete the tenant's audit rows are gone and another tenant's are unchanged (normal and strict runs).

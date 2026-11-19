@@ -847,6 +847,17 @@ describe('editing and deleting a tenant (ADR 047 amendment 2026-11-17)', () => {
     await db.person.create({
       data: { tenantId, mergedIntoId: survivor.id },
     });
+    // Every real tenant has audit rows; audit_events is append-only
+    // (staging 2026-11-19: the delete failed on them with 55000).
+    const auditRow = await db.auditEvent.create({
+      data: {
+        tenantId,
+        actorType: 'SYSTEM',
+        action: 'test.erase',
+        entityType: 'tenant',
+        entityId: tenantId,
+      },
+    });
     const other = await db.tenant.findFirstOrThrow({
       where: { id: { not: tenantId } },
       select: { id: true },
@@ -854,6 +865,29 @@ describe('editing and deleting a tenant (ADR 047 amendment 2026-11-17)', () => {
     const otherContacts = await db.contact.count({
       where: { tenantId: other.id },
     });
+    const otherAudit = await db.auditEvent.count({
+      where: { tenantId: other.id },
+    });
+    // Outside a tenant erasure the audit log still refuses a delete, an
+    // erasure of another tenant does not open it, and an update never passes.
+    await expect(
+      db.auditEvent.delete({ where: { id: auditRow.id } }),
+    ).rejects.toThrow(/append-only/u);
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('agentcore.erasing_tenant', ${other.id}, true)`;
+        await tx.auditEvent.delete({ where: { id: auditRow.id } });
+      }),
+    ).rejects.toThrow(/append-only/u);
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('agentcore.erasing_tenant', ${tenantId}, true)`;
+        await tx.auditEvent.update({
+          where: { id: auditRow.id },
+          data: { action: 'changed' },
+        });
+      }),
+    ).rejects.toThrow(/append-only/u);
 
     const path = `/api/v1/platform/tenants/${tenantId}`;
     const active = await call('DELETE', path, {
@@ -900,10 +934,14 @@ describe('editing and deleting a tenant (ADR 047 amendment 2026-11-17)', () => {
       db.person.count({ where: { tenantId } }),
       db.operatorInvite.count({ where: { tenantId } }),
       db.channelAccount.count({ where: { tenantId } }),
+      db.auditEvent.count({ where: { tenantId } }),
     ]))
       expect(count).toBe(0);
     expect(await db.contact.count({ where: { tenantId: other.id } })).toBe(
       otherContacts,
+    );
+    expect(await db.auditEvent.count({ where: { tenantId: other.id } })).toBe(
+      otherAudit,
     );
     // The platform audit keeps the history; its tenant reference is cleared.
     const trail = await db.platformAuditEvent.findMany({
