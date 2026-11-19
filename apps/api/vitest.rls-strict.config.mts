@@ -8,6 +8,7 @@ import { defineConfig } from 'vitest/config';
  */
 const STRICT_SPECS = [
   'src/persistence/rls-http-context.integration.spec.ts',
+  'src/signup/signup.integration.spec.ts',
   'src/persistence/rls-background.integration.spec.ts',
   'src/handover/handover.integration.spec.ts',
   'src/persons/person-identity.integration.spec.ts',
