@@ -33,6 +33,10 @@ const ALLOWED = new Map([
   ['platform/platform-audit.controller.ts', 'platform audit log'],
   ['signup/signup.service.ts', 'self-serve signup creates a tenant (ADR 080)'],
 
+  [
+    'billing/click-payments.service.ts',
+    'Click callback finds its payment, then runs per tenant (ADR 082)',
+  ],
   ['platform/platform-overview.controller.ts', 'platform overview totals'],
   // S6: queues. The relay and the scheduler find due work of every tenant;
   // each job then runs under runWithTenant.

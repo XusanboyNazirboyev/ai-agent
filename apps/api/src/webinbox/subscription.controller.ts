@@ -6,6 +6,8 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { AppEnvironment } from '../config/environment.js';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { canManageTeam } from '../team/team-rules.js';
@@ -30,6 +32,17 @@ export interface TenantSubscriptionView {
     graceUntil: Date | null;
     canceledAt: Date | null;
   } | null;
+  /** ADR 082: the pay button is offered only when Click is configured. */
+  clickConfigured: boolean;
+  /** Active public plans for the picker; prices are minor units. */
+  plans: {
+    code: string;
+    name: string;
+    priceMinor: number;
+    currency: string;
+    periodDays: number;
+  }[];
+  currentPlanCode: string | null;
   payments: {
     id: string;
     provider: string;
@@ -51,6 +64,7 @@ export interface TenantSubscriptionView {
 export class SubscriptionController {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() private readonly access?: TenantAccessService,
   ) {}
 
@@ -64,7 +78,7 @@ export class SubscriptionController {
         i18nKey: 'errors.forbidden',
       });
     const tenantId = principal.tenantId;
-    const [rows, payments, access] = await Promise.all([
+    const [rows, payments, access, plans] = await Promise.all([
       this.prisma.tenantSubscription.findMany({
         where: { tenantId },
         orderBy: { createdAt: 'desc' },
@@ -72,6 +86,7 @@ export class SubscriptionController {
         include: {
           plan: {
             select: {
+              code: true,
               name: true,
               priceMinor: true,
               currency: true,
@@ -86,6 +101,11 @@ export class SubscriptionController {
         take: 100,
       }),
       this.access ? this.access.check(tenantId) : undefined,
+      this.prisma.subscriptionPlan.findMany({
+        where: { isActive: true, isPublic: true },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+        take: 20,
+      }),
     ]);
     // The open row wins; otherwise the newest one.
     const row =
@@ -97,6 +117,18 @@ export class SubscriptionController {
         periodEnd: access?.periodEnd ?? null,
         graceUntil: access?.graceUntil ?? null,
       },
+      clickConfigured:
+        !!this.config.get('CLICK_SERVICE_ID', { infer: true }) &&
+        !!this.config.get('CLICK_MERCHANT_ID', { infer: true }) &&
+        !!this.config.get('CLICK_SECRET_KEY', { infer: true }),
+      plans: plans.map((plan) => ({
+        code: plan.code,
+        name: plan.name,
+        priceMinor: Number(plan.priceMinor),
+        currency: plan.currency,
+        periodDays: plan.periodDays,
+      })),
+      currentPlanCode: row?.plan.code ?? null,
       subscription: row
         ? {
             status: row.status,
