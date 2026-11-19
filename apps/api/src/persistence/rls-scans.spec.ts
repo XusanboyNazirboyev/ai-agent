@@ -118,15 +118,35 @@ describe('scheduled scans and the tenant context (RLS plan S7)', () => {
 
   it('task reminders find due tasks without a tenant and claim each in its own', async () => {
     const seen: Seen = [];
-    const main = recorder('main', seen, {
+    const tx = recorder('main', seen, {
       leadTask: { updateMany: () => ({ count: 1 }) },
       inboxEvent: { create: () => ({}) },
-    });
+      // Tenant A has an operator group (Telegram queued), B has none.
+      channelAccount: {
+        count: () => (currentTenant() === A ? 1 : 0),
+      },
+      outboxEvent: { createMany: () => ({ count: 1 }) },
+    }) as Record<string, unknown>;
+    const main = {
+      ...tx,
+      $transaction: <T>(work: (client: unknown) => Promise<T>): Promise<T> =>
+        work(tx),
+    };
     const privileged = recorder('privileged', seen, {
       leadTask: {
         findMany: () => [
-          { id: 'k1', tenantId: A, lead: { conversationId: null } },
-          { id: 'k2', tenantId: B, lead: { conversationId: null } },
+          {
+            id: 'k1',
+            tenantId: A,
+            title: 'Call',
+            lead: { conversationId: null },
+          },
+          {
+            id: 'k2',
+            tenantId: B,
+            title: 'Call',
+            lead: { conversationId: null },
+          },
         ],
       },
     });
@@ -139,8 +159,11 @@ describe('scheduled scans and the tenant context (RLS plan S7)', () => {
       { db: 'privileged', call: 'leadTask.findMany', tenant: null },
       { db: 'main', call: 'leadTask.updateMany', tenant: A },
       { db: 'main', call: 'inboxEvent.create', tenant: A },
+      { db: 'main', call: 'channelAccount.count', tenant: A },
+      { db: 'main', call: 'outboxEvent.createMany', tenant: A },
       { db: 'main', call: 'leadTask.updateMany', tenant: B },
       { db: 'main', call: 'inboxEvent.create', tenant: B },
+      { db: 'main', call: 'channelAccount.count', tenant: B },
     ]);
   });
 
