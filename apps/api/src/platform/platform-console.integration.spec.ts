@@ -1274,6 +1274,7 @@ describe('platform overview', () => {
         contactId: contact.id,
         providerChatId: `ov-${suffix}`,
         createdAt: thisMonth,
+        lastInboundAt: thisMonth,
       },
     });
     for (const [sequence, createdAt] of [lastMonth, thisMonth].entries())
@@ -1300,6 +1301,28 @@ describe('platform overview', () => {
         createdAt: new Date(Date.now() + 120_000),
       },
     });
+
+    // The customer list shows the last inbound message per company.
+    const listed = await call(
+      'GET',
+      `/api/v1/platform/tenants?q=ov-a-${suffix}`,
+      { session: support },
+    );
+    const rows = listed.body.tenants as {
+      id: string;
+      lastInboundAt: string | null;
+    }[];
+    expect(rows.find((row) => row.id === a.id)?.lastInboundAt).toBe(
+      thisMonth.toISOString(),
+    );
+    const listedB = await call(
+      'GET',
+      `/api/v1/platform/tenants?q=ov-b-${suffix}`,
+      { session: support },
+    );
+    expect(
+      (listedB.body.tenants as { lastInboundAt: unknown }[])[0]?.lastInboundAt,
+    ).toBeNull();
 
     const after = await ovr(support);
     const delta = (pick: (o: OverviewBody) => number): number =>
