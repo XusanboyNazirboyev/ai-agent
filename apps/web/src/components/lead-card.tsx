@@ -144,7 +144,7 @@ export function LeadCard(props: {
           if (props.selecting) props.onToggleSelect?.(item.id);
           else props.onOpen(item, openRef.current);
         }}
-        className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-2.5 hover:border-primary ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
+        className={`flex min-w-0 cursor-pointer flex-col gap-2 rounded-xl border p-3 hover:border-primary hover:shadow-card ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
           pickedUp || (props.selecting && props.selected)
             ? 'border-primary bg-primary-soft ring-1 ring-primary'
             : isDraggedHere
@@ -170,7 +170,7 @@ export function LeadCard(props: {
             data-lead-open={item.id}
             aria-label={t('leads.openLead', { name })}
             onClick={() => props.onOpen(item, openRef.current)}
-            className="min-h-9 min-w-0 flex-1 truncate rounded-md text-left text-sm font-semibold hover:text-primary-fg"
+            className="min-h-9 min-w-0 flex-1 truncate rounded-md text-left text-[0.9375rem] font-semibold hover:text-primary-fg"
           >
             {name}
           </button>
@@ -201,6 +201,14 @@ export function LeadCard(props: {
             </>
           ) : null}
         </div>
+        {item.contact.phone ? (
+          <p
+            data-testid="lead-card-phone"
+            className="-mt-1 min-w-0 truncate text-xs text-muted"
+          >
+            {item.contact.phone}
+          </p>
+        ) : null}
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           {LEAD_AMOUNT_ENABLED && item.amount ? (
             <span
