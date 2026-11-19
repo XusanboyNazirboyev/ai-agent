@@ -67,7 +67,13 @@ beforeAll(async () => {
   const address = fake.address() as { port: number };
   process.env.TELEGRAM_API_BASE_URL = `http://127.0.0.1:${address.port}`;
   await db.subscriptionPlan.create({
-    data: { code: PLAN, name: 'Signup test', priceMinor: 100n, periodDays: 30, isPublic: true },
+    data: {
+      code: PLAN,
+      name: 'Signup test',
+      priceMinor: 100n,
+      periodDays: 30,
+      isPublic: true,
+    },
   });
   const { AppModule } = await import('../app.module.js');
   app = await NestFactory.create(AppModule, {

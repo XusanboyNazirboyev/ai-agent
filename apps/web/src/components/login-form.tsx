@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
@@ -154,6 +155,17 @@ export function LoginForm(): ReactNode {
               </Button>
             </form>
           )}
+          {!challenge ? (
+            <p className="text-center text-sm">
+              <Link
+                href="/signup"
+                data-testid="login-create-account"
+                className="font-medium underline"
+              >
+                {t('signup.createAccount')}
+              </Link>
+            </p>
+          ) : null}
           <LegalLinks />
         </div>
       </div>
