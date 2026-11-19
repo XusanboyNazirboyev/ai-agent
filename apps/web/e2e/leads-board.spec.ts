@@ -196,6 +196,10 @@ test('the list view and the filters share the same panel', async ({
 
   // A filter with no match empties the list; its chip removes it.
   await page.getByTestId('leads-filters-button').click();
+  // ADR 076: the source box sits under "More filters".
+  await page
+    .getByText(/^(More filters|Ещё фильтры|Qo‘shimcha filtrlar)$/)
+    .click();
   await page.getByLabel(/^(source|Источник|Manba)$/i).fill('no-such-source');
   await expect(page.getByTestId('lead-list-row')).toHaveCount(0);
   await expect(page.getByTestId('leads-filters-count')).toBeVisible();

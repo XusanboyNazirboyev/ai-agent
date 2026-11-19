@@ -45,14 +45,21 @@ export function currentStageId(
 }
 
 export interface LeadFilters {
+  /** An operator id, or `none` for leads without an owner. */
   ownerId: string;
   source: string;
   closeBefore: string;
   closeAfter: string;
   tagId: string;
-  /** Funnel creation-date range: goes to the board endpoint as from/to. */
+  /** Creation date range (`YYYY-MM-DD`), inclusive. */
   createdFrom: string;
   createdTo: string;
+  /** ADR 076: customer name or phone digits (the toolbar search box). */
+  q: string;
+  /** Conversation channel type (`telegram`, `instagram`, `manual`, ...). */
+  channel: string;
+  score: '' | 'HOT' | 'WARM' | 'COLD';
+  task: '' | 'none' | 'overdue';
 }
 
 export const NO_FILTERS: LeadFilters = {
@@ -63,9 +70,13 @@ export const NO_FILTERS: LeadFilters = {
   tagId: '',
   createdFrom: '',
   createdTo: '',
+  q: '',
+  channel: '',
+  score: '',
+  task: '',
 };
 
-/** Query params of `GET /leads`, named exactly as the API contract. */
+/** Query params of `GET /leads` and the board, named as the API contract. */
 export function filterParams(
   filters: LeadFilters,
   params: URLSearchParams,
@@ -75,6 +86,13 @@ export function filterParams(
   if (filters.closeBefore) params.set('closeBefore', filters.closeBefore);
   if (filters.closeAfter) params.set('closeAfter', filters.closeAfter);
   if (filters.tagId) params.set('tagId', filters.tagId);
+  if (filters.createdFrom) params.set('from', filters.createdFrom);
+  if (filters.createdTo) params.set('to', filters.createdTo);
+  const q = filters.q.trim();
+  if (q) params.set('q', q.slice(0, 80));
+  if (filters.channel) params.set('channel', filters.channel);
+  if (filters.score) params.set('score', filters.score);
+  if (filters.task) params.set('task', filters.task);
 }
 
 type LeadsData = InfiniteData<LeadPipelinePage>;

@@ -46,12 +46,16 @@ describe('filterParams', () => {
         tagId: 'tag-1',
         createdFrom: '2026-01-01',
         createdTo: '2026-02-01',
+        q: '  97 988 ',
+        channel: 'telegram',
+        score: 'HOT',
+        task: 'overdue',
       },
       params,
     );
     expect(params.toString()).toBe(
-      // The creation range belongs to the board endpoint, not to GET /leads.
-      'ownerOperatorId=op-1&source=instagram&closeBefore=2026-12-31&closeAfter=2026-12-01&tagId=tag-1',
+      // ADR 076: the list and the board take the same parameters.
+      'ownerOperatorId=op-1&source=instagram&closeBefore=2026-12-31&closeAfter=2026-12-01&tagId=tag-1&from=2026-01-01&to=2026-02-01&q=97+988&channel=telegram&score=HOT&task=overdue',
     );
     const none = new URLSearchParams();
     filterParams(NO_FILTERS, none);

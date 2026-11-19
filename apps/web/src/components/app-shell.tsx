@@ -87,8 +87,8 @@ function NavLink(props: {
     <Link
       href={props.href}
       aria-current={props.active ? 'page' : undefined}
-      className={`group flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1 text-center text-[0.6875rem] leading-tight font-medium ${
-        props.layout === 'rail' ? 'w-full' : 'flex-1'
+      className={`group flex min-w-0 flex-col items-center rounded-xl px-0.5 text-center text-[0.6875rem] leading-tight font-medium ${
+        props.layout === 'rail' ? 'w-full gap-1 py-1.5' : 'flex-1 gap-0.5 py-1'
       } ${props.active ? 'text-fg' : 'text-muted hover:text-fg'}`}
     >
       <span
@@ -256,7 +256,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
         </a>
         <nav
           aria-label={t('nav.label')}
-          className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-0.5 border-r border-line bg-surface px-0.5 py-2 md:flex"
+          className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-3 overflow-y-auto border-r border-line bg-surface px-0.5 py-2 md:flex"
         >
           <span className="mb-2 grid h-9 w-full place-items-center">
             <BrandMark className="h-8 w-9" />

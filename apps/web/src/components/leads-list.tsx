@@ -31,6 +31,10 @@ export function LeadsList(props: {
   stages: BoardStageView[];
   filters: LeadFilters;
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
+  /** ADR 076 select mode. */
+  selecting?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (id: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const query = useInfiniteQuery({
@@ -91,6 +95,9 @@ export function LeadsList(props: {
             item={item}
             stages={props.stages}
             onOpen={props.onOpen}
+            selecting={props.selecting}
+            selected={props.selectedIds?.has(item.id) ?? false}
+            onToggleSelect={props.onToggleSelect}
           />
         ))}
       </ul>
@@ -110,6 +117,9 @@ function ListRow(props: {
   item: LeadPipelineItem;
   stages: BoardStageView[];
   onOpen: (item: LeadPipelineItem, opener: HTMLElement | null) => void;
+  selecting?: boolean;
+  selected: boolean;
+  onToggleSelect?: (id: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const { item } = props;
@@ -124,18 +134,42 @@ function ListRow(props: {
   return (
     <li
       data-testid="lead-list-row"
-      className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+      className={`flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${
+        props.selecting && props.selected ? 'bg-primary-soft' : ''
+      }`}
     >
+      {props.selecting ? (
+        <input
+          type="checkbox"
+          data-testid="lead-list-select"
+          checked={props.selected}
+          onChange={() => props.onToggleSelect?.(item.id)}
+          aria-label={t('leads.selectLead', { name })}
+          className="h-5 w-5 shrink-0 accent-primary"
+        />
+      ) : null}
       <button
         ref={ref}
         type="button"
         data-testid="lead-list-open"
         data-lead-open={item.id}
         aria-label={t('leads.openLead', { name })}
-        onClick={() => props.onOpen(item, ref.current)}
-        className="min-h-9 min-w-0 flex-1 basis-40 truncate text-left text-sm font-semibold hover:text-primary-fg"
+        onClick={() =>
+          props.selecting
+            ? props.onToggleSelect?.(item.id)
+            : props.onOpen(item, ref.current)
+        }
+        className="flex min-h-9 min-w-0 flex-1 basis-40 flex-col justify-center text-left hover:text-primary-fg"
       >
-        {name}
+        <span className="truncate text-sm font-semibold">{name}</span>
+        {item.contact.phone ? (
+          <span
+            data-testid="lead-list-phone"
+            className="truncate text-xs text-muted"
+          >
+            {item.contact.phone}
+          </span>
+        ) : null}
       </button>
       {stage ? (
         <Badge

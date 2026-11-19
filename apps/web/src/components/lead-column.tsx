@@ -63,6 +63,10 @@ export function LeadColumn(props: {
   onAnnounce: (message: string) => void;
   /** Opens the add-lead dialog on this stage (open stages, editors only). */
   onAdd?: (stageId: string) => void;
+  /** ADR 076 select mode. */
+  selecting?: boolean;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelect?: (id: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const listId = useId();
@@ -196,6 +200,9 @@ export function LeadColumn(props: {
             onOpen={props.onOpen}
             onRequestMove={props.onRequestMove}
             onAnnounce={props.onAnnounce}
+            selecting={props.selecting}
+            selected={props.selectedIds?.has(item.id) ?? false}
+            onToggleSelect={props.onToggleSelect}
           />
         ))}
         {query.hasNextPage ? (

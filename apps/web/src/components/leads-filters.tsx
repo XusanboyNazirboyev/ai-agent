@@ -12,6 +12,7 @@ import { fieldClass } from './ui/fields';
 import { Select } from './ui/select';
 import { FormDialog } from './ui/form-dialog';
 import { Icon } from './ui/icons';
+import { channelName } from '@/lib/channel-names';
 import { NO_FILTERS, type LeadFilters } from './lead-board-utils';
 
 const SOURCE_DEBOUNCE_MS = 300;
@@ -38,8 +39,93 @@ function useFilterOptions() {
   };
 }
 
+/** The search box is not a filter: it has its own field in the toolbar. */
 export function activeFilterCount(filters: LeadFilters): number {
-  return Object.values(filters).filter((v) => v).length;
+  return Object.entries(filters).filter(([key, v]) => key !== 'q' && v).length;
+}
+
+/** Every filter cleared, the search text kept. */
+export function clearedFilters(filters: LeadFilters): LeadFilters {
+  return { ...NO_FILTERS, q: filters.q };
+}
+
+/** Channel types an operator can filter on (ADR 076). */
+const FILTER_CHANNELS = ['telegram', 'instagram', 'facebook', 'manual'];
+const SCORES = ['HOT', 'WARM', 'COLD'] as const;
+const TASKS = ['none', 'overdue'] as const;
+type Preset = 'today' | 'yesterday' | 'week' | 'month';
+const PRESETS: Preset[] = ['today', 'yesterday', 'week', 'month'];
+
+function localDate(offsetDays: number, now: Date = new Date()): string {
+  const day = new Date(now);
+  day.setDate(day.getDate() + offsetDays);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+}
+
+/** Creation range of a quick preset, in the browser's calendar. */
+export function presetRange(
+  preset: Preset,
+  now: Date = new Date(),
+): { createdFrom: string; createdTo: string } {
+  const today = localDate(0, now);
+  switch (preset) {
+    case 'today':
+      return { createdFrom: today, createdTo: today };
+    case 'yesterday': {
+      const yesterday = localDate(-1, now);
+      return { createdFrom: yesterday, createdTo: yesterday };
+    }
+    case 'week':
+      return { createdFrom: localDate(-6, now), createdTo: today };
+    case 'month':
+      return { createdFrom: localDate(-29, now), createdTo: today };
+  }
+}
+
+export function channelFilterLabel(
+  channel: string,
+  t: (key: string) => string,
+): string {
+  return channel === 'manual'
+    ? t('leads.channel.manual')
+    : channelName(channel);
+}
+
+function ChoiceChip(props: {
+  selected: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  testId?: string;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      aria-pressed={props.selected}
+      data-testid={props.testId}
+      onClick={props.onClick}
+      className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-medium transition-colors ${
+        props.selected
+          ? 'border-primary bg-primary-soft text-primary-fg'
+          : 'border-line bg-surface text-fg hover:bg-surface-2'
+      }`}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+function FilterGroup(props: { label: string; children: ReactNode }): ReactNode {
+  return (
+    <div
+      role="group"
+      aria-label={props.label}
+      className="flex min-w-0 flex-col gap-1.5"
+    >
+      <span className="text-xs font-semibold text-muted">{props.label}</span>
+      <div className="flex min-w-0 flex-wrap gap-1.5">{props.children}</div>
+    </div>
+  );
 }
 
 function FilterFields(props: {
@@ -47,6 +133,7 @@ function FilterFields(props: {
   onChange: (next: LeadFilters) => void;
 }): ReactNode {
   const { t } = useI18n();
+  const { operator } = useShell();
   const options = useFilterOptions();
   const { filters, onChange } = props;
   const [source, setSource] = useState(filters.source);
@@ -66,58 +153,34 @@ function FilterFields(props: {
   const update = (patch: Partial<LeadFilters>): void =>
     onChange({ ...filters, ...patch });
   const labelClass = 'flex min-w-0 flex-col gap-1 text-sm font-medium';
+  const activePreset = PRESETS.find((preset) => {
+    const range = presetRange(preset);
+    return (
+      range.createdFrom === filters.createdFrom &&
+      range.createdTo === filters.createdTo
+    );
+  });
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {options.manager ? (
-        <label className={labelClass}>
-          {t('leads.filterOwner')}
-          <Select
-            field
-            value={filters.ownerId}
-            onChange={(e) => update({ ownerId: e.target.value })}
-            className="w-full"
+      <FilterGroup label={t('leads.filterCreated')}>
+        {PRESETS.map((preset) => (
+          <ChoiceChip
+            key={preset}
+            testId={`leads-preset-${preset}`}
+            selected={activePreset === preset}
+            onClick={() =>
+              update(
+                activePreset === preset
+                  ? { createdFrom: '', createdTo: '' }
+                  : presetRange(preset),
+              )
+            }
           >
-            <option value="">{t('leads.anyOwner')}</option>
-            {options.operators
-              .filter((o) => o.isActive)
-              .map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.displayName}
-                </option>
-              ))}
-          </Select>
-        </label>
-      ) : null}
-      <label className={labelClass}>
-        {t('leads.filterSource')}
-        <input
-          value={source}
-          maxLength={60}
-          onChange={(e) => setSource(e.target.value)}
-          className={fieldClass}
-        />
-      </label>
-      <div className="flex min-w-0 flex-wrap gap-2">
-        <label className={`${labelClass} flex-1 basis-32`}>
-          {t('leads.filterCloseAfter')}
-          <input
-            type="date"
-            value={filters.closeAfter}
-            onChange={(e) => update({ closeAfter: e.target.value })}
-            className={fieldClass}
-          />
-        </label>
-        <label className={`${labelClass} flex-1 basis-32`}>
-          {t('leads.filterCloseBefore')}
-          <input
-            type="date"
-            value={filters.closeBefore}
-            onChange={(e) => update({ closeBefore: e.target.value })}
-            className={fieldClass}
-          />
-        </label>
-      </div>
+            {t(`leads.preset.${preset}`)}
+          </ChoiceChip>
+        ))}
+      </FilterGroup>
       <div className="flex min-w-0 flex-wrap gap-2">
         <label className={`${labelClass} flex-1 basis-32`}>
           {t('leads.createdFrom')}
@@ -138,6 +201,67 @@ function FilterFields(props: {
           />
         </label>
       </div>
+      <FilterGroup label={t('leads.filterChannel')}>
+        {FILTER_CHANNELS.map((channel) => (
+          <ChoiceChip
+            key={channel}
+            testId={`leads-channel-${channel}`}
+            selected={filters.channel === channel}
+            onClick={() =>
+              update({ channel: filters.channel === channel ? '' : channel })
+            }
+          >
+            {channelFilterLabel(channel, t)}
+          </ChoiceChip>
+        ))}
+      </FilterGroup>
+      <label className={labelClass}>
+        {t('leads.filterOwner')}
+        <Select
+          field
+          data-testid="leads-owner-filter"
+          value={filters.ownerId}
+          onChange={(e) => update({ ownerId: e.target.value })}
+          className="w-full"
+        >
+          <option value="">{t('leads.anyOwner')}</option>
+          <option value={operator.id}>{t('leads.mine')}</option>
+          <option value="none">{t('leads.unassigned')}</option>
+          {options.operators
+            .filter((o) => o.isActive && o.id !== operator.id)
+            .map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.displayName}
+              </option>
+            ))}
+        </Select>
+      </label>
+      <FilterGroup label={t('leads.filterScore')}>
+        {SCORES.map((score) => (
+          <ChoiceChip
+            key={score}
+            testId={`leads-score-${score}`}
+            selected={filters.score === score}
+            onClick={() =>
+              update({ score: filters.score === score ? '' : score })
+            }
+          >
+            {t(`score.${score}`)}
+          </ChoiceChip>
+        ))}
+      </FilterGroup>
+      <FilterGroup label={t('leads.filterTask')}>
+        {TASKS.map((task) => (
+          <ChoiceChip
+            key={task}
+            testId={`leads-task-${task}`}
+            selected={filters.task === task}
+            onClick={() => update({ task: filters.task === task ? '' : task })}
+          >
+            {t(`leads.task.${task}`)}
+          </ChoiceChip>
+        ))}
+      </FilterGroup>
       <label className={labelClass}>
         {t('people.filterByTag')}
         <Select
@@ -155,6 +279,49 @@ function FilterFields(props: {
           ))}
         </Select>
       </label>
+      <details
+        className="min-w-0 rounded-lg border border-line"
+        open={
+          filters.source !== '' ||
+          filters.closeAfter !== '' ||
+          filters.closeBefore !== ''
+        }
+      >
+        <summary className="flex min-h-9 cursor-pointer items-center px-3 text-sm font-medium">
+          {t('leads.filterMore')}
+        </summary>
+        <div className="flex min-w-0 flex-col gap-3 border-t border-line p-3">
+          <label className={labelClass}>
+            {t('leads.filterSource')}
+            <input
+              value={source}
+              maxLength={60}
+              onChange={(e) => setSource(e.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          <div className="flex min-w-0 flex-wrap gap-2">
+            <label className={`${labelClass} flex-1 basis-32`}>
+              {t('leads.filterCloseAfter')}
+              <input
+                type="date"
+                value={filters.closeAfter}
+                onChange={(e) => update({ closeAfter: e.target.value })}
+                className={fieldClass}
+              />
+            </label>
+            <label className={`${labelClass} flex-1 basis-32`}>
+              {t('leads.filterCloseBefore')}
+              <input
+                type="date"
+                value={filters.closeBefore}
+                onChange={(e) => update({ closeBefore: e.target.value })}
+                className={fieldClass}
+              />
+            </label>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -181,7 +348,7 @@ export function FiltersMenu(props: {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open, props.isMobile]);
 
-  const clear = (): void => props.onChange(NO_FILTERS);
+  const clear = (): void => props.onChange(clearedFilters(props.filters));
 
   return (
     <div
@@ -219,7 +386,7 @@ export function FiltersMenu(props: {
           id={panelId}
           role="group"
           aria-label={t('leads.filters')}
-          className="absolute left-0 top-full z-30 mt-1 flex w-[min(92vw,22rem)] flex-col gap-3 rounded-xl border border-line bg-surface p-3 shadow-pop"
+          className="absolute left-0 top-full z-30 mt-1 flex max-h-[min(80dvh,42rem)] w-[min(92vw,24rem)] flex-col gap-3 overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-pop"
         >
           <FilterFields filters={props.filters} onChange={props.onChange} />
           <div className="flex flex-wrap justify-end gap-2">
@@ -275,6 +442,7 @@ export function FilterChips(props: {
   onChange: (next: LeadFilters) => void;
 }): ReactNode {
   const { t } = useI18n();
+  const { operator } = useShell();
   const options = useFilterOptions();
   const { filters } = props;
   if (activeFilterCount(filters) === 0) return null;
@@ -284,9 +452,28 @@ export function FilterChips(props: {
     chips.push({
       key: 'ownerId',
       label: `${t('leads.filterOwner')}: ${
-        options.operators.find((o) => o.id === filters.ownerId)?.displayName ??
-        filters.ownerId
+        filters.ownerId === 'none'
+          ? t('leads.unassigned')
+          : filters.ownerId === operator.id
+            ? t('leads.mine')
+            : (options.operators.find((o) => o.id === filters.ownerId)
+                ?.displayName ?? filters.ownerId)
       }`,
+    });
+  if (filters.channel)
+    chips.push({
+      key: 'channel',
+      label: `${t('leads.filterChannel')}: ${channelFilterLabel(filters.channel, t)}`,
+    });
+  if (filters.score)
+    chips.push({
+      key: 'score',
+      label: `${t('leads.filterScore')}: ${t(`score.${filters.score}`)}`,
+    });
+  if (filters.task)
+    chips.push({
+      key: 'task',
+      label: `${t('leads.filterTask')}: ${t(`leads.task.${filters.task}`)}`,
     });
   if (filters.source)
     chips.push({
@@ -347,7 +534,7 @@ export function FilterChips(props: {
           size="sm"
           variant="ghost"
           data-testid="leads-clear-all"
-          onClick={() => props.onChange(NO_FILTERS)}
+          onClick={() => props.onChange(clearedFilters(filters))}
         >
           {t('leads.clearAll')}
         </Button>

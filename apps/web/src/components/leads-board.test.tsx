@@ -92,6 +92,12 @@ function setupApi(): void {
       );
       return Promise.resolve({ items, nextCursor: null });
     }
+    if (path === '/api/v1/leads/stages?pipelineId=pipe-1')
+      return Promise.resolve(
+        STAGES.map((stage) => ({ ...stage, pipelineId: 'pipe-1' })),
+      );
+    if (path === '/api/v1/leads/bulk' && opts?.method === 'POST')
+      return Promise.resolve({ updated: 1, failed: [] });
     if (path === '/api/v1/tags')
       return Promise.resolve({
         items: [{ id: 'tag-1', name: 'VIP', color: null }],
@@ -139,7 +145,9 @@ beforeEach(() => {
   failMove = false;
   freezeLists = false;
   pipelinesBody = {
-    items: [{ id: 'pipe-1', name: null, position: 0, isDefault: true }],
+    items: [
+      { id: 'pipe-1', name: null, position: 0, isDefault: true, leadCount: 1 },
+    ],
   };
   setupApi();
 });
@@ -403,8 +411,9 @@ describe('LeadsBoard filters and views', () => {
     const owner = await screen.findByRole('combobox', {
       name: 'leads.filterOwner',
     });
+    // Any, mine, unassigned, then the team (ADR 076).
     await waitFor(() =>
-      expect(owner.querySelectorAll('option')).toHaveLength(2),
+      expect(owner.querySelectorAll('option')).toHaveLength(4),
     );
     fireEvent.change(owner, { target: { value: 'op-9' } });
     fireEvent.change(screen.getByLabelText('leads.filterCloseBefore'), {
@@ -431,10 +440,45 @@ describe('LeadsBoard filters and views', () => {
     expect(document.activeElement).toBe(button);
   });
 
-  it('has no text search box (the API has none)', async () => {
+  it('searches by name or phone after a pause, in the list and the board counts (ADR 076)', async () => {
     mount();
     await screen.findByTestId('lead-card');
-    expect(screen.queryByRole('searchbox')).toBeNull();
+    fireEvent.change(screen.getByRole('searchbox'), {
+      target: { value: '97 988' },
+    });
+    await waitFor(() =>
+      expect(leadsCalls()).toContain(
+        '/api/v1/leads?pipelineId=pipe-1&stageId=stage-new&limit=25&q=97+988',
+      ),
+    );
+    expect(vi.mocked(api).mock.calls.map(([p]) => String(p))).toContain(
+      '/api/v1/pipelines/pipe-1/board?q=97+988',
+    );
+    // The search is not a filter: no count on the Filters button.
+    expect(screen.queryByTestId('leads-filters-count')).toBeNull();
+  });
+
+  it('filters by channel, score and overdue tasks with chips (ADR 076)', async () => {
+    mount();
+    await screen.findByTestId('lead-card');
+    fireEvent.click(screen.getByTestId('leads-filters-button'));
+    fireEvent.click(screen.getByTestId('leads-channel-telegram'));
+    fireEvent.click(screen.getByTestId('leads-score-HOT'));
+    fireEvent.click(screen.getByTestId('leads-task-overdue'));
+    await waitFor(() =>
+      expect(leadsCalls()).toContain(
+        '/api/v1/leads?pipelineId=pipe-1&stageId=stage-new&limit=25&channel=telegram&score=HOT&task=overdue',
+      ),
+    );
+    expect(screen.getByTestId('leads-filter-chip-channel')).toBeInTheDocument();
+    expect(screen.getByTestId('leads-filters-count').textContent).toContain(
+      '3',
+    );
+    fireEvent.click(screen.getByTestId('leads-preset-today'));
+    expect(screen.getByTestId('leads-preset-today')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('the list view lists the pipeline without a stage filter and opens the panel', async () => {
@@ -527,5 +571,119 @@ describe('LeadsBoard created range and mobile tabs', () => {
     expect(won).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('lead-column-WON')).toBeInTheDocument();
     expect(screen.queryByTestId('lead-column-NEW')).toBeNull();
+  });
+});
+
+describe('LeadsBoard counts and select mode (ADR 076)', () => {
+  it("shows each pipeline's lead count, the total and the board count", async () => {
+    pipelinesBody = {
+      items: [
+        {
+          id: 'pipe-1',
+          name: null,
+          position: 0,
+          isDefault: true,
+          leadCount: 3,
+        },
+        {
+          id: 'pipe-2',
+          name: 'Tours',
+          position: 1,
+          isDefault: false,
+          leadCount: 5,
+        },
+      ],
+    };
+    mount();
+    await screen.findByTestId('lead-card');
+    expect(
+      screen.getAllByTestId('pipeline-switch-count').map((c) => c.textContent),
+    ).toEqual(['3', '5']);
+    expect(screen.getByTestId('leads-total').textContent).toContain(
+      'leads.total|8',
+    );
+    expect(screen.getByTestId('leads-board-total').textContent).toContain(
+      'leads.boardCount|',
+    );
+  });
+
+  it('selects cards and moves them to a stage in one request', async () => {
+    mount();
+    await screen.findByTestId('lead-card');
+    expect(screen.queryByTestId('lead-card-select')).toBeNull();
+    fireEvent.click(screen.getByTestId('leads-select-toggle'));
+    // Operators move; changing the owner of many leads is for managers.
+    expect(screen.queryByTestId('leads-bulk-assign-open')).toBeNull();
+    expect(screen.getByTestId('leads-bulk-move-open')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('lead-card-select'));
+    expect(screen.getByTestId('leads-selected-count').textContent).toBe(
+      'leads.selectedCount|1',
+    );
+    fireEvent.click(screen.getByTestId('leads-bulk-move-open'));
+    const stage = await screen.findByTestId('leads-bulk-stage');
+    await waitFor(() =>
+      expect(stage.querySelectorAll('option').length).toBeGreaterThan(1),
+    );
+    fireEvent.change(stage, { target: { value: 'stage-qual' } });
+    fireEvent.click(screen.getByRole('button', { name: 'leads.bulkApply' }));
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(api)
+          .mock.calls.find(([p]) => p === '/api/v1/leads/bulk')?.[1],
+      ).toEqual({
+        method: 'POST',
+        body: {
+          action: 'move',
+          stageId: 'stage-qual',
+          leadIds: ['lead-1'],
+        },
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId('leads-bulk-bar')).toBeNull(),
+    );
+  });
+
+  it('managers can select every shown lead and change the owner', async () => {
+    state.role = 'ADMIN';
+    leads = [makeLead(), makeLead({ id: 'lead-2' })];
+    mount();
+    await waitFor(() =>
+      expect(screen.getAllByTestId('lead-card')).toHaveLength(2),
+    );
+    fireEvent.click(screen.getByTestId('leads-select-toggle'));
+    fireEvent.click(screen.getByTestId('leads-select-shown'));
+    expect(screen.getByTestId('leads-selected-count').textContent).toBe(
+      'leads.selectedCount|2',
+    );
+    fireEvent.click(screen.getByTestId('leads-bulk-assign-open'));
+    const owner = await screen.findByTestId('leads-bulk-owner');
+    await waitFor(() =>
+      expect(owner.querySelectorAll('option')).toHaveLength(3),
+    );
+    fireEvent.change(owner, { target: { value: 'none' } });
+    fireEvent.click(screen.getByRole('button', { name: 'leads.bulkApply' }));
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(api)
+          .mock.calls.find(([p]) => p === '/api/v1/leads/bulk')?.[1],
+      ).toEqual({
+        method: 'POST',
+        body: {
+          action: 'assign',
+          ownerOperatorId: null,
+          leadIds: ['lead-1', 'lead-2'],
+        },
+      }),
+    );
+  });
+
+  it('viewers get no select mode', async () => {
+    state.role = 'VIEWER';
+    mount();
+    await screen.findByTestId('lead-card');
+    expect(screen.queryByTestId('leads-select-toggle')).toBeNull();
   });
 });

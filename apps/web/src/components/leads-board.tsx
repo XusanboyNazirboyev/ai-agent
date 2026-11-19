@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
@@ -10,6 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import type {
   BoardStageView,
   LeadPipelineItem,
+  LeadPipelinePage,
   PipelineView,
 } from '@/lib/types';
 import { useShell } from './app-shell';
@@ -21,6 +26,7 @@ import { SkeletonRows } from './ui/skeleton';
 import {
   NO_FILTERS,
   currentStageId,
+  filterParams,
   findCachedLead,
   readCollapsed,
   stageLabel,
@@ -32,11 +38,14 @@ import { AddLeadDialog } from './add-lead-dialog';
 import { LeadColumn } from './lead-column';
 import { useLeadMove } from './lead-move';
 import { LeadPanel } from './lead-panel';
+import { BulkAssignDialog, BulkMoveDialog } from './leads-bulk-dialogs';
 import { FilterChips, FiltersMenu } from './leads-filters';
+import { LeadsImportDialog } from './leads-import-dialog';
 import { LeadsArchive } from './leads-archive';
 import { LeadsList } from './leads-list';
 
 const MOBILE_BREAKPOINT = 768;
+const SEARCH_DEBOUNCE_MS = 300;
 
 function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(false);
@@ -93,23 +102,33 @@ export function LeadsBoard(): ReactNode {
   }, [list, urlPipeline]);
 
   const [filters, setFilters] = useState<LeadFilters>(NO_FILTERS);
-  const fromDate = filters.createdFrom;
-  const toDate = filters.createdTo;
+  // ADR 076: the search box asks the API after a pause in typing.
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    if (search === filters.q) return;
+    const timer = setTimeout(
+      () => setFilters((current) => ({ ...current, q: search })),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [search, filters.q]);
 
   const active = list.find((p) => p.id === activeId) ?? list[0];
+  const totalLeads = list.reduce((sum, p) => sum + p.leadCount, 0);
+  // The board counts with every filter, so a column says what it lists.
   const board = useQuery({
-    queryKey: ['board', active?.id, fromDate, toDate],
+    queryKey: ['board', active?.id, filters],
     enabled: !!active,
     queryFn: () => {
       const qs = new URLSearchParams();
-      if (fromDate) qs.set('from', fromDate);
-      if (toDate) qs.set('to', toDate);
+      filterParams(filters, qs);
       return api<{ stages: BoardStageView[] }>(
         `/api/v1/pipelines/${active!.id}/board?${qs.toString()}`,
       );
     },
   });
   const columns = board.data?.stages ?? [];
+  const boardTotal = columns.reduce((sum, stage) => sum + stage.count, 0);
 
   const [view, setView] = useState<'board' | 'list' | 'archive'>('board');
   const [mobileStageId, setMobileStageId] = useState<string | null>(null);
@@ -146,6 +165,27 @@ export function LeadsBoard(): ReactNode {
   const [lostReasonDraft, setLostReasonDraft] = useState('');
   const move = useLeadMove();
 
+  // ADR 076 select mode: pick leads, then change their owner or stage.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [bulk, setBulk] = useState<'move' | 'assign' | null>(null);
+  const [importing, setImporting] = useState(false);
+  function toggleSelect(id: string): void {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function stopSelecting(): void {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setBulk(null);
+  }
+
   function requestMove(item: LeadPipelineItem, toStageId: string): void {
     const from = currentStageId(item, columns);
     if (from === toStageId) return;
@@ -168,6 +208,7 @@ export function LeadsBoard(): ReactNode {
   }
 
   function choose(next: PipelineView): void {
+    setSelectedIds(new Set());
     setActiveId(next.id);
     router.replace(`/leads?view=funnel&pipeline=${next.id}`, { scroll: false });
   }
@@ -228,9 +269,25 @@ export function LeadsBoard(): ReactNode {
             aria-pressed={pipeline.id === active?.id}
             disabled={pipeline.id === active?.id}
             onClick={() => choose(pipeline)}
-            className={`${toggleClass(pipeline.id === active?.id)} max-w-[14rem] truncate`}
+            aria-label={t('leads.pipelineCount', {
+              name: pipeline.name ?? t('pipeline.defaultName'),
+              count: pipeline.leadCount,
+            })}
+            data-testid="pipeline-switch"
+            className={`${toggleClass(pipeline.id === active?.id)} inline-flex max-w-[16rem] items-center gap-1.5`}
           >
-            {pipeline.name ?? t('pipeline.defaultName')}
+            <span className="min-w-0 truncate">
+              {pipeline.name ?? t('pipeline.defaultName')}
+            </span>
+            <span
+              aria-hidden="true"
+              data-testid="pipeline-switch-count"
+              className={`shrink-0 rounded-full px-1.5 text-xs font-semibold ${
+                pipeline.id === active?.id ? 'bg-white/25' : 'bg-surface-2'
+              }`}
+            >
+              {pipeline.leadCount}
+            </span>
           </button>
         ))}
       </div>
@@ -243,6 +300,29 @@ export function LeadsBoard(): ReactNode {
     view === 'board' && isMobile
       ? columns.filter((stage) => stage.id === selectedStageId)
       : columns;
+
+  /** Selects every lead loaded in the view (open columns, or the list). */
+  function selectShown(): void {
+    const shown = new Set(
+      visibleColumns.filter((s) => !isCollapsed(s)).map((s) => s.id),
+    );
+    const wanted = JSON.stringify(filters);
+    const next = new Set(selectedIds);
+    for (const [key, data] of queryClient.getQueriesData<
+      InfiniteData<LeadPipelinePage>
+    >({ queryKey: ['leads'] })) {
+      if (!key.includes(active?.id) || JSON.stringify(key.at(-1)) !== wanted)
+        continue;
+      const fits =
+        view === 'list'
+          ? key[1] === 'list'
+          : key[1] === 'stage' && shown.has(String(key[2]));
+      if (!fits) continue;
+      for (const page of data?.pages ?? [])
+        for (const item of page.items) next.add(item.id);
+    }
+    setSelectedIds(next);
+  }
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:p-4">
@@ -288,11 +368,54 @@ export function LeadsBoard(): ReactNode {
             </button>
           ) : null}
         </div>
+        {view !== 'archive' ? (
+          <label className="relative flex min-w-0 flex-1 basis-48 items-center sm:max-w-xs">
+            <span className="sr-only">{t('leads.search')}</span>
+            <Icon
+              name="search"
+              className="pointer-events-none absolute left-3 h-4 w-4 text-muted"
+            />
+            <input
+              type="search"
+              data-testid="leads-search"
+              value={search}
+              maxLength={80}
+              placeholder={t('leads.search')}
+              onChange={(e) => setSearch(e.target.value)}
+              className={`${fieldClass} w-full pl-9`}
+            />
+          </label>
+        ) : null}
         <FiltersMenu
           filters={filters}
           onChange={setFilters}
           isMobile={isMobile}
         />
+        {canAdd && view !== 'archive' ? (
+          <Button
+            size="sm"
+            variant={selecting ? 'primary' : 'secondary'}
+            data-testid="leads-select-toggle"
+            aria-pressed={selecting}
+            onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+          >
+            {selecting ? t('leads.selectDone') : t('leads.select')}
+          </Button>
+        ) : null}
+        {pipelines.isSuccess ? (
+          <span
+            data-testid="leads-total"
+            title={t('leads.totalLabel', { count: totalLeads })}
+            className="inline-flex min-h-9 items-center rounded-lg bg-surface-2 px-3 text-sm font-medium"
+          >
+            <span aria-hidden="true">
+              {t('leads.total', { count: totalLeads })}
+            </span>
+            <span className="sr-only">
+              {t('leads.totalLabel', { count: totalLeads })}
+            </span>
+          </span>
+        ) : null}
         {canAdd ? (
           <Button
             size="sm"
@@ -303,6 +426,17 @@ export function LeadsBoard(): ReactNode {
             onClick={() => setAdding({ stageId: null })}
           >
             {t('leads.add')}
+          </Button>
+        ) : null}
+        {canExport && active ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            data-testid="leads-import"
+            className="min-w-0 max-w-full"
+            onClick={() => setImporting(true)}
+          >
+            {t('leadsImport.open')}
           </Button>
         ) : null}
         {canExport ? (
@@ -331,6 +465,61 @@ export function LeadsBoard(): ReactNode {
         ) : null}
       </div>
       <FilterChips filters={filters} onChange={setFilters} />
+      {selecting && view !== 'archive' ? (
+        <div
+          role="region"
+          aria-label={t('leads.bulkActions')}
+          data-testid="leads-bulk-bar"
+          className="sticky top-0 z-30 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-primary bg-primary-soft px-3 py-2"
+        >
+          <span
+            aria-live="polite"
+            data-testid="leads-selected-count"
+            className="text-sm font-semibold text-primary-fg"
+          >
+            {t('leads.selectedCount', { count: selectedIds.size })}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            data-testid="leads-select-shown"
+            onClick={selectShown}
+          >
+            {t('leads.selectVisible')}
+          </Button>
+          {selectedIds.size > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              {t('leads.clearSelection')}
+            </Button>
+          ) : null}
+          <div className="ml-auto flex min-w-0 flex-wrap gap-2">
+            {canExport ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                data-testid="leads-bulk-assign-open"
+                disabled={selectedIds.size === 0}
+                onClick={() => setBulk('assign')}
+              >
+                {t('leads.bulkAssign')}
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              variant="primary"
+              data-testid="leads-bulk-move-open"
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulk('move')}
+            >
+              {t('leads.bulkMove')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {board.isSuccess && columns.length > 0 && (
         <section
           aria-label={t('leads.funnelTitle')}
@@ -347,6 +536,12 @@ export function LeadsBoard(): ReactNode {
               ▾
             </span>
             {t('leads.funnelTitle')}
+            <span
+              data-testid="leads-board-total"
+              className="font-normal text-muted"
+            >
+              · {t('leads.boardCount', { count: boardTotal })}
+            </span>
           </button>
           {showFunnel ? (
             <div className="flex min-w-0 flex-wrap items-center gap-1 px-2 pb-1">
@@ -414,6 +609,9 @@ export function LeadsBoard(): ReactNode {
           stages={columns}
           filters={filters}
           onOpen={openLead}
+          selecting={selecting}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
         />
       ) : null}
       {board.isSuccess && columns.length > 0 && view === 'board' && isMobile ? (
@@ -476,6 +674,9 @@ export function LeadsBoard(): ReactNode {
               onRequestMove={requestMove}
               onAnnounce={setDragStatus}
               onAdd={canAdd ? (id) => setAdding({ stageId: id }) : undefined}
+              selecting={selecting}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
@@ -497,6 +698,31 @@ export function LeadsBoard(): ReactNode {
           stages={columns}
           stageId={adding?.stageId ?? mobileStageId}
           onClose={() => setAdding(null)}
+        />
+      ) : null}
+
+      {bulk === 'move' && active ? (
+        <BulkMoveDialog
+          leadIds={[...selectedIds]}
+          pipelines={list}
+          pipelineId={active.id}
+          onClose={() => setBulk(null)}
+          onDone={stopSelecting}
+        />
+      ) : null}
+      {bulk === 'assign' ? (
+        <BulkAssignDialog
+          leadIds={[...selectedIds]}
+          onClose={() => setBulk(null)}
+          onDone={stopSelecting}
+        />
+      ) : null}
+      {importing && active ? (
+        <LeadsImportDialog
+          open
+          pipelineId={active.id}
+          stages={columns}
+          onClose={() => setImporting(false)}
         />
       ) : null}
 

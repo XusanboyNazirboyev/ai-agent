@@ -42,6 +42,10 @@ export function LeadCard(props: {
   onRequestMove: (item: LeadPipelineItem, toStageId: string) => void;
   /** Announces a drop on the board's live region: the card may unmount. */
   onAnnounce: (message: string) => void;
+  /** ADR 076 select mode: a click toggles the card, dragging is off. */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();
@@ -57,8 +61,8 @@ export function LeadCard(props: {
   );
   const [keyboardStatus, setKeyboardStatus] = useState('');
   const drag = useCardDrag({
-    enabled: canEdit,
-    swipe: props.swipe,
+    enabled: canEdit && !props.selecting,
+    swipe: props.swipe && !props.selecting,
     index: props.stages.findIndex((s) => s.id === stageId),
     count: props.stages.length,
     onStart: () => props.onDragStart(item.id),
@@ -136,11 +140,12 @@ export function LeadCard(props: {
         {...drag.handlers}
         onClick={(event) => {
           if (drag.consumeClick()) return;
-          if ((event.target as HTMLElement).closest('button, a')) return;
-          props.onOpen(item, openRef.current);
+          if ((event.target as HTMLElement).closest('button, a, input')) return;
+          if (props.selecting) props.onToggleSelect?.(item.id);
+          else props.onOpen(item, openRef.current);
         }}
         className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border p-2.5 hover:border-primary ${drag.dragging ? 'shadow-pop' : 'transition-transform'} ${
-          pickedUp
+          pickedUp || (props.selecting && props.selected)
             ? 'border-primary bg-primary-soft ring-1 ring-primary'
             : isDraggedHere
               ? 'border-primary bg-canvas ring-2 ring-primary'
@@ -148,6 +153,16 @@ export function LeadCard(props: {
         }`}
       >
         <div className="flex min-w-0 items-center gap-1.5">
+          {props.selecting ? (
+            <input
+              type="checkbox"
+              data-testid="lead-card-select"
+              checked={props.selected ?? false}
+              onChange={() => props.onToggleSelect?.(item.id)}
+              aria-label={t('leads.selectLead', { name })}
+              className="h-5 w-5 shrink-0 accent-primary"
+            />
+          ) : null}
           <button
             ref={openRef}
             type="button"
@@ -159,7 +174,7 @@ export function LeadCard(props: {
           >
             {name}
           </button>
-          {canEdit ? (
+          {canEdit && !props.selecting ? (
             <>
               <button
                 type="button"
