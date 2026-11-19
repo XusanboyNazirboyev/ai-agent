@@ -252,10 +252,11 @@ export class AmocrmController {
     const who = this.admit(request);
     const parsed = PipelineBody.safeParse(body);
     if (!parsed.success) throw refuse('INVALID_BODY');
-    const { connector, config, pipelineId: before } = await this.load(
-      who.tenantId,
-      id,
-    );
+    const {
+      connector,
+      config,
+      pipelineId: before,
+    } = await this.load(who.tenantId, id);
     let pipelines;
     try {
       pipelines = await connector.listPipelines();
@@ -328,7 +329,8 @@ export class AmocrmController {
     return {
       connector,
       config,
-      pipelineId: typeof config.pipelineId === 'number' ? config.pipelineId : null,
+      pipelineId:
+        typeof config.pipelineId === 'number' ? config.pipelineId : null,
     };
   }
 

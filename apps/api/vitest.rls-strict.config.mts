@@ -55,6 +55,8 @@ const STRICT_SPECS = [
   'src/leads/customer-lead.integration.spec.ts',
   'src/tasks/lead-tasks.integration.spec.ts',
   'src/connectors/bitrix24/crm-stage-sync.integration.spec.ts',
+  'src/connectors/amocrm/amocrm.integration.spec.ts',
+  'src/webinbox/amocrm-connect.integration.spec.ts',
   'src/leads/lead-timeline.integration.spec.ts',
   'src/secrets/channel-secret-store.integration.spec.ts',
   'src/secrets/connector-secret-store.integration.spec.ts',
