@@ -1,102 +1,35 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
- * RLS plan S8/S8b: integration specs that run in strict mode with the code
- * under test on a NOBYPASSRLS role (`persistence/testing/test-clients.ts`).
- * A spec joins this list once its fixtures use `ownerClient()`, the code
- * under test `appClient()`, and its calls set the tenant as production does.
+ * RLS plan S8/S8b: every integration spec runs in strict mode with the code
+ * under test on a NOBYPASSRLS role (`persistence/testing/test-clients.ts`):
+ * fixtures use `ownerClient()`, the code under test `appClient()`, and calls
+ * set the tenant as production does. A new spec is covered without being
+ * listed (a hand-kept list let the sales site's plan list miss strict mode,
+ * 2026-11-20). Only these stay out, each for the reason given:
  */
-const STRICT_SPECS = [
-  'src/access/lead-limit.integration.spec.ts',
-  'src/persistence/rls-http-context.integration.spec.ts',
-  'src/signup/signup.integration.spec.ts',
-  // The sales site's plan list runs before any tenant (ADR 080).
-  'src/public/public-plans.integration.spec.ts',
-  'src/billing/click-payments.integration.spec.ts',
-  'src/billing/click-http.integration.spec.ts',
-  'src/persistence/rls-background.integration.spec.ts',
-  'src/handover/handover.integration.spec.ts',
-  'src/persons/person-identity.integration.spec.ts',
-  'src/channels/telegram/telegram-agent.integration.spec.ts',
-  'src/retention/retention.integration.spec.ts',
-  'src/pipelines/pipelines.integration.spec.ts',
-  'src/pipelines/funnel.integration.spec.ts',
-  'src/pipelines/lead-search-bulk.integration.spec.ts',
-  'src/pipelines/lead-one.integration.spec.ts',
-  'src/tasks/tasks-page.integration.spec.ts',
-  'src/persons/person-merge.integration.spec.ts',
-  'src/tags/tags.integration.spec.ts',
-  'src/handover/phase5.integration.spec.ts',
-  'src/channels/instagram/instagram-flow.integration.spec.ts',
-  'src/webinbox/inbox-last-message.integration.spec.ts',
-  'src/webinbox/canned-responses.integration.spec.ts',
-  'src/webinbox/audit-log.integration.spec.ts',
-  'src/webinbox/conversation-tags.integration.spec.ts',
-  'src/webinbox/inbox-waiting-order.integration.spec.ts',
-  'src/webinbox/today.integration.spec.ts',
-  'src/webinbox/crm-template.integration.spec.ts',
-  'src/webinbox/lead-archive.integration.spec.ts',
-  'src/webinbox/manual-lead.integration.spec.ts',
-  'src/webinbox/test-chat.integration.spec.ts',
-  'src/webinbox/suggest-reply.integration.spec.ts',
-  'src/webinbox/sheet-catalog.integration.spec.ts',
-  'src/webinbox/connector-roles.integration.spec.ts',
-  'src/webinbox/connectors.integration.spec.ts',
-  'src/webinbox/analytics.integration.spec.ts',
-  'src/webinbox/facebook-connect.integration.spec.ts',
-  'src/webinbox/telegram-connect.integration.spec.ts',
-  'src/webinbox/instagram-connect.integration.spec.ts',
-  'src/webinbox/login-limit.integration.spec.ts',
-  'src/webinbox/webinbox.integration.spec.ts',
-  'src/handover/operator-api.integration.spec.ts',
-  'src/channels/telegram/operator-group-link.integration.spec.ts',
-  'src/handover/digest.integration.spec.ts',
-  'src/handover/operator-idle-return.integration.spec.ts',
-  'src/channels/telegram/operator-webhook.integration.spec.ts',
-  'src/channels/telegram/telegram.integration.spec.ts',
-  'src/channels/facebook/facebook-flow.integration.spec.ts',
-  'src/channels/instagram/instagram-comment-flow.integration.spec.ts',
-  'src/leads/customer-lead.integration.spec.ts',
-  'src/tasks/lead-tasks.integration.spec.ts',
-  'src/connectors/bitrix24/crm-stage-sync.integration.spec.ts',
-  'src/connectors/amocrm/amocrm.integration.spec.ts',
-  'src/webinbox/amocrm-connect.integration.spec.ts',
-  'src/leads/lead-timeline.integration.spec.ts',
-  'src/secrets/channel-secret-store.integration.spec.ts',
-  'src/secrets/connector-secret-store.integration.spec.ts',
-  'src/followup/follow-up.integration.spec.ts',
-  'src/persons/people.integration.spec.ts',
-  'src/scheduling/appointment.integration.spec.ts',
-  'src/scheduling/scheduling-agent.integration.spec.ts',
-  'src/connectors/sync/stored-secrets.integration.spec.ts',
-  'src/connectors/bitrix24/bitrix24-lead-sync.integration.spec.ts',
-  'src/connectors/spreadsheet/sheet-catalog.integration.spec.ts',
-  'src/connectors/spreadsheet/sheet-agent.integration.spec.ts',
-  'src/connectors/spreadsheet/sheet-refresh.integration.spec.ts',
-  'src/connectors/sync/catalog-sync.integration.spec.ts',
-  'src/leads/lead-sync.integration.spec.ts',
-  'src/leads/lead-import.integration.spec.ts',
-  'src/knowledge/knowledge.integration.spec.ts',
-  'src/exports/export.integration.spec.ts',
-  'src/observability/alerts.integration.spec.ts',
-  'src/actions/action-eval.integration.spec.ts',
-  'src/actions/action-pipeline.integration.spec.ts',
-  'src/actions/action.integration.spec.ts',
-  'src/actions/cross-domain.integration.spec.ts',
-  'src/agent/llm-budget-ledger.integration.spec.ts',
-  'src/agent/agent.integration.spec.ts',
-  'src/agent/agent-sandbox.integration.spec.ts',
-  'src/agent/knowledge-turn.integration.spec.ts',
-  'src/agent/testing/simulation/simulation.integration.spec.ts',
-  'src/access/access-enforcement.integration.spec.ts',
-  'src/auth/mfa.integration.spec.ts',
-  'src/platform/platform-mfa-nokey.integration.spec.ts',
-  'src/platform/platform-console.integration.spec.ts',
+const NOT_STRICT = [
+  // Infrastructure: they test the RLS and persistence machinery itself.
+  'src/persistence/rls.integration.spec.ts',
+  'src/persistence/tenant-adapter.integration.spec.ts',
+  'src/persistence/persistence.integration.spec.ts',
+  'src/persistence/timestamp-offset.integration.spec.ts',
+  'src/persistence/shutdown-order.integration.spec.ts',
+  'src/app.startup.integration.spec.ts',
+  // Redis only: no database statement to scope.
+  'src/channels/instagram/instagram-oauth-state-ledger.integration.spec.ts',
+  // Dev and ops CLI scripts run as the owner by design.
+  'src/dev/dev-superadmin.integration.spec.ts',
+  'src/dev/test-account.integration.spec.ts',
+  'src/ops/demo-catalog.integration.spec.ts',
+  'src/ops/tenant-owner.integration.spec.ts',
+  'src/platform/reset-platform-admin-mfa.integration.spec.ts',
 ];
 
 export default defineConfig({
   test: {
-    include: STRICT_SPECS,
+    include: ['src/**/*.integration.spec.ts'],
+    exclude: [...configDefaults.exclude, ...NOT_STRICT],
     globalSetup: ['src/persistence/testing/rls-strict.global-setup.ts'],
     env: { TEST_RLS_STRICT: '1' },
     fileParallelism: false,
