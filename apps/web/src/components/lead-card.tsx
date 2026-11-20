@@ -6,18 +6,14 @@ import { useI18n } from '@/i18n';
 import { channelName } from '@/lib/channel-names';
 import { formatAmount } from '@/lib/currencies';
 import { LEAD_AMOUNT_ENABLED } from '@/lib/lead-fields';
+import { leadCreatedTime } from '@/lib/lead-created-time';
+import { useNow } from '@/lib/use-now';
 import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
 import { useShell } from './app-shell';
-import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Icon } from './ui/icons';
 import { useCardDrag } from './use-card-drag';
-import {
-  ageDays,
-  ageTone,
-  currentStageId,
-  stageLabel,
-} from './lead-board-utils';
+import { currentStageId, stageLabel } from './lead-board-utils';
 
 const MAX_TAG_CHIPS = 2;
 
@@ -47,8 +43,9 @@ export function LeadCard(props: {
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
 }): ReactNode {
-  const { t } = useI18n();
-  const { operator } = useShell();
+  const { t, locale } = useI18n();
+  const { operator, timeZone } = useShell();
+  const now = useNow(60_000);
   const canEdit = ['OWNER', 'ADMIN', 'OPERATOR'].includes(operator.role);
   const openRef = useRef<HTMLAnchorElement>(null);
   const { item, stages } = props;
@@ -73,7 +70,6 @@ export function LeadCard(props: {
   });
   const pickedUp = isDragging || keyboardDragging || drag.dragging;
   const name = item.contact.name ?? t('list.unnamed');
-  const terminal = props.stage.kind !== 'OPEN';
 
   function cancelKeyboardDrag(): void {
     setKeyboardDragging(false);
@@ -123,8 +119,7 @@ export function LeadCard(props: {
   }
 
   const tags = item.tags ?? [];
-  const days = ageDays(item.updatedAt);
-  const tone = ageTone(days);
+  const created = leadCreatedTime(item.createdAt, now, locale, timeZone);
   const suggested =
     item.suggestedStageId && item.suggestedStageId !== stageId
       ? stages.find((s) => s.id === item.suggestedStageId)
@@ -216,6 +211,41 @@ export function LeadCard(props: {
             {item.contact.phone}
           </p>
         ) : null}
+        {created ? (
+          <time
+            dateTime={item.createdAt}
+            title={t('leads.createdAtLabel', { date: created.full })}
+            data-testid="lead-card-created"
+            className="flex min-w-0 items-start gap-2 text-sm text-muted"
+          >
+            <Icon name="clock" className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0 break-words">
+              {t('leads.createdWhen', {
+                date:
+                  created.day === 'date'
+                    ? created.date
+                    : t(`leads.createdDay.${created.day}`),
+                time: created.time,
+                elapsed: t(`leads.createdElapsed.${created.elapsed}`, {
+                  count: created.count,
+                }),
+              })}
+            </span>
+          </time>
+        ) : null}
+        <div
+          data-testid="lead-card-owner-name"
+          title={item.owner?.displayName ?? t('opportunity.unassigned')}
+          aria-label={t('leads.ownerLabel', {
+            name: item.owner?.displayName ?? t('opportunity.unassigned'),
+          })}
+          className="flex min-w-0 items-start gap-2 text-sm text-muted"
+        >
+          <Icon name="user" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="min-w-0 break-words">
+            {item.owner?.displayName ?? t('opportunity.unassigned')}
+          </span>
+        </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
           {LEAD_AMOUNT_ENABLED && item.amount ? (
             <span
@@ -232,19 +262,6 @@ export function LeadCard(props: {
           <span data-testid="lead-card-channel" className="min-w-0 truncate">
             {channelName(item.conversation.channelType)}
           </span>
-          {item.owner ? (
-            <span
-              role="img"
-              data-testid="lead-card-owner-name"
-              title={item.owner.displayName}
-              aria-label={t('leads.ownerLabel', {
-                name: item.owner.displayName,
-              })}
-              className="ml-auto"
-            >
-              <Avatar name={item.owner.displayName} size="sm" />
-            </span>
-          ) : null}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           {tags.slice(0, MAX_TAG_CHIPS).map((tag) => (
@@ -266,20 +283,6 @@ export function LeadCard(props: {
               <Icon name="bot" className="h-3 w-3" />
               <span aria-hidden="true">{t('leads.aiChip')}</span>
               <span className="sr-only">{t('leads.stageByAI')}</span>
-            </Badge>
-          ) : null}
-          {!terminal ? (
-            <Badge
-              tone={tone}
-              dot={tone !== 'neutral'}
-              data-testid="lead-card-age"
-            >
-              <span aria-hidden="true">
-                {days === 0
-                  ? t('leads.ageToday')
-                  : t('leads.ageDays', { days })}
-              </span>
-              <span className="sr-only">{t('leads.ageLabel', { days })}</span>
             </Badge>
           ) : null}
         </div>

@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({ role: 'OPERATOR' }));
 
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
+    locale: 'en',
     t: (key: string, values?: Record<string, string | number>) =>
       values ? `${key}|${Object.values(values).join(',')}` : key,
   }),
@@ -28,8 +29,6 @@ vi.mock('./app-shell', () => ({
 }));
 
 const NOW = Date.parse('2026-11-13T12:00:00.000Z');
-const daysAgo = (n: number): string =>
-  new Date(NOW - n * 86_400_000 - 1000).toISOString();
 
 function renderCard(
   item: LeadPipelineItem,
@@ -87,7 +86,15 @@ function pointer(
 }
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+  vi.useFakeTimers({
+    toFake: [
+      'Date',
+      'setTimeout',
+      'clearTimeout',
+      'setInterval',
+      'clearInterval',
+    ],
+  });
   vi.setSystemTime(NOW);
   state.role = 'OPERATOR';
 });
@@ -144,7 +151,7 @@ describe('LeadCard', () => {
     expect(screen.queryByText(formatAmount('1234567.89', 'USD'))).toBeNull();
   });
 
-  it('shows the channel and the owner as a labelled avatar', () => {
+  it('shows the channel and the full owner name beside the person icon', () => {
     renderCard(makeLead());
     expect(screen.getByTestId('lead-card-channel').textContent).toBe(
       'Telegram',
@@ -155,7 +162,7 @@ describe('LeadCard', () => {
       'aria-label',
       'leads.ownerLabel|Grace Hopper',
     );
-    expect(owner.textContent).toBe('GH');
+    expect(owner.textContent).toBe('Grace Hopper');
   });
 
   it('shows two tags and "+N" for the rest', () => {
@@ -177,23 +184,53 @@ describe('LeadCard', () => {
     expect(screen.queryByTestId('lead-card-stage-by-ai')).toBeNull();
   });
 
-  it.each([
-    [2, 'bg-surface-2'],
-    [3, 'bg-warning-soft'],
-    [6, 'bg-warning-soft'],
-    [7, 'bg-danger-soft'],
-    [20, 'bg-danger-soft'],
-  ])('age chip at %s days uses %s and says it in text', (days, cls) => {
-    renderCard(makeLead({ updatedAt: daysAgo(days) }));
-    const chip = screen.getByTestId('lead-card-age');
-    expect(chip.className).toContain(cls);
-    expect(chip.textContent).toContain(`leads.ageDays|${days}`);
-    expect(chip.textContent).toContain(`leads.ageLabel|${days}`);
+  it('shows the creation date and clock time, not the last activity time', () => {
+    renderCard(
+      makeLead({
+        createdAt: '2026-11-12T22:00:00Z',
+        updatedAt: new Date(NOW).toISOString(),
+      }),
+    );
+    const time = screen.getByTestId('lead-card-created');
+    expect(time.tagName).toBe('TIME');
+    expect(time).toHaveAttribute('datetime', '2026-11-12T22:00:00Z');
+    expect(time.textContent).toContain('leads.createdDay.yesterday');
+    expect(time.textContent).toContain('22:00');
+    expect(time.textContent).toContain('leads.createdElapsed.hours|14');
+    expect(screen.queryByTestId('lead-card-age')).toBeNull();
   });
 
-  it('hides the age chip in WON and LOST columns', () => {
-    renderCard(makeLead({ updatedAt: daysAgo(30) }), 'stage-won');
-    expect(screen.queryByTestId('lead-card-age')).toBeNull();
+  it('updates elapsed time while the board stays open', () => {
+    renderCard(
+      makeLead({ createdAt: new Date(NOW - 59 * 60_000).toISOString() }),
+    );
+    expect(screen.getByTestId('lead-card-created').textContent).toContain(
+      'leads.createdElapsed.minutes|59',
+    );
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByTestId('lead-card-created').textContent).toContain(
+      'leads.createdElapsed.hours|1',
+    );
+  });
+
+  it.each(['stage-won', 'stage-lost'])(
+    'keeps creation time visible in %s',
+    (stage) => {
+      renderCard(makeLead(), stage);
+      expect(screen.getByTestId('lead-card-created')).toBeInTheDocument();
+    },
+  );
+
+  it('says unassigned when there is no responsible operator', () => {
+    renderCard(makeLead({ owner: null, ownerOperatorId: null }));
+    expect(screen.getByTestId('lead-card-owner-name')).toHaveTextContent(
+      'opportunity.unassigned',
+    );
+  });
+
+  it('does not render a made-up date for malformed creation data', () => {
+    renderCard(makeLead({ createdAt: 'not a date' }));
+    expect(screen.queryByTestId('lead-card-created')).toBeNull();
   });
 
   it('shows one generic "AI suggestion" chip, without a stage name, that links to the lead page', () => {

@@ -48,3 +48,29 @@ Owner feedback: the board is cluttered and not like a real CRM. Market review (P
 4. **One toolbar**: pipeline switcher, Board/List toggle, Filters popover with active-count badge and removable chips; no text search (the API has none); the funnel summary is a collapsible disclosure.
 5. **List view** with the same filters and the same panel.
 6. Stage is the only concept (decision 9): no score or status controls anywhere.
+
+
+## Amendment (2026-11-20): readable creation time and responsible operator on cards
+
+Owner supplied a reference card with name, phone, a clock row ("Yesterday, 10:17 ·
+14 hours ago") and a person row, and explicitly chose **lead creation time**, not
+last activity. This supersedes the card's activity-age chip and owner-avatar-only
+presentation in the original UI slice.
+
+- Render `createdAt` as a semantic `time`: Today/Yesterday or a localized calendar
+  date with year, 24-hour HH:mm and elapsed minutes/hours/days. Use the tenant's
+  time zone for calendar labels and the actual duration for elapsed text. Compare
+  calendar dates correctly across DST; clamp future clock skew to "just now";
+  omit malformed timestamps. Refresh elapsed text once a minute while mounted.
+- Display the complete responsible operator name beside the existing user icon;
+  show the existing unassigned label when absent. Let long names wrap. Keep
+  creation time on closed-stage cards too.
+- Retain existing channel/tag/AI metadata, select mode, card links, dragging,
+  keyboard controls and mobile swipe. Use the existing typography and tokens.
+- All new text uses en, ru and uz-Latn catalogs. No API/schema/CRM/agent changes.
+
+Verified: web tsc, formatting, changed-file lint and all 510 unit tests; 7 Chromium
+checks including the new card test in all three languages, 320 px layout and axe,
+plus the existing lead-board flows. Local desktop/mobile screenshots were opened
+and compared with the owner's reference (`design-qa.md`). All checks used the
+secrets-free source copy. Staging and native-speaker review remain unchecked.
