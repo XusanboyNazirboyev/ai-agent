@@ -116,7 +116,11 @@ describe('POST /api/v1/leads/import (ADR 077)', () => {
       where: { tenantId: w.tenantId, action: 'lead.imported' },
     });
     expect(audits).toHaveLength(2);
-    const text = JSON.stringify(audits.map((a) => a.safeInputSummary));
+    // The stage id is random and can contain "998"; only the rest must be clean.
+    const text = JSON.stringify(audits.map((a) => a.safeInputSummary)).replace(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gu,
+      '<id>',
+    );
     expect(text).not.toMatch(/Ali|Bek|998|secret/);
     expect(audits[1].safeInputSummary).toMatchObject({ rows: 7, created: 3 });
   });
