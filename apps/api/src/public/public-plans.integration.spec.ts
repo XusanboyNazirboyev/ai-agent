@@ -47,12 +47,14 @@ async function plan(
 
 describe('GET /api/v1/public/plans', () => {
   it('lists active public plans by position, public limit keys only', async () => {
+    // Below any real position: other specs leave public plans behind, and
+    // the list stops at 20 (failed in the strict run of CI 2026-11-20).
     const second = await plan(
-      { isPublic: true, isActive: true, position: 9_002 },
+      { isPublic: true, isActive: true, position: -9_001 },
       { monthlyNewLeads: 1000, maxOperators: 5 },
     );
     const first = await plan(
-      { isPublic: true, isActive: true, position: 9_001 },
+      { isPublic: true, isActive: true, position: -9_002 },
       {
         monthlyNewLeads: 500,
         maxChannelAccounts: 2,
