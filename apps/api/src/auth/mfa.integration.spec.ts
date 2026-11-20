@@ -206,6 +206,9 @@ const passwordLogin = (
 ): Promise<Result> => call('POST', api.login, { body: { email, password } });
 
 describe('tenant operator two-step sign-in', () => {
+  // The exact code the sign-in test used: recomputing it later can land on
+  // the next 30 s step, which is a fresh, valid code (CI flake 2026-11-19).
+  let usedCode = '';
   let email = '';
   let operatorId = '';
   let secret = '';
@@ -285,8 +288,9 @@ describe('tenant operator two-step sign-in', () => {
     const challenge = String(login.body.challenge);
     expect(login.body.csrfToken).toBeUndefined();
 
+    usedCode = nextCode(secret, 1);
     const done = await call('POST', TENANT.mfa, {
-      body: { challenge, code: nextCode(secret, 1) },
+      body: { challenge, code: usedCode },
     });
     expect(done.status).toBe(200);
     const session = sessionFrom(done, 'ac_session');
@@ -295,7 +299,7 @@ describe('tenant operator two-step sign-in', () => {
 
     // The challenge is single use.
     const reuse = await call('POST', TENANT.mfa, {
-      body: { challenge, code: nextCode(secret, 1) },
+      body: { challenge, code: usedCode },
     });
     expect(reuse.status).toBe(401);
     expect(reuse.body.code).toBe('MFA_CHALLENGE_INVALID');
@@ -307,7 +311,7 @@ describe('tenant operator two-step sign-in', () => {
     const replay = await call('POST', TENANT.mfa, {
       body: {
         challenge: String(login.body.challenge),
-        code: nextCode(secret, 1),
+        code: usedCode,
       },
     });
     expect(replay.status).toBe(401);
@@ -522,8 +526,9 @@ describe('platform admin forced enrolment and sign-in', () => {
     expect(login.body.mfaRequired).toBe(true);
     expect(login.cookies).toEqual([]);
     const challenge = String(login.body.challenge);
+    const used = nextCode(secret, 1);
     const done = await call('POST', PLATFORM.mfa, {
-      body: { challenge, code: nextCode(secret, 1) },
+      body: { challenge, code: used },
     });
     expect(done.status).toBe(200);
     const session = sessionFrom(done, 'ac_platform');
@@ -531,7 +536,7 @@ describe('platform admin forced enrolment and sign-in', () => {
     const replay = await call('POST', PLATFORM.mfa, {
       body: {
         challenge: String(again.body.challenge),
-        code: nextCode(secret, 1),
+        code: used,
       },
     });
     expect(replay.status).toBe(401);
