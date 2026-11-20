@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import type { ConfigService } from '@nestjs/config';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { AppEnvironment } from '../config/environment.js';
-import type { PrismaService } from '../persistence/prisma.service.js';
-import { appClient, ownerClient } from '../persistence/testing/test-clients.js';
+import type { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { ownerClient } from '../persistence/testing/test-clients.js';
 import { PublicPlansController } from './public-plans.controller.js';
 
 loadEnv({ path: resolve(process.cwd(), '../../.env'), quiet: true });
@@ -13,11 +13,10 @@ if (process.env.TEST_POSTGRES_DATABASE !== 'agentcore_test') {
   throw new Error('Public plans tests require agentcore_test');
 }
 const db = ownerClient();
-const app = appClient();
 const made: string[] = [];
 afterAll(async () => {
   await db.subscriptionPlan.deleteMany({ where: { id: { in: made } } });
-  await Promise.all([db.$disconnect(), app.$disconnect()]);
+  await db.$disconnect();
 });
 
 const config = (
@@ -71,7 +70,7 @@ describe('GET /api/v1/public/plans', () => {
       position: 9_000,
     });
     const controller = new PublicPlansController(
-      app as unknown as PrismaService,
+      { db } as unknown as PrivilegedDatabase,
       config({ PUBLIC_SALES_CONTACT_URL: 'https://t.me/example' }),
     );
     const body = await controller.plans(request);
@@ -101,7 +100,7 @@ describe('GET /api/v1/public/plans', () => {
 
   it('caches for a minute and rate limits per address', async () => {
     const controller = new PublicPlansController(
-      app as unknown as PrismaService,
+      { db } as unknown as PrivilegedDatabase,
       config(),
     );
     const first = await controller.plans(request);

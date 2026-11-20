@@ -35,6 +35,10 @@ const ALLOWED = new Map([
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],
   ['signup/signup.service.ts', 'self-serve signup creates a tenant (ADR 080)'],
+  [
+    'public/public-plans.controller.ts',
+    'sales site plan list, before any tenant',
+  ],
   ['signup/signup-cleanup.scan.ts', 'purges expired signups (platform table)'],
 
   [

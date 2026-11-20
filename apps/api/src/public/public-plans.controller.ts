@@ -2,7 +2,8 @@ import { Controller, Get, HttpException, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { planLimitsOf } from '../access/plan-limits.js';
-import { PrismaService } from '../persistence/prisma.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   loginClientAddress,
   type AddressedRequest,
@@ -42,10 +43,15 @@ export class PublicPlansController {
   private readonly limiter = new LoginRateLimiter(60);
   private cache: { at: number; body: PublicPlansResponse } | undefined;
 
+  // Plans belong to no tenant and this runs before any session (RLS plan S5).
+  private readonly prisma: PrismaClient;
+
   constructor(
-    private readonly prisma: PrismaService,
+    privileged: PrivilegedDatabase,
     private readonly config: ConfigService<AppEnvironment, true>,
-  ) {}
+  ) {
+    this.prisma = privileged.db;
+  }
 
   @Get('plans')
   async plans(@Req() request: AddressedRequest): Promise<PublicPlansResponse> {

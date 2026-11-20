@@ -10,6 +10,8 @@ const STRICT_SPECS = [
   'src/access/lead-limit.integration.spec.ts',
   'src/persistence/rls-http-context.integration.spec.ts',
   'src/signup/signup.integration.spec.ts',
+  // The sales site's plan list runs before any tenant (ADR 080).
+  'src/public/public-plans.integration.spec.ts',
   'src/billing/click-payments.integration.spec.ts',
   'src/billing/click-http.integration.spec.ts',
   'src/persistence/rls-background.integration.spec.ts',
