@@ -27,12 +27,12 @@ import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
 import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
+import { PageLoading } from './page-loading';
 import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { BrandMark } from './ui/brand';
 import { Button } from './ui/button';
 import { Icon, type IconName } from './ui/icons';
-import { SkeletonRows } from './ui/skeleton';
 import { useToast } from './ui/toast';
 
 interface ShellValue {
@@ -221,9 +221,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
 
   if (me.isPending) {
     return (
-      <div className="flex h-dvh flex-col" role="status">
-        <span className="sr-only">{t('app.loading')}</span>
-        <SkeletonRows rows={6} />
+      <div className="h-dvh">
+        <PageLoading />
       </div>
     );
   }
