@@ -23,7 +23,12 @@ services:
   api:
     logging: *logging
     image: ${IMAGE_REPO:-tezda}-api:${TAG:-local}
-    env_file: .env.production
+    env_file:
+      - .env.production
+      # RLS plan S10: the API alone runs as the app role; postgres, migrate
+      # and backups keep the owner from .env.production. Optional.
+      - path: .env.api
+        required: false
     environment:
       REDIS_URL: redis://redis:6379
       API_HOST: 0.0.0.0
