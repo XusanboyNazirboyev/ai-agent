@@ -16,20 +16,11 @@ import { EmptyState, ErrorNote, QueryState } from '../ui/error-note';
 import { fieldClass } from '../ui/fields';
 import { FormDialog } from '../ui/form-dialog';
 import { ReasonDialog } from '../ui/reason-dialog';
-import { Select } from '../ui/select';
 import { Card, Field, SubscriptionBadge } from './console-format';
 import { useConsole } from './console-shell';
+import { CustomerPlanPicker } from './customer-plan-picker';
 
 type Dialog = 'start' | 'change' | 'extend' | 'cancel' | null;
-
-function usePlans(enabled: boolean): Plan[] {
-  const plans = useQuery({
-    queryKey: ['platform', 'plans'],
-    queryFn: () => platformApi<{ plans: Plan[] }>('/api/v1/platform/plans'),
-    enabled,
-  });
-  return (plans.data?.plans ?? []).filter((plan) => plan.isActive);
-}
 
 /** Subscription card of a customer: start, change plan, extend, cancel. */
 export function SubscriptionCard(props: { tenantId: string }): ReactNode {
@@ -38,9 +29,10 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
   const queryClient = useQueryClient();
   const base = `/api/v1/platform/tenants/${props.tenantId}`;
   const [dialog, setDialog] = useState<Dialog>(null);
-  const [planId, setPlanId] = useState('');
+  // Chosen explicitly from every active plan (the plain list stops at 200).
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const planId = plan?.id ?? '';
   const [trialDays, setTrialDays] = useState('');
-  const plans = usePlans(canWrite);
 
   const query = useQuery({
     queryKey: ['platform', 'tenant', props.tenantId, 'subscription'],
@@ -75,52 +67,16 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
     if (dialog === null) {
       write.reset();
       setTrialDays('');
+      setPlan(null);
     }
-    if (dialog === 'start' || dialog === 'change')
-      setPlanId(
-        query.data?.current?.planId &&
-          plans.some((plan) => plan.id === query.data?.current?.planId)
-          ? query.data.current.planId
-          : (plans[0]?.id ?? ''),
-      );
     // Only when a dialog opens or closes.
   }, [dialog]);
-
-  useEffect(() => {
-    // Plans may arrive after the dialog opened.
-    if ((dialog === 'start' || dialog === 'change') && !planId && plans[0])
-      setPlanId(plans[0].id);
-  }, [dialog, planId, plans]);
 
   const current = query.data?.current ?? null;
   const trial = trialDays === '' ? undefined : Number(trialDays);
   const trialValid =
     trial === undefined ||
     (Number.isInteger(trial) && trial >= 1 && trial <= 365);
-  const chosen = plans.find((plan) => plan.id === planId);
-
-  function planSelect(): ReactNode {
-    return (
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        {t('console.field.plan')}
-        <Select
-          data-testid="subscription-plan"
-          value={planId}
-          onChange={(e) => setPlanId(e.target.value)}
-        >
-          {plans.map((plan) => (
-            <option key={plan.id} value={plan.id}>
-              {t('console.planOption', {
-                name: plan.name,
-                price: formatMoney(plan.priceMinor, plan.currency, locale),
-                days: plan.periodDays,
-              })}
-            </option>
-          ))}
-        </Select>
-      </label>
-    );
-  }
 
   return (
     <Card
@@ -266,13 +222,9 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
               </>
             }
           >
-            {plans.length === 0 ? (
-              <p className="text-sm text-muted">
-                {t('console.subscription.noPlans')}
-              </p>
-            ) : (
-              planSelect()
-            )}
+            {dialog === 'start' || dialog === 'change' ? (
+              <CustomerPlanPicker value={plan} onChange={setPlan} />
+            ) : null}
             {dialog === 'start' ? (
               <label className="flex flex-col gap-1.5 text-sm font-medium">
                 {t('console.field.trialDays')}
@@ -292,10 +244,10 @@ export function SubscriptionCard(props: { tenantId: string }): ReactNode {
                 </span>
               </label>
             ) : null}
-            {chosen && dialog === 'start' && !trial ? (
+            {plan && dialog === 'start' && !trial ? (
               <p className="text-sm text-muted">
                 {t('console.subscription.startsFor', {
-                  days: chosen.periodDays,
+                  days: plan.periodDays,
                 })}
               </p>
             ) : null}

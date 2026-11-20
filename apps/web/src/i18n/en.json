@@ -1115,7 +1115,6 @@
   "console.subscription.cancel": "Cancel subscription",
   "console.subscription.cancelTitle": "Cancel the subscription?",
   "console.subscription.cancelBody": "The assistant stops answering right away; the team can still sign in and answer customers by hand.",
-  "console.subscription.noPlans": "There is no active plan. Create one on the Plans page first.",
   "console.subscription.history": "History ({count})",
   "console.subscription.period": "{start} – {end}",
   "console.payments.title": "Payments",

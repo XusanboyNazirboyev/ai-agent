@@ -1115,7 +1115,6 @@
   "console.subscription.cancel": "Obunani bekor qilish",
   "console.subscription.cancelTitle": "Obuna bekor qilinsinmi?",
   "console.subscription.cancelBody": "Yordamchi darhol javob berishni to‘xtatadi; xodimlar baribir kirib, mijozlarga o‘zlari javob bera oladi.",
-  "console.subscription.noPlans": "Faol tarif yo‘q. Avval «Tariflar» sahifasida tarif yarating.",
   "console.subscription.history": "Tarix ({count})",
   "console.subscription.period": "{start} – {end}",
   "console.payments.title": "To‘lovlar",

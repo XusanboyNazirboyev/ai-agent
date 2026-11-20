@@ -1115,7 +1115,6 @@
   "console.subscription.cancel": "Отменить подписку",
   "console.subscription.cancelTitle": "Отменить подписку?",
   "console.subscription.cancelBody": "Ассистент сразу перестанет отвечать; сотрудники по-прежнему смогут входить и отвечать клиентам вручную.",
-  "console.subscription.noPlans": "Нет активных тарифов. Сначала создайте тариф на странице «Тарифы».",
   "console.subscription.history": "История ({count})",
   "console.subscription.period": "{start} – {end}",
   "console.payments.title": "Платежи",
