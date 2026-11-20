@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
@@ -10,6 +10,7 @@ import type { BoardStageView, LeadPipelineItem } from '@/lib/types';
 import { useShell } from './app-shell';
 import { ConversationViewPane } from './conversation-view';
 import { LeadAiBlock } from './lead-ai-block';
+import { findCachedLead, NO_FILTERS } from './lead-board-utils';
 import { LeadArchiveButton } from './lead-archive-button';
 import { LeadMainInfo } from './lead-main-info';
 import { LeadNotes } from './lead-notes';
@@ -30,13 +31,18 @@ const TABS: Tab[] = ['chat', 'notes', 'tasks', 'history'];
 /** One lead on its own page: the CRM card on the left, work on the right. */
 export function LeadPage(props: { leadId: string }): ReactNode {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const lead = useQuery({
     queryKey: ['leads', 'one', props.leadId],
+    // A board/list item has the same shape. Mount its card and chat queries
+    // immediately, while still reading the authoritative lead in parallel.
+    placeholderData: () => findCachedLead(queryClient, props.leadId),
     queryFn: () => api<LeadPipelineItem>(`/api/v1/leads/${props.leadId}`),
   });
   const pipelineId = lead.data?.pipelineId;
   const board = useQuery({
-    queryKey: ['board', pipelineId, 'lead-page'],
+    // Share only the unfiltered board cache; filtered counts are not reusable.
+    queryKey: ['board', pipelineId, NO_FILTERS],
     enabled: !!pipelineId,
     queryFn: () =>
       api<{ stages: BoardStageView[] }>(

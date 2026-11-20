@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -11,6 +12,7 @@ import { api } from '@/lib/api';
 import { STAGES, makeLead } from '@/test-fixtures/leads';
 import type { LeadPipelineItem } from '@/lib/types';
 import { LeadPage } from './lead-page';
+import { NO_FILTERS } from './lead-board-utils';
 
 const state = vi.hoisted(() => ({
   role: 'OWNER',
@@ -88,12 +90,13 @@ function show(lead: LeadPipelineItem) {
       });
     return Promise.resolve({ items: [], operators: [] });
   });
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  return renderPage(lead.id);
+}
+
+function renderPage(leadId: string, client = navigationClient()) {
   return render(
     <QueryClientProvider client={client}>
-      <LeadPage leadId={lead.id} />
+      <LeadPage leadId={leadId} />
     </QueryClientProvider>,
   );
 }
@@ -247,5 +250,134 @@ describe('LeadPage', () => {
         body: { stageId: 'stage-qual' },
       }),
     );
+  });
+});
+
+/** Match the production query cache, including the five-second freshness window. */
+function navigationClient() {
+  return new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 5_000 } },
+  });
+}
+
+function cacheList(client: QueryClient, lead: LeadPipelineItem) {
+  client.setQueryData(
+    ['leads', 'stage', lead.pipelineStageId, lead.pipelineId, NO_FILTERS],
+    {
+      pages: [{ items: [lead], nextCursor: null }],
+      pageParams: [''],
+    },
+  );
+}
+
+function navigationApi(lead: Promise<LeadPipelineItem>) {
+  vi.mocked(api).mockImplementation((url: string) => {
+    if (url === '/api/v1/leads/lead-1') return lead;
+    if (url.includes('/board')) return Promise.resolve({ stages: STAGES });
+    return Promise.resolve({ items: [], operators: [] });
+  });
+}
+
+describe('LeadPage navigation cache', () => {
+  it('starts the card queries alongside a fresh lead read using the matching cached list item', async () => {
+    const lead = withField();
+    const client = navigationClient();
+    cacheList(client, lead);
+    let resolveLead!: (value: LeadPipelineItem) => void;
+    navigationApi(
+      new Promise((resolve) => {
+        resolveLead = resolve;
+      }),
+    );
+    renderPage(lead.id, client);
+
+    await screen.findByTestId('lead-page');
+    expect(api).toHaveBeenCalledWith(`/api/v1/leads/${lead.id}`);
+    expect(api).toHaveBeenCalledWith('/api/v1/custom-fields?entity=LEAD');
+    expect(api).toHaveBeenCalledWith('/api/v1/team');
+    expect(screen.getByTestId('stub-chat')).toBeTruthy();
+    // A list item is only a placeholder: the authoritative read is still pending.
+    expect(client.getQueryData(['leads', 'one', lead.id])).toBeUndefined();
+    await act(async () =>
+      resolveLead({
+        ...lead,
+        contact: { ...lead.contact, name: 'Fresh name' },
+      }),
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Fresh name' }),
+    ).toBeTruthy();
+    expect(
+      vi.mocked(api).mock.calls.filter(([url]) => url === '/api/v1/team'),
+    ).toHaveLength(1);
+    expect(
+      vi
+        .mocked(api)
+        .mock.calls.filter(
+          ([url]) => url === '/api/v1/custom-fields?entity=LEAD',
+        ),
+    ).toHaveLength(1);
+  });
+
+  it('reuses a fresh unfiltered board, without a duplicate request on the lead page', async () => {
+    const lead = withField();
+    const client = navigationClient();
+    client.setQueryData(['board', lead.pipelineId, NO_FILTERS], {
+      stages: STAGES,
+    });
+    navigationApi(Promise.resolve(lead));
+    renderPage(lead.id, client);
+    await screen.findByTestId('lead-panel-stage-QUALIFIED');
+    expect(
+      vi.mocked(api).mock.calls.filter(([url]) => url.includes('/board')),
+    ).toHaveLength(0);
+  });
+
+  it('does not reuse a filtered board as the complete stage list', async () => {
+    const lead = withField();
+    const client = navigationClient();
+    client.setQueryData(
+      ['board', lead.pipelineId, { ...NO_FILTERS, q: 'different' }],
+      { stages: [] },
+    );
+    navigationApi(Promise.resolve(lead));
+    renderPage(lead.id, client);
+    await screen.findByTestId('lead-panel-stage-QUALIFIED');
+    expect(
+      vi.mocked(api).mock.calls.filter(([url]) => url.includes('/board')),
+    ).toHaveLength(1);
+  });
+
+  it('waits for an uncached lead and never shows a different cached lead', async () => {
+    const client = navigationClient();
+    cacheList(client, withField({ id: 'another-lead' }));
+    let resolveLead!: (value: LeadPipelineItem) => void;
+    navigationApi(
+      new Promise((resolve) => {
+        resolveLead = resolve;
+      }),
+    );
+    renderPage('lead-1', client);
+    expect(screen.queryByTestId('lead-page')).toBeNull();
+    expect(screen.getByRole('status')).toBeTruthy();
+    await act(async () => resolveLead(withField()));
+    expect(await screen.findByTestId('lead-page')).toBeTruthy();
+  });
+
+  it('removes the cached card when the fresh read rejects access or a missing lead', async () => {
+    const lead = withField();
+    const client = navigationClient();
+    cacheList(client, lead);
+    let rejectLead!: (reason: Error) => void;
+    navigationApi(
+      new Promise((_resolve, reject) => {
+        rejectLead = reject;
+      }),
+    );
+    renderPage(lead.id, client);
+    await screen.findByTestId('lead-page');
+    await act(async () => rejectLead(new Error('not found')));
+    expect(await screen.findByTestId('lead-page-error')).toBeTruthy();
+    expect(screen.queryByTestId('lead-page')).toBeNull();
   });
 });

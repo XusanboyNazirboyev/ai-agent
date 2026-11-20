@@ -19,3 +19,53 @@ Status: accepted (2026-11-19). Owner report: "pagelarga o'tishda qotib qolyabdi"
 
 ## Verified
 `e2e/navigation-feedback.spec.ts` (menu click and opening a lead with a 3 s server delay: address changes and the skeleton shows within 1 s) failed before the change and passes after it.
+
+
+## Amendment — lead navigation request waterfalls (2026-11-20)
+
+Measured before changing code, against `c677793` in a secrets-free copy of the
+worktree: production Next.js build, Chromium, local PostgreSQL/Redis and seeded
+fictional tenants, OWNER session, desktop viewport, `/today` → `/leads` → a lead.
+Every GET received 250 ms of added browser-route delay (excluding SSE). Network
+request/finished events were captured; no staging account or real provider was used.
+
+`/leads` requests: team, tags and pipelines in parallel; then
+`/api/v1/pipelines/:pipelineId/board`; then seven parallel
+`/api/v1/leads?pipelineId=…&stageId=…&limit=25` requests. These dependencies supply
+the pipeline/stage IDs; no duplicate request within that navigation was observed.
+No board implementation change is included.
+
+Lead-page timings below are relative to the first API request for that navigation:
+
+| Request | Before start–finish (ms) | After start–finish (ms) |
+| --- | --- | --- |
+| `/api/v1/leads/:id` | 0–263 | 4–321 |
+| `/api/v1/custom-fields?entity=LEAD` | 302–560 | 0–318 |
+| `/api/v1/canned-responses` | 303–562 | 1–315 |
+| `/api/v1/inbox/conversations/:id` | 304–582 | 4–334 |
+| `/api/v1/pipelines/:pipelineId/board` | 304–570 | reused from cache |
+
+Lead-page API span: **582 → 334 ms**; GET count: **5 → 4**. The board request was
+a duplicate of the unfiltered board fetched just before navigation. Team data was
+already fresh in the shared cache. `/leads` API span was 859 → 936 ms (11 GETs in
+both samples); this path was not optimized. These are individual controlled
+samples, not staging timings or a claim about total click-to-render latency.
+
+Decision: use the matching cached board/list lead as TanStack `placeholderData`.
+It mounts the card/chat immediately and starts their requests alongside the
+mandatory fresh lead read; it does not seed the authoritative detail cache or skip
+its read. A failed read replaces the placeholder with the error screen. Uncached
+links retain their loading state. Share the existing unfiltered board query key
+(`NO_FILTERS`), never a filtered board; normal freshness/invalidation still applies.
+No wider cache lifetime, API contract, tenant boundary or UI text changes.
+
+Verification: five regression tests cover parallel start, one request per shared
+lookup, fresh detail replacement, no placeholder from another lead, error removal,
+unfiltered board reuse and filtered-board separation. Three tests fail against the
+old implementation; all pass after. Web tsc, 494 unit tests and format pass; API
+build and five Playwright checks (navigation feedback, lead-page UX and the temporary
+network measurement harness) pass. Tests ran in the secrets-free source copy because
+the normal e2e setup reads the root `.env` automatically.
+
+Owner-reported staging observations remain unverified here: about 170 MB of swap,
+and about 4 s for the first request after idle. No server tuning or release performed.
