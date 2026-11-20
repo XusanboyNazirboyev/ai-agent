@@ -1068,6 +1068,8 @@
   "console.tenants.empty": "Клиентов пока нет. Создайте первого кнопкой «Новый клиент».",
   "console.tenants.emptyFiltered": "Под этот поиск не подходит ни один клиент.",
   "console.newCustomer.button": "Новый клиент",
+  "console.newCustomer.planSearch": "Поиск активных тарифов по названию или коду",
+  "console.newCustomer.noMatchingPlans": "Активные тарифы не найдены.",
   "console.newCustomer.title": "Новый клиент",
   "console.newCustomer.intro": "Создаёт рабочее пространство и приглашение для владельца. Владелец сам задаёт пароль; вы его не увидите.",
   "console.newCustomer.submit": "Создать и пригласить",

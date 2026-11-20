@@ -1451,3 +1451,161 @@ describe('platform overview', () => {
     ).toBe(401);
   });
 });
+
+describe('available plans for customer creation', () => {
+  it('searches all active plans and pages newest first past 200 with stable timestamp ties', async () => {
+    const session = await platformLogin(OWNER_EMAIL);
+    const prefix = `choices-${randomUUID().slice(0, 8)}`;
+    const rows = Array.from({ length: 205 }, (_, index) => ({
+      id: randomUUID(),
+      code: `${prefix}-${index}`,
+      name: `${prefix} Plan ${index}`,
+      priceMinor: 100n,
+      currency: 'UZS',
+      periodDays: 30,
+      isActive: true,
+      createdAt: new Date(
+        index === 204 ? '2026-01-02T00:00:00Z' : '2026-01-01T00:00:00Z',
+      ),
+    }));
+    await db.subscriptionPlan.createMany({
+      data: [
+        ...rows,
+        {
+          ...rows[204]!,
+          id: randomUUID(),
+          code: `${prefix}-inactive`,
+          isActive: false,
+          createdAt: new Date('2026-01-03T00:00:00Z'),
+        },
+      ],
+    });
+    // PostgreSQL stores microseconds that a JS Date cannot represent.
+    await db.$executeRaw`UPDATE subscription_plans SET created_at = created_at + interval '123 microseconds' WHERE code LIKE ${`${prefix}-%`}`;
+    const expected = [...rows]
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          b.id.localeCompare(a.id),
+      )
+      .map((row) => row.id);
+    const first = await call(
+      'GET',
+      `/api/v1/platform/plans/available?q=${prefix.toUpperCase()}`,
+      { session },
+    );
+    expect(first.status).toBe(200);
+    const firstPlans = first.body.plans as { id: string; isActive: boolean }[];
+    expect(firstPlans).toHaveLength(25);
+    expect(firstPlans.map((plan) => plan.id)).toEqual(expected.slice(0, 25));
+    const seen = firstPlans.map((plan) => plan.id);
+    let cursor = first.body.nextCursor as string | null;
+    // A new top item and a deactivated boundary must not shift later pages.
+    await db.subscriptionPlan.create({
+      data: {
+        ...rows[204]!,
+        id: randomUUID(),
+        code: `${prefix}-inserted`,
+        createdAt: new Date('2026-01-04T00:00:00Z'),
+      },
+    });
+    await db.subscriptionPlan.update({
+      where: { id: seen.at(-1)! },
+      data: { isActive: false },
+    });
+    for (let page = 0; cursor && page < 10; page += 1) {
+      const result = await call(
+        'GET',
+        `/api/v1/platform/plans/available?q=${prefix}&limit=40&cursor=${encodeURIComponent(cursor)}`,
+        { session },
+      );
+      expect(result.status).toBe(200);
+      const plans = result.body.plans as { id: string; isActive: boolean }[];
+      expect(plans.length).toBeLessThanOrEqual(40);
+      expect(plans.every((plan) => plan.isActive)).toBe(true);
+      seen.push(...plans.map((plan) => plan.id));
+      cursor = result.body.nextCursor as string | null;
+    }
+    expect(cursor).toBeNull();
+    expect(seen).toEqual(expected);
+    expect(new Set(seen).size).toBe(205);
+    const byCode = await call(
+      'GET',
+      `/api/v1/platform/plans/available?q=${rows[0]!.code.toUpperCase()}`,
+      { session },
+    );
+    expect(
+      (byCode.body.plans as { id: string }[]).map((plan) => plan.id),
+    ).toContain(rows[0]!.id);
+    const newest = await call(
+      'GET',
+      `/api/v1/platform/plans/available?q=${prefix}&limit=1`,
+      { session },
+    );
+    expect((newest.body.plans as { code: string }[])[0]?.code).toBe(
+      `${prefix}-inserted`,
+    );
+  });
+
+  it('matches names and literal wildcard characters, and returns an empty final page', async () => {
+    const session = await platformLogin(SUPPORT_EMAIL);
+    const prefix = `literal-${randomUUID().slice(0, 8)}`;
+    await db.subscriptionPlan.createMany({
+      data: [
+        {
+          code: `${prefix}-one`,
+          name: `${prefix}%_ Choice`,
+          priceMinor: 100n,
+          periodDays: 30,
+        },
+        {
+          code: `${prefix}-two`,
+          name: `${prefix}XY Choice`,
+          priceMinor: 100n,
+          periodDays: 30,
+        },
+      ],
+    });
+    const found = await call(
+      'GET',
+      `/api/v1/platform/plans/available?q=${encodeURIComponent(`${prefix.toUpperCase()}%_`)}`,
+      { session },
+    );
+    expect(found.status).toBe(200);
+    expect(
+      (found.body.plans as { code: string }[]).map((plan) => plan.code),
+    ).toEqual([`${prefix}-one`]);
+    expect(found.body.nextCursor).toBeNull();
+    const empty = await call(
+      'GET',
+      `/api/v1/platform/plans/available?q=absent-${prefix}`,
+      { session },
+    );
+    expect(empty.body).toEqual({ plans: [], nextCursor: null });
+  });
+
+  it('requires a platform session and rejects invalid search, page size and cursor values', async () => {
+    expect((await call('GET', '/api/v1/platform/plans/available')).status).toBe(
+      401,
+    );
+    const session = await platformLogin(OWNER_EMAIL);
+    for (const query of [
+      'limit=0',
+      'limit=101',
+      'limit=1.5',
+      `q=${'a'.repeat(201)}`,
+      'cursor=broken',
+      'cursor=e30',
+      'q=a&q=b',
+    ]) {
+      expect(
+        (
+          await call('GET', `/api/v1/platform/plans/available?${query}`, {
+            session,
+          })
+        ).status,
+        query,
+      ).toBe(400);
+    }
+  });
+});

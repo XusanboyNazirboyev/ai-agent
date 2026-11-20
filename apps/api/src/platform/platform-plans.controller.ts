@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Req,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { z } from 'zod';
@@ -27,6 +28,11 @@ import {
   type PlatformRequest,
 } from './platform-session.guard.js';
 
+const AvailablePlansQuery = z.object({
+  q: z.string().trim().max(200).default(''),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  cursor: z.uuid().optional(),
+});
 const Limits = z
   .object({
     maxOperators: z.number().int().min(0).max(10_000).optional(),
@@ -114,6 +120,50 @@ export class PlatformPlansController {
       take: 200,
     });
     return { plans: plans.map(view) };
+  }
+
+  /** Active choices for a new customer, independent of the legacy console list cap. */
+  @Get('available')
+  async available(@Query() query: unknown): Promise<{
+    plans: PlanView[];
+    nextCursor: string | null;
+  }> {
+    const input = parseBody(AvailablePlansQuery, query ?? {});
+    // Prisma contains uses LIKE: treat user-entered wildcards as literal text.
+    const search = input.q.replace(/[\\%_]/gu, '\\$&');
+    const rows = await this.prisma.subscriptionPlan.findMany({
+      where: {
+        isActive: true,
+        // Exclude the anchor by ID, not skip: 1: it may have been deactivated.
+        ...(input.cursor ? { id: { not: input.cursor } } : {}),
+        AND: [
+          ...(search
+            ? [
+                {
+                  OR: [
+                    {
+                      name: { contains: search, mode: 'insensitive' as const },
+                    },
+                    {
+                      code: { contains: search, mode: 'insensitive' as const },
+                    },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      // Resolve the timestamp in PostgreSQL: JS Dates lose its microseconds.
+      ...(input.cursor ? { cursor: { id: input.cursor } } : {}),
+      take: input.limit + 1,
+    });
+    const plans = rows.slice(0, input.limit);
+    const last = plans.at(-1);
+    return {
+      plans: plans.map(view),
+      nextCursor: rows.length > input.limit && last ? last.id : null,
+    };
   }
 
   @Post()

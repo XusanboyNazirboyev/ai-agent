@@ -1068,6 +1068,8 @@
   "console.tenants.empty": "Hozircha mijozlar yo‘q. Birinchisini «Yangi mijoz» tugmasi bilan yarating.",
   "console.tenants.emptyFiltered": "Bu qidiruvga mos mijoz topilmadi.",
   "console.newCustomer.button": "Yangi mijoz",
+  "console.newCustomer.planSearch": "Faol tariflarni nomi yoki kodi bo‘yicha qidirish",
+  "console.newCustomer.noMatchingPlans": "Mos faol tarif topilmadi.",
   "console.newCustomer.title": "Yangi mijoz",
   "console.newCustomer.intro": "Ish maydoni va uning egasi uchun taklifnoma yaratiladi. Egasi parolni o‘zi o‘rnatadi; siz uni ko‘rmaysiz.",
   "console.newCustomer.submit": "Yaratish va taklif qilish",

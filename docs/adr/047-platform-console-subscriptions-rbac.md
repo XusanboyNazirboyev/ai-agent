@@ -118,3 +118,40 @@ Not done: payments by the Click adapter are counted when they are PAID but were 
 - **Defect (staging 2026-11-19, owner):** deleting an archived tenant answered 500: `audit_events` is append-only (trigger `reject_audit_event_mutation`, phase 1), and every real tenant has audit rows; the erasure's `DELETE FROM audit_events` raised 55000 and the transaction rolled back (nothing was deleted; the tenant had no Telegram bots, so no webhook was touched). The integration test had passed because its tenant had no audit rows.
 - **Fix:** migration `20261129120000_audit_events_tenant_erasure` replaces the trigger function: a DELETE passes only for rows whose `tenant_id` equals the transaction-local setting `agentcore.erasing_tenant`, which `eraseTenantData` sets for the tenant it erases; any UPDATE and any other DELETE are still refused. The platform audit log keeps the deletion record as before.
 - **Checked:** the delete test now seeds an audit row and proves, before the delete, that a plain delete, a delete under another tenant's erasure setting and an update are refused; after the delete the tenant's audit rows are gone and another tenant's are unchanged (normal and strict runs).
+
+
+## Amendment (2026-11-20): searchable active plans when creating a customer
+
+Owner approved active plans, newest first, with server search and pagination.
+The old dialog filtered the first 200 plans returned by the general console list;
+its oldest-first order could hide a newly created plan.
+
+- Add `GET /api/v1/platform/plans/available` under the existing platform-session
+  guard. Parameters: `q` (trimmed, max 200, case-insensitive literal name/code
+  match), `limit` (default 25, max 100), UUID `cursor`. Return `plans` and
+  `nextCursor`; offer active public and private plans, ordered by `createdAt DESC,
+  id DESC`. Prices still come from stored plan rows, never UI defaults.
+- Use the row ID as the cursor so PostgreSQL compares its full timestamp precision.
+  Exclude the anchor ID instead of using `skip: 1`: deactivating the last item of
+  the previous page must not skip the next eligible item. Plans are not deleted.
+  A new plan inserted ahead of the cursor does not shift later pages.
+- The new-customer dialog debounces search by 300 ms and loads further pages on
+  request. Preserve the selected plan across searches, including no matching
+  results. Show loading, empty and retry states. Keep the optional no-plan choice.
+  Customer creation still validates the selected plan on the server.
+- No changes to the general plan-management list, tenant billing, schema or pricing.
+  The privileged read is documented in the existing ALLOWED entry. UI text is in
+  en, ru and uz-Latn; native-speaker review remains open.
+
+Verified in a source copy without `.env`: API/web tsc, formatting and changed-file
+lint; 498 web unit tests; 22 API/privileged tests; 18 strict-RLS platform tests; API
+build; new Playwright flow with 28 plans (one inactive), pagination, search,
+selection preservation and actual customer creation. API tests traverse 205 active
+plans with tied timestamps and PostgreSQL microseconds, concurrent insertion and
+cursor-plan deactivation; they cover case-insensitive name/code search, literal
+wildcards, empty results, session guards and invalid query inputs.
+
+The broader `platform-console.spec.ts` run passed five tests; its customer lifecycle
+reached the audit check and failed because the newest event was `payment.recorded`,
+not the asserted `tenant.updated` (line 248). Plan selection/customer creation passed.
+That audit-order assertion was not changed. No live staging verification or release.

@@ -1068,6 +1068,8 @@
   "console.tenants.empty": "No customers yet. Create the first one with “New customer”.",
   "console.tenants.emptyFiltered": "No customer matches this search.",
   "console.newCustomer.button": "New customer",
+  "console.newCustomer.planSearch": "Search active plans by name or code",
+  "console.newCustomer.noMatchingPlans": "No active plans match your search.",
   "console.newCustomer.title": "New customer",
   "console.newCustomer.intro": "Creates the workspace and an invitation for its owner. The owner sets their own password; you never see it.",
   "console.newCustomer.submit": "Create and invite",

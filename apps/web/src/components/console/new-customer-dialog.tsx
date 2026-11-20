@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
-import { formatMoney } from '@/lib/money';
 import type { Plan, TenantOptions } from '@/lib/platform-types';
 import type { CreatedInvite } from '@/lib/types';
+import { CustomerPlanPicker } from './customer-plan-picker';
 import { InviteLinkBox } from '../invite-link-box';
 import { Button, buttonClass } from '../ui/button';
 import { ErrorNote } from '../ui/error-note';
@@ -51,7 +51,7 @@ export function NewCustomerDialog(props: {
   open: boolean;
   onClose: () => void;
 }): ReactNode {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const localeName = useLocaleName();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -61,7 +61,8 @@ export function NewCustomerDialog(props: {
   const [pack, setPack] = useState('');
   const [language, setLanguage] = useState('');
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
-  const [planId, setPlanId] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const planId = selectedPlan?.id ?? '';
   const [trialDays, setTrialDays] = useState('');
   const [invalid, setInvalid] = useState(false);
 
@@ -69,11 +70,6 @@ export function NewCustomerDialog(props: {
     queryKey: ['platform', 'tenant-options'],
     queryFn: () =>
       platformApi<TenantOptions>('/api/v1/platform/tenants/options'),
-    enabled: props.open,
-  });
-  const plans = useQuery({
-    queryKey: ['platform', 'plans'],
-    queryFn: () => platformApi<{ plans: Plan[] }>('/api/v1/platform/plans'),
     enabled: props.open,
   });
   const create = useMutation({
@@ -103,7 +99,7 @@ export function NewCustomerDialog(props: {
     setSlug('');
     setSlugTouched(false);
     setEmail('');
-    setPlanId('');
+    setSelectedPlan(null);
     setTrialDays('');
     setTimezone(DEFAULT_TIMEZONE);
     setInvalid(false);
@@ -138,7 +134,6 @@ export function NewCustomerDialog(props: {
     if (!create.isPending) create.mutate();
   }
 
-  const activePlans = (plans.data?.plans ?? []).filter((plan) => plan.isActive);
   const done = create.data;
 
   return (
@@ -277,25 +272,12 @@ export function NewCustomerDialog(props: {
               className={fieldClass}
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            {t('console.field.plan')}
-            <Select
-              data-testid="customer-plan"
-              value={planId}
-              onChange={(e) => setPlanId(e.target.value)}
-            >
-              <option value="">{t('console.field.noPlan')}</option>
-              {activePlans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {t('console.planOption', {
-                    name: plan.name,
-                    price: formatMoney(plan.priceMinor, plan.currency, locale),
-                    days: plan.periodDays,
-                  })}
-                </option>
-              ))}
-            </Select>
-          </label>
+          {props.open ? (
+            <CustomerPlanPicker
+              value={selectedPlan}
+              onChange={setSelectedPlan}
+            />
+          ) : null}
           {planId ? (
             <label className="flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
               {t('console.field.trialDays')}
