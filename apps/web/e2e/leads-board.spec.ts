@@ -41,27 +41,34 @@ async function resetLead(
   );
 }
 
-/** The stage a conversation's lead sits in now (null = first column). */
+/**
+ * The stage a conversation's lead sits in now (null = first column), or with
+ * `first` its pipeline's first stage.
+ */
 async function stageOf(
   page: Page,
   conversationId: string,
+  first = false,
 ): Promise<string | null> {
-  return page.evaluate(async (id) => {
-    const listed = (await (await fetch('/api/v1/leads?limit=50')).json()) as {
-      items: {
-        pipelineStageId: string | null;
-        pipelineId: string;
-        conversation: { id: string };
-      }[];
-    };
-    const lead = listed.items.find((item) => item.conversation.id === id);
-    if (!lead) return null;
-    if (lead.pipelineStageId) return lead.pipelineStageId;
-    const board = (await (
-      await fetch(`/api/v1/pipelines/${lead.pipelineId}/board`)
-    ).json()) as { stages: { id: string }[] };
-    return board.stages[0]?.id ?? null;
-  }, conversationId);
+  return page.evaluate(
+    async ({ id, first }) => {
+      const listed = (await (await fetch('/api/v1/leads?limit=50')).json()) as {
+        items: {
+          pipelineStageId: string | null;
+          pipelineId: string;
+          conversation: { id: string };
+        }[];
+      };
+      const lead = listed.items.find((item) => item.conversation.id === id);
+      if (!lead) return null;
+      if (lead.pipelineStageId && !first) return lead.pipelineStageId;
+      const board = (await (
+        await fetch(`/api/v1/pipelines/${lead.pipelineId}/board`)
+      ).json()) as { stages: { id: string }[] };
+      return board.stages[0]?.id ?? null;
+    },
+    { id: conversationId, first },
+  );
 }
 
 /** One lead card, found by the customer's name. */
@@ -287,6 +294,14 @@ test('on a phone a lead card is swiped to the next stage', async ({
   try {
     await page.goto('/leads?view=funnel');
     originalStageId = await stageOf(page, conversationId);
+    // The tests share this lead; start it in the first stage whatever an
+    // earlier test left (CI 2026-11-20 found it in Contacted).
+    await resetLead(
+      page,
+      conversationId,
+      await stageOf(page, conversationId, true),
+    );
+    await page.reload();
     const tabs = page.getByTestId('leads-stage-tabs');
     await expect(tabs).toBeVisible();
     await tabs.getByTestId('leads-stage-tab').first().click();
