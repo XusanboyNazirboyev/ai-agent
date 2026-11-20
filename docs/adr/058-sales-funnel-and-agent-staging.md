@@ -72,5 +72,6 @@ presentation in the original UI slice.
 Verified: web tsc, formatting, changed-file lint and all 510 unit tests; 7 Chromium
 checks including the new card test in all three languages, 320 px layout and axe,
 plus the existing lead-board flows. Local desktop/mobile screenshots were opened
-and compared with the owner's reference (`design-qa.md`). All checks used the
+and compared with the owner's reference (screenshots from
+`e2e/lead-card-details.spec.ts`, not kept). All checks used the
 secrets-free source copy. Staging and native-speaker review remain unchecked.
