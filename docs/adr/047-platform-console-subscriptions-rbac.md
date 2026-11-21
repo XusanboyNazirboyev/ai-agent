@@ -106,6 +106,10 @@ Unit tests for access decisions, scan transitions, invite tokens and role rules;
 
 Owner request: "an admin panel for ourselves: all companies, those coming in and leaving, trials, who subscribed and left, total revenue." Done: `GET /api/v1/platform/overview?months=1..24` (default 12; PLATFORM_OWNER and PLATFORM_SUPPORT; strict query) in `src/platform/platform-overview.controller.ts`, page `/console/overview` (first nav item; `/console` stays the customers list, which now reads `?subscription=<state>`), and the customers list shows created date and last customer message (`lastInboundAt`, max over conversations, one grouped query).
 
+### Amendment (2026-11-21): overview KPI drill-down
+
+The five company KPI cards are links to the customer list: all companies, `ACTIVE` paying customers, `TRIAL` customers, trials ending in the next 3 days, and customers churned in the current Asia/Tashkent calendar month. The two time-based filters use the same definitions as the overview totals; when that segment is requested, the platform API marks current-month churn from cancel/expire audit events only when no open subscription exists. Revenue cards remain non-interactive because they are amounts, not company counts.
+
 Everything is a SQL aggregate on the privileged connection. Calendar months use the fixed platform time zone **Asia/Tashkent**. Subscription rows are updated in place (a paid extension turns a TRIAL row ACTIVE; expiry and cancel change the status), so transitions are read from `platform_audit_events`, which the console and the expiry scan write:
 
 - Company state: each tenant's latest subscription row by `created_at`; NONE = no row. Tenant status counts come from `tenants.status`.

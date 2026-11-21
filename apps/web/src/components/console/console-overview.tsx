@@ -62,20 +62,33 @@ function Tile(props: {
   testId: string;
   label: string;
   hint?: string;
+  href?: string;
   children: ReactNode;
 }): ReactNode {
-  return (
-    <div
-      data-testid={props.testId}
-      className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6"
-    >
-      <dt className="text-base text-muted">{props.label}</dt>
-      <dd className="min-w-0 text-3xl font-semibold sm:text-4xl tracking-tight">
+  const content = (
+    <>
+      <span className="text-base text-muted">{props.label}</span>
+      <span className="min-w-0 text-3xl font-semibold sm:text-4xl tracking-tight">
         {props.children}
-      </dd>
+      </span>
       {props.hint ? (
-        <dd className="text-base text-muted">{props.hint}</dd>
+        <span className="text-base text-muted">{props.hint}</span>
       ) : null}
+    </>
+  );
+  const className =
+    'flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6';
+  return props.href ? (
+    <Link
+      href={props.href}
+      data-testid={props.testId}
+      className={`${className} hover:bg-surface-2`}
+    >
+      {content}
+    </Link>
+  ) : (
+    <div data-testid={props.testId} className={className}>
+      {content}
     </div>
   );
 }
@@ -230,34 +243,42 @@ export function ConsoleOverview(): ReactNode {
           <EmptyState icon="users" text={t('console.overview.empty')} />
         ) : (
           <>
-            <dl
+            <div
               aria-label={t('console.overview.kpis')}
               className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4"
             >
               <Tile
                 testId="kpi-companies"
                 label={t('console.overview.kpi.companies')}
+                href="/console"
               >
                 {data.companies.total}
               </Tile>
               <Tile
                 testId="kpi-paying"
                 label={t('console.overview.kpi.paying')}
+                href="/console?subscription=ACTIVE"
               >
                 {data.companies.bySubscription.ACTIVE}
               </Tile>
-              <Tile testId="kpi-trial" label={t('console.overview.kpi.trial')}>
+              <Tile
+                testId="kpi-trial"
+                label={t('console.overview.kpi.trial')}
+                href="/console?subscription=TRIAL"
+              >
                 {data.companies.bySubscription.TRIAL}
               </Tile>
               <Tile
                 testId="kpi-trial-soon"
                 label={t('console.overview.kpi.trialSoon')}
+                href="/console?subscription=TRIAL_ENDING_SOON"
               >
                 {data.trialsEndingSoon}
               </Tile>
               <Tile
                 testId="kpi-churned"
                 label={t('console.overview.kpi.churned')}
+                href="/console?subscription=CHURNED_THIS_MONTH"
               >
                 {thisMonth?.churned ?? 0}
               </Tile>
@@ -280,7 +301,7 @@ export function ConsoleOverview(): ReactNode {
               >
                 <Money value={data.revenue.allTime} />
               </Tile>
-            </dl>
+            </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
               <BarChart

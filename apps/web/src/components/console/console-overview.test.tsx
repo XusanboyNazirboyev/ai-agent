@@ -119,6 +119,31 @@ describe('ConsoleOverview', () => {
     );
   });
 
+  it('links the company KPI tiles to their exact customer segments', async () => {
+    vi.mocked(platformApi).mockResolvedValue(data);
+    show();
+    expect(await screen.findByTestId('kpi-companies')).toHaveAttribute(
+      'href',
+      '/console',
+    );
+    expect(screen.getByTestId('kpi-paying')).toHaveAttribute(
+      'href',
+      '/console?subscription=ACTIVE',
+    );
+    expect(screen.getByTestId('kpi-trial')).toHaveAttribute(
+      'href',
+      '/console?subscription=TRIAL',
+    );
+    expect(screen.getByTestId('kpi-trial-soon')).toHaveAttribute(
+      'href',
+      '/console?subscription=TRIAL_ENDING_SOON',
+    );
+    expect(screen.getByTestId('kpi-churned')).toHaveAttribute(
+      'href',
+      '/console?subscription=CHURNED_THIS_MONTH',
+    );
+  });
+
   it('lists recent events linking to the customer page', async () => {
     vi.mocked(platformApi).mockResolvedValue(data);
     show();

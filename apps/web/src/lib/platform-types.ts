@@ -48,6 +48,8 @@ export interface TenantRow {
   createdAt: string;
   /** Newest inbound customer message; null when none yet. */
   lastInboundAt: string | null;
+  /** Matches the overview's current-month churn KPI. */
+  churnedThisMonth?: boolean;
   subscription: TenantSubscriptionSummary | null;
   usage: TenantUsage;
 }

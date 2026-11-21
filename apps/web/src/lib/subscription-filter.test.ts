@@ -7,11 +7,14 @@ const row = (
   id: string,
   status: SubscriptionStatus | null,
   days = 0,
+  churnedThisMonth = false,
 ): {
   id: string;
+  churnedThisMonth: boolean;
   subscription: { status: SubscriptionStatus; currentPeriodEnd: string } | null;
 } => ({
   id,
+  churnedThisMonth,
   subscription: status
     ? {
         status,
@@ -52,5 +55,20 @@ describe('filterBySubscription', () => {
     expect(ids(filterBySubscription(rows, 'EXPIRED', NOW))).toEqual([
       'expired-soon-date',
     ]);
+  });
+
+  it('matches the two overview-only business segments', () => {
+    const special = [
+      ...rows,
+      row('trial-three-days', 'TRIAL', 3),
+      row('trial-expired', 'TRIAL', -1),
+      row('churned-this-month', 'EXPIRED', -5, true),
+    ];
+    expect(
+      ids(filterBySubscription(special, 'TRIAL_ENDING_SOON', NOW)),
+    ).toEqual(['trial-soon', 'trial-three-days']);
+    expect(
+      ids(filterBySubscription(special, 'CHURNED_THIS_MONTH', NOW)),
+    ).toEqual(['churned-this-month']);
   });
 });

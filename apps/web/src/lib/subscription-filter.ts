@@ -2,9 +2,12 @@ import type { SubscriptionStatus } from './types';
 
 /** "Ends soon" in the console list: an open subscription within this many days. */
 export const ENDS_SOON_DAYS = 7;
+export const TRIAL_ENDING_SOON_DAYS = 3;
 
 export const SUBSCRIPTION_FILTERS = [
   'ENDS_SOON',
+  'TRIAL_ENDING_SOON',
+  'CHURNED_THIS_MONTH',
   'TRIAL',
   'ACTIVE',
   'PAST_DUE',
@@ -16,6 +19,7 @@ export const SUBSCRIPTION_FILTERS = [
 export type SubscriptionFilter = (typeof SUBSCRIPTION_FILTERS)[number];
 
 interface Row {
+  churnedThisMonth?: boolean;
   subscription: {
     status: SubscriptionStatus;
     currentPeriodEnd: string;
@@ -26,8 +30,17 @@ const OPEN: readonly SubscriptionStatus[] = ['TRIAL', 'ACTIVE', 'PAST_DUE'];
 
 function matches(row: Row, filter: SubscriptionFilter, now: number): boolean {
   const sub = row.subscription;
+  if (filter === 'CHURNED_THIS_MONTH') return row.churnedThisMonth === true;
   if (filter === 'NONE') return sub === null;
   if (!sub) return false;
+  if (filter === 'TRIAL_ENDING_SOON') {
+    const remaining = Date.parse(sub.currentPeriodEnd) - now;
+    return (
+      sub.status === 'TRIAL' &&
+      remaining >= 0 &&
+      remaining <= TRIAL_ENDING_SOON_DAYS * 86_400_000
+    );
+  }
   if (filter !== 'ENDS_SOON') return sub.status === filter;
   return (
     OPEN.includes(sub.status) &&

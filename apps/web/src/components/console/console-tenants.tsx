@@ -42,13 +42,15 @@ export function ConsoleTenants(): ReactNode {
   const now = useNow(60 * 60_000);
   const [creating, setCreating] = useState(false);
   const q = useDeferredValue(search.trim());
+  const churnSegment = subscription === 'CHURNED_THIS_MONTH';
 
   const query = useQuery({
-    queryKey: ['platform', 'tenants', q, status],
+    queryKey: ['platform', 'tenants', q, status, churnSegment],
     queryFn: () => {
       const params = new URLSearchParams();
       if (q) params.set('q', q);
       if (status) params.set('status', status);
+      if (churnSegment) params.set('segment', 'CHURNED_THIS_MONTH');
       return platformApi<{ tenants: TenantRow[] }>(
         `/api/v1/platform/tenants?${params.toString()}`,
       );
@@ -107,9 +109,13 @@ export function ConsoleTenants(): ReactNode {
             <option key={id} value={id}>
               {id === 'ENDS_SOON'
                 ? t('console.tenants.endsSoon')
-                : id === 'NONE'
-                  ? t('console.noSubscription')
-                  : t(`subscriptionStatus.${id}`)}
+                : id === 'TRIAL_ENDING_SOON'
+                  ? t('console.overview.kpi.trialSoon')
+                  : id === 'CHURNED_THIS_MONTH'
+                    ? t('console.overview.kpi.churned')
+                    : id === 'NONE'
+                      ? t('console.noSubscription')
+                      : t(`subscriptionStatus.${id}`)}
             </option>
           ))}
         </Select>

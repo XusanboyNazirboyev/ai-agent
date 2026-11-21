@@ -1361,6 +1361,24 @@ describe('platform overview', () => {
     expect(
       (listedB.body.tenants as { lastInboundAt: unknown }[])[0]?.lastInboundAt,
     ).toBeNull();
+    const listedC = await call(
+      'GET',
+      `/api/v1/platform/tenants?q=ov-c-${suffix}&segment=CHURNED_THIS_MONTH`,
+      { session: support },
+    );
+    expect(
+      (listedC.body.tenants as { churnedThisMonth: boolean }[])[0]
+        ?.churnedThisMonth,
+    ).toBe(true);
+    const listedD = await call(
+      'GET',
+      `/api/v1/platform/tenants?q=ov-d-${suffix}&segment=CHURNED_THIS_MONTH`,
+      { session: support },
+    );
+    expect(
+      (listedD.body.tenants as { churnedThisMonth: boolean }[])[0]
+        ?.churnedThisMonth,
+    ).toBe(false);
 
     const after = await ovr(support);
     const delta = (pick: (o: OverviewBody) => number): number =>

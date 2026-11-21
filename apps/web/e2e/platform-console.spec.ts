@@ -144,6 +144,18 @@ test('console: plan, new customer, invite, owner signs in, team, suspend and rea
     'href',
     '/console?subscription=TRIAL',
   );
+  await expect(admin.getByTestId('kpi-paying')).toHaveAttribute(
+    'href',
+    '/console?subscription=ACTIVE',
+  );
+  await expect(admin.getByTestId('kpi-trial-soon')).toHaveAttribute(
+    'href',
+    '/console?subscription=TRIAL_ENDING_SOON',
+  );
+  await expect(admin.getByTestId('kpi-churned')).toHaveAttribute(
+    'href',
+    '/console?subscription=CHURNED_THIS_MONTH',
+  );
 
   // New customer with that plan; the owner's invite link is shown once.
   await admin.goto('/console');

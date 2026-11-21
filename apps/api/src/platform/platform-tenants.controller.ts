@@ -126,6 +126,7 @@ const InviteBody = z.object({
 const ListQuery = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(['ACTIVE', 'SUSPENDED', 'ARCHIVED']).optional(),
+  segment: z.enum(['CHURNED_THIS_MONTH']).optional(),
 });
 
 export interface TenantRow {
@@ -140,6 +141,8 @@ export interface TenantRow {
   createdAt: Date;
   /** Newest inbound customer message over all conversations; null = none yet. */
   lastInboundAt: Date | null;
+  /** Matches the overview's "churned this month" definition. */
+  churnedThisMonth: boolean;
   subscription: {
     id: string;
     status: string;
@@ -213,14 +216,21 @@ export class PlatformTenantsController {
       },
     });
     const ids = tenants.map((tenant) => tenant.id);
-    const usage = await this.usage(ids, new Date());
-    const subscriptions = await this.currentSubscriptions(ids);
-    // One grouped query for every listed tenant (no N+1).
-    const activity = await this.prisma.conversation.groupBy({
-      by: ['tenantId'],
-      where: { tenantId: { in: ids }, lastInboundAt: { not: null } },
-      _max: { lastInboundAt: true },
-    });
+    const now = new Date();
+    const [usage, subscriptions, activity, churnedThisMonth] =
+      await Promise.all([
+        this.usage(ids, now),
+        this.currentSubscriptions(ids),
+        // One grouped query for every listed tenant (no N+1).
+        this.prisma.conversation.groupBy({
+          by: ['tenantId'],
+          where: { tenantId: { in: ids }, lastInboundAt: { not: null } },
+          _max: { lastInboundAt: true },
+        }),
+        filter.segment === 'CHURNED_THIS_MONTH'
+          ? this.churnedThisMonth(ids, now)
+          : Promise.resolve(new Set<string>()),
+      ]);
     const lastInbound = new Map(
       activity.map((row) => [row.tenantId, row._max.lastInboundAt]),
     );
@@ -228,6 +238,7 @@ export class PlatformTenantsController {
       tenants: tenants.map((tenant) => ({
         ...tenant,
         lastInboundAt: lastInbound.get(tenant.id) ?? null,
+        churnedThisMonth: churnedThisMonth.has(tenant.id),
         subscription: subscriptions.get(tenant.id) ?? null,
         usage: usage.get(tenant.id) ?? {
           conversations: 0,
@@ -745,6 +756,28 @@ export class PlatformTenantsController {
           graceUntil: row.graceUntil,
         });
     return result;
+  }
+
+  /** Tenant ids behind the overview's current-month churn KPI. */
+  private async churnedThisMonth(
+    ids: readonly string[],
+    now: Date,
+  ): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await this.prisma.$queryRaw<{ tenantId: string }[]>`
+      SELECT DISTINCT e.tenant_id AS "tenantId"
+      FROM platform_audit_events e
+      WHERE e.tenant_id = ANY(${[...ids]}::uuid[])
+        AND e.action IN ('subscription.canceled', 'subscription.expired')
+        AND e.created_at >= date_trunc(
+          'month', ${now}::timestamptz AT TIME ZONE 'Asia/Tashkent'
+        ) AT TIME ZONE 'Asia/Tashkent'
+        AND NOT EXISTS (
+          SELECT 1 FROM tenant_subscriptions s
+          WHERE s.tenant_id = e.tenant_id
+            AND s.status IN ('TRIAL', 'ACTIVE', 'PAST_DUE')
+        )`;
+    return new Set(rows.map((row) => row.tenantId));
   }
 
   private async usage(

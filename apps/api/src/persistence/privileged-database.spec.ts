@@ -26,7 +26,10 @@ const ALLOWED = new Map([
   // S5b: the platform console works across tenants by design (ADR 047).
   ['platform/platform-auth.controller.ts', 'platform sign-in'],
   ['platform/platform-session.service.ts', 'platform sessions'],
-  ['platform/platform-tenants.controller.ts', 'tenants list, edit, delete'],
+  [
+    'platform/platform-tenants.controller.ts',
+    'tenants list and business segments, edit, delete',
+  ],
   ['platform/platform-billing.controller.ts', 'subscriptions, payments'],
   [
     'platform/platform-plans.controller.ts',
