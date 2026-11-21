@@ -7,6 +7,7 @@ import {
   RoutingConfigError,
 } from './routing-factory.js';
 import {
+  GEMINI_LITE_ROUTING_POLICY,
   GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
   GEMINI_PRIMARY_ROUTING_POLICY,
 } from './routing-policy.js';
@@ -198,5 +199,46 @@ describe('gemini-primary-fast-groq routing policy (latency experiment)', () => {
     expect(built.provider.modelFor('FAST')).toBe(
       base.provider.modelFor('FAST'),
     );
+  });
+});
+
+describe('gemini-lite routing policy (cost experiment 2026-11-21)', () => {
+  const lite = PRICING_CATALOG.snapshot('routing-gemini-lite-2026-11-21');
+
+  it('is loadable by name: Flash-Lite first, then the free fallbacks', () => {
+    expect(loadRoutingPolicy('builtin:gemini-lite')).toBe(
+      GEMINI_LITE_ROUTING_POLICY,
+    );
+    for (const tier of ['FAST', 'STRONG'] as const) {
+      const candidates = GEMINI_LITE_ROUTING_POLICY.tiers[tier];
+      expect(candidates[0]).toEqual({
+        provider: 'gemini',
+        model: 'gemini-3.5-flash-lite',
+      });
+      expect(candidates.slice(1)).toEqual(
+        GEMINI_PRIMARY_ROUTING_POLICY.tiers[tier]
+          .slice(1)
+          .filter((c) => c.provider !== 'mistral'),
+      );
+    }
+  });
+
+  it('builds with every candidate priced at the published Flash-Lite rate', () => {
+    const built = buildRoutedProvider({
+      policy: GEMINI_LITE_ROUTING_POLICY,
+      snapshot: lite,
+      env: ALL_KEYS,
+      trustedProviders: TRUSTED,
+      requestTimeoutMs: 500,
+      maxRetries: 0,
+    });
+    expect(built.skipped).toEqual([]);
+    // Per 1K tokens in nano-USD: $0.30, $2.50 and $0.03 per 1M tokens.
+    expect(lite.models['gemini-3.5-flash-lite']).toMatchObject({
+      free: false,
+      standard: { input: 300, output: 2500, cacheRead: 30 },
+    });
+    expect(lite.source).toBe('https://ai.google.dev/gemini-api/docs/pricing');
+    expect(lite.validUntil).toBeUndefined();
   });
 });

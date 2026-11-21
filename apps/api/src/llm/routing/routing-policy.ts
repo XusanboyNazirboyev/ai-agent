@@ -115,11 +115,43 @@ export const GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY: RoutingPolicy =
     breaker: GEMINI_PRIMARY_ROUTING_POLICY.breaker,
   });
 
+/**
+ * Cost experiment 2026-11-21 (owner: plans five to six times cheaper):
+ * `gemini-3.5-flash-lite` in both tiers, then the free fallbacks of
+ * `gemini-primary` (no Mistral, see `routing-gemini-lite-2026-11-21`). Live
+ * eval on eval/live-sample.json: 16 of 27 passed, as `gemini-primary`, at
+ * about half its 2026 cost (`gemini-3.1-flash-lite`: 8 of 27, rejected).
+ * Selected with `LLM_ROUTING_POLICY_FILE=builtin:gemini-lite`.
+ */
+const freeFallbacks = (
+  tier: 'FAST' | 'STRONG',
+): RoutingPolicy['tiers']['FAST'] =>
+  GEMINI_PRIMARY_ROUTING_POLICY.tiers[tier]
+    .slice(1)
+    .filter((candidate) => candidate.provider !== 'mistral');
+
+export const GEMINI_LITE_ROUTING_POLICY: RoutingPolicy =
+  RoutingPolicySchema.parse({
+    version: 'gemini-lite-2026-11-21',
+    tiers: {
+      FAST: [
+        { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+        ...freeFallbacks('FAST'),
+      ],
+      STRONG: [
+        { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+        ...freeFallbacks('STRONG'),
+      ],
+    },
+    breaker: GEMINI_PRIMARY_ROUTING_POLICY.breaker,
+  });
+
 /** Policies selectable by name (`builtin:<name>`) instead of a file. */
 export const BUILTIN_ROUTING_POLICIES: Readonly<Record<string, RoutingPolicy>> =
   {
     'gemini-primary': GEMINI_PRIMARY_ROUTING_POLICY,
     'gemini-primary-fast-groq': GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
+    'gemini-lite': GEMINI_LITE_ROUTING_POLICY,
   };
 
 export const DEFAULT_ROUTING_POLICY: RoutingPolicy = RoutingPolicySchema.parse({

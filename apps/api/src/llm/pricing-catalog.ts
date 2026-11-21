@@ -259,6 +259,36 @@ const ROUTING_GEMINI_PAID_2027_01_01: PricingConfig = {
   },
 };
 
+/**
+ * Cost experiment 2026-11-21 (owner: plans five to six times cheaper): the
+ * routing table with `gemini-3.5-flash-lite` first. Prices from
+ * https://ai.google.dev/gemini-api/docs/pricing, read 2026-11-20: text input
+ * $0.30, output $2.50, context caching $0.03 per 1M tokens, no announced 2027
+ * change. Cache-write fields carry the input price as the never-billed
+ * placeholder explained above `GEMINI_PAID_2026_10_29`. Only free fallbacks:
+ * Mistral's rates neither dominate nor are dominated by Flash-Lite's, which
+ * the router's worst-case reservation refuses.
+ */
+const ROUTING_GEMINI_LITE_2026_11_21: PricingConfig = {
+  version: 'routing-gemini-lite-2026-11-21',
+  provider: 'multi',
+  asOf: '2026-11-20',
+  sourceUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
+  models: {
+    'gemini-3.5-flash-lite': {
+      inputPerMTok: '0.30',
+      outputPerMTok: '2.50',
+      cacheReadPerMTok: '0.03',
+      cacheWrite5mPerMTok: '0.30',
+      cacheWrite1hPerMTok: '0.30',
+    },
+    'openai/gpt-oss-20b': { free: true },
+    'openai/gpt-oss-120b': { free: true },
+    'nvidia/nemotron-3-ultra-550b-a55b:free': { free: true },
+    'google/gemma-4-31b-it:free': { free: true },
+  },
+};
+
 export const PRICING_CATALOG = new PricingCatalog([
   ANTHROPIC_2026_10_23,
   GEMINI_FREE_2026_10_23,
@@ -268,6 +298,7 @@ export const PRICING_CATALOG = new PricingCatalog([
   ROUTING_GEMINI_PAID_2026_11_09,
   GEMINI_PAID_2027_01_01,
   ROUTING_GEMINI_PAID_2027_01_01,
+  ROUTING_GEMINI_LITE_2026_11_21,
 ]);
 
 export const DEFAULT_PRICING_VERSION = 'anthropic-2026-10-23';
