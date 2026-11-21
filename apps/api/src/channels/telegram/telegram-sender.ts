@@ -119,10 +119,15 @@ export class TelegramSender {
     if (!token) throw new Error('Telegram sender is not configured');
     const form = new FormData();
     form.set('chat_id', chatId);
+    // OGG/Opus (Gemini through ffmpeg) starts with "OggS"; otherwise MP3.
+    const ogg =
+      mp3[0] === 0x4f && mp3[1] === 0x67 && mp3[2] === 0x67 && mp3[3] === 0x53;
     form.set(
       'voice',
-      new Blob([new Uint8Array(mp3)], { type: 'audio/mpeg' }),
-      'reply.mp3',
+      new Blob([new Uint8Array(mp3)], {
+        type: ogg ? 'audio/ogg' : 'audio/mpeg',
+      }),
+      ogg ? 'reply.ogg' : 'reply.mp3',
     );
     const response = await this.request(
       `https://api.telegram.org/bot${token}/sendVoice`,

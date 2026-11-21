@@ -266,7 +266,17 @@ const environmentSchema = postgresEnvironmentSchema
      * voice note, the bot's text reply is also sent as speech. `elevenlabs`
      * needs ELEVENLABS_API_KEY and VOICE_REPLY_VOICE_ID; `off` by default.
      */
-    VOICE_REPLIES: z.enum(['off', 'elevenlabs']).default('off'),
+    VOICE_REPLIES: z.enum(['off', 'elevenlabs', 'gemini']).default('off'),
+    /** `gemini`: Gemini TTS first (paid GEMINI_API_KEY), ElevenLabs after it. */
+    GEMINI_TTS_MODEL: z
+      .string()
+      .min(1)
+      .max(100)
+      .default('gemini-3.8-flash-lite-tts'),
+    GEMINI_TTS_VOICE: z
+      .string()
+      .regex(/^[A-Za-z]{2,40}$/u)
+      .default('Kore'),
     VOICE_REPLY_VOICE_ID: z
       .string()
       .regex(/^[A-Za-z0-9]{10,40}$/u)
@@ -577,6 +587,13 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['POSTGRES_ADMIN_USER'],
         message: 'POSTGRES_ADMIN_USER is required when RLS_CONTEXT_MODE=strict',
+      });
+    }
+    if (environment.VOICE_REPLIES === 'gemini' && !environment.GEMINI_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GEMINI_API_KEY'],
+        message: 'GEMINI_API_KEY is required when VOICE_REPLIES=gemini',
       });
     }
     if (

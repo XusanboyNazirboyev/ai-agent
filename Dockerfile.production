@@ -37,6 +37,8 @@ CMD ["pnpm", "db:migrate"]
 FROM node:24-alpine AS api
 ENV NODE_ENV=production PORT=4000 API_HOST=0.0.0.0
 WORKDIR /app
+# Voice replies: Gemini TTS answers WAV, Telegram voice needs OGG/Opus.
+RUN apk add --no-cache ffmpeg
 COPY --from=build --chown=node:node /prod/api ./
 COPY --from=build --chown=node:node /app/apps/api/dist ./dist
 USER node

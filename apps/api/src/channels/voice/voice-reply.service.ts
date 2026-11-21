@@ -6,6 +6,11 @@ import {
   ElevenLabsReplyTts,
   type ReplyTts,
 } from '../../speech/elevenlabs-reply-tts.js';
+import {
+  FirstReplyTts,
+  GeminiReplyTts,
+  sdkTtsCall,
+} from '../../speech/gemini-reply-tts.js';
 import { TelegramSender } from '../telegram/telegram-sender.js';
 
 /** Optional override of the reply speech engine (tests). */
@@ -37,15 +42,28 @@ export class VoiceReplyService {
     config: ConfigService<AppEnvironment, true>,
     @Optional() @Inject(REPLY_TTS) tts?: ReplyTts,
   ) {
+    const mode = config.get('VOICE_REPLIES', { infer: true });
     const apiKey = config.get('ELEVENLABS_API_KEY', { infer: true });
     const voiceId = config.get('VOICE_REPLY_VOICE_ID', { infer: true });
+    const geminiKey = config.get('GEMINI_API_KEY', { infer: true });
+    const eleven =
+      apiKey && voiceId ? new ElevenLabsReplyTts({ apiKey, voiceId }) : null;
+    // Owner 2026-11-21: Gemini speaks Uzbek; ElevenLabs answers when it fails.
+    const gemini =
+      mode === 'gemini' && geminiKey
+        ? new GeminiReplyTts({
+            call: sdkTtsCall(geminiKey),
+            model: config.get('GEMINI_TTS_MODEL', { infer: true }),
+            voice: config.get('GEMINI_TTS_VOICE', { infer: true }),
+          })
+        : null;
     this.tts =
       tts ??
-      (config.get('VOICE_REPLIES', { infer: true }) === 'elevenlabs' &&
-      apiKey &&
-      voiceId
-        ? new ElevenLabsReplyTts({ apiKey, voiceId })
-        : null);
+      (gemini
+        ? new FirstReplyTts(eleven ? [gemini, eleven] : [gemini])
+        : mode === 'elevenlabs'
+          ? eleven
+          : null);
   }
 
   async afterTextSent(tenantId: string, messageId: string): Promise<void> {
