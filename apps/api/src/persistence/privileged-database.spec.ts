@@ -45,6 +45,10 @@ const ALLOWED = new Map([
     'billing/click-payments.service.ts',
     'Click callback finds its payment, then runs per tenant (ADR 082)',
   ],
+  [
+    'billing/payme-payments.service.ts',
+    'Payme callbacks route an order; GetStatement spans the merchant (ADR 084)',
+  ],
   ['platform/platform-overview.controller.ts', 'platform overview totals'],
   // S6: queues. The relay and the scheduler find due work of every tenant;
   // each job then runs under runWithTenant.

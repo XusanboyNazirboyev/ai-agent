@@ -1,6 +1,6 @@
 # ADR 082 — Subscription payments through Click (pay button, no automatic charging)
 
-Status: accepted (2026-11-19). Implements ADR 047 §6 within ADR 080's owner decisions: no card storage and no automatic charging; the customer presses "Pay" each period and pays on Click's page. Owner choice 2026-11-19: Click (over Payme).
+Status: accepted (2026-11-19). Implements ADR 047 §6 within ADR 080's owner decisions: no card storage and no automatic charging; the customer presses "Pay" each period and pays on Click's page. The original 2026-11-19 choice was Click over Payme; on 2026-11-21 the owner added Payme alongside it (ADR 084).
 
 ## Facts checked (official docs, read 2026-11-19)
 The Shop API pages are rendered by JavaScript; their text was read from the site's own published page bundles (`/assets/js/f914dc4a.*.js` for `/shop-api/requests`, `/assets/js/44100f7c.*.js` for `/shop-api/errors`).
@@ -21,7 +21,7 @@ The Shop API pages are rendered by JavaScript; their text was read from the site
 Sign the Click merchant contract; put the four values into the server's secret store; in the Click merchant cabinet set the Prepare URL to `https://<api host>/api/v1/payments/click/prepare` and the Complete URL to `…/complete`; enter plan prices in the console.
 
 ## Not done
-Payme; card storage and automatic charging (owner decision); refunds through `payment/reversal`; fiscal receipts (Click fiscalization); invoices.
+Card storage and automatic charging (owner decision); refunds through `payment/reversal`; fiscal receipts (Click fiscalization); invoices. Payme is specified separately in ADR 084.
 
 ## Implementation notes (2026-11-19)
 - Code: `apps/api/src/billing/` (`click-rules.ts` pure sign/amount/link rules, `click-payments.service.ts`, `click.controllers.ts`, `billing.module.ts`); migration `20261129110000_click_transactions` (BIGSERIAL id, tenant policies); `GET /api/v1/subscription` now also returns `clickConfigured`, public `plans` and `currentPlanCode`; web `subscription-pay.tsx`.

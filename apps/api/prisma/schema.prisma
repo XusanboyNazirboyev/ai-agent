@@ -291,6 +291,7 @@ model Tenant {
   subscriptions          TenantSubscription[]
   subscriptionPayments   SubscriptionPayment[]
   clickTransactions      ClickTransaction[]
+  paymeTransactions      PaymeTransaction[]
   operatorInvites        OperatorInvite[]
   passwordResets         OperatorPasswordReset[]
   platformAuditEvents    PlatformAuditEvent[]
@@ -1634,6 +1635,7 @@ enum SubscriptionStatus {
 enum PaymentProvider {
   MANUAL
   CLICK
+  PAYME
 }
 
 enum PaymentStatus {
@@ -1757,6 +1759,7 @@ model SubscriptionPayment {
   subscription      TenantSubscription? @relation(fields: [tenantId, subscriptionId], references: [tenantId, id], onDelete: Restrict)
   recordedBy        PlatformAdmin?      @relation(fields: [recordedById], references: [id], onDelete: SetNull)
   clickTransactions ClickTransaction[]
+  paymeTransactions PaymeTransaction[]
 
   @@unique([tenantId, id])
   @@unique([provider, providerRef])
@@ -1788,6 +1791,29 @@ model ClickTransaction {
 
   @@index([tenantId, paymentId])
   @@map("click_transactions")
+}
+
+/// ADR 084: one Payme Merchant API transaction of a subscription payment.
+/// Payme's 24-character id is globally unique; all provider times are Unix ms.
+model PaymeTransaction {
+  id                  String              @id @db.VarChar(24)
+  tenantId            String              @map("tenant_id") @db.Uuid
+  paymentId           String              @unique @map("payment_id") @db.Uuid
+  paymeTime           BigInt              @map("payme_time")
+  amountMinor         BigInt              @map("amount_minor")
+  state               Int
+  reason              Int?
+  createTime          BigInt              @map("create_time")
+  performTime         BigInt              @default(0) @map("perform_time")
+  cancelTime          BigInt              @default(0) @map("cancel_time")
+  entitlementSnapshot Json?               @map("entitlement_snapshot") @db.JsonB
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment             SubscriptionPayment @relation(fields: [tenantId, paymentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId, paymeTime])
+  @@map("payme_transactions")
 }
 
 /// Invite to join a tenant as an operator. Only the token hash is stored;

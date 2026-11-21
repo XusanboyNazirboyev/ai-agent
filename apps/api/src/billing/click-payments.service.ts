@@ -9,9 +9,7 @@ import { runWithTenant } from '../persistence/tenant-context.js';
 import {
   CLICK_ERROR,
   CLICK_ERROR_NOTE,
-  addDays,
   buildClickPayLink,
-  extendedPeriodEnd,
   parseClickAmount,
   parseClickRequest,
   signatureMatches,
@@ -19,8 +17,8 @@ import {
   type ClickErrorCode,
   type ClickRequest,
 } from './click-rules.js';
+import { applySubscriptionEntitlement } from './subscription-entitlement.js';
 
-const OPEN = ['TRIAL', 'ACTIVE', 'PAST_DUE'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 /** A pending checkout of the same plan and amount is reused for an hour. */
 const REUSE_MS = 60 * 60 * 1000;
@@ -334,48 +332,11 @@ export class ClickPaymentsService {
         data: { status: 'PAID', paidAt: now },
       });
       if (won.count !== 1) return 'RACED' as const;
-      const plan = await tx.subscriptionPlan.findUnique({
-        where: { id: planId },
-      });
-      if (!plan) throw new Error('PLAN_MISSING');
-      const open = await tx.tenantSubscription.findFirst({
-        where: { tenantId, status: { in: [...OPEN] } },
-      });
-      let subscriptionId: string;
-      let periodEnd: Date;
-      if (open) {
-        periodEnd = extendedPeriodEnd(
-          open.currentPeriodEnd,
-          plan.periodDays,
-          now,
-        );
-        await tx.tenantSubscription.update({
-          where: { id: open.id },
-          data: {
-            status: 'ACTIVE',
-            planId: plan.id,
-            graceUntil: null,
-            currentPeriodEnd: periodEnd,
-            ...(open.status === 'ACTIVE' ? {} : { currentPeriodStart: now }),
-          },
-        });
-        subscriptionId = open.id;
-      } else {
-        periodEnd = addDays(now, plan.periodDays);
-        const started = await tx.tenantSubscription.create({
-          data: {
-            tenantId,
-            planId: plan.id,
-            status: 'ACTIVE',
-            currentPeriodStart: now,
-            currentPeriodEnd: periodEnd,
-          },
-        });
-        subscriptionId = started.id;
-      }
-      await tx.subscriptionPayment.update({
-        where: { id: paymentId },
-        data: { subscriptionId },
+      const applied = await applySubscriptionEntitlement(tx, {
+        tenantId,
+        paymentId,
+        planId,
+        now,
       });
       await tx.clickTransaction.update({
         where: { id: transaction.id },
@@ -390,10 +351,10 @@ export class ClickPaymentsService {
           entityId: paymentId,
           safeSummary: {
             provider: 'CLICK',
-            planCode: plan.code,
-            amountMinor: Number(plan.priceMinor),
-            periodEnd: periodEnd.toISOString(),
-            wasOpen: open ? open.status : null,
+            planCode: applied.planCode,
+            amountMinor: Number(applied.planPriceMinor),
+            periodEnd: applied.periodEnd.toISOString(),
+            wasOpen: applied.wasOpen,
           },
         },
       });

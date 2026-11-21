@@ -98,6 +98,20 @@ const environmentSchema = postgresEnvironmentSchema
       .regex(/^\d{1,12}$/u)
       .optional(),
     /**
+     * ADR 084: Payme checkout and Merchant API. All three are set together;
+     * LOGIN and KEY are server-only Basic Auth credentials and are never
+     * logged or returned.
+     */
+    PAYME_MERCHANT_ID: z
+      .string()
+      .regex(/^[^;=\s]{1,100}$/u)
+      .optional(),
+    PAYME_LOGIN: z
+      .string()
+      .regex(/^[^:\s]{1,100}$/u)
+      .optional(),
+    PAYME_KEY: z.string().min(1).max(200).optional(),
+    /**
      * The Meta app's App Secret (App Dashboard → Settings → Basic): signs the
      * Instagram webhooks and buys Unified login tokens. Server only.
      */

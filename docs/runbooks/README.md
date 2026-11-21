@@ -11,6 +11,7 @@ Short, step-by-step procedures for the staging host described in [ADR 035](../ad
 | 05 | [LLM outage](05-llm-outage.md) | the model provider fails or answers badly |
 | 06 | [Restore from backup](06-restore-from-backup.md) | data was lost or damaged |
 | 08 | [Click payments](08-click-payments.md) | setting up or checking subscription payments |
+| 09 | [Payme payments](09-payme-payments.md) | setting up or checking Payme subscription payments |
 | 07 | [Secret rotation](07-secret-rotation.md) | a key leaked or must be replaced |
 
 ## Facts every runbook uses

@@ -7,12 +7,22 @@ import {
   ClickCallbackController,
   ClickCheckoutController,
 } from './click.controllers.js';
+import {
+  PaymeCallbackController,
+  PaymeCheckoutController,
+} from './payme.controllers.js';
+import { PaymePaymentsService } from './payme-payments.service.js';
 
 /** Subscription payments through Click (ADR 082). */
 @Module({
   imports: [PersistenceModule, AccessModule, WebInboxModule],
-  controllers: [ClickCheckoutController, ClickCallbackController],
-  providers: [ClickPaymentsService],
-  exports: [ClickPaymentsService],
+  controllers: [
+    ClickCheckoutController,
+    ClickCallbackController,
+    PaymeCheckoutController,
+    PaymeCallbackController,
+  ],
+  providers: [ClickPaymentsService, PaymePaymentsService],
+  exports: [ClickPaymentsService, PaymePaymentsService],
 })
 export class BillingModule {}

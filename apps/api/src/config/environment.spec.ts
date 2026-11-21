@@ -78,6 +78,35 @@ describe('validateEnvironment', () => {
     ).toThrow();
   });
 
+  it('accepts a safe Payme id or alias and a Basic-safe login', () => {
+    expect(
+      validateEnvironment({
+        ...postgresEnvironment,
+        PAYME_MERCHANT_ID: '507f1f77bcf86cd799439011',
+        PAYME_LOGIN: 'Paycom-test',
+        PAYME_KEY: 'test-only-key',
+      }),
+    ).toMatchObject({ PAYME_LOGIN: 'Paycom-test' });
+    expect(
+      validateEnvironment({
+        ...postgresEnvironment,
+        PAYME_MERCHANT_ID: 'tezda-cashdesk',
+      }).PAYME_MERCHANT_ID,
+    ).toBe('tezda-cashdesk');
+    expect(() =>
+      validateEnvironment({
+        ...postgresEnvironment,
+        PAYME_MERCHANT_ID: 'bad;alias',
+      }),
+    ).toThrow();
+    expect(() =>
+      validateEnvironment({
+        ...postgresEnvironment,
+        PAYME_LOGIN: 'bad:login',
+      }),
+    ).toThrow();
+  });
+
   it('rejects malformed service URLs', () => {
     expect(() =>
       validateEnvironment({

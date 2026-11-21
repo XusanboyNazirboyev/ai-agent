@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { AppEnvironment } from './config/environment.js';
 import { AppModule } from './app.module.js';
+import { configurePaymeProtocol } from './billing/payme-http.js';
 import { StructuredLogger } from './observability/structured-logger.js';
 import { traceRequests } from './observability/trace-requests.js';
 import { configureHttp } from './http/security-headers.js';
@@ -17,6 +18,7 @@ async function bootstrap(): Promise<void> {
 
   app.useLogger(logger);
   app.use(traceRequests);
+  configurePaymeProtocol(app);
   configureHttp(app);
   await app.listen(
     config.get('PORT', { infer: true }),

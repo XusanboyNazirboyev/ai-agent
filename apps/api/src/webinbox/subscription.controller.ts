@@ -34,6 +34,7 @@ export interface TenantSubscriptionView {
   } | null;
   /** ADR 082: the pay button is offered only when Click is configured. */
   clickConfigured: boolean;
+  paymeConfigured: boolean;
   /** Active public plans for the picker; prices are minor units. */
   plans: {
     code: string;
@@ -121,6 +122,10 @@ export class SubscriptionController {
         !!this.config.get('CLICK_SERVICE_ID', { infer: true }) &&
         !!this.config.get('CLICK_MERCHANT_ID', { infer: true }) &&
         !!this.config.get('CLICK_SECRET_KEY', { infer: true }),
+      paymeConfigured:
+        !!this.config.get('PAYME_MERCHANT_ID', { infer: true }) &&
+        !!this.config.get('PAYME_LOGIN', { infer: true }) &&
+        !!this.config.get('PAYME_KEY', { infer: true }),
       plans: plans.map((plan) => ({
         code: plan.code,
         name: plan.name,
