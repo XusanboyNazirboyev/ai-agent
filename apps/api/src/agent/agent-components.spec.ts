@@ -17,7 +17,7 @@ import {
 import { formatMoney, LocaleRegistry } from '../core/locales/locale-pack.js';
 import { FactStore } from '../core/agent/facts.js';
 import { displayPolicyFor } from '../core/agent/display-gate.js';
-import { checkDraft } from '../core/agent/guardrails.js';
+import { checkDraft, titleHardFact } from '../core/agent/guardrails.js';
 import { chooseLocale, detectLanguage } from '../core/agent/language.js';
 import {
   detectEnumSlots,
@@ -298,6 +298,82 @@ describe('facts and guardrail', () => {
     });
     expect(result.violations).toContain(violation);
     expect(result.rendered).toBeUndefined();
+  });
+
+  // AUD-10 (audit 2026-11-21): a date, a time or a price without a currency
+  // in a title is a hard fact too, in every supported language.
+  it.each([
+    ['IELTS 15-dekabr', UZ_LATN],
+    ['IELTS 1-martdan', UZ_LATN],
+    ['IELTS 15 декабр', UZ_CYRL],
+    ['IELTS с 15 декабря', RU],
+    ['IELTS starts December 15', EN],
+    ['IELTS 15.12.2026', UZ_LATN],
+    ['IELTS 2026-12-15', EN],
+    ['IELTS 18:00 guruh', UZ_LATN],
+    ['IELTS 1 200 000', UZ_LATN],
+    ['IELTS 150.000', RU],
+    ['IELTS 1500000', EN],
+    ['IELTS 150 ming', UZ_LATN],
+    ['IELTS 1,2 mln', UZ_LATN],
+    ['IELTS 300k', EN],
+    ['IELTS 1 200 000, 15-dekabr', UZ_LATN],
+  ] as const)('treats the title %j as a hard fact', (title, locale) => {
+    expect(titleHardFact(title, locale)).toBe('UNSOURCED_NUMBER');
+  });
+
+  it.each([
+    ['IELTS 7.0 Intensive', UZ_LATN],
+    ['Python 3.10 asoslari', UZ_LATN],
+    ['iPhone 15 Pro', EN],
+    ['Ingliz tili B2', UZ_LATN],
+    ['Matematika 101', UZ_LATN],
+    ['1 martalik konsultatsiya', UZ_LATN],
+    ['2 maydonli lager', UZ_LATN],
+    ['Футболка и 2 майки', RU],
+    ['Инглиз тили курси', UZ_CYRL],
+    ['May courses', EN],
+  ] as const)('keeps the ordinary title %j', (title, locale) => {
+    expect(titleHardFact(title, locale)).toBeNull();
+  });
+
+  const titleCheck = (
+    title: string,
+    draft: string,
+  ): ReturnType<typeof checkDraft> => {
+    const facts = new FactStore();
+    facts.add({ kind: 'title', text: title }, provenance);
+    return checkDraft(draft, {
+      facts,
+      locale: UZ_LATN,
+      customerTexts: [],
+      timeZone: 'Asia/Tashkent',
+      now,
+      evidence: {
+        tenantId: 't1',
+        conversationId: 'c1',
+        policy: displayPolicyFor({ liveQuote: true, availability: true }),
+      },
+    });
+  };
+
+  it('blocks a referenced date-only title (AUD-10)', () => {
+    const result = titleCheck('IELTS 15-dekabr', '{{F1}} sizga mos keladi.');
+    expect(result.violations).toContain('UNSOURCED_NUMBER');
+    expect(result.rendered).toBeUndefined();
+  });
+
+  it('does not let the model repeat a price from an unsafe title (AUD-10)', () => {
+    const result = titleCheck('IELTS 1 200 000', 'Bu kurs 1 200 000 turadi.');
+    expect(result.violations).toContain('UNSOURCED_NUMBER');
+  });
+
+  it('still lets the model repeat a number from a safe title', () => {
+    const result = titleCheck(
+      'IELTS 7.0 Intensive',
+      'IELTS 7.0 kursini tanlang.',
+    );
+    expect(result.violations).not.toContain('UNSOURCED_NUMBER');
   });
 
   it('renders referenced facts with locale formatting', () => {

@@ -404,6 +404,18 @@ describe('agent turn: disclosure, empty drafts, interrupted turns', () => {
     expect(result.reply).not.toContain('joy bor');
   });
 
+  it('drops a fallback title that carries a date or a price without currency (AUD-10)', async () => {
+    const { result } = await emptyDraftTurn([
+      'IELTS 15-dekabr',
+      'IELTS 1 200 000',
+      'IELTS General',
+    ]);
+    expect(result.outcome).toBe('FALLBACK');
+    expect(result.reply).toContain('• IELTS General');
+    expect(result.reply).not.toContain('dekabr');
+    expect(result.reply).not.toContain('1 200 000');
+  });
+
   it('shows no option list when every title is unsafe (AUD-10)', async () => {
     const { result } = await emptyDraftTurn(['IELTS $300']);
     expect(result.outcome).toBe('FALLBACK');

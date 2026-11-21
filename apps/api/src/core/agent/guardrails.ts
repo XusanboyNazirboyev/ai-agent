@@ -62,17 +62,50 @@ function statesAvailability(text: string, locale: LocalePack): boolean {
   });
 }
 
+// AUD-10: month names of the supported locales (uz-Latn, uz-Cyrl, ru, en),
+// matched only next to a day number so a word like "may" alone is not a date.
+// "mart"/"may" (and "март"/"май") also start ordinary words ("1 martalik",
+// "maydon", "майка"), so they count only whole or with a date suffix.
+const MONTH =
+  '(?:yanvar|fevral|aprel|iyun|iyul|avgust|sent[ay]br|okt[ay]br|noyabr|dekabr|январ|феврал|апрел|июн|июл|август|сентябр|октябр|ноябр|декабр|january|february|april|june|july|august|september|october|november|december|(?:mart|may)(?:da|dan|ga|gacha|ning|dagi)?(?![\\p{L}])|(?:март[ае]?|ма[йя]|march)(?![\\p{L}]))';
+const DATE_OR_TIME = new RegExp(
+  [
+    `\\b\\d{1,2}(?:-|\\s)?${MONTH}`,
+    `${MONTH}\\s?\\d{1,2}\\b`,
+    '\\b(?:0[1-9]|[12]\\d|3[01])[./](?:0[1-9]|1[0-2])\\b',
+    '\\b\\d{4}-\\d{2}-\\d{2}\\b',
+    '\\b\\d{1,2}:\\d{2}\\b',
+  ].join('|'),
+  'u',
+);
+// A price written without a currency: digit groups of thousands, a number of
+// five or more digits, or an amount with a magnitude word ("150 ming").
+const PRICE_LIKE =
+  /\b\d{1,3}(?:[ \u00a0.,]\d{3})+\b|\b\d{5,}\b|\d+(?:[.,]\d+)?\s?(?:k|ming|mln|million|минг|тыс|млн)(?![\p{L}])/u;
+
 /**
- * AUD-10: a CRM item title is shown as written. A title that carries a
- * currency or an availability phrase would state a price or availability
- * without a typed, live fact, so a code-rendered list leaves it out.
+ * AUD-10: a CRM item title is shown as written, so one that states a price,
+ * an availability, a date or a time would state a hard fact without a typed,
+ * live fact. Returns the violation it would be, or null for a safe title.
  */
+export function titleHardFact(
+  title: string,
+  locale: LocalePack,
+): GuardrailViolation | null {
+  const text = unifyApostrophes(title).toLowerCase();
+  if (CURRENCY.test(text)) return 'UNSOURCED_CURRENCY';
+  if (statesAvailability(text, locale)) return 'UNSOURCED_AVAILABILITY';
+  if (DATE_OR_TIME.test(text) || PRICE_LIKE.test(text))
+    return 'UNSOURCED_NUMBER';
+  return null;
+}
+
+/** Whether a code-rendered list must leave this title out (AUD-10). */
 export function titleCarriesHardFact(
   title: string,
   locale: LocalePack,
 ): boolean {
-  const text = unifyApostrophes(title).toLowerCase();
-  return CURRENCY.test(text) || statesAvailability(text, locale);
+  return titleHardFact(title, locale) !== null;
 }
 
 export function checkDraft(
@@ -113,18 +146,23 @@ export function checkDraft(
     // availability would bypass the typed, live price/availability facts.
     const fact = context.facts.get(id);
     if (fact?.value.kind === 'title') {
-      const title = unifyApostrophes(fact.value.text).toLowerCase();
-      if (CURRENCY.test(title)) violations.add('UNSOURCED_CURRENCY');
-      else if (titleCarriesHardFact(title, context.locale))
-        violations.add('UNSOURCED_AVAILABILITY');
+      const unsafe = titleHardFact(fact.value.text, context.locale);
+      if (unsafe) violations.add(unsafe);
     }
   }
 
   // Everything below inspects only what the model wrote itself.
   const own = unifyApostrophes(text.replace(FACT_REFERENCE, ' '));
+  // A number the model repeats from a title counts as sourced only when the
+  // title is safe: one carrying a price or a date would launder it (AUD-10).
   const titles = context.facts
     .list()
-    .flatMap((fact) => (fact.value.kind === 'title' ? [fact.value.text] : []));
+    .flatMap((fact) =>
+      fact.value.kind === 'title' &&
+      !titleCarriesHardFact(fact.value.text, context.locale)
+        ? [fact.value.text]
+        : [],
+    );
   const echoes = [...context.customerTexts, ...titles].map((value) =>
     unifyApostrophes(value),
   );
