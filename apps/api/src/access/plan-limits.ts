@@ -13,6 +13,22 @@ export interface PlanLimits {
   readonly monthlyNewLeads?: number;
 }
 
+/** One channel is included before a paid plan explicitly grants more. */
+export const INCLUDED_CHANNEL_ACCOUNTS = 1;
+
+export function effectiveChannelAccountLimit(
+  subscriptionStatus: string | undefined,
+  plan: PlanLimits,
+): number {
+  if (subscriptionStatus !== 'ACTIVE' && subscriptionStatus !== 'PAST_DUE') {
+    return INCLUDED_CHANNEL_ACCOUNTS;
+  }
+  return Math.max(
+    INCLUDED_CHANNEL_ACCOUNTS,
+    plan.maxChannelAccounts ?? INCLUDED_CHANNEL_ACCOUNTS,
+  );
+}
+
 /** Subscription states whose plan limits apply. */
 export const OPEN_SUBSCRIPTION_STATES = [
   'TRIAL',

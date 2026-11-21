@@ -88,6 +88,11 @@ describe('GET /api/v1/public/plans', () => {
       periodDays: 30,
       limits: { monthlyNewLeads: 500, maxChannelAccounts: 2 },
     });
+    expect(body.plans.find((p) => p.code === second)?.limits).toMatchObject({
+      monthlyNewLeads: 1000,
+      maxOperators: 5,
+      maxChannelAccounts: 1,
+    });
     expect(JSON.stringify(body)).not.toContain('monthlyLlmBudgetUsd');
     expect(Object.keys(one).sort()).toEqual([
       'code',

@@ -1,7 +1,10 @@
 import { Controller, Get, HttpException, Req } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
-import { planLimitsOf } from '../access/plan-limits.js';
+import {
+  effectiveChannelAccountLimit,
+  planLimitsOf,
+} from '../access/plan-limits.js';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
@@ -21,7 +24,7 @@ export interface PublicPlanView {
   limits: {
     monthlyNewLeads?: number;
     maxOperators?: number;
-    maxChannelAccounts?: number;
+    maxChannelAccounts: number;
   };
 }
 
@@ -93,9 +96,7 @@ export class PublicPlansController {
             ...(limits.maxOperators !== undefined
               ? { maxOperators: limits.maxOperators }
               : {}),
-            ...(limits.maxChannelAccounts !== undefined
-              ? { maxChannelAccounts: limits.maxChannelAccounts }
-              : {}),
+            maxChannelAccounts: effectiveChannelAccountLimit('ACTIVE', limits),
           },
         };
       }),

@@ -1155,7 +1155,7 @@
   "console.plans.maxOperators": "Operators",
   "console.plans.maxChannels": "Messenger accounts",
   "console.plans.unlimited": "No limit",
-  "console.plans.limitHint": "Leave a limit empty for no limit.",
+  "console.plans.limitHint": "Leave operator and lead limits empty for no limit. An empty messenger limit includes 1 account.",
   "console.plans.aiBudget": "AI budget per month, USD",
   "console.plans.aiBudgetHint": "Empty: the server's default budget. 0: the assistant does not answer and every chat goes to the team.",
   "console.plans.serverDefault": "Server default",

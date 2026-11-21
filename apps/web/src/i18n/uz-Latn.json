@@ -1155,7 +1155,7 @@
   "console.plans.maxOperators": "Operatorlar",
   "console.plans.maxChannels": "Messenjer hisoblari",
   "console.plans.unlimited": "Cheklovsiz",
-  "console.plans.limitHint": "Cheklov qo‘ymaslik uchun maydonni bo‘sh qoldiring.",
+  "console.plans.limitHint": "Operator va lid limitlarini cheklamaslik uchun bo‘sh qoldiring. Messenjer limiti bo‘sh bo‘lsa, 1 ta hisob kiradi.",
   "console.plans.aiBudget": "Oylik AI byudjeti, USD",
   "console.plans.aiBudgetHint": "Bo‘sh: serverdagi standart byudjet. 0: yordamchi javob bermaydi, har bir suhbat jamoaga o‘tadi.",
   "console.plans.serverDefault": "Server standarti",

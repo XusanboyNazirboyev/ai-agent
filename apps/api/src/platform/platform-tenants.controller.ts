@@ -16,7 +16,11 @@ import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 import { z } from 'zod';
 import { TenantAccessService } from '../access/tenant-access.service.js';
 import { countNewLeadsThisMonth } from '../access/lead-limit.js';
-import { monthlyLlmBudgetNano, openPlanLimits } from '../access/plan-limits.js';
+import {
+  effectiveChannelAccountLimit,
+  monthlyLlmBudgetNano,
+  openPlanLimits,
+} from '../access/plan-limits.js';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
@@ -293,6 +297,7 @@ export class PlatformTenantsController {
       openPlanLimits(this.prisma, id),
       countNewLeadsThisMonth(this.prisma, id, tenant.timezone, now),
     ]);
+    const currentSubscription = subscriptions.get(id) ?? null;
     return {
       tenant,
       access: {
@@ -300,17 +305,21 @@ export class PlatformTenantsController {
         periodEnd: access.periodEnd,
         graceUntil: access.graceUntil,
       },
-      subscription: subscriptions.get(id) ?? null,
+      subscription: currentSubscription,
       usage: usage.get(id) ?? {
         conversations: 0,
         inboundMessages: 0,
         llmCostUsd: 0,
       },
-      // What the open plan allows; null = no limit. The AI budget is the one
-      // the agent enforces (the plan's, else the server default).
+      // What the open plan allows. A missing channel limit includes one; null
+      // means no limit for the other resources. The AI budget is the one the
+      // agent enforces (the plan's, else the server default).
       limits: {
         maxOperators: planLimits.maxOperators ?? null,
-        maxChannelAccounts: planLimits.maxChannelAccounts ?? null,
+        maxChannelAccounts: effectiveChannelAccountLimit(
+          currentSubscription?.status,
+          planLimits,
+        ),
         monthlyNewLeads: planLimits.monthlyNewLeads ?? null,
         newLeadsThisMonth,
         monthlyLlmBudgetUsd: budgetUsd(

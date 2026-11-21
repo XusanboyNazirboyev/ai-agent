@@ -1,5 +1,9 @@
 import type { Prisma } from '../generated/prisma/client.js';
-import { openPlanLimits } from '../access/plan-limits.js';
+import {
+  effectiveChannelAccountLimit,
+  OPEN_SUBSCRIPTION_STATES,
+  planLimitsOf,
+} from '../access/plan-limits.js';
 import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 
 type CountDb = Pick<
@@ -14,16 +18,25 @@ interface TransactionDb {
 /**
  * Whether one more ACTIVE channel account fits the plan's
  * `maxChannelAccounts`. The account itself is not counted, so enabling an
- * account that is already ACTIVE always fits. No open subscription or no
- * limit on the plan means no limit (as for operator seats).
+ * account that is already ACTIVE always fits. Trial and missing plan limits
+ * include one account; a paid plan must explicitly grant more.
  */
 export async function channelSlotFree(
   db: CountDb,
   tenantId: string,
   accountId: string,
 ): Promise<boolean> {
-  const { maxChannelAccounts } = await openPlanLimits(db, tenantId);
-  if (maxChannelAccounts === undefined) return true;
+  const subscription = await db.tenantSubscription.findFirst({
+    where: {
+      tenantId,
+      status: { in: [...OPEN_SUBSCRIPTION_STATES] },
+    },
+    select: { status: true, plan: { select: { limits: true } } },
+  });
+  const maxChannelAccounts = effectiveChannelAccountLimit(
+    subscription?.status,
+    subscription ? planLimitsOf(subscription.plan.limits) : {},
+  );
   const active = await db.channelAccount.count({
     where: {
       tenantId,

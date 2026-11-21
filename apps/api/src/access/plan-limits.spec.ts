@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { monthlyLlmBudgetNano, planLimitsOf } from './plan-limits.js';
+import {
+  effectiveChannelAccountLimit,
+  monthlyLlmBudgetNano,
+  planLimitsOf,
+} from './plan-limits.js';
 
 describe('planLimitsOf', () => {
   it('reads the three limits and drops anything malformed', () => {
@@ -25,6 +29,28 @@ describe('planLimitsOf', () => {
     expect(planLimitsOf(null)).toEqual({});
     expect(planLimitsOf([1])).toEqual({});
     expect(planLimitsOf({ monthlyLlmBudgetUsd: Number.NaN })).toEqual({});
+  });
+});
+
+describe('effectiveChannelAccountLimit', () => {
+  it('includes one channel until a paid plan explicitly grants more', () => {
+    expect(effectiveChannelAccountLimit(undefined, {})).toBe(1);
+    expect(
+      effectiveChannelAccountLimit('TRIAL', { maxChannelAccounts: 5 }),
+    ).toBe(1);
+    expect(
+      effectiveChannelAccountLimit('ACTIVE', { maxChannelAccounts: 3 }),
+    ).toBe(3);
+    expect(
+      effectiveChannelAccountLimit('PAST_DUE', { maxChannelAccounts: 2 }),
+    ).toBe(2);
+    expect(
+      effectiveChannelAccountLimit('CANCELLED', { maxChannelAccounts: 9 }),
+    ).toBe(1);
+    expect(
+      effectiveChannelAccountLimit('ACTIVE', { maxChannelAccounts: 0 }),
+    ).toBe(1);
+    expect(effectiveChannelAccountLimit('ACTIVE', {})).toBe(1);
   });
 });
 

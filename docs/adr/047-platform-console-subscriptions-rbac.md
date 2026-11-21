@@ -80,6 +80,14 @@ Unit tests for access decisions, scan transitions, invite tokens and role rules;
 - **Not changed:** TTS metering (parked, ADR 042 voice replies) still reads no tenant budget.
 - **Checked:** unit tests of the limit parsing and the budget choice; integration tests: the second Telegram enable is refused before Telegram is called and the account stays `DISABLED`, re-enabling the first is allowed, freeing the slot lets the second in; an agent turn of a tenant whose plan budget is used up hands over with `TENANT_MONTHLY_LIMIT` while the server sets no cap; the console detail returns the limits; e2e: plan form saves all three limits and the customer page shows "2 / 2", "0 / 1" and the budget.
 
+### Amendment (2026-11-21): one included channel
+
+- **Owner decision:** every tenant gets one active Telegram, Instagram or Messenger account. A second account is paid.
+- **Decision:** this supersedes the 2026-11-17 missing-limit rule for channels only. No open subscription and `TRIAL` always use `maxChannelAccounts = 1`, even if the trial plan JSON contains a different value. `ACTIVE` and `PAST_DUE` subscriptions use the plan's explicit `maxChannelAccounts`, with a minimum and default of 1. The console and public plan API display this effective default. Plans that sell more than one account must set a value greater than 1 explicitly.
+- **Compatibility:** existing active accounts above the effective limit stay active. The existing locked enable path refuses only the next account, so this change needs no migration and does not disconnect customers.
+- **Not decided here:** plan prices and how many additional accounts each paid plan includes remain owner-managed console values.
+- **Checked:** unit tests cover no subscription, trial, cancelled, active and past-due subscriptions; channel-slot tests cover the first included account and a paid plan granting more; public plan and platform customer integration tests cover the effective default.
+
 ## Amendment (2026-11-17): seeing subscriptions that end soon
 - **Gap:** the tenant heard about the end of a period only once it was past due; the console list could be filtered only by tenant status.
 - **Decision:**

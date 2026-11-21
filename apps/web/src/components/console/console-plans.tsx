@@ -256,8 +256,7 @@ export function ConsolePlans(): ReactNode {
                 {plan.limits?.maxOperators ?? t('console.plans.unlimited')}
               </Field>
               <Field label={t('console.plans.maxChannels')}>
-                {plan.limits?.maxChannelAccounts ??
-                  t('console.plans.unlimited')}
+                {plan.limits?.maxChannelAccounts ?? 1}
               </Field>
               <Field label={t('console.plans.monthlyNewLeads')}>
                 {plan.limits?.monthlyNewLeads ?? t('console.plans.unlimited')}
