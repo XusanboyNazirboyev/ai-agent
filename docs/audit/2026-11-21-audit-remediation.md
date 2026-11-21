@@ -13,7 +13,7 @@ Branch `feat/ui-words-menu` at `f25658d` (clean before this work). `origin/main`
 | AUD-12 SSE validation | Already fixed, test added | `parseLiveEvent` validates every payload; malformed JSON and bad payloads refetch; new hook test |
 | RLS strict readiness | Evidence below | |
 | AUD-01, AUD-02, AUD-11 | Already fixed, validated | specs pass (3/3, 501-message regression, 2/2) |
-| AUD-08 | Partly validated | pause/drain test passes; slow-client disconnect at 256 KB untested |
+| AUD-08 | Validated | pause/drain test and a new slow-client disconnect test (3,000 queued events, about 390 KB) pass; it fails with the bound raised |
 
 ## Changes
 - `apps/api/src/core/agent/guardrails.ts`: `titleHardFact()` adds dates (day plus month name in uz-Latn, uz-Cyrl, ru, en; `dd.mm`, ISO dates), times (`18:00`) and prices without a currency (thousand groups, 5+ digits, "150 ming", "1,2 mln", "300k") to the currency and availability checks. Referenced titles get the matching violation. Unsafe titles no longer count as a source for numbers in the model's own text. "mart"/"may" count only whole or with a date suffix, so "1 martalik", "maydon" and "майки" stay allowed.
@@ -29,4 +29,4 @@ Branch `feat/ui-words-menu` at `f25658d` (clean before this work). `origin/main`
 Staging runs the app role in `warn` since 2026-11-20: after the public-plans fix (`3d37e12`) its log showed 0 `db.tenant_context_missing` and 0 errors. The strict suite now covers every integration spec except 12 documented infrastructure and owner-CLI specs (`16833c7`), 85 of 86 files locally (the known catalog-sync Redis wait). Switch to `strict` when: (1) seven days of staging logs show no `db.tenant_context_missing`, including daily scans (digest, retention, subscription expiry); (2) the strict suite is green in CI on the release commit; (3) a backup is checked first; (4) rollback is `RLS_CONTEXT_MODE=warn` in `deploy/.env.api` and recreating the api container.
 
 ## Open
-AUD-06 lifecycle tests; AUD-08 slow-client disconnect test; AUD-07 deploy by digest and a build-info endpoint (owner decision); GitHub settings in the posture document (owner, GitHub UI); AUD-10 on `main` (only the merger session merges to `main`; this fix lives on `feat/ui-words-menu`).
+AUD-06 lifecycle tests; AUD-07 deploy by digest and a build-info endpoint (owner decision); GitHub settings in the posture document (owner, GitHub UI); AUD-10 on `main` (only the merger session merges to `main`; this fix lives on `feat/ui-words-menu`).

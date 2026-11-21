@@ -1202,6 +1202,48 @@ describe('event stream resource accounting', () => {
     bus.onModuleDestroy();
   });
 
+  // AUD-08: a client that never drains is cut off once its queue passes
+  // 256 KB; it replays the missed events from Last-Event-ID on reconnect.
+  it('disconnects a client whose queued events pass the 256 KB bound', async () => {
+    const w = await world();
+    const s = await signIn(w);
+    const bus = new InboxEventBus(prisma, privileged);
+    const response = new FakeResponse();
+    response.blockNextWrite = true;
+    await controllerWith(bus).stream(
+      { principal: s.principal } as never,
+      response as never,
+      undefined,
+      undefined,
+    );
+    expect(response.frames).toEqual(['retry: 3000\n\n']);
+
+    // About 130 bytes a frame: 3,000 events queue about 390 KB.
+    const many = Array.from({ length: 3_000 }, (_, i) => ({
+      id: String(1_000_000 + i),
+      type: 'conversation.updated',
+      conversationId: w.conversationId,
+      handoverId: null,
+      messageId: null,
+    }));
+    const afterSpy = vi
+      .spyOn(events, 'after')
+      .mockResolvedValueOnce({ events: many, gap: false });
+    await db.conversation.update({
+      where: { id: w.conversationId },
+      data: { state: 'BOT_ACTIVE' },
+    });
+    await bus.tick();
+    await vi.waitFor(() => expect(response.ended).toBe(true));
+    afterSpy.mockRestore();
+
+    // Nothing was written past the blocked frame, and every resource is freed.
+    expect(response.frames).toHaveLength(1);
+    expect(openStreams(w.tenantId, w.operatorId)).toBe(0);
+    expect(bus.listenerCount(w.tenantId)).toBe(0);
+    bus.onModuleDestroy();
+  });
+
   it('never sends an unknown or malformed persisted event: it resyncs, advances the cursor and keeps delivering', async () => {
     const w = await world();
     const s = await signIn(w);
