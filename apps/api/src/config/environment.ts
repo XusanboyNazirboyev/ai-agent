@@ -234,10 +234,12 @@ const environmentSchema = postgresEnvironmentSchema
      * Gemini, then ElevenLabs, when Groq fails or hears nothing.
      */
     STT_PROVIDER: z
-      .enum(['none', 'gemini', 'groq', 'deepgram'])
+      .enum(['none', 'gemini', 'groq', 'deepgram', 'ovozai'])
       .default('none'),
     /** `deepgram`: Nova-3 forced to Uzbek first, then Groq, then Gemini. */
     DEEPGRAM_API_KEY: z.string().min(1).optional(),
+    /** `ovozai`: OvozAI first, then the Deepgram (or Groq, Gemini) chain. */
+    OVOZAI_API_KEY: z.string().min(1).optional(),
     /** Groq key (also read by the `groq` LLM provider preset). */
     GROQ_API_KEY: z.string().min(1).optional(),
     STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
@@ -640,6 +642,13 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['STT_API_KEY'],
         message:
           'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
+      });
+    }
+    if (environment.STT_PROVIDER === 'ovozai' && !environment.OVOZAI_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['OVOZAI_API_KEY'],
+        message: 'OVOZAI_API_KEY is required when STT_PROVIDER=ovozai',
       });
     }
     if (

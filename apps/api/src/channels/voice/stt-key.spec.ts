@@ -86,4 +86,29 @@ describe('buildSpeechToText (ADR 042)', () => {
       'none',
     );
   });
+
+  it('puts OvozAI first, then the Deepgram chain (owner 2026-11-21)', () => {
+    const chain = buildSpeechToText({
+      ...base,
+      STT_PROVIDER: 'ovozai',
+      OVOZAI_API_KEY: 'o',
+      DEEPGRAM_API_KEY: 'd',
+      GROQ_API_KEY: 'q',
+    });
+    expect(chain.providerId).toBe('ovozai+deepgram+groq+gemini');
+    expect(
+      buildSpeechToText({
+        ...base,
+        STT_PROVIDER: 'ovozai',
+        OVOZAI_API_KEY: 'o',
+      }).providerId,
+    ).toBe('ovozai+gemini');
+    expect(
+      buildSpeechToText({ STT_PROVIDER: 'ovozai', OVOZAI_API_KEY: 'o' })
+        .providerId,
+    ).toBe('ovozai');
+    expect(buildSpeechToText({ STT_PROVIDER: 'ovozai' }).providerId).toBe(
+      'none',
+    );
+  });
 });

@@ -54,9 +54,34 @@ export function buildSpeechToText(env: {
   readonly GEMINI_API_KEY?: string | undefined;
   readonly GROQ_API_KEY?: string | undefined;
   readonly DEEPGRAM_API_KEY?: string | undefined;
+  readonly OVOZAI_API_KEY?: string | undefined;
   readonly STT_FALLBACK?: string | undefined;
   readonly ELEVENLABS_API_KEY?: string | undefined;
 }): SpeechToText {
+  // Owner 2026-11-21 (last): OvozAI first, the only engine that wrote every
+  // measured sample word for word, noisy Uzbek, Russian and English included,
+  // detecting the language itself. It allows two transcriptions at a time, so
+  // an error (a busy 429 included) or a timeout goes to the Deepgram chain.
+  // Silence keeps its verdict: nothing to hear is not worth a second call.
+  if (env.STT_PROVIDER === 'ovozai' && env.OVOZAI_API_KEY) {
+    const ovozai = new WhisperSpeechToText({
+      providerId: 'ovozai',
+      baseUrl: 'https://api.ovozai.uz/v1',
+      apiKey: env.OVOZAI_API_KEY,
+      model: 'ovozai-transcribe',
+      timeoutMs: DEFAULT_VOICE_POLICY.timeoutMs,
+    });
+    const rest = buildSpeechToText({
+      ...env,
+      STT_PROVIDER: env.DEEPGRAM_API_KEY
+        ? 'deepgram'
+        : env.GROQ_API_KEY
+          ? 'groq'
+          : 'gemini',
+    });
+    if (rest.providerId === 'none') return ovozai;
+    return new FallbackSpeechToText(ovozai, rest, undefined);
+  }
   // Owner 2026-11-21 (later): Deepgram Nova-3 first, forced to Uzbek (word
   // for word in the measurement); a failure or a low-confidence transcript
   // (most likely another language) goes to Groq, which detects the language,
@@ -181,6 +206,7 @@ export class VoiceTranscriptionService {
         STT_FALLBACK: config.get('STT_FALLBACK', { infer: true }),
         GROQ_API_KEY: config.get('GROQ_API_KEY', { infer: true }),
         DEEPGRAM_API_KEY: config.get('DEEPGRAM_API_KEY', { infer: true }),
+        OVOZAI_API_KEY: config.get('OVOZAI_API_KEY', { infer: true }),
         ELEVENLABS_API_KEY: config.get('ELEVENLABS_API_KEY', { infer: true }),
       });
   }
