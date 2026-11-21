@@ -203,6 +203,8 @@ export interface OwnSubscription {
   } | null;
   /** ADR 082: the pay button is offered only when Click is configured. */
   clickConfigured: boolean;
+  /** ADR 084: Payme is offered only when all merchant credentials exist. */
+  paymeConfigured: boolean;
   plans: {
     code: string;
     name: string;

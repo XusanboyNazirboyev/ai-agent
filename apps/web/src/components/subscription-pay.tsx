@@ -17,7 +17,7 @@ function signature(data: OwnSubscription): string {
 }
 
 /**
- * "Pay with Click" (ADR 082). Prices are shown from the API's minor units;
+ * Click and Payme checkout (ADR 082/084). Prices come from API minor units;
  * the server builds the pay link and the amount. After the customer returns
  * (`?paid=1`) the page polls until the subscription changes, for up to 60 s.
  */
@@ -68,10 +68,15 @@ export function SubscriptionPay(props: {
   }, [returned, changed]);
 
   const pay = useMutation({
-    mutationFn: (planCode: string) =>
-      api<{ url: string }>('/api/v1/billing/click/checkout', {
+    mutationFn: (input: { provider: 'click' | 'payme'; planCode: string }) =>
+      api<{ url: string }>(`/api/v1/billing/${input.provider}/checkout`, {
         method: 'POST',
-        body: { planCode },
+        body: {
+          planCode: input.planCode,
+          ...(input.provider === 'payme'
+            ? { locale: locale === 'uz-Latn' ? 'uz' : locale }
+            : {}),
+        },
       }),
     onSuccess: ({ url }) => {
       if (props.navigate) props.navigate(url);
@@ -96,7 +101,7 @@ export function SubscriptionPay(props: {
               : t('billing.confirming')}
         </p>
       ) : null}
-      {!data.clickConfigured ? (
+      {!data.clickConfigured && !data.paymeConfigured ? (
         <p className="text-sm text-muted" data-testid="pay-unavailable">
           {t('billing.unavailable')}
         </p>
@@ -137,17 +142,37 @@ export function SubscriptionPay(props: {
               {t(errorKey(pay.error))}
             </p>
           ) : null}
-          <div>
-            <Button
-              variant="primary"
-              data-testid="pay-click"
-              disabled={!selected || pay.isPending || pay.isSuccess}
-              onClick={() => selected && pay.mutate(selected)}
-            >
-              {pay.isPending || pay.isSuccess
-                ? t('billing.redirecting')
-                : t('billing.payWithClick')}
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {data.clickConfigured ? (
+              <Button
+                variant="primary"
+                data-testid="pay-click"
+                disabled={!selected || pay.isPending || pay.isSuccess}
+                onClick={() =>
+                  selected &&
+                  pay.mutate({ provider: 'click', planCode: selected })
+                }
+              >
+                {pay.isPending || pay.isSuccess
+                  ? t('billing.redirecting')
+                  : t('billing.payWithClick')}
+              </Button>
+            ) : null}
+            {data.paymeConfigured ? (
+              <Button
+                variant={data.clickConfigured ? 'secondary' : 'primary'}
+                data-testid="pay-payme"
+                disabled={!selected || pay.isPending || pay.isSuccess}
+                onClick={() =>
+                  selected &&
+                  pay.mutate({ provider: 'payme', planCode: selected })
+                }
+              >
+                {pay.isPending || pay.isSuccess
+                  ? t('billing.redirecting')
+                  : t('billing.payWithPayme')}
+              </Button>
+            ) : null}
           </div>
         </>
       )}

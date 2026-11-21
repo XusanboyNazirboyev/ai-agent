@@ -31,6 +31,7 @@ const BASE: OwnSubscription = {
   access: { state: 'ok', periodEnd: null, graceUntil: null },
   subscription: null,
   clickConfigured: true,
+  paymeConfigured: true,
   currentPlanCode: 'pro',
   plans: [
     {
@@ -91,9 +92,24 @@ describe('SubscriptionPay', () => {
   });
 
   it('hides the button with an explanation when Click is not configured', () => {
-    renderIt({ ...BASE, clickConfigured: false });
+    renderIt({ ...BASE, clickConfigured: false, paymeConfigured: false });
     expect(screen.queryByTestId('pay-click')).toBeNull();
+    expect(screen.queryByTestId('pay-payme')).toBeNull();
     expect(screen.getByTestId('pay-unavailable')).toBeTruthy();
+  });
+
+  it('posts the Payme checkout with the mapped locale', async () => {
+    vi.mocked(api).mockResolvedValue({ url: 'https://checkout.paycom.uz/x' });
+    const navigate = vi.fn();
+    renderIt({ ...BASE, clickConfigured: false }, navigate);
+    fireEvent.click(screen.getByTestId('pay-payme'));
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('https://checkout.paycom.uz/x'),
+    );
+    expect(api).toHaveBeenCalledWith('/api/v1/billing/payme/checkout', {
+      method: 'POST',
+      body: { planCode: 'pro', locale: 'en' },
+    });
   });
 
   it('after return shows the confirming notice and refetches', () => {
