@@ -3,6 +3,7 @@ import { ANY_MODEL, usdToNano } from '../core/llm/pricing.js';
 import { MOCK_MODEL } from '../core/llm/scripted-llm-provider.js';
 import { PRICING_CATALOG } from '../llm/pricing-catalog.js';
 import { postgresEnvironmentSchema } from './postgres-config.js';
+import { NEURONAI_VOICES } from '../speech/neuronai-reply-tts.js';
 
 /** USD amount as a decimal string ("0.02"), validated exactly. */
 const usdAmount = z
@@ -266,7 +267,15 @@ const environmentSchema = postgresEnvironmentSchema
      * voice note, the bot's text reply is also sent as speech. `elevenlabs`
      * needs ELEVENLABS_API_KEY and VOICE_REPLY_VOICE_ID; `off` by default.
      */
-    VOICE_REPLIES: z.enum(['off', 'elevenlabs', 'gemini']).default('off'),
+    VOICE_REPLIES: z
+      .enum(['off', 'elevenlabs', 'gemini', 'neuronai'])
+      .default('off'),
+    /**
+     * `neuronai`: NeuronAI's native Uzbek voice first (Uzbek replies only),
+     * then Gemini TTS when GEMINI_API_KEY is set, then ElevenLabs.
+     */
+    NEURONAI_API_KEY: z.string().min(1).optional(),
+    NEURONAI_TTS_VOICE: z.enum(NEURONAI_VOICES).default('kamola'),
     /** `gemini`: Gemini TTS first (paid GEMINI_API_KEY), ElevenLabs after it. */
     GEMINI_TTS_MODEL: z
       .string()
@@ -594,6 +603,16 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['GEMINI_API_KEY'],
         message: 'GEMINI_API_KEY is required when VOICE_REPLIES=gemini',
+      });
+    }
+    if (
+      environment.VOICE_REPLIES === 'neuronai' &&
+      !environment.NEURONAI_API_KEY
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['NEURONAI_API_KEY'],
+        message: 'NEURONAI_API_KEY is required when VOICE_REPLIES=neuronai',
       });
     }
     if (

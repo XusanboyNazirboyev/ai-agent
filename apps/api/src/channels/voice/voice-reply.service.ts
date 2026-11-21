@@ -11,6 +11,7 @@ import {
   GeminiReplyTts,
   sdkTtsCall,
 } from '../../speech/gemini-reply-tts.js';
+import { NeuronAiReplyTts } from '../../speech/neuronai-reply-tts.js';
 import { TelegramSender } from '../telegram/telegram-sender.js';
 
 /** Optional override of the reply speech engine (tests). */
@@ -46,21 +47,33 @@ export class VoiceReplyService {
     const apiKey = config.get('ELEVENLABS_API_KEY', { infer: true });
     const voiceId = config.get('VOICE_REPLY_VOICE_ID', { infer: true });
     const geminiKey = config.get('GEMINI_API_KEY', { infer: true });
+    const neuronKey = config.get('NEURONAI_API_KEY', { infer: true });
     const eleven =
       apiKey && voiceId ? new ElevenLabsReplyTts({ apiKey, voiceId }) : null;
-    // Owner 2026-11-21: Gemini speaks Uzbek; ElevenLabs answers when it fails.
+    // Owner 2026-11-21: NeuronAI's native Uzbek voice first (mode
+    // `neuronai`), then Gemini, then ElevenLabs; the first audio wins.
+    const neuron =
+      mode === 'neuronai' && neuronKey
+        ? new NeuronAiReplyTts({
+            apiKey: neuronKey,
+            voice: config.get('NEURONAI_TTS_VOICE', { infer: true }),
+          })
+        : null;
     const gemini =
-      mode === 'gemini' && geminiKey
+      (mode === 'gemini' || mode === 'neuronai') && geminiKey
         ? new GeminiReplyTts({
             call: sdkTtsCall(geminiKey),
             model: config.get('GEMINI_TTS_MODEL', { infer: true }),
             voice: config.get('GEMINI_TTS_VOICE', { infer: true }),
           })
         : null;
+    const chain: ReplyTts[] = [neuron, gemini, eleven].filter(
+      (engine) => engine !== null,
+    );
     this.tts =
       tts ??
-      (gemini
-        ? new FirstReplyTts(eleven ? [gemini, eleven] : [gemini])
+      (neuron || gemini
+        ? new FirstReplyTts(chain)
         : mode === 'elevenlabs'
           ? eleven
           : null);
