@@ -41,6 +41,7 @@ import {
   tenantScoped,
 } from '../../persistence/testing/test-clients.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
+import type { TelegramBotApi } from '../../handover/telegram-bot-api.js';
 import { normalizeTelegramUpdate } from './telegram-normalizer.js';
 import {
   TelegramProcessor,
@@ -1338,5 +1339,56 @@ describe('voice notes (ADR 042)', () => {
     expect(await lastTurn(f)).toMatchObject({
       outcome: 'CLARIFICATION_REQUIRED',
     });
+  });
+});
+
+describe('early "typing…" while a voice note is transcribed', () => {
+  it('shows it only when the bot will answer live', async () => {
+    const live = await fixture({ mode: 'LIVE' });
+    const chatId = 800_000 + Math.floor(Math.random() * 99_000);
+    await receive(live, 'Salom', chatId);
+    const conversation = await prisma.conversation.findFirstOrThrow({
+      where: { tenantId: live.tenantId },
+      select: { id: true },
+    });
+    const sendChatAction = vi.fn(async () => undefined);
+    const pipelineWith = (): TelegramAgentPipeline =>
+      new TelegramAgentPipeline(
+        limited as unknown as PrismaService,
+        {} as AgentConversationService,
+        config(settings),
+        DEV,
+        undefined,
+        undefined,
+        undefined,
+        { sendChatAction } as unknown as TelegramBotApi,
+      );
+    const early = (
+      tenantId: string,
+      id: string,
+    ): Promise<(() => void) | undefined> =>
+      runWithTenant(tenantId, () =>
+        pipelineWith().typingIfAnswering(tenantId, id),
+      );
+
+    const stop = await early(live.tenantId, conversation.id);
+    expect(stop).toBeTypeOf('function');
+    stop?.();
+    expect(sendChatAction).toHaveBeenCalledTimes(1);
+
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { state: 'OPERATOR_ACTIVE' },
+    });
+    expect(await early(live.tenantId, conversation.id)).toBeUndefined();
+
+    const shadow = await fixture({ mode: 'SHADOW' });
+    await receive(shadow, 'Salom', chatId + 1);
+    const quiet = await prisma.conversation.findFirstOrThrow({
+      where: { tenantId: shadow.tenantId },
+      select: { id: true },
+    });
+    expect(await early(shadow.tenantId, quiet.id)).toBeUndefined();
+    expect(sendChatAction).toHaveBeenCalledTimes(1);
   });
 });

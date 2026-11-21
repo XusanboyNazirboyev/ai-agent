@@ -194,8 +194,16 @@ export class InboundProcessor {
         conversationId,
         access,
       ));
-    // ADR 042: voice notes become text (or FAILED) before anyone reads them.
-    await this.voice?.resolvePending(event.tenantId, conversationId);
+    // ADR 042: voice notes become text (or FAILED) before anyone reads them;
+    // the customer sees "typing…" meanwhile when the bot will answer.
+    const typing = await this.agent
+      ?.typingIfAnswering(event.tenantId, conversationId)
+      .catch(() => undefined);
+    try {
+      await this.voice?.resolvePending(event.tenantId, conversationId);
+    } finally {
+      typing?.();
+    }
     if (await this.held(event, inboundEventId, conversationId, access)) return;
     if (this.agent) {
       const mode = await this.agent.modeFor(event.tenantId, conversationId);

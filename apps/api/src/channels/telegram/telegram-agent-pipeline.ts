@@ -131,17 +131,20 @@ export class TelegramAgentPipeline {
   private async typing(
     tenantId: string,
     conversationId: string,
+    onlyWhileBotActive = false,
   ): Promise<(() => void) | undefined> {
     if (!this.bot) return undefined;
     const row = await this.prisma.conversation.findFirst({
       where: { tenantId, id: conversationId },
       select: {
+        state: true,
         providerChatId: true,
         channelAccountId: true,
         channelAccount: { select: { channelType: true } },
       },
     });
     if (!row || row.channelAccount.channelType !== 'telegram') return undefined;
+    if (onlyWhileBotActive && row.state !== 'BOT_ACTIVE') return undefined;
     const bot = this.bot;
     return startTyping(() =>
       bot.sendChatAction({
@@ -149,6 +152,20 @@ export class TelegramAgentPipeline {
         channelAccountId: row.channelAccountId,
       }),
     );
+  }
+
+  /**
+   * "typing…" from the moment the job starts, before a voice note is
+   * transcribed, when the bot is the one that will answer (LIVE, bot active).
+   * The customer saw nothing for about 6 s after a voice note on staging.
+   */
+  async typingIfAnswering(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<(() => void) | undefined> {
+    if ((await this.modeFor(tenantId, conversationId)) !== 'LIVE')
+      return undefined;
+    return this.typing(tenantId, conversationId, true);
   }
 
   /** The channel account's configured agent mode for a conversation. */

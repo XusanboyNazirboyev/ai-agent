@@ -24,3 +24,7 @@ Telegram may retry webhook requests, queues may redeliver after process failure,
 - A late out-of-order Telegram update becomes a visible failed inbound event and needs operational recovery; it is not silently merged into a later turn.
 - A single configured bot per API process is an initial integration limitation. Supporting multiple independently credentialed Telegram accounts requires a secret-reference resolver and channel-account routing before deployment expansion.
 - Added `delivery_attempts`/`delivery_error_code` columns and a channel-scoped inbound-event index in the additive Phase 2 migration. Existing partial unique provider-message and send-idempotency indexes remain unchanged.
+
+## Amendment 2026-11-21: 1 s debounce and early "typing…" (owner: the agent is too slow)
+
+Measured on staging (Gemini Flash-Lite routing): a text reply took 4.3 s from the customer's message to the bot's, of which 2.7 s passed before the turn started (the 2 s debounce plus the 500 ms outbox poll) and 1.6 s in two model calls; a voice note waited about 6 s (debounce plus transcription) with nothing shown to the customer. The inbound debounce is now 1 s (`INBOUND_DEBOUNCE_MS`): a quick burst is still answered once, and a later message is still picked up by the next round. When the bot will answer (agent mode LIVE, conversation `BOT_ACTIVE`, Telegram), "typing…" now starts when the job starts, before a voice note is transcribed, instead of after it.

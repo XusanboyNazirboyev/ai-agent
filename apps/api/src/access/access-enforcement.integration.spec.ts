@@ -119,6 +119,7 @@ async function world(
   const run = vi.fn(async () => undefined);
   const agent = {
     modeFor: vi.fn(async () => 'LIVE'),
+    typingIfAnswering: vi.fn(async () => undefined),
     run,
     failOwnedTurns: vi.fn(async () => undefined),
   } as unknown as TelegramAgentPipeline;

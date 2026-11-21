@@ -21,6 +21,12 @@ import { telegramRetryDelayMs } from './retry-policy.js';
 import { runWithLogContext } from '../../observability/log-context.js';
 import { redisOptions } from '../../queue/redis-options.js';
 
+/**
+ * ADR 005 debounce: a burst of customer messages is answered once. 1 s since
+ * 2026-11-21 (was 2 s): it was half of a text reply's wait on staging.
+ */
+export const INBOUND_DEBOUNCE_MS = 1_000;
+
 export type QueuePayload = {
   outboxId: string;
   tenantId: string;
@@ -209,7 +215,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
             ...(event.type === 'telegram.inbound' ||
             event.type === 'instagram.inbound' ||
             event.type === 'facebook.inbound'
-              ? { delay: 2_000 }
+              ? { delay: INBOUND_DEBOUNCE_MS }
               : {}),
           });
           await this.relay.outboxEvent.updateMany({
