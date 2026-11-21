@@ -116,6 +116,29 @@ async function tenant(label: string): Promise<{
       status: 'ACTIVE',
     },
   });
+  // ADR 047 amendment 2026-11-21: one channel is included and a paid plan
+  // grants more. The channel specs connect further accounts, so these tenants
+  // hold an active subscription to a hidden plan that grants them.
+  const channelsPlan = await db.subscriptionPlan.create({
+    data: {
+      code: `e2e-${label}-channels-${run}`,
+      name: `E2E ${label} channels`,
+      priceMinor: 0n,
+      currency: 'UZS',
+      periodDays: 30,
+      limits: { maxChannelAccounts: 10 },
+      isActive: false,
+    },
+  });
+  await db.tenantSubscription.create({
+    data: {
+      tenantId: created.id,
+      planId: channelsPlan.id,
+      status: 'ACTIVE',
+      currentPeriodStart: new Date(Date.now() - 86_400_000),
+      currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+    },
+  });
   const operators: Record<string, { id: string; email: string }> = {};
   const roles: [string, 'OPERATOR' | 'VIEWER' | 'ADMIN' | 'OWNER'][] =
     label === 'a'
