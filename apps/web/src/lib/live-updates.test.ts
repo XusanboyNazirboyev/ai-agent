@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { parseLiveEvent } from './live-updates';
+import { createElement, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { parseLiveEvent, useLiveUpdates } from './live-updates';
 
 const c = '11111111-1111-4111-8111-111111111111';
 const h = '22222222-2222-4222-8222-222222222222';
@@ -103,5 +106,66 @@ describe('parseLiveEvent task.due (ADR 068)', () => {
     ).toBeNull();
     expect(parseLiveEvent('task.due', { ...base, taskTitle: 5 })).toBeNull();
     expect(parseLiveEvent('task.due', { ...base, extra: 1 })).toBeNull();
+  });
+});
+
+describe('useLiveUpdates with a bad event (AUD-12)', () => {
+  class FakeEventSource {
+    static last: FakeEventSource | undefined;
+    listeners = new Map<string, (message: MessageEvent) => void>();
+    readyState = 1;
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor() {
+      FakeEventSource.last = this;
+    }
+    addEventListener(type: string, listener: (m: MessageEvent) => void): void {
+      this.listeners.set(type, listener);
+    }
+    close(): void {}
+    emit(type: string, data: string): void {
+      this.listeners.get(type)?.({ data } as MessageEvent);
+    }
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('refetches on malformed JSON or a bad payload and keeps handling later events', () => {
+    vi.stubGlobal('EventSource', FakeEventSource);
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const onEvent = vi.fn();
+    renderHook(() => useLiveUpdates(true, onEvent), {
+      wrapper: ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client }, children),
+    });
+    const stream = FakeEventSource.last!;
+    const refetchedAll = (): boolean =>
+      invalidate.mock.calls.some(
+        ([filters]) =>
+          JSON.stringify(filters?.queryKey) ===
+          JSON.stringify(['conversation']),
+      );
+
+    stream.emit('message.created', '{not json');
+    expect(refetchedAll()).toBe(true);
+    invalidate.mockClear();
+    stream.emit(
+      'message.created',
+      JSON.stringify({ conversationId: c, handoverId: null, messageId: 'x' }),
+    );
+    expect(refetchedAll()).toBe(true);
+    // An event type the client does not know is never listened to.
+    expect(stream.listeners.has('tenant.deleted')).toBe(false);
+    expect(onEvent).not.toHaveBeenCalled();
+
+    stream.emit(
+      'message.created',
+      JSON.stringify({ conversationId: c, handoverId: null, messageId: m }),
+    );
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'message.created',
+      conversationId: c,
+      handoverId: null,
+    });
   });
 });
