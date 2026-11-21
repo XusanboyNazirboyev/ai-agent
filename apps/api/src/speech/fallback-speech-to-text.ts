@@ -1,6 +1,7 @@
 import type {
   AudioClip,
   SpeechToText,
+  TranscriptionFailure,
   TranscriptionResult,
 } from '../core/speech/speech-to-text.js';
 
@@ -28,6 +29,11 @@ export class FallbackSpeechToText implements SpeechToText {
     private readonly backup: SpeechToText,
     /** Language the backup is told to expect when no hint is given. */
     private readonly backupLanguage: string,
+    /** Primary failures that ask the backup (silence included for Groq). */
+    private readonly askBackupOn: readonly TranscriptionFailure[] = [
+      'PROVIDER_ERROR',
+      'TIMEOUT',
+    ],
   ) {
     this.providerId = `${primary.providerId}+${backup.providerId}`;
     this.model = `${primary.model}+${backup.model}`;
@@ -39,11 +45,7 @@ export class FallbackSpeechToText implements SpeechToText {
     options: { languageHint?: string; signal?: AbortSignal } = {},
   ): Promise<TranscriptionResult> {
     const first = await this.primary.transcribe(clip, options);
-    if (
-      first.ok ||
-      (first.code !== 'PROVIDER_ERROR' && first.code !== 'TIMEOUT')
-    )
-      return first;
+    if (first.ok || !this.askBackupOn.includes(first.code)) return first;
     if (options.signal?.aborted) return first;
     return this.backup.transcribe(clip, {
       ...options,

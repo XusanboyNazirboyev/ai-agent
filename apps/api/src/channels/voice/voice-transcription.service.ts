@@ -23,6 +23,7 @@ import { ElevenLabsSpeechToText } from '../../speech/elevenlabs-speech-to-text.j
 import { sniffAudioContainer } from './audio-container.js';
 import { downloadPublicMedia, type MediaDownload } from './media-download.js';
 import { FallbackSpeechToText } from '../../speech/fallback-speech-to-text.js';
+import { WhisperSpeechToText } from '../../speech/whisper-speech-to-text.js';
 import {
   GeminiSpeechToText,
   sdkTranscribeCall,
@@ -50,9 +51,29 @@ export function buildSpeechToText(env: {
   readonly STT_MODEL?: string | undefined;
   readonly STT_API_KEY?: string | undefined;
   readonly GEMINI_API_KEY?: string | undefined;
+  readonly GROQ_API_KEY?: string | undefined;
   readonly STT_FALLBACK?: string | undefined;
   readonly ELEVENLABS_API_KEY?: string | undefined;
 }): SpeechToText {
+  // Owner 2026-11-21: Groq Whisper first; Uzbek is not on its language list,
+  // so anything it cannot turn into text (error, timeout, nothing heard)
+  // goes on to the Gemini chain below.
+  if (env.STT_PROVIDER === 'groq' && env.GROQ_API_KEY) {
+    const groq = new WhisperSpeechToText({
+      providerId: 'groq',
+      baseUrl: 'https://api.groq.com/openai/v1',
+      apiKey: env.GROQ_API_KEY,
+      model: 'whisper-large-v3',
+      timeoutMs: DEFAULT_VOICE_POLICY.timeoutMs,
+    });
+    const rest = buildSpeechToText({ ...env, STT_PROVIDER: 'gemini' });
+    if (rest.providerId === 'none') return groq;
+    return new FallbackSpeechToText(groq, rest, 'uz-Latn', [
+      'PROVIDER_ERROR',
+      'TIMEOUT',
+      'UNINTELLIGIBLE',
+    ]);
+  }
   const key = sttApiKey(env);
   if (env.STT_PROVIDER !== 'gemini' || !key)
     return new NotConfiguredSpeechToText();
@@ -135,6 +156,7 @@ export class VoiceTranscriptionService {
         STT_API_KEY: config.get('STT_API_KEY', { infer: true }),
         GEMINI_API_KEY: config.get('GEMINI_API_KEY', { infer: true }),
         STT_FALLBACK: config.get('STT_FALLBACK', { infer: true }),
+        GROQ_API_KEY: config.get('GROQ_API_KEY', { infer: true }),
         ELEVENLABS_API_KEY: config.get('ELEVENLABS_API_KEY', { infer: true }),
       });
   }

@@ -68,4 +68,24 @@ describe('FallbackSpeechToText (ADR 042)', () => {
     expect(stt.providerId).toBe('gemini+elevenlabs');
     expect(await stt.transcribe(CLIP)).toEqual({ ok: false, code: 'TIMEOUT' });
   });
+
+  it('asks the backup on silence too when told to (Groq first, owner 2026-11-21)', async () => {
+    const primary = fake('groq', { ok: false, code: 'UNINTELLIGIBLE' });
+    const backup = fake('gemini', { ok: true, text: 'Salom' });
+    const strict = new FallbackSpeechToText(primary, backup, 'uz-Latn');
+    expect(await strict.transcribe(CLIP)).toEqual({
+      ok: false,
+      code: 'UNINTELLIGIBLE',
+    });
+    const groqFirst = new FallbackSpeechToText(primary, backup, 'uz-Latn', [
+      'PROVIDER_ERROR',
+      'TIMEOUT',
+      'UNINTELLIGIBLE',
+    ]);
+    expect(await groqFirst.transcribe(CLIP)).toEqual({
+      ok: true,
+      text: 'Salom',
+    });
+    expect(backup.hints).toEqual(['uz-Latn']);
+  });
 });

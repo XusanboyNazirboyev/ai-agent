@@ -214,9 +214,13 @@ const environmentSchema = postgresEnvironmentSchema
     /**
      * ADR 042: speech-to-text for customer voice notes. `none` (default)
      * answers every voice note with "please type"; `gemini` uses
-     * gemini-3.5-transcribe with STT_API_KEY (a paid-tier Gemini key).
+     * gemini-3.5-transcribe with STT_API_KEY (a paid-tier Gemini key);
+     * `groq` (owner 2026-11-21) uses Groq Whisper first and falls back to
+     * Gemini, then ElevenLabs, when Groq fails or hears nothing.
      */
-    STT_PROVIDER: z.enum(['none', 'gemini']).default('none'),
+    STT_PROVIDER: z.enum(['none', 'gemini', 'groq']).default('none'),
+    /** Groq key (also read by the `groq` LLM provider preset). */
+    GROQ_API_KEY: z.string().min(1).optional(),
     STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
     STT_API_KEY: z.string().min(1).optional(),
     /**
@@ -561,6 +565,13 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['STT_API_KEY'],
         message:
           'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
+      });
+    }
+    if (environment.STT_PROVIDER === 'groq' && !environment.GROQ_API_KEY) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GROQ_API_KEY'],
+        message: 'GROQ_API_KEY is required when STT_PROVIDER=groq',
       });
     }
     if (

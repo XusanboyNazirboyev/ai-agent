@@ -45,4 +45,19 @@ describe('buildSpeechToText (ADR 042)', () => {
       }),
     ).toBeInstanceOf(GeminiSpeechToText);
   });
+
+  it('puts Groq Whisper first, then the Gemini chain (owner 2026-11-21)', () => {
+    const chain = buildSpeechToText({
+      ...base,
+      STT_PROVIDER: 'groq',
+      GROQ_API_KEY: 'q',
+      ELEVENLABS_API_KEY: 'e',
+    });
+    expect(chain).toBeInstanceOf(FallbackSpeechToText);
+    expect(chain.providerId).toBe('groq+gemini+elevenlabs');
+    expect(
+      buildSpeechToText({ STT_PROVIDER: 'groq', GROQ_API_KEY: 'q' }).providerId,
+    ).toBe('groq');
+    expect(buildSpeechToText({ STT_PROVIDER: 'groq' }).providerId).toBe('none');
+  });
 });
