@@ -20,6 +20,7 @@ import { InboundProcessor } from '../inbound/inbound-processor.js';
 import { telegramRetryDelayMs } from './retry-policy.js';
 import { runWithLogContext } from '../../observability/log-context.js';
 import { redisOptions } from '../../queue/redis-options.js';
+import { onOutboxWritten } from './outbox-signal.js';
 
 /**
  * ADR 005 debounce: a burst of customer messages is answered once. 1 s since
@@ -61,6 +62,8 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
   private queue!: Queue<QueuePayload>;
   private worker!: Worker<QueuePayload>;
   private timer: ReturnType<typeof setInterval> | undefined;
+  private again = false;
+  private stopSignal: (() => void) | undefined;
   private publishing = false;
   /**
    * The outbox relay claims due events of every tenant, so it reads and
@@ -149,16 +152,24 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
     );
     this.timer.unref();
     void runWithoutTenant(() => this.publishPending());
+    this.stopSignal = onOutboxWritten(
+      () => void runWithoutTenant(() => this.publishPending()),
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    this.stopSignal?.();
     await Promise.allSettled([this.worker?.close(), this.queue?.close()]);
   }
 
   private async publishPending(): Promise<void> {
-    if (this.publishing || !this.queue) return;
+    if (!this.queue) return;
+    // A signal during a pass runs one more pass, so a new row never waits
+    // for the next poll.
+    if (this.publishing) return void (this.again = true);
     this.publishing = true;
+    this.again = false;
     try {
       const staleBefore = new Date(Date.now() - 60_000);
       await this.relay.outboxEvent.updateMany({
@@ -254,6 +265,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
       this.logger.error('Telegram outbox polling failed');
     } finally {
       this.publishing = false;
+      if (this.again) void runWithoutTenant(() => this.publishPending());
     }
   }
 }

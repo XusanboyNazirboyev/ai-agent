@@ -28,6 +28,7 @@ import {
   startPayload,
   verifyGroupLinkCode,
 } from './operator-group-link.js';
+import { outboxWritten } from './outbox-signal.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -186,7 +187,7 @@ export class TelegramWebhookService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const outcome = await this.prisma.$transaction(async (tx) => {
         const channel = await tx.channelAccount.findFirst({
           where: {
             id: routeAccountId,
@@ -392,8 +393,10 @@ export class TelegramWebhookService {
             } satisfies Prisma.InputJsonObject,
           },
         });
-        return 'accepted';
+        return 'accepted' as const;
       });
+      if (outcome === 'accepted') outboxWritten();
+      return outcome;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

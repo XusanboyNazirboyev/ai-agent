@@ -28,3 +28,5 @@ Telegram may retry webhook requests, queues may redeliver after process failure,
 ## Amendment 2026-11-21: 1 s debounce and early "typing…" (owner: the agent is too slow)
 
 Measured on staging (Gemini Flash-Lite routing): a text reply took 4.3 s from the customer's message to the bot's, of which 2.7 s passed before the turn started (the 2 s debounce plus the 500 ms outbox poll) and 1.6 s in two model calls; a voice note waited about 6 s (debounce plus transcription) with nothing shown to the customer. The inbound debounce is now 1 s (`INBOUND_DEBOUNCE_MS`): a quick burst is still answered once, and a later message is still picked up by the next round. When the bot will answer (agent mode LIVE, conversation `BOT_ACTIVE`, Telegram), "typing…" now starts when the job starts, before a voice note is transcribed, instead of after it.
+
+The outbox relay is also woken right after a commit that wrote a row (the Telegram webhook's acceptance and the agent's reply commit), instead of waiting up to its 500 ms poll; a signal during a pass runs one more pass. One process runs the webhook, the worker and the relay; the poll stays as the safety net.

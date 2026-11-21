@@ -31,6 +31,7 @@ import type {
   ProcessResult,
   TelegramQueueEvent,
 } from './telegram-processor.js';
+import { outboxWritten } from './outbox-signal.js';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -277,6 +278,7 @@ export class TelegramAgentPipeline {
         claim,
         computed,
       );
+      outboxWritten();
       this.logger.log(
         JSON.stringify({
           event: 'agent.turn_committed',
