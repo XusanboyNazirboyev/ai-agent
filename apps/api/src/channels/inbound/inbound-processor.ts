@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { VoiceReplyService } from '../voice/voice-reply.service.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { jsonString, selectInboundBatch } from '../telegram/inbound-batch.js';
@@ -71,6 +72,7 @@ export class InboundProcessor {
     @Optional() private readonly voice?: VoiceTranscriptionService,
     @Optional() private readonly comments?: InstagramCommentReplyService,
     @Optional() private readonly access?: InboundAccessGate,
+    @Optional() private readonly voiceReplies?: VoiceReplyService,
   ) {}
 
   /**
@@ -692,6 +694,7 @@ export class InboundProcessor {
         },
       });
       await this.afterDelivery(event.tenantId, message.id);
+      await this.voiceReplies?.afterTextSent(event.tenantId, message.id);
     } catch (error) {
       if (error instanceof TelegramAmbiguousSendError) {
         await this.prisma.message.updateMany({

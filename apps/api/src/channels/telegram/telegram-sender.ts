@@ -102,6 +102,45 @@ export class TelegramSender {
     }
   }
 
+  /**
+   * Voice replies (owner 2026-11-21): Bot API `sendVoice` (read 2026-11-21:
+   * OGG/Opus, MP3 or M4A up to 50 MB, multipart upload in `voice`). Best
+   * effort after the text reply: throws on any failure, the caller ignores it.
+   */
+  async sendVoice(
+    chatId: string,
+    mp3: Uint8Array,
+    channelAccountId?: string,
+  ): Promise<void> {
+    const token =
+      channelAccountId && this.credentials
+        ? await this.credentials.tokenFor(channelAccountId)
+        : this.token;
+    if (!token) throw new Error('Telegram sender is not configured');
+    const form = new FormData();
+    form.set('chat_id', chatId);
+    form.set(
+      'voice',
+      new Blob([new Uint8Array(mp3)], { type: 'audio/mpeg' }),
+      'reply.mp3',
+    );
+    const response = await this.request(
+      `https://api.telegram.org/bot${token}/sendVoice`,
+      { method: 'POST', body: form, signal: AbortSignal.timeout(20_000) },
+    );
+    const body = (await response.json().catch(() => null)) as {
+      ok?: unknown;
+      error_code?: unknown;
+    } | null;
+    if (!response.ok || body?.ok !== true)
+      throw new TelegramApiError(
+        typeof body?.error_code === 'number'
+          ? body.error_code
+          : response.status,
+        null,
+      );
+  }
+
   /** `channelAccountId` selects that account's bot; without it the environment bot is used. */
   async sendMessage(
     chatId: string,

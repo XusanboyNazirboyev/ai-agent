@@ -247,6 +247,16 @@ const environmentSchema = postgresEnvironmentSchema
      */
     STT_FALLBACK: z.enum(['none', 'elevenlabs']).default('elevenlabs'),
     ELEVENLABS_API_KEY: z.string().min(1).optional(),
+    /**
+     * Voice replies (owner 2026-11-21): when the customer's last message was a
+     * voice note, the bot's text reply is also sent as speech. `elevenlabs`
+     * needs ELEVENLABS_API_KEY and VOICE_REPLY_VOICE_ID; `off` by default.
+     */
+    VOICE_REPLIES: z.enum(['off', 'elevenlabs']).default('off'),
+    VOICE_REPLY_VOICE_ID: z
+      .string()
+      .regex(/^[A-Za-z0-9]{10,40}$/u)
+      .optional(),
     LLM_MODEL_FAST: z.string().min(1).max(100).optional(),
     LLM_MODEL_STRONG: z.string().min(1).max(100).optional(),
     LLM_STRUCTURED_OUTPUT: z
@@ -553,6 +563,17 @@ const environmentSchema = postgresEnvironmentSchema
         code: 'custom',
         path: ['POSTGRES_ADMIN_USER'],
         message: 'POSTGRES_ADMIN_USER is required when RLS_CONTEXT_MODE=strict',
+      });
+    }
+    if (
+      environment.VOICE_REPLIES === 'elevenlabs' &&
+      (!environment.ELEVENLABS_API_KEY || !environment.VOICE_REPLY_VOICE_ID)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['VOICE_REPLY_VOICE_ID'],
+        message:
+          'ELEVENLABS_API_KEY and VOICE_REPLY_VOICE_ID are required when VOICE_REPLIES=elevenlabs',
       });
     }
     if (

@@ -9,6 +9,7 @@ import { PersistenceModule } from '../../persistence/persistence.module.js';
 import { TelegramCredentialsModule } from './telegram-credentials.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
+import { VoiceReplyService } from '../voice/voice-reply.service.js';
 import { InboundProcessor } from '../inbound/inbound-processor.js';
 import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
 import { TelegramSender } from './telegram-sender.js';
@@ -32,6 +33,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     TelegramSender,
     TelegramAgentPipeline,
     InboundProcessor,
+    VoiceReplyService,
     TelegramQueueRuntime,
     VoiceTranscriptionService,
   ],
