@@ -20,15 +20,15 @@ ChatGPT prepares code and tests only. Claude Code owns review, local test execut
 
 | ID | Priority | Finding | Current status | Next action |
 |---|---|---|---|---|
-| AUD-01 | P0 | Waiting inbox is not globally longest-wait-first; page sorting and cursor ordering disagree | IMPLEMENTED / VALIDATION PENDING | Review SQL, run the new integration spec and API typecheck; verify pagination/filter behavior |
-| AUD-02 | P0 | Conversation timeline can omit newest messages when more than 500 exist | IMPLEMENTED / VALIDATION PENDING | Review and run the 501-message integration regression test |
+| AUD-01 | P0 | Waiting inbox is not globally longest-wait-first; page sorting and cursor ordering disagree | VALIDATED 2026-11-21 (`inbox-waiting-order.integration.spec.ts` 3/3 on `feat/ui-words-menu`) | Review SQL, run the new integration spec and API typecheck; verify pagination/filter behavior |
+| AUD-02 | P0 | Conversation timeline can omit newest messages when more than 500 exist | VALIDATED 2026-11-21 (501-message regression in `webinbox.integration.spec.ts` passes) | Review and run the 501-message integration regression test |
 | AUD-04 | P1 | Instagram account, secret and audit writes are not fully atomic | PARTIAL | Trace all connect/callback/disable/disconnect transaction boundaries; add rollback and concurrency tests |
 | AUD-06 | P1 | Graceful shutdown lifecycle is only partially covered | PARTIAL | Inventory every worker, queue, SSE stream, provider and DB resource; implement ordered/idempotent shutdown and tests |
 | AUD-07 | P1 | Deployment image and source HEAD cannot be reproduced/verified reliably | BLOCKED / NEEDS EVIDENCE | Define immutable image digest + embedded commit SHA; Claude verifies deployed runtime against expected SHA |
-| AUD-08 | P0 | SSE response backpressure is uncontrolled | IMPLEMENTED / VALIDATION PENDING | Review bounded queue/drain/slow-client close behavior and run its integration regression test |
+| AUD-08 | P0 | SSE response backpressure is uncontrolled | PARTLY VALIDATED 2026-11-21 (pause/drain test passes; the 256 KB slow-client disconnect has no test) | Review bounded queue/drain/slow-client close behavior and run its integration regression test |
 | AUD-09 | P1 | Knowledge-only tenant cannot operate without a catalog connector | implemented on feat/knowledge-only-tenants, awaiting reviewer verification (ADR 060 S1) | Trace tenant capability resolution and tool registration; add catalog-free knowledge-only tests |
-| AUD-11 | P1 | Delayed mutation in conversation A can clear draft in conversation B | IMPLEMENTED / VALIDATION PENDING | Review active-conversation guard and run frontend regression test |
-| AUD-12 | P1 | SSE JSON events lack runtime schema validation | OPEN | Define discriminated event schemas and validate at the event boundary; test malformed/unknown payloads |
+| AUD-11 | P1 | Delayed mutation in conversation A can clear draft in conversation B | VALIDATED 2026-11-21 (`conversation-view.draft.test.tsx` 2/2) | Review active-conversation guard and run frontend regression test |
+| AUD-12 | P1 | SSE JSON events lack runtime schema validation | VALIDATED 2026-11-21 (`parseLiveEvent` + hook recovery test in `live-updates.test.ts`, mutation-checked) | Define discriminated event schemas and validate at the event boundary; test malformed/unknown payloads |
 | AUD-13 | P1 | Connector selection may choose the oldest active search connector instead of configured source | Implemented on `feat/connector-roles` (ADR 059 S1), awaiting reviewer verification | Trace tenant connector configuration and routing; make source selection explicit and deterministic |
 | AUD-14 | P1 | DomainPack requires search_catalog, preventing catalog-less packs | implemented on feat/knowledge-only-tenants, awaiting reviewer verification (ADR 060 S1) | Separate optional catalog capability from required pack contract; add scheduling/knowledge-only pack tests |
 
