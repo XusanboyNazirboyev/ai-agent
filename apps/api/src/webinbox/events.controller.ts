@@ -1,4 +1,5 @@
 import {
+  type BeforeApplicationShutdown,
   Controller,
   Get,
   Headers,
@@ -39,15 +40,27 @@ export function openStreams(tenantId: string, operatorId: string): number {
   return open.get(`${tenantId}:${operatorId}`) ?? 0;
 }
 
+/** How to end each open stream of this process (AUD-06). */
+const ends = new Set<() => void>();
+
 @Controller('api/v1/events')
 @UseGuards(SessionGuard)
-export class EventsController {
+export class EventsController implements BeforeApplicationShutdown {
   constructor(
     private readonly events: InboxEventsService,
     private readonly bus: InboxEventBus,
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly sessions: SessionService,
   ) {}
+
+  /**
+   * AUD-06: Nest closes the HTTP server after this hook and waits for open
+   * connections, so end every stream first; browsers reconnect with
+   * Last-Event-ID to the next process. Safe to call twice.
+   */
+  beforeApplicationShutdown(): void {
+    for (const end of [...ends]) end();
+  }
 
   /**
    * Server-sent events for the operator's tenant. A reconnect sends
@@ -86,6 +99,7 @@ export class EventsController {
       closed = true;
       if (released) return;
       released = true;
+      ends.delete(terminate);
       subscription.off?.();
       if (drainListener) response.off('drain', drainListener);
       pendingFrames.length = 0;
@@ -100,6 +114,7 @@ export class EventsController {
       release();
       response.end();
     };
+    ends.add(terminate);
     const validateSession = async (): Promise<boolean> => {
       try {
         if (await this.sessions.isSessionActive(principal)) return true;
