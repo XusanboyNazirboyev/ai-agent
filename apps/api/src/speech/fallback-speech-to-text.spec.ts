@@ -47,6 +47,19 @@ describe('FallbackSpeechToText (ADR 042)', () => {
     }
   });
 
+  it('lets the backup detect the language when no default is set (Deepgram)', async () => {
+    const primary = fake('deepgram', {
+      ok: false,
+      code: 'UNSUPPORTED_LANGUAGE',
+    });
+    const backup = fake('groq', { ok: true, text: 'Привет' });
+    const stt = new FallbackSpeechToText(primary, backup, undefined, [
+      'UNSUPPORTED_LANGUAGE',
+    ]);
+    expect(await stt.transcribe(CLIP)).toEqual({ ok: true, text: 'Привет' });
+    expect(backup.hints).toEqual([undefined]);
+  });
+
   it('keeps the primary verdict for silence or a refused clip (no second paid call)', async () => {
     for (const code of ['UNINTELLIGIBLE', 'NOT_CONFIGURED'] as const) {
       const primary = fake('gemini', { ok: false, code });

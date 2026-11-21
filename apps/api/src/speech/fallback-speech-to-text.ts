@@ -27,8 +27,11 @@ export class FallbackSpeechToText implements SpeechToText {
   constructor(
     private readonly primary: SpeechToText,
     private readonly backup: SpeechToText,
-    /** Language the backup is told to expect when no hint is given. */
-    private readonly backupLanguage: string,
+    /**
+     * Language the backup is told to expect when no hint is given; undefined
+     * lets the backup detect it (Deepgram's low-confidence case).
+     */
+    private readonly backupLanguage: string | undefined,
     /** Primary failures that ask the backup (silence included for Groq). */
     private readonly askBackupOn: readonly TranscriptionFailure[] = [
       'PROVIDER_ERROR',
@@ -47,9 +50,10 @@ export class FallbackSpeechToText implements SpeechToText {
     const first = await this.primary.transcribe(clip, options);
     if (first.ok || !this.askBackupOn.includes(first.code)) return first;
     if (options.signal?.aborted) return first;
-    return this.backup.transcribe(clip, {
-      ...options,
-      languageHint: options.languageHint ?? this.backupLanguage,
-    });
+    const languageHint = options.languageHint ?? this.backupLanguage;
+    return this.backup.transcribe(
+      clip,
+      languageHint ? { ...options, languageHint } : options,
+    );
   }
 }

@@ -60,4 +60,30 @@ describe('buildSpeechToText (ADR 042)', () => {
     ).toBe('groq');
     expect(buildSpeechToText({ STT_PROVIDER: 'groq' }).providerId).toBe('none');
   });
+
+  it('puts Deepgram first, then Groq and the Gemini chain (owner 2026-11-21)', () => {
+    const chain = buildSpeechToText({
+      ...base,
+      STT_PROVIDER: 'deepgram',
+      DEEPGRAM_API_KEY: 'd',
+      GROQ_API_KEY: 'q',
+      ELEVENLABS_API_KEY: 'e',
+    });
+    expect(chain).toBeInstanceOf(FallbackSpeechToText);
+    expect(chain.providerId).toBe('deepgram+groq+gemini+elevenlabs');
+    expect(
+      buildSpeechToText({
+        ...base,
+        STT_PROVIDER: 'deepgram',
+        DEEPGRAM_API_KEY: 'd',
+      }).providerId,
+    ).toBe('deepgram+gemini');
+    expect(
+      buildSpeechToText({ STT_PROVIDER: 'deepgram', DEEPGRAM_API_KEY: 'd' })
+        .providerId,
+    ).toBe('deepgram');
+    expect(buildSpeechToText({ STT_PROVIDER: 'deepgram' }).providerId).toBe(
+      'none',
+    );
+  });
 });

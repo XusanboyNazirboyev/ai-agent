@@ -233,7 +233,11 @@ const environmentSchema = postgresEnvironmentSchema
      * `groq` (owner 2026-11-21) uses Groq Whisper first and falls back to
      * Gemini, then ElevenLabs, when Groq fails or hears nothing.
      */
-    STT_PROVIDER: z.enum(['none', 'gemini', 'groq']).default('none'),
+    STT_PROVIDER: z
+      .enum(['none', 'gemini', 'groq', 'deepgram'])
+      .default('none'),
+    /** `deepgram`: Nova-3 forced to Uzbek first, then Groq, then Gemini. */
+    DEEPGRAM_API_KEY: z.string().min(1).optional(),
     /** Groq key (also read by the `groq` LLM provider preset). */
     GROQ_API_KEY: z.string().min(1).optional(),
     STT_MODEL: z.string().min(1).max(100).default('gemini-3.5-transcribe'),
@@ -636,6 +640,16 @@ const environmentSchema = postgresEnvironmentSchema
         path: ['STT_API_KEY'],
         message:
           'STT_API_KEY or GEMINI_API_KEY is required when STT_PROVIDER=gemini',
+      });
+    }
+    if (
+      environment.STT_PROVIDER === 'deepgram' &&
+      !environment.DEEPGRAM_API_KEY
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['DEEPGRAM_API_KEY'],
+        message: 'DEEPGRAM_API_KEY is required when STT_PROVIDER=deepgram',
       });
     }
     if (environment.STT_PROVIDER === 'groq' && !environment.GROQ_API_KEY) {

@@ -24,6 +24,7 @@ import { sniffAudioContainer } from './audio-container.js';
 import { downloadPublicMedia, type MediaDownload } from './media-download.js';
 import { FallbackSpeechToText } from '../../speech/fallback-speech-to-text.js';
 import { WhisperSpeechToText } from '../../speech/whisper-speech-to-text.js';
+import { DeepgramSpeechToText } from '../../speech/deepgram-speech-to-text.js';
 import {
   GeminiSpeechToText,
   sdkTranscribeCall,
@@ -52,9 +53,31 @@ export function buildSpeechToText(env: {
   readonly STT_API_KEY?: string | undefined;
   readonly GEMINI_API_KEY?: string | undefined;
   readonly GROQ_API_KEY?: string | undefined;
+  readonly DEEPGRAM_API_KEY?: string | undefined;
   readonly STT_FALLBACK?: string | undefined;
   readonly ELEVENLABS_API_KEY?: string | undefined;
 }): SpeechToText {
+  // Owner 2026-11-21 (later): Deepgram Nova-3 first, forced to Uzbek (word
+  // for word in the measurement); a failure or a low-confidence transcript
+  // (most likely another language) goes to Groq, which detects the language,
+  // then to the Gemini chain.
+  if (env.STT_PROVIDER === 'deepgram' && env.DEEPGRAM_API_KEY) {
+    const deepgram = new DeepgramSpeechToText({
+      apiKey: env.DEEPGRAM_API_KEY,
+      timeoutMs: DEFAULT_VOICE_POLICY.timeoutMs,
+    });
+    const rest = buildSpeechToText({
+      ...env,
+      STT_PROVIDER: env.GROQ_API_KEY ? 'groq' : 'gemini',
+    });
+    if (rest.providerId === 'none') return deepgram;
+    return new FallbackSpeechToText(deepgram, rest, undefined, [
+      'PROVIDER_ERROR',
+      'TIMEOUT',
+      'UNINTELLIGIBLE',
+      'UNSUPPORTED_LANGUAGE',
+    ]);
+  }
   // Owner 2026-11-21: Groq Whisper first; Uzbek is not on its language list,
   // so anything it cannot turn into text (error, timeout, nothing heard)
   // goes on to the Gemini chain below.
@@ -157,6 +180,7 @@ export class VoiceTranscriptionService {
         GEMINI_API_KEY: config.get('GEMINI_API_KEY', { infer: true }),
         STT_FALLBACK: config.get('STT_FALLBACK', { infer: true }),
         GROQ_API_KEY: config.get('GROQ_API_KEY', { infer: true }),
+        DEEPGRAM_API_KEY: config.get('DEEPGRAM_API_KEY', { infer: true }),
         ELEVENLABS_API_KEY: config.get('ELEVENLABS_API_KEY', { infer: true }),
       });
   }
