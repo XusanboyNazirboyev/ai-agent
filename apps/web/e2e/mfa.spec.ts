@@ -51,7 +51,7 @@ async function context(browser: Browser): Promise<Page> {
   return created.newPage();
 }
 
-test('an operator enrols from Security, then signs in with a code (and not without)', async ({
+test('an operator enrols, signs in with a code, then turns MFA off', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -72,7 +72,7 @@ test('an operator enrols from Security, then signs in with a code (and not witho
   await expect(page.getByTestId('mfa-uri')).toHaveValue(
     new RegExp(`^otpauth://totp/tezda:.+secret=${secret}&issuer=tezda$`, 'u'),
   );
-  await page.getByTestId('mfa-enroll-code').fill(code(secret));
+  await page.getByTestId('mfa-enroll-code').fill(code(secret, -1));
   await page.getByRole('button', { name: 'Turn on' }).click();
   await expect(page.getByTestId('mfa-recovery')).toBeVisible();
   await expect(
@@ -99,11 +99,28 @@ test('an operator enrols from Security, then signs in with a code (and not witho
   await expect(other.getByTestId('mfa-form').getByRole('alert')).toContainText(
     'not valid',
   );
-  // The step used to enrol is spent (replay); the next step's code is valid.
-  await other.getByTestId('mfa-code').fill(code(secret, 1));
+  // The previous step used to enrol is spent (replay); the current code is valid.
+  await other.getByTestId('mfa-code').fill(code(secret));
   await other.getByRole('button', { name: 'Verify' }).click();
   await other.waitForURL(/\/today/u);
   await other.goto('/inbox');
+
+  // The original session can turn MFA off only with the current password and a
+  // fresh authenticator code. A later password-only login must then succeed.
+  await page.goto('/settings/security');
+  await page.getByTestId('mfa-manage-code').fill(code(secret, 1));
+  await page.getByTestId('mfa-manage-password').fill(f.password);
+  await page.getByTestId('mfa-disable').click();
+  await expect(page.getByTestId('mfa-state')).toContainText('is off');
+  await expect(page.getByTestId('mfa-disable')).toHaveCount(0);
+
+  const direct = await context(browser);
+  await direct.goto('/login');
+  await direct.getByLabel('Email').fill(email);
+  await direct.getByLabel('Password').fill(f.password);
+  await direct.getByRole('button', { name: 'Sign in' }).click();
+  await direct.waitForURL(/\/today/u);
+  await expect(direct.getByTestId('mfa-form')).toHaveCount(0);
 });
 
 test('a console admin without a second factor must enrol before getting a session', async ({
