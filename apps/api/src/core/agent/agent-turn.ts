@@ -702,7 +702,9 @@ export async function runAgentTurn(
       // model names, when the heuristic guesses that same language or none,
       // in the same script; never against the heuristic, never for a message
       // without a lower-case word (an acronym says nothing about language),
-      // and never instead of an explicit request.
+      // and never instead of an explicit request. A message the heuristic
+      // cannot read at all ("aylts") never moves away from the language the
+      // customer clearly wrote in earlier (staging 2026-11-23).
       if (
         requested === undefined &&
         !mirror &&
@@ -710,7 +712,10 @@ export async function runAgentTurn(
         modelLocale !== undefined &&
         modelLocale !== localeId &&
         input.supportedLocales.includes(modelLocale) &&
-        (language.language === lang || language.language === 'unknown') &&
+        (language.language === lang ||
+          (language.language === 'unknown' &&
+            (past.established === undefined ||
+              past.established === modelLocale))) &&
         language.script === script &&
         /\p{Ll}{3}/u.test(input.customerText)
       ) {

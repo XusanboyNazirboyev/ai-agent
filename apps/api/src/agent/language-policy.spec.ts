@@ -545,6 +545,29 @@ describe('explicit language requests', () => {
     expect(result.locale).toBe('uz-Latn');
   });
 
+  // Staging 2026-11-23: "aylts" (IELTS by ear) in an Uzbek chat; the model
+  // called it English and the Uzbek reply then failed LANGUAGE_MISMATCH.
+  it('does not leave the language the customer wrote in for a word the heuristic cannot read', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'Sizga {{F1}} kursi mos keladi.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'aylts',
+      input: {
+        conversationLocale: 'uz-Latn',
+        history: [
+          {
+            role: 'customer',
+            text: "menga o'zbek tilida ovozli habar jo'nata olasanmi",
+          },
+        ],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+  });
+
   it('follows a clear message in another language after a request', async () => {
     const provider = new ScriptedLlmProvider([
       extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),
