@@ -1156,6 +1156,7 @@
   "console.plans.maxChannels": "Аккаунтов мессенджеров",
   "console.plans.unlimited": "Без ограничений",
   "console.plans.limitHint": "Оставьте лимиты операторов и лидов пустыми, чтобы не ограничивать их. Пустой лимит мессенджеров включает 1 аккаунт.",
+  "console.plans.callAnalysisMinutes": "Анализ звонков, минут в месяц",
   "console.plans.aiBudget": "Бюджет на ИИ в месяц, USD",
   "console.plans.aiBudgetHint": "Пусто: бюджет сервера по умолчанию. 0: ассистент не отвечает, все чаты уходят команде.",
   "console.plans.serverDefault": "По умолчанию сервера",

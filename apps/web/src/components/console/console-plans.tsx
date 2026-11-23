@@ -74,6 +74,7 @@ export function ConsolePlans(): ReactNode {
   const [maxChannels, setMaxChannels] = useState('');
   const [aiBudget, setAiBudget] = useState('');
   const [monthlyLeads, setMonthlyLeads] = useState('');
+  const [callMinutes, setCallMinutes] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [position, setPosition] = useState('0');
   const [invalid, setInvalid] = useState(false);
@@ -133,6 +134,11 @@ export function ConsolePlans(): ReactNode {
         ? String(plan.limits.monthlyNewLeads)
         : '',
     );
+    setCallMinutes(
+      plan?.limits?.callAnalysisMinutes !== undefined
+        ? String(plan.limits.callAnalysisMinutes)
+        : '',
+    );
     setIsPublic(plan?.isPublic ?? false);
     setPosition(String(plan?.position ?? 0));
     setAiBudget(
@@ -151,6 +157,7 @@ export function ConsolePlans(): ReactNode {
   const channels = optionalInt(maxChannels);
   const budget = optionalUsd(aiBudget);
   const leadsLimit = optionalLeads(monthlyLeads);
+  const callLimit = optionalInt(callMinutes);
   const order = Number(position);
   const valid =
     (!isNew || CODE.test(code)) &&
@@ -163,6 +170,7 @@ export function ConsolePlans(): ReactNode {
     channels !== null &&
     budget !== null &&
     leadsLimit !== null &&
+    callLimit !== null &&
     Number.isInteger(order) &&
     order >= 0 &&
     order <= 10_000;
@@ -180,6 +188,9 @@ export function ConsolePlans(): ReactNode {
     delete limits.maxChannelAccounts;
     delete limits.monthlyLlmBudgetUsd;
     delete limits.monthlyNewLeads;
+    delete limits.callAnalysisMinutes;
+    if (callLimit !== undefined && callLimit !== null)
+      limits.callAnalysisMinutes = callLimit;
     if (leadsLimit !== undefined && leadsLimit !== null)
       limits.monthlyNewLeads = leadsLimit;
     if (operators !== undefined && operators !== null)
@@ -260,6 +271,9 @@ export function ConsolePlans(): ReactNode {
               </Field>
               <Field label={t('console.plans.monthlyNewLeads')}>
                 {plan.limits?.monthlyNewLeads ?? t('console.plans.unlimited')}
+              </Field>
+              <Field label={t('console.plans.callAnalysisMinutes')}>
+                {plan.limits?.callAnalysisMinutes ?? 0}
               </Field>
               <Field label={t('console.plans.public')}>
                 {plan.isPublic
@@ -443,6 +457,18 @@ export function ConsolePlans(): ReactNode {
                   min={1}
                   value={monthlyLeads}
                   onChange={(e) => setMonthlyLeads(e.target.value)}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                {t('console.plans.callAnalysisMinutes')}
+                <input
+                  data-testid="plan-call-minutes"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={callMinutes}
+                  onChange={(e) => setCallMinutes(e.target.value)}
                   className={fieldClass}
                 />
               </label>

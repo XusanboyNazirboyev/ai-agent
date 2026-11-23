@@ -11,6 +11,16 @@ export interface PlanLimits {
   readonly monthlyLlmBudgetUsd?: number;
   /** ADR 080: new leads per calendar month (tenant time zone); warned, never blocked. */
   readonly monthlyNewLeads?: number;
+  /**
+   * ADR 085: analysed call minutes per calendar month. Unlike the other keys,
+   * a missing value means the plan has no call analysis (callAnalysisMinutesOf).
+   */
+  readonly callAnalysisMinutes?: number;
+}
+
+/** ADR 085: call analysis is a plan feature; no key, no minutes. */
+export function callAnalysisMinutesOf(plan: PlanLimits): number {
+  return plan.callAnalysisMinutes ?? 0;
 }
 
 /** One channel is included before a paid plan explicitly grants more. */
@@ -55,6 +65,7 @@ export function planLimitsOf(raw: unknown): PlanLimits {
   const maxOperators = nonNegativeInt(record.maxOperators);
   const maxChannelAccounts = nonNegativeInt(record.maxChannelAccounts);
   const monthlyLlmBudgetUsd = nonNegativeAmount(record.monthlyLlmBudgetUsd);
+  const callAnalysisMinutes = nonNegativeInt(record.callAnalysisMinutes);
   const monthlyNewLeads =
     typeof record.monthlyNewLeads === 'number' &&
     Number.isInteger(record.monthlyNewLeads) &&
@@ -66,6 +77,7 @@ export function planLimitsOf(raw: unknown): PlanLimits {
     ...(maxOperators !== undefined ? { maxOperators } : {}),
     ...(maxChannelAccounts !== undefined ? { maxChannelAccounts } : {}),
     ...(monthlyLlmBudgetUsd !== undefined ? { monthlyLlmBudgetUsd } : {}),
+    ...(callAnalysisMinutes !== undefined ? { callAnalysisMinutes } : {}),
   };
 }
 

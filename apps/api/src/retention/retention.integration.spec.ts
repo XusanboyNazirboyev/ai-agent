@@ -286,6 +286,49 @@ describe('ContactErasureService (P0.6)', () => {
     });
     expect(still?.deletedAt).toBeNull();
   });
+
+  it('deletes the contact calls and keeps other calls (ADR 085)', async () => {
+    const tenant = await createTenant({});
+    const { contact } = await createBase(tenant.id);
+    const pbx = await db.telephonyAccount.create({
+      data: {
+        tenantId: tenant.id,
+        provider: 'ONLINEPBX',
+        domain: 'example.onpbx.ru',
+        apiKeyKeyId: 'k1',
+        apiKeyNonce: Uint8Array.from([1]),
+        apiKeyCipher: Uint8Array.from([2]),
+      },
+    });
+    const call = (providerCallId: string, contactId: string | null) =>
+      db.callRecording.create({
+        data: {
+          tenantId: tenant.id,
+          telephonyAccountId: pbx.id,
+          providerCallId,
+          direction: 'inbound',
+          customerPhone: '+998901234567',
+          startedAt: new Date(),
+          endedAt: new Date(),
+          talkSeconds: 30,
+          summary: 'Ada asks about IELTS',
+          contactId,
+        },
+      });
+    const own = await call(unique('call'), contact.id);
+    const unmatched = await call(unique('call'), null);
+    const actor = await db.operator.create({
+      data: { tenantId: tenant.id, displayName: 'Owner', role: 'OWNER' },
+    });
+    const service = scoped(new ContactErasureService(prisma));
+    await service.erase(tenant.id, contact.id, actor.id);
+    expect(
+      await db.callRecording.findUnique({ where: { id: own.id } }),
+    ).toBeNull();
+    expect(
+      await db.callRecording.findUnique({ where: { id: unmatched.id } }),
+    ).not.toBeNull();
+  });
 });
 
 async function addMessage(

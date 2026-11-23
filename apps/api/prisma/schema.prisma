@@ -292,6 +292,8 @@ model Tenant {
   subscriptionPayments   SubscriptionPayment[]
   clickTransactions      ClickTransaction[]
   paymeTransactions      PaymeTransaction[]
+  telephonyAccounts      TelephonyAccount[]
+  callRecordings         CallRecording[]
   operatorInvites        OperatorInvite[]
   passwordResets         OperatorPasswordReset[]
   platformAuditEvents    PlatformAuditEvent[]
@@ -628,6 +630,7 @@ model Contact {
   leads         Lead[]
   bookings      Booking[]
   appointments  Appointment[]
+  calls         CallRecording[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, channelAccountId, providerUserId])
@@ -1699,7 +1702,7 @@ model SubscriptionPlan {
   priceMinor BigInt   @map("price_minor")
   currency   String   @default("UZS") @db.VarChar(3)
   periodDays Int      @map("period_days")
-  /// { maxOperators?, maxChannelAccounts?, monthlyLlmBudgetUsd?, monthlyNewLeads? }
+  /// { maxOperators?, maxChannelAccounts?, monthlyLlmBudgetUsd?, monthlyNewLeads?, callAnalysisMinutes? }
   limits     Json     @default("{}") @db.JsonB
   isActive   Boolean  @default(true) @map("is_active")
   /// ADR 080: listed on the public sales page.
@@ -1814,6 +1817,87 @@ model PaymeTransaction {
 
   @@index([tenantId, paymeTime])
   @@map("payme_transactions")
+}
+
+/// ADR 085: a tenant's IP telephony account whose call recordings are
+/// analysed. The API key is sealed with the channel-secret cipher (AAD
+/// `telephony:{tenantId}:{id}:api_key`); only TelephonyAccountStore reads it.
+model TelephonyAccount {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  tenantId     String            @map("tenant_id") @db.Uuid
+  provider     TelephonyProvider
+  /// OnlinePBX: the tenant's PBX domain, e.g. example.onpbx.ru.
+  domain       String            @db.VarChar(253)
+  enabled      Boolean           @default(true)
+  apiKeyKeyId  String            @map("api_key_key_id") @db.VarChar(40)
+  apiKeyNonce  Bytes             @map("api_key_nonce")
+  /// Ciphertext followed by the 16-byte GCM tag.
+  apiKeyCipher Bytes             @map("api_key_cipher")
+  /// The poller has read every call that ended before this instant.
+  polledUntil  DateTime?         @map("polled_until") @db.Timestamptz(6)
+  lastError    String?           @map("last_error") @db.VarChar(200)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  calls        CallRecording[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, provider])
+  @@map("telephony_accounts")
+}
+
+enum TelephonyProvider {
+  ONLINEPBX
+}
+
+/// ADR 085 call life cycle. SKIPPED_LIMIT: over the plan's monthly minutes,
+/// never downloaded. FAILED: gave up after bounded retries (failureReason).
+enum CallRecordingStatus {
+  PENDING
+  ANALYSED
+  SKIPPED_LIMIT
+  FAILED
+}
+
+/// ADR 085: one answered call read from the tenant's PBX. Personal data:
+/// deleted with its contact on erasure; audio lives in S3 until
+/// audioDeleteAfter, the transcript and analysis stay.
+model CallRecording {
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
+  telephonyAccountId String              @map("telephony_account_id") @db.Uuid
+  /// The PBX's call id (OnlinePBX `uuid`).
+  providerCallId     String              @map("provider_call_id") @db.VarChar(100)
+  /// Provider direction as given (OnlinePBX `accountcode`: inbound, outbound, ...).
+  direction          String              @db.VarChar(20)
+  customerPhone      String?             @map("customer_phone") @db.VarChar(40)
+  internalNumber     String?             @map("internal_number") @db.VarChar(40)
+  startedAt          DateTime            @map("started_at") @db.Timestamptz(6)
+  endedAt            DateTime            @map("ended_at") @db.Timestamptz(6)
+  talkSeconds        Int                 @map("talk_seconds")
+  status             CallRecordingStatus @default(PENDING)
+  attempts           Int                 @default(0)
+  failureReason      String?             @map("failure_reason") @db.VarChar(200)
+  audioKey           String?             @map("audio_key") @db.VarChar(300)
+  audioDeleteAfter   DateTime?           @map("audio_delete_after") @db.Timestamptz(6)
+  /// [{ start, end, speaker, text }] in seconds; speaker labels from diarization.
+  transcript         Json?               @db.JsonB
+  summary            String?
+  nextStep           String?             @map("next_step")
+  analysedAt         DateTime?           @map("analysed_at") @db.Timestamptz(6)
+  /// Matched by normalised phone; null until matched or attached by hand.
+  contactId          String?             @map("contact_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  telephonyAccount   TelephonyAccount    @relation(fields: [tenantId, telephonyAccountId], references: [tenantId, id], onDelete: Cascade)
+  contact            Contact?            @relation(fields: [tenantId, contactId], references: [tenantId, id], onDelete: NoAction)
+
+  @@unique([tenantId, telephonyAccountId, providerCallId])
+  @@index([tenantId, contactId, startedAt])
+  @@index([tenantId, startedAt])
+  @@index([tenantId, status])
+  @@map("call_recordings")
 }
 
 /// Invite to join a tenant as an operator. Only the token hash is stored;

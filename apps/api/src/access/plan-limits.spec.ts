@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  callAnalysisMinutesOf,
   effectiveChannelAccountLimit,
   monthlyLlmBudgetNano,
   planLimitsOf,
@@ -29,6 +30,19 @@ describe('planLimitsOf', () => {
     expect(planLimitsOf(null)).toEqual({});
     expect(planLimitsOf([1])).toEqual({});
     expect(planLimitsOf({ monthlyLlmBudgetUsd: Number.NaN })).toEqual({});
+  });
+
+  it('reads call analysis minutes; a plan without them has none (ADR 085)', () => {
+    expect(
+      callAnalysisMinutesOf(planLimitsOf({ callAnalysisMinutes: 300 })),
+    ).toBe(300);
+    expect(callAnalysisMinutesOf(planLimitsOf({}))).toBe(0);
+    expect(
+      callAnalysisMinutesOf(planLimitsOf({ callAnalysisMinutes: -5 })),
+    ).toBe(0);
+    expect(
+      callAnalysisMinutesOf(planLimitsOf({ callAnalysisMinutes: 2.5 })),
+    ).toBe(0);
   });
 });
 

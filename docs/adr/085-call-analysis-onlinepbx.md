@@ -52,3 +52,11 @@ So the text comes from OvozAI and only the speaker turns from Gladia: each OvozA
 
 - **C1:** a real OnlinePBX domain and API key to test against (blocks step 5; steps 1 to 4 use recorded fixtures).
 - **C2:** the owner switches on Gladia's model-training opt-out in the Gladia dashboard (blocks sending customer calls to Gladia; until then speakers are labelled from the text by the summary model, with lower accuracy).
+
+## Step 1 done (2026-11-23)
+
+- Migration `20261201090000_call_analysis`: `telephony_accounts` (one per tenant and provider; the API key sealed in the row with the channel-secret cipher) and `call_recordings` (idempotent by tenant, account and provider call id), both with the four RLS policies.
+- **Not a `tenant_connectors` row:** that table is read as a CRM everywhere (connector list, role selection, catalog sync `listActive`), so a PBX there would show up as a broken CRM. Telephony stays out of `core/**` and out of the CRM tables.
+- **Calls belong to the contact, not the lead:** `contact_id` (nullable); the lead card shows the calls of its contact. Contact erasure deletes the contact's calls (transcript and summary are the contact's words); deleting stored audio joins that step when audio storage lands (step 3).
+- Plan limit `callAnalysisMinutes` (console plan editor and API); unlike the other limits a missing value means none. Staging: set Premium to 300 in the console after the release.
+- The connect endpoint and the sealed-key store come with the OnlinePBX client in step 2, since saving a key is only useful once it can be checked against `auth.json`.

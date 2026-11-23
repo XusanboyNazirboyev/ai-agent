@@ -154,6 +154,10 @@ export class ContactErasureService {
 
     const erasedProviderId = erasedPlaceholder(tenantId, contactId);
 
+    // ADR 085: a call's transcript and summary are the contact's words.
+    // shortcut: rows only; stored audio is deleted when audio storage lands (ADR 085 step 3).
+    await tx.callRecording.deleteMany({ where: { tenantId, contactId } });
+
     await tx.contact.update({
       where: { tenantId_id: { tenantId, id: contactId } },
       data: {

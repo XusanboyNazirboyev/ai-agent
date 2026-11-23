@@ -120,6 +120,8 @@ export interface PlanLimits {
   maxChannelAccounts?: number;
   monthlyLlmBudgetUsd?: number;
   monthlyNewLeads?: number;
+  /** ADR 085: analysed call minutes per month; none = no call analysis. */
+  callAnalysisMinutes?: number;
 }
 
 export interface Plan {
