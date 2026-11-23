@@ -10,6 +10,9 @@ test.describe('Assistant page', () => {
     await admin.page.goto('/settings/bot');
     const current = admin.page.getByTestId('bot-current');
     await expect(current).toHaveAttribute('data-mode', 'OFF');
+    // The setup list loads after the page and pushes it down: wait for it, or a
+    // forced click lands on whatever moved under the old spot (CI 2026-11-23).
+    await expect(admin.page.getByTestId('bot-setup')).toBeVisible();
 
     // The first click can land before hydration on a slow CI runner (it was
     // lost once in CI on 2026-11-17): retry it until the state changes.
