@@ -8,14 +8,10 @@ import { useShell } from './app-shell';
 import { Icon, type IconName } from './ui/icons';
 
 export type SettingsSection =
-  | 'bot'
-  | 'knowledge'
-  | 'test'
   | 'channels'
   | 'replies'
   | 'crm'
   | 'pipeline'
-  | 'catalog'
   | 'fields'
   | 'team'
   | 'subscription'
@@ -33,7 +29,7 @@ interface SectionDef {
 }
 
 interface GroupDef {
-  key: 'assistant' | 'channels' | 'sales' | 'account';
+  key: 'channels' | 'sales' | 'account';
   icon: IconName;
   sections: SectionDef[];
 }
@@ -45,20 +41,6 @@ interface GroupDef {
  * own address; only the way to reach it changed.
  */
 export const SETTINGS_GROUPS: GroupDef[] = [
-  {
-    key: 'assistant',
-    icon: 'bot',
-    sections: [
-      { key: 'bot', href: '/settings/bot', label: 'settings.sub.bot' },
-      { key: 'knowledge', href: '/knowledge', label: 'settings.sub.knowledge' },
-      {
-        key: 'test',
-        href: '/settings/bot/test',
-        label: 'settings.sub.test',
-        managers: true,
-      },
-    ],
-  },
   {
     key: 'channels',
     icon: 'link',
@@ -83,12 +65,6 @@ export const SETTINGS_GROUPS: GroupDef[] = [
         key: 'pipeline',
         href: '/settings/pipeline',
         label: 'settings.section.pipeline',
-      },
-      {
-        key: 'catalog',
-        href: '/settings/catalog',
-        label: 'settings.section.catalog',
-        managers: true,
       },
       {
         key: 'fields',
@@ -161,7 +137,7 @@ export function SettingsSectionNav(props: {
     <div className="shrink-0 border-b border-line bg-surface">
       <nav
         aria-label={t('settings.sections')}
-        className="grid grid-cols-4 gap-1 px-2 pt-2 sm:px-4"
+        className="grid grid-cols-3 gap-1 px-2 pt-2 sm:px-4"
       >
         {groups.map((group) => (
           <Link

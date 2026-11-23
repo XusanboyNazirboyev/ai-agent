@@ -25,6 +25,9 @@ const ListQuery = z.object({
   leadScore: z.enum(['HOT', 'WARM', 'COLD']).optional(),
   leadStatus: z.enum(['NEW', 'IN_PROGRESS', 'WON', 'LOST']).optional(),
   tagId: z.uuid().optional(),
+  // Owner 2026-11-23: one messenger, or one connected account of it.
+  channelType: z.enum(['telegram', 'instagram', 'facebook']).optional(),
+  channelAccountId: z.uuid().optional(),
 });
 
 @Controller('api/v1/inbox')

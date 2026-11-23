@@ -9,7 +9,6 @@ import { channelName } from '@/lib/channel-names';
 import { effectiveNotice } from '@/lib/effective-mode';
 import type { AgentMode, ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
-import { BusinessProfileCard } from './business-profile-card';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
@@ -93,13 +92,13 @@ export function BotPage(): ReactNode {
                 >
                   <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
                   {gap === 'CATALOG' ? (
-                    <Link href="/settings/catalog" className="underline">
+                    <Link href="/agent/prices" className="underline">
                       {t('bot.setup.catalog')}
                     </Link>
                   ) : (
-                    <a href="#business-profile" className="underline">
+                    <Link href="/agent/rules" className="underline">
                       {t('bot.setup.profile')}
-                    </a>
+                    </Link>
                   )}
                 </li>
               ))}
@@ -108,7 +107,7 @@ export function BotPage(): ReactNode {
         ) : null}
         {canChange ? (
           <Link
-            href="/settings/bot/test"
+            href="/agent/test"
             data-testid="bot-try"
             className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-primary-soft p-4 transition-colors hover:bg-surface-2"
           >
@@ -268,23 +267,6 @@ export function BotPage(): ReactNode {
             </div>
           </section>
         ))}
-
-        <BusinessProfileCard canChange={canChange} />
-
-        <section className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 sm:p-5">
-          <h2 className="font-semibold">{t('bot.rulesTitle')}</h2>
-          <ul className="flex flex-col gap-2 text-sm text-muted">
-            {['bot.rule1', 'bot.rule2', 'bot.rule3'].map((key) => (
-              <li key={key} className="flex items-start gap-2">
-                <Icon
-                  name="check"
-                  className="mt-0.5 h-4 w-4 shrink-0 text-success-fg"
-                />
-                {t(key)}
-              </li>
-            ))}
-          </ul>
-        </section>
       </div>
 
       <ConfirmDialog

@@ -239,10 +239,10 @@ function AsksCard(props: {
               <span className="min-w-0 flex-1 basis-48">
                 {t('analytics.asks.fixHint')}
               </span>
-              <Link href="/knowledge" className="font-medium underline">
+              <Link href="/agent/knowledge" className="font-medium underline">
                 {t('analytics.asks.fixKnowledge')}
               </Link>
-              <Link href="/settings/catalog" className="font-medium underline">
+              <Link href="/agent/prices" className="font-medium underline">
                 {t('analytics.asks.fixPrices')}
               </Link>
             </p>

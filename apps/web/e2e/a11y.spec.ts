@@ -188,8 +188,9 @@ test.describe('leads, settings and status pages', () => {
       for (const path of [
         '/leads?view=list',
         '/more',
-        '/settings/bot',
-        '/knowledge',
+        '/agent',
+        '/agent/knowledge',
+        '/agent/rules',
         '/settings/pipeline',
         '/settings/crm',
         '/analytics',
@@ -376,10 +377,10 @@ test('the question form and the assistant switch have no violations', async ({
     browser,
     f.a.operators.admin.email,
   );
-  await page.goto('/settings/bot');
+  await page.goto('/agent');
   await expect(page.getByTestId('bot-account')).toBeVisible();
   await audit(page, 'bot page as admin');
-  await page.goto('/knowledge');
+  await page.goto('/agent/knowledge');
   await page.getByTestId('faq-add').click();
   await expect(page.getByTestId('faq-dialog')).toBeVisible();
   await audit(page, 'faq form');

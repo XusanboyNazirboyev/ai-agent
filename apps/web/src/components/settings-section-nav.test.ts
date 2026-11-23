@@ -5,16 +5,13 @@ import {
   visibleSections,
   type SettingsSection,
 } from './settings-section-nav';
+import { AGENT_SECTIONS, visibleAgentSections } from './agent-section-nav';
 
 const ALL: SettingsSection[] = [
-  'bot',
-  'knowledge',
-  'test',
   'channels',
   'replies',
   'crm',
   'pipeline',
-  'catalog',
   'fields',
   'team',
   'subscription',
@@ -24,9 +21,9 @@ const ALL: SettingsSection[] = [
 ];
 
 describe('settings groups', () => {
-  it('has four groups and puts every section in exactly one of them', () => {
+  // Owner 2026-11-23: the assistant group moved to its own AI agent section.
+  it('has three groups and puts every section in exactly one of them', () => {
     expect(SETTINGS_GROUPS.map((g) => g.key)).toEqual([
-      'assistant',
       'channels',
       'sales',
       'account',
@@ -36,9 +33,7 @@ describe('settings groups', () => {
     expect(new Set(placed).size).toBe(placed.length);
   });
 
-  it('groups the assistant, the selling and the account as the UX review asks', () => {
-    expect(groupOf('knowledge')).toBe('assistant');
-    expect(groupOf('test')).toBe('assistant');
+  it('groups the selling and the account as the UX review asks', () => {
     expect(groupOf('pipeline')).toBe('sales');
     expect(groupOf('crm')).toBe('sales');
     expect(groupOf('fields')).toBe('sales');
@@ -55,8 +50,7 @@ describe('settings groups', () => {
     expect(keys(true).sort()).toEqual([...ALL].sort());
     expect(keys(false).sort()).toEqual(
       ALL.filter(
-        (k) =>
-          !['test', 'catalog', 'team', 'subscription', 'history'].includes(k),
+        (k) => !['team', 'subscription', 'history'].includes(k),
       ).sort(),
     );
   });
@@ -66,13 +60,9 @@ describe('settings groups', () => {
       SETTINGS_GROUPS.flatMap((g) => g.sections.map((s) => [s.key, s.href])),
     );
     expect(hrefs).toMatchObject({
-      bot: '/settings/bot',
-      knowledge: '/knowledge',
-      test: '/settings/bot/test',
       channels: '/settings/channels',
       replies: '/settings/replies',
       pipeline: '/settings/pipeline',
-      catalog: '/settings/catalog',
       fields: '/settings/fields',
       crm: '/settings/crm',
       team: '/settings/team',
@@ -81,5 +71,23 @@ describe('settings groups', () => {
       history: '/settings/history',
       general: '/settings',
     });
+  });
+});
+
+describe('AI agent section (owner 2026-11-23)', () => {
+  it('lists overview, knowledge, rules, prices and test; prices and test for managers only', () => {
+    expect(AGENT_SECTIONS.map((s) => [s.key, s.href])).toEqual([
+      ['dashboard', '/agent'],
+      ['knowledge', '/agent/knowledge'],
+      ['rules', '/agent/rules'],
+      ['prices', '/agent/prices'],
+      ['test', '/agent/test'],
+    ]);
+    expect(visibleAgentSections(false).map((s) => s.key)).toEqual([
+      'dashboard',
+      'knowledge',
+      'rules',
+    ]);
+    expect(visibleAgentSections(true)).toHaveLength(5);
   });
 });

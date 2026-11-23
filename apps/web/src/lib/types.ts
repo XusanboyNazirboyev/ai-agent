@@ -220,6 +220,8 @@ export interface ConversationListItem {
   id: string;
   state: ConversationState;
   contactName: string | null;
+  /** telegram, instagram or facebook (the list shows its mark). */
+  channelType: string;
   language: string | null;
   leadScore: LeadScore | null;
   leadStatus: LeadStatus | null;

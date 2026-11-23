@@ -4,7 +4,9 @@ import type { Role } from './types';
 import { NAV, visibleNav } from './nav';
 
 const ROLES: Role[] = ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'];
+// Owner 2026-11-23: the AI agent comes first.
 const FULL: NavKey[] = [
+  'agent',
   'today',
   'inbox',
   'leads',
@@ -13,6 +15,7 @@ const FULL: NavKey[] = [
   'settings',
 ];
 const WITHOUT_ANALYTICS: NavKey[] = [
+  'agent',
   'today',
   'inbox',
   'leads',

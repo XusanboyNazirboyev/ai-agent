@@ -23,7 +23,7 @@ import {
   type TestChatState,
 } from '@/lib/test-chat';
 import { useShell } from './app-shell';
-import { SettingsSubPage } from './settings-section-nav';
+import { AgentSubPage } from './agent-section-nav';
 import { Avatar } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -99,16 +99,16 @@ export function TestChatPage(): ReactNode {
 
   if (!manage)
     return (
-      <SettingsSubPage active="test">
+      <AgentSubPage active="test">
         <p className="p-4 text-sm text-muted">{t('settings.readOnly')}</p>
-      </SettingsSubPage>
+      </AgentSubPage>
     );
 
   const messages = chat?.messages ?? [];
   const details = chat ? slotPairs(chat.slots, (key) => t(key)) : [];
 
   return (
-    <SettingsSubPage active="test">
+    <AgentSubPage active="test">
       <div
         role="region"
         tabIndex={0}
@@ -281,6 +281,6 @@ export function TestChatPage(): ReactNode {
           </form>
         </div>
       </div>
-    </SettingsSubPage>
+    </AgentSubPage>
   );
 }

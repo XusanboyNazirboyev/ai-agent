@@ -79,8 +79,8 @@ test.describe('no overflow in the signed-in pages', () => {
         for (const path of [
           '/leads?view=list',
           '/more',
-          '/settings/bot',
-          '/knowledge',
+          '/agent',
+          '/agent/knowledge',
           '/settings/pipeline',
           '/settings/crm',
           '/analytics',

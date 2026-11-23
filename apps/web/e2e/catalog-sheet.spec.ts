@@ -31,7 +31,7 @@ test('an admin uploads a price list, checks the columns and saves it', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await expect(page.getByTestId('sheet-status')).toBeVisible();
     await expect(page.getByTestId('sheet-save')).toHaveCount(0);
 
@@ -90,8 +90,8 @@ test('the price list page is for admins: the tab and the page are hidden from an
   const { page, context } = await newSession(browser, f.b.operators.op1.email);
   try {
     await page.goto('/settings');
-    await expect(page.locator('a[href="/settings/catalog"]')).toHaveCount(0);
-    await page.goto('/settings/catalog');
+    await expect(page.locator('a[href="/agent/prices"]')).toHaveCount(0);
+    await page.goto('/agent/prices');
     await expect(page.getByTestId('sheet-file')).toHaveCount(0);
   } finally {
     await context.close();
@@ -116,7 +116,7 @@ test('the upload screen has no accessibility violations and fits a phone in ru a
     );
     try {
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
-      await page.goto('/settings/catalog');
+      await page.goto('/agent/prices');
       await chooseFile(page);
       await expect(page.getByTestId('sheet-preview')).toBeVisible();
       expect(

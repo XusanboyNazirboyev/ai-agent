@@ -67,7 +67,7 @@ test('an admin loads a Google Sheets link, saves it with auto refresh, reloads i
   try {
     mode = 'ok';
     hits = 0;
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await expect(page.getByTestId('sheet-status')).toBeVisible();
 
     // Not a Google link: refused before anything is asked of anyone.
@@ -166,7 +166,7 @@ test('the link form has no accessibility violations and fits a phone in ru and u
     try {
       mode = 'ok';
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
-      await page.goto('/settings/catalog');
+      await page.goto('/agent/prices');
       await page.getByTestId('sheet-link').fill(LINK);
       await page.getByTestId('sheet-link-load').click();
       await expect(page.getByTestId('sheet-auto-refresh')).toBeVisible();

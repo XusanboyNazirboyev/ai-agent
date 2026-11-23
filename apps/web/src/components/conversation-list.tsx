@@ -10,10 +10,12 @@ import {
 } from 'react';
 import { useI18n } from '@/i18n';
 import { isStartCommand } from '@/lib/bot-command';
+import { channelName } from '@/lib/channel-names';
 import { api, errorKey } from '@/lib/api';
 import { shortTime } from '@/lib/inbox-row';
 import { isUnread } from '@/lib/seen';
 import type {
+  ChannelAccount,
   ConversationListItem,
   ConversationPage,
   LeadScore,
@@ -22,6 +24,7 @@ import type {
 } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
 import { Avatar } from './ui/avatar';
+import { ChannelLogo } from './ui/channel-logo';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
@@ -38,6 +41,42 @@ const SCORE_TONE: Record<LeadScore, Tone> = {
   WARM: 'warning',
   COLD: 'neutral',
 };
+
+interface ChannelFilter {
+  type?: string;
+  accountId?: string;
+}
+
+interface ChannelChip extends ChannelFilter {
+  key: string;
+  /** Undefined for "all chats" (translated). */
+  label?: string;
+}
+
+const CHAT_CHANNELS = ['telegram', 'instagram', 'facebook'];
+
+/**
+ * "All", one chip per connected messenger, and one per account when a
+ * messenger has several (owner 2026-11-23).
+ */
+export function chipsFor(accounts: readonly ChannelAccount[]): ChannelChip[] {
+  const chips: ChannelChip[] = [{ key: 'all' }];
+  for (const type of CHAT_CHANNELS) {
+    const own = accounts.filter((account) => account.channelType === type);
+    if (own.length === 0) continue;
+    chips.push({ key: type, type, label: channelName(type) });
+    if (own.length > 1)
+      own.forEach((account, index) =>
+        chips.push({
+          key: account.id,
+          type,
+          accountId: account.id,
+          label: account.displayName ?? `${channelName(type)} ${index + 1}`,
+        }),
+      );
+  }
+  return chips;
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -61,7 +100,14 @@ export function ConversationList(props: {
   const [language, setLanguage] = useState('');
   const [score, setScore] = useState('');
   const [tagId, setTagId] = useState('');
+  // Owner 2026-11-23: all chats, one messenger, or one account of it.
+  const [channel, setChannel] = useState<ChannelFilter>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const accounts = useQuery({
+    queryKey: ['channels'],
+    queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
+  });
+  const channelChips = chipsFor(accounts.data?.items ?? []);
   const activeFilters = (language ? 1 : 0) + (score ? 1 : 0) + (tagId ? 1 : 0);
   const tagList = useQuery({
     queryKey: ['tags'],
@@ -73,7 +119,16 @@ export function ConversationList(props: {
   const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const query = useInfiniteQuery({
-    queryKey: ['conversations', props.scope, q, language, score, tagId],
+    queryKey: [
+      'conversations',
+      props.scope,
+      q,
+      language,
+      score,
+      tagId,
+      channel.type ?? '',
+      channel.accountId ?? '',
+    ],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({ scope: props.scope, limit: '25' });
@@ -82,6 +137,8 @@ export function ConversationList(props: {
       if (language) params.set('language', language);
       if (score) params.set('leadScore', score);
       if (tagId) params.set('tagId', tagId);
+      if (channel.accountId) params.set('channelAccountId', channel.accountId);
+      else if (channel.type) params.set('channelType', channel.type);
       return api<ConversationPage>(
         `/api/v1/inbox/conversations?${params.toString()}`,
       );
@@ -89,7 +146,9 @@ export function ConversationList(props: {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(q || language || score || tagId);
+  const filtered = Boolean(
+    q || language || score || tagId || channel.type || channel.accountId,
+  );
 
   function onTabKey(event: KeyboardEvent, index: number): void {
     const last = SCOPES.length - 1;
@@ -146,6 +205,44 @@ export function ConversationList(props: {
           );
         })}
       </div>
+      {channelChips.length > 2 ? (
+        <div
+          role="group"
+          aria-label={t('list.channels')}
+          data-testid="inbox-channels"
+          className="mx-3 mt-3 flex gap-1.5 overflow-x-auto pb-1"
+        >
+          {channelChips.map((chip) => {
+            const active =
+              (chip.accountId ?? '') === (channel.accountId ?? '') &&
+              (chip.type ?? '') === (channel.type ?? '');
+            return (
+              <button
+                key={chip.key}
+                type="button"
+                aria-pressed={active}
+                data-testid={`inbox-channel-${chip.key}`}
+                onClick={() =>
+                  setChannel({
+                    ...(chip.type ? { type: chip.type } : {}),
+                    ...(chip.accountId ? { accountId: chip.accountId } : {}),
+                  })
+                }
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                  active
+                    ? 'border-primary bg-primary-soft text-primary-fg'
+                    : 'border-line bg-surface text-muted hover:bg-surface-2 hover:text-fg'
+                }`}
+              >
+                {chip.type ? (
+                  <ChannelLogo channelType={chip.type} decorative />
+                ) : null}
+                {chip.label ?? t('list.channelAll')}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
@@ -372,7 +469,13 @@ function ConversationRow(props: {
           props.selected ? 'bg-primary-soft hover:bg-primary-soft' : ''
         }`}
       >
-        <Avatar name={item.contactName} />
+        <span className="relative shrink-0">
+          <Avatar name={item.contactName} />
+          <ChannelLogo
+            channelType={item.channelType}
+            className="absolute right-0 bottom-0 h-4 w-4 rounded-full ring-2 ring-surface"
+          />
+        </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-baseline justify-between gap-2">
             {/* Customer-provided name: text only. */}

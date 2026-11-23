@@ -43,7 +43,7 @@ test('semicolon file with UTF-8 BOM and CRLF: columns are guessed', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     const bom = Buffer.from([0xef, 0xbb, 0xbf]);
     const text =
       'Destination;Hotel;Price per person;Currency\r\n' +
@@ -72,7 +72,7 @@ test('Russian headers: mapping selects show the right columns', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, fixture('russian-headers.csv'), 'russian.csv');
     // Цена за человека is column index 5 (0-based).
     const priceSelect = page.getByTestId('sheet-map-price');
@@ -96,7 +96,7 @@ test('Uzbek headers with apostrophes: mapping selects show the right columns', a
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, fixture('uzbek-headers.csv'), 'uzbek.csv');
     // Narxi is column index 5 (0-based).
     const priceSelect = page.getByTestId('sheet-map-price');
@@ -116,7 +116,7 @@ test('price formats are normalised in the sample rows', async ({ browser }) => {
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, fixture('price-formats.csv'), 'prices.csv');
     await page.getByTestId('sheet-map-price').selectOption('2');
     await page.getByTestId('sheet-map-currency').selectOption('3');
@@ -143,7 +143,7 @@ test('all rows bad: 0 accepted, save disabled, every skipped line listed', async
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, fixture('all-bad.csv'), 'bad.csv');
     await page.getByTestId('sheet-map-price').selectOption('2');
     await expect(counts(page)).toContainText('0');
@@ -169,7 +169,7 @@ test('header-only and empty files: error visible, no save button', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
 
     await upload(page, fixture('header-only.csv'), 'header-only.csv');
     await expect(page.getByTestId('sheet-error')).toBeVisible();
@@ -192,7 +192,7 @@ test('105 bad rows: at most 100 skipped shown, more-rows note visible', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     const lines = ['Destination,Hotel,Price,Currency'];
     for (let i = 0; i < 105; i++) {
       lines.push(`Dubai,Hotel ${i},bad,USD`);
@@ -218,7 +218,7 @@ test('file larger than 5 MB: refused in browser, no preview request', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     let previewRequests = 0;
     page.on('request', (request) => {
       if (request.url().includes('/api/v1/catalog/sheet/preview')) {
@@ -246,7 +246,7 @@ test('replacing: 1-row file then sample, status shows 12 accepted, old row gone'
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
 
     // Upload and save a 1-row file.
     const oneRow =
@@ -288,7 +288,7 @@ test('wrong role by API: operator gets 403, admin JSON body gets 400', async ({
   // Operator of tenant B: POST /api/v1/catalog/sheet with text/csv -> 403.
   const { page, context } = await newSession(browser, f.b.operators.op1.email);
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     const csrf = await page.evaluate(() => {
       const match = document.cookie.match(/(?:^|; )ac_csrf=([^;]+)/);
       return match ? decodeURIComponent(match[1]) : '';
@@ -323,7 +323,7 @@ test('wrong role by API: operator gets 403, admin JSON body gets 400', async ({
     f.b.operators.admin.email,
   );
   try {
-    await page2.goto('/settings/catalog');
+    await page2.goto('/agent/prices');
     const csrf2 = await page2.evaluate(() => {
       const match = document.cookie.match(/(?:^|; )ac_csrf=([^;]+)/);
       return match ? decodeURIComponent(match[1]) : '';
@@ -364,7 +364,7 @@ test('formulas in cells: shown as plain text, no popup', async ({
     page.on('popup', () => {
       popups += 1;
     });
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, fixture('formulas.csv'), 'formulas.csv');
     await page.getByTestId('sheet-map-price').selectOption('2');
     const rows = page.getByTestId('sheet-sample-row');

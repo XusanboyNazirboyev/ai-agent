@@ -107,7 +107,7 @@ test('an Excel price list is read in the browser: columns guessed, date cells be
           `${request.method()} ${request.headers()['content-type']}`,
         );
     });
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, 'tours.xlsx', agencyBook());
     await expect(page.getByTestId('sheet-map-price')).toHaveValue('3');
     await expect(page.getByTestId('sheet-map-departureDate')).toHaveValue('5');
@@ -180,7 +180,7 @@ test('a workbook with several sheets offers the ones with data and switches betw
         },
       ],
     });
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, 'seasons.xlsx', workbook);
     await expect(counts(page)).toContainText('1 rows will be saved');
     const select = page.getByTestId('sheet-select');
@@ -210,7 +210,7 @@ test('an old .xls file and a broken .xlsx are refused in the browser with a clea
       if (request.url().includes('/catalog/sheet/preview'))
         previews.push(request.url());
     });
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await page.getByTestId('sheet-file').setInputFiles({
       name: 'old.xls',
       mimeType: 'application/vnd.ms-excel',
@@ -241,7 +241,7 @@ test('an Excel price list is saved like a CSV one and the catalog role points at
     f.b.operators.admin.email,
   );
   try {
-    await page.goto('/settings/catalog');
+    await page.goto('/agent/prices');
     await upload(page, 'tours.xlsx', agencyBook());
     await expect(counts(page)).toContainText('2 rows will be saved');
     await page.getByTestId('sheet-save').click();

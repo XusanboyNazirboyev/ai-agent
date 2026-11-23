@@ -49,9 +49,9 @@ export function guideSteps(
   const href: Record<GuideKey, string> = {
     business: '/settings/crm',
     channel: '/settings/channels',
-    content: '/settings/catalog',
-    test: '/settings/bot/test',
-    assistant: '/settings/bot',
+    content: '/agent/prices',
+    test: '/agent/test',
+    assistant: '/agent',
   };
   return KEYS.map((key) => ({
     key,

@@ -47,11 +47,11 @@ test('the card lists what customers asked, who answered, and where to add missin
     const fix = page.getByTestId('analytics-asks-fix');
     await expect(fix.getByRole('link', { name: 'Knowledge' })).toHaveAttribute(
       'href',
-      '/knowledge',
+      '/agent/knowledge',
     );
     await expect(fix.getByRole('link', { name: 'Price list' })).toHaveAttribute(
       'href',
-      '/settings/catalog',
+      '/agent/prices',
     );
   } finally {
     await context.close();

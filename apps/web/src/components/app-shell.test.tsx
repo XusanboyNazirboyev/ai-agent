@@ -98,8 +98,9 @@ describe('AppShell rail', () => {
     renderShell('OPERATOR');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(links.map((link) => link.textContent)).toEqual([
+      'AI agent',
       'Today',
       'Inbox',
       'Leads',
@@ -115,8 +116,9 @@ describe('AppShell rail', () => {
     renderShell('ADMIN');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(7);
     expect(links.map((link) => link.textContent)).toEqual([
+      'AI agent',
       'Today',
       'Inbox',
       'Leads',
@@ -130,8 +132,9 @@ describe('AppShell rail', () => {
     renderShell('VIEWER');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(links.map((link) => link.textContent)).toEqual([
+      'AI agent',
       'Today',
       'Inbox',
       'Leads',

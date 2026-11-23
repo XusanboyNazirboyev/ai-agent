@@ -9,7 +9,7 @@ const PAGES = [
   '/analytics',
   '/channels',
   '/bot',
-  '/knowledge',
+  '/agent/knowledge',
   '/more',
   '/settings',
   '/settings/fields',

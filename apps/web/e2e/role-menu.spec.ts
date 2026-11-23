@@ -4,8 +4,16 @@ import { fixtures, newSession } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-const OPERATOR_ITEMS = ['Today', 'Inbox', 'Leads', 'Tasks', 'Settings'];
+const OPERATOR_ITEMS = [
+  'AI agent',
+  'Today',
+  'Inbox',
+  'Leads',
+  'Tasks',
+  'Settings',
+];
 const ADMIN_ITEMS = [
+  'AI agent',
   'Today',
   'Inbox',
   'Leads',
@@ -61,7 +69,7 @@ test.describe('role-based menu', () => {
       await expect(more.getByRole('link', { name: 'Analytics' })).toHaveCount(
         0,
       );
-      // Knowledge is no longer a menu item: it sits under Settings, Assistant.
+      // Knowledge is no menu item of its own: it sits under the AI agent.
       await expect(more.getByRole('link', { name: 'Knowledge' })).toHaveCount(
         0,
       );

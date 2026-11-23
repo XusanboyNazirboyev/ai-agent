@@ -23,7 +23,7 @@ import {
   type SheetUploadResult,
 } from '@/lib/sheet-catalog';
 import { useShell } from './app-shell';
-import { SettingsSubPage } from './settings-section-nav';
+import { AgentSubPage } from './agent-section-nav';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
@@ -224,9 +224,9 @@ export function CatalogSheetPage(): ReactNode {
 
   if (!manage)
     return (
-      <SettingsSubPage active="catalog">
+      <AgentSubPage active="prices">
         <p className="p-4 text-sm text-muted">{t('settings.readOnly')}</p>
-      </SettingsSubPage>
+      </AgentSubPage>
     );
 
   const data = preview.data;
@@ -235,7 +235,7 @@ export function CatalogSheetPage(): ReactNode {
   const date = (iso: string): string => new Date(iso).toLocaleDateString();
 
   return (
-    <SettingsSubPage active="catalog">
+    <AgentSubPage active="prices">
       <div
         role="region"
         tabIndex={0}
@@ -666,6 +666,6 @@ export function CatalogSheetPage(): ReactNode {
           ) : null}
         </div>
       </div>
-    </SettingsSubPage>
+    </AgentSubPage>
   );
 }

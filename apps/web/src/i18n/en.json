@@ -2010,5 +2010,16 @@
   "bot.setup.body": "Without these the On mode stays closed, so the bot never states a wrong price or detail.",
   "bot.setup.catalog": "Connect your real catalog (Google Sheets or a CRM). The demo catalog is not for customers.",
   "bot.setup.profile": "Enter your business name and phone (below).",
-  "errors.SETUP_INCOMPLETE": "Finish the setup first: a catalog and your business details are needed."
+  "errors.SETUP_INCOMPLETE": "Finish the setup first: a catalog and your business details are needed.",
+  "nav.agent": "AI agent",
+  "agent.tab.dashboard": "Overview",
+  "agent.tab.knowledge": "Knowledge base",
+  "agent.tab.rules": "Rules",
+  "agent.tab.prices": "Prices (catalog)",
+  "agent.tab.test": "Test",
+  "agent.rules.intro": "The AI agent states only these details about your business and always follows the rules below.",
+  "agent.rules.noGuess": "Business name, address, phone and opening hours come only from Business details; anything missing goes to an operator.",
+  "agent.rules.noClaim": "It never says an order, booking or payment is confirmed: your team does that.",
+  "list.channelAll": "All",
+  "list.channels": "By channel"
 }

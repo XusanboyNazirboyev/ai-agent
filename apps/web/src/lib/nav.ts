@@ -2,7 +2,7 @@ import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
 export type NavKey =
-  'today' | 'inbox' | 'leads' | 'tasks' | 'analytics' | 'settings';
+  'agent' | 'today' | 'inbox' | 'leads' | 'tasks' | 'analytics' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -16,6 +16,13 @@ export interface NavItem {
 
 /** One source of truth for the top-level menu. */
 export const NAV: NavItem[] = [
+  // Owner 2026-11-23: the AI agent is its own section, first in the menu.
+  {
+    key: 'agent',
+    icon: 'bot',
+    roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
+    alsoUnder: ['/knowledge', '/settings/bot', '/settings/catalog'],
+  },
   {
     key: 'today',
     icon: 'sun',
@@ -41,8 +48,6 @@ export const NAV: NavItem[] = [
     key: 'settings',
     icon: 'sliders',
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
-    // The knowledge base is part of the Assistant group of Settings.
-    alsoUnder: ['/knowledge'],
   },
 ];
 

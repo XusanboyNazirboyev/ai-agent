@@ -2010,5 +2010,16 @@
   "bot.setup.body": "Bularsiz bot noto‘g‘ri narx yoki noto‘g‘ri ma’lumot aytmasligi uchun “Yoqilgan” rejimi ochilmaydi.",
   "bot.setup.catalog": "Haqiqiy katalogni ulang (Google Sheets yoki CRM). Demo katalog mijozlar uchun emas.",
   "bot.setup.profile": "Biznes nomi va telefonini kiriting (pastda).",
-  "errors.SETUP_INCOMPLETE": "Avval sozlashni tugating: katalog va biznes ma’lumotlari kerak."
+  "errors.SETUP_INCOMPLETE": "Avval sozlashni tugating: katalog va biznes ma’lumotlari kerak.",
+  "nav.agent": "AI agent",
+  "agent.tab.dashboard": "Boshqaruv",
+  "agent.tab.knowledge": "Bilimlar bazasi",
+  "agent.tab.rules": "Qoidalar",
+  "agent.tab.prices": "Narxlar (katalog)",
+  "agent.tab.test": "Sinov",
+  "agent.rules.intro": "AI agent biznesingiz haqida faqat shu yerdagi ma’lumotlarni aytadi va quyidagi qoidalarga doim amal qiladi.",
+  "agent.rules.noGuess": "Biznes nomi, manzili, telefoni va ish vaqtini faqat «Biznes ma’lumotlari»dan aytadi; yo‘q bo‘lsa operatorga topshiradi.",
+  "agent.rules.noClaim": "Buyurtma, bron yoki to‘lov tasdiqlandi deb hech qachon aytmaydi: buni jamoangiz qiladi.",
+  "list.channelAll": "Hammasi",
+  "list.channels": "Kanal bo‘yicha"
 }

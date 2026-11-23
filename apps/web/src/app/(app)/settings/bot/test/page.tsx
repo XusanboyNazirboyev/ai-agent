@@ -1,6 +1,7 @@
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { TestChatPage } from '@/components/test-chat-page';
 
-export default function TestChat(): ReactNode {
-  return <TestChatPage />;
+/** Owner 2026-11-23: moved to the AI agent section; old links keep working. */
+export default function Moved(): ReactNode {
+  redirect('/agent/test');
 }

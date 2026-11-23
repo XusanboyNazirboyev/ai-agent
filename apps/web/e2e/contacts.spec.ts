@@ -33,7 +33,7 @@ test('contacts list the tenant customers, search and open their conversation', a
   await other.context.close();
 });
 
-test('on a phone the tab bar has four entries and settings leads to its sections', async ({
+test('on a phone the tab bar has four entries and More leads to the AI agent', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -44,11 +44,12 @@ test('on a phone the tab bar has four entries and settings leads to its sections
   await expect(bar.getByRole('link')).toHaveCount(4);
   await bar.getByRole('link', { name: 'More' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('More');
-  await page.getByRole('link', { name: 'Settings' }).click();
-  // Wait for the Settings page: the More list also says "assistant" in the
-  // description of other items, so a name match must not run before that.
-  await expect(page).toHaveURL(/\/settings$/u);
-  await page.getByRole('link', { name: 'Assistant', exact: true }).click();
+  // Owner 2026-11-23: the AI agent is its own section, reached from More.
+  await page
+    .locator('#app-main')
+    .getByRole('link', { name: 'AI agent' })
+    .click();
+  await expect(page).toHaveURL(/\/agent$/u);
   await expect(page.getByTestId('bot-current').first()).toBeVisible();
   // "More" stays marked as the current section.
   await expect(

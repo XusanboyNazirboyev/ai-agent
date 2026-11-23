@@ -1,11 +1,7 @@
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { BotPage } from '@/components/bot-page';
-import { SettingsSubPage } from '@/components/settings-section-nav';
 
-export default function BotSettings(): ReactNode {
-  return (
-    <SettingsSubPage active="bot">
-      <BotPage />
-    </SettingsSubPage>
-  );
+/** Owner 2026-11-23: moved to the AI agent section; old links keep working. */
+export default function Moved(): ReactNode {
+  redirect('/agent');
 }

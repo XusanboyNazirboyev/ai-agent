@@ -2,9 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { findOverflow, fixtures, newSession } from './helpers';
 
-// Settings in four groups (UX review A2, A3).
+// Settings in three groups (UX review A2); the assistant is its own AI agent
+// section, first in the menu (owner 2026-11-23).
 
-test('an admin finds everything under four groups, the knowledge base under Assistant', async ({
+test('an admin finds the AI agent first, with its five tabs, and settings in three groups', async ({
   browser,
 }) => {
   const f = fixtures();
@@ -17,43 +18,43 @@ test('an admin finds everything under four groups, the knowledge base under Assi
   );
   try {
     await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
+    const menu = page.getByRole('navigation', { name: 'Main navigation' });
+    await expect(menu.getByRole('link').first()).toHaveText('AI agent');
+    // Old addresses lead into the new section.
     await page.goto('/settings/bot');
-    const groups = page.getByRole('navigation', { name: 'Settings sections' });
-    await expect(groups.getByRole('link')).toHaveCount(4);
-    for (const name of ['Assistant', 'Channels', 'Sales', 'Team and account'])
-      await expect(groups.getByRole('link', { name })).toHaveCount(1);
-    await expect(page.getByTestId('settings-group-assistant')).toHaveAttribute(
+    await page.waitForURL(/\/agent$/u);
+    await expect(menu.getByRole('link', { name: 'AI agent' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    const tabs = page.getByTestId('settings-subtabs');
-    await expect(tabs.getByRole('link')).toHaveText([
-      'On and off',
-      'Knowledge',
-      'Test chat',
+    const agentTabs = page.getByTestId('agent-tabs');
+    await expect(agentTabs.getByRole('link')).toHaveText([
+      'Overview',
+      'Knowledge base',
+      'Rules',
+      'Prices (catalog)',
+      'Test',
     ]);
-
-    // The knowledge base is here, at its old address, inside Settings.
-    await page.getByTestId('settings-tab-knowledge').click();
-    await page.waitForURL(/\/knowledge$/u);
-    await expect(page.getByTestId('settings-tab-knowledge')).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
-    await expect(
-      page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link', { name: 'Settings' }),
-    ).toHaveAttribute('aria-current', 'page');
-
-    await page.getByTestId('settings-tab-test').click();
+    await page.getByTestId('agent-tab-knowledge').click();
+    await page.waitForURL(/\/agent\/knowledge$/u);
+    await page.getByTestId('agent-tab-rules').click();
+    await expect(page.getByTestId('business-profile')).toBeVisible();
+    await expect(page.getByTestId('agent-rules')).toBeVisible();
+    await page.getByTestId('agent-tab-test').click();
     await expect(page.getByTestId('test-chat-input')).toBeVisible();
+    await page.goto('/knowledge');
+    await page.waitForURL(/\/agent\/knowledge$/u);
 
+    await page.goto('/settings/pipeline');
+    const groups = page.getByRole('navigation', { name: 'Settings sections' });
+    await expect(groups.getByRole('link')).toHaveCount(3);
+    for (const name of ['Channels', 'Sales', 'Team and account'])
+      await expect(groups.getByRole('link', { name })).toHaveCount(1);
+    const tabs = page.getByTestId('settings-subtabs');
     await page.getByTestId('settings-group-sales').click();
     await page.waitForURL(/\/settings\/pipeline$/u);
     await expect(tabs.getByRole('link')).toHaveText([
       'Sales stages',
-      'Price list',
       'Tags and fields',
       'External CRM',
     ]);
@@ -96,13 +97,15 @@ test('an operator sees only what they may open', async ({ browser }) => {
   });
   try {
     await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
-    await page.goto('/settings/bot');
-    const tabs = page.getByTestId('settings-subtabs');
-    // No test chat for an operator.
-    await expect(tabs.getByRole('link')).toHaveText([
-      'On and off',
-      'Knowledge',
+    await page.goto('/agent');
+    // No prices or test chat for an operator.
+    await expect(page.getByTestId('agent-tabs').getByRole('link')).toHaveText([
+      'Overview',
+      'Knowledge base',
+      'Rules',
     ]);
+    await page.goto('/settings/pipeline');
+    const tabs = page.getByTestId('settings-subtabs');
     await page.getByTestId('settings-group-sales').click();
     await expect(tabs.getByRole('link')).toHaveText([
       'Sales stages',
@@ -135,15 +138,15 @@ test('the groups fit a phone without a sideways scroll and have no accessibility
     try {
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
       for (const path of [
-        '/settings/bot',
+        '/settings/channels',
         '/settings/team',
         '/settings/pipeline',
       ]) {
         await page.goto(path);
         await expect(page.getByTestId('settings-subtabs')).toBeVisible();
-        // The four groups are all in view at once (the old row scrolled sideways).
+        // The groups are all in view at once (the old row scrolled sideways).
         const groups = page.getByRole('navigation').filter({
-          has: page.getByTestId('settings-group-assistant'),
+          has: page.getByTestId('settings-group-channels'),
         });
         const box = (await groups.boundingBox())!;
         const scroll = await groups.evaluate(
@@ -158,6 +161,11 @@ test('the groups fit a phone without a sideways scroll and have no accessibility
           `overflow ${language} ${path}`,
         ).toEqual([]);
       }
+      await page.goto('/agent');
+      await expect(page.getByTestId('agent-tabs')).toBeVisible();
+      expect(await findOverflow(page), `overflow ${language} /agent`).toEqual(
+        [],
+      );
       const result = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
         .analyze();

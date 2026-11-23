@@ -36,10 +36,10 @@ test('an admin chats with the real assistant and nothing is saved anywhere', asy
   );
   try {
     await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
-    await page.goto('/settings/bot');
+    await page.goto('/agent');
     // The assistant page offers it.
     await page.getByTestId('bot-try').click();
-    await page.waitForURL(/\/settings\/bot\/test/u);
+    await page.waitForURL(/\/agent\/test/u);
     const before = await conversationIds(page);
 
     await expect(page.getByTestId('test-chat-starter-hello')).toBeVisible();
@@ -94,7 +94,7 @@ test('the reply shows what it looked up, a hand-over note and the collected deta
         });
       return route.fulfill({ json: FAKE });
     });
-    await page.goto('/settings/bot/test');
+    await page.goto('/agent/test');
     await page.getByTestId('test-chat-input').fill('IELTS price?');
     await page.getByTestId('test-chat-send').click();
 
@@ -150,7 +150,7 @@ test('an operator cannot use the test chat: the page says so and the API refuses
   const f = fixtures();
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
   try {
-    await page.goto('/settings/bot/test');
+    await page.goto('/agent/test');
     await expect(page.getByTestId('test-chat-input')).toHaveCount(0);
     await expect(page.getByTestId('bot-try')).toHaveCount(0);
     const refused = await postAsPage(page, '/api/v1/assistant/test-chat', {
@@ -186,7 +186,7 @@ test('the test chat has no accessibility violations and fits a phone in en, ru a
       await page.route('**/api/v1/assistant/test-chat', (route) =>
         route.fulfill({ json: FAKE }),
       );
-      await page.goto('/settings/bot/test');
+      await page.goto('/agent/test');
       await page.getByTestId('test-chat-input').fill('IELTS');
       await page.getByTestId('test-chat-send').click();
       await expect(page.getByTestId('test-chat-assistant')).toBeVisible();

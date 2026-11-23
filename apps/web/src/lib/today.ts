@@ -63,13 +63,13 @@ export function setupItems(
       done: checklist.channelConnected,
       href: '/settings/channels',
     },
-    { key: 'content', done: checklist.hasContent, href: '/settings/catalog' },
+    { key: 'content', done: checklist.hasContent, href: '/agent/prices' },
     {
       key: 'test',
       done: checklist.testedAssistant,
-      href: '/settings/bot/test',
+      href: '/agent/test',
     },
-    { key: 'assistant', done: light === 'live', href: '/settings/bot' },
+    { key: 'assistant', done: light === 'live', href: '/agent' },
     { key: 'team', done: checklist.teamInvited, href: '/settings/team' },
     { key: 'group', done: checklist.operatorGroup, href: '/settings/channels' },
   ];

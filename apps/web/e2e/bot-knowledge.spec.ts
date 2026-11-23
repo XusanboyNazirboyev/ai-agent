@@ -7,7 +7,7 @@ test.describe('Assistant page', () => {
   }) => {
     const f = fixtures();
     const admin = await newSession(browser, f.a.operators.admin.email);
-    await admin.page.goto('/settings/bot');
+    await admin.page.goto('/agent');
     const current = admin.page.getByTestId('bot-current');
     await expect(current).toHaveAttribute('data-mode', 'OFF');
     // The setup list loads after the page and pushes it down: wait for it, or a
@@ -38,22 +38,27 @@ test.describe('Assistant page', () => {
     await expect(admin.page.getByTestId('bot-error')).toBeVisible();
     await expect(current).toHaveAttribute('data-mode', 'SHADOW');
 
-    // Filling the business profile clears that item; the catalog stays missing.
+    // The profile item leads to the Rules tab; filling the phone there clears
+    // it, and the catalog stays missing.
+    await admin.page.getByTestId('bot-setup-PROFILE').getByRole('link').click();
+    await admin.page.waitForURL(/\/agent\/rules$/u);
     await admin.page.getByTestId('profile-phone').fill('+998 90 123 45 67');
     await admin.page.getByTestId('profile-save').click();
+    await expect(admin.page.getByTestId('profile-error')).toHaveCount(0);
+    await admin.page.getByTestId('agent-tab-dashboard').click();
+    await admin.page.waitForURL(/\/agent$/u);
     await expect(admin.page.getByTestId('bot-setup-PROFILE')).toHaveCount(0);
     await expect(admin.page.getByTestId('bot-setup-CATALOG')).toBeVisible();
 
     // An operator sees the state but every choice is disabled.
     const operator = await newSession(browser, f.a.operators.op1.email);
-    await operator.page.goto('/settings/bot');
+    await operator.page.goto('/agent');
     await expect(operator.page.getByTestId('bot-current')).toHaveAttribute(
       'data-mode',
       'SHADOW',
     );
     await expect(operator.page.getByTestId('bot-mode-OFF')).toBeDisabled();
     await expect(operator.page.getByTestId('bot-mode-SHADOW')).toBeDisabled();
-    await expect(operator.page.getByTestId('profile-save')).toHaveCount(0);
     await operator.context.close();
 
     await admin.page.getByTestId('bot-mode-OFF').click({ force: true });
@@ -70,7 +75,7 @@ test.describe('Knowledge page', () => {
     const stamp = Date.now();
     const question = `How long is the course ${stamp}?`;
     const admin = await newSession(browser, f.a.operators.admin.email);
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('faq-add').click();
     await admin.page.getByTestId('faq-question').fill(question);
     await admin.page.getByTestId('faq-answer').fill('Three months.');
@@ -100,7 +105,7 @@ test.describe('Knowledge page', () => {
     await expect(item).toHaveCount(1);
 
     const operator = await newSession(browser, f.a.operators.op1.email);
-    await operator.page.goto('/knowledge');
+    await operator.page.goto('/agent/knowledge');
     await expect(
       operator.page.getByTestId('faq-item').filter({ hasText: question }),
     ).toBeVisible();
@@ -110,7 +115,7 @@ test.describe('Knowledge page', () => {
 
     // Another tenant never sees it.
     const other = await newSession(browser, f.b.operators.op1.email);
-    await other.page.goto('/knowledge');
+    await other.page.goto('/agent/knowledge');
     await expect(other.page.getByTestId('faq-count')).toBeVisible();
     await expect(
       other.page.getByTestId('faq-item').filter({ hasText: question }),
@@ -128,7 +133,7 @@ test.describe('Knowledge page', () => {
     const admin = await newSession(browser, f.a.operators.admin.email, {
       viewport: { width: 320, height: 640 },
     });
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('faq-add').click();
     await expect(admin.page.getByTestId('faq-dialog')).toBeVisible();
     await admin.page.getByTestId('faq-question').fill('Ж'.repeat(150));
@@ -150,7 +155,7 @@ test.describe('FAQ file import', () => {
         `question,answer,language\n"${q1}","${answer}",en\n"${q2}","Second, with a comma.",ru\nx,too short question,\n`,
       );
     const admin = await newSession(browser, f.a.operators.admin.email);
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('faq-import').click();
     await admin.page.getByTestId('faq-import-file').setInputFiles({
       name: 'faq.csv',
@@ -202,7 +207,7 @@ test.describe('FAQ file import', () => {
     const admin = await newSession(browser, f.a.operators.admin.email, {
       viewport: { width: 320, height: 640 },
     });
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('faq-import').click();
     await admin.page.getByTestId('faq-import-file').setInputFiles({
       name: 'bad.csv',
@@ -223,7 +228,7 @@ test.describe('Knowledge documents', () => {
     const title = `Refund policy ${Date.now()}`;
     const long = `Refunds are possible within 14 days. ${'Details of the policy. '.repeat(70)}`;
     const admin = await newSession(browser, f.a.operators.admin.email);
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('knowledge-tab-documents').click();
     await admin.page.getByTestId('document-upload').click();
     await admin.page.getByTestId('document-file').setInputFiles({
@@ -252,7 +257,7 @@ test.describe('Knowledge documents', () => {
     await expect(item).toContainText('1 passage');
 
     const operator = await newSession(browser, f.a.operators.op1.email);
-    await operator.page.goto('/knowledge');
+    await operator.page.goto('/agent/knowledge');
     await operator.page.getByTestId('knowledge-tab-documents').click();
     await expect(
       operator.page.getByTestId('document-item').filter({ hasText: title }),
@@ -271,7 +276,7 @@ test.describe('Knowledge documents', () => {
     const admin = await newSession(browser, f.a.operators.admin.email, {
       viewport: { width: 320, height: 640 },
     });
-    await admin.page.goto('/knowledge');
+    await admin.page.goto('/agent/knowledge');
     await admin.page.getByTestId('knowledge-tab-documents').click();
     await admin.page.getByTestId('document-upload').click();
     await admin.page.getByTestId('document-title').fill('Ж'.repeat(120));

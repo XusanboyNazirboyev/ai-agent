@@ -17,6 +17,8 @@ export interface ConversationListItem {
   readonly id: string;
   readonly state: string;
   readonly contactName: string | null;
+  /** The messenger (telegram, instagram, facebook): the list shows its icon. */
+  readonly channelType: string;
   readonly language: string | null;
   readonly leadScore: string | null;
   readonly leadStatus: string | null;
@@ -187,6 +189,8 @@ export class InboxReadService {
       leadScore?: 'HOT' | 'WARM' | 'COLD';
       leadStatus?: 'NEW' | 'IN_PROGRESS' | 'WON' | 'LOST';
       tagId?: string;
+      channelType?: 'telegram' | 'instagram' | 'facebook';
+      channelAccountId?: string;
     },
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const limit = Math.min(Math.max(options.limit ?? 25, 1), MAX_PAGE);
@@ -194,7 +198,12 @@ export class InboxReadService {
     const where: Prisma.ConversationWhereInput = {
       tenantId: principal.tenantId,
       // ADR 061: the empty conversation of a lead added by hand is no inbox row.
-      channelAccount: { channelType: { not: MANUAL_CHANNEL_TYPE } },
+      channelAccount: {
+        channelType: options.channelType ?? { not: MANUAL_CHANNEL_TYPE },
+      },
+      ...(options.channelAccountId
+        ? { channelAccountId: options.channelAccountId }
+        : {}),
       ...(options.scope === 'waiting' ? { state: 'WAITING_OPERATOR' } : {}),
       ...(options.scope === 'mine'
         ? {
@@ -354,6 +363,7 @@ export class InboxReadService {
             },
             include: {
               contact: { select: { name: true } },
+              channelAccount: { select: { channelType: true } },
               leads: {
                 where: { archivedAt: null },
                 orderBy: { createdAt: 'desc' },
@@ -388,6 +398,7 @@ export class InboxReadService {
             id: row.id,
             state: row.state,
             contactName: row.contact.name,
+            channelType: row.channelAccount.channelType,
             language: row.language,
             leadScore: row.leads[0]?.score ?? null,
             leadStatus: row.leads[0]?.status ?? null,
@@ -417,6 +428,7 @@ export class InboxReadService {
       take: limit + 1,
       include: {
         contact: { select: { name: true } },
+        channelAccount: { select: { channelType: true } },
         leads: {
           where: { archivedAt: null },
           orderBy: { createdAt: 'desc' },
@@ -442,6 +454,7 @@ export class InboxReadService {
       id: row.id,
       state: row.state,
       contactName: row.contact.name,
+      channelType: row.channelAccount.channelType,
       language: row.language,
       leadScore: row.leads[0]?.score ?? null,
       leadStatus: row.leads[0]?.status ?? null,
