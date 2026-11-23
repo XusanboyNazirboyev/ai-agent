@@ -276,6 +276,9 @@ describe('live eval CLI guards (no network)', () => {
         ANTHROPIC_API_KEY: '',
         LIVE_EVAL: '',
         LIVE_EVAL_PROVIDER: 'anthropic',
+        // dotenv never overrides a set variable: keeps a local .env pricing
+        // version (e.g. a Gemini snapshot) from firing the pricing guard first.
+        LLM_PRICING_VERSION: 'anthropic-2026-10-23',
         ...env,
       },
       encoding: 'utf8',
