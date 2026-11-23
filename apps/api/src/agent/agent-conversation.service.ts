@@ -64,6 +64,9 @@ export class AgentConfigurationError extends Error {
   }
 }
 
+/** A phone request is repeated at most once a day (owner 2026-11-23). */
+export const PHONE_ASK_AGAIN_MS = 24 * 60 * 60 * 1000;
+
 export interface TurnRequest {
   readonly tenantId: string;
   readonly conversationId: string;
@@ -450,6 +453,9 @@ export class AgentConversationService implements OnModuleInit {
               tenantId,
               conversationId,
               direction: 'OUTBOUND',
+              // Owner 2026-11-23: ask again after a day, not never again; a
+              // returning customer without a phone is asked once more.
+              createdAt: { gte: new Date(Date.now() - PHONE_ASK_AGAIN_MS) },
               OR: INITIAL_LOCALE_PACKS.map((pack) => ({
                 text: { contains: pack.templates.phoneRequest },
               })),
