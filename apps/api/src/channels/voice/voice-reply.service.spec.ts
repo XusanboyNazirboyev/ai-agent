@@ -15,6 +15,7 @@ const reply = {
 type Setup = {
   service: VoiceReplyService;
   findFirst: ReturnType<typeof vi.fn>;
+  findMany: ReturnType<typeof vi.fn>;
   sendVoice: ReturnType<typeof vi.fn>;
   synthesize: ReturnType<typeof vi.fn>;
 };
@@ -27,12 +28,12 @@ function setup(options: {
 }): Setup {
   const findFirst = vi
     .fn()
-    .mockResolvedValueOnce(options.reply === undefined ? reply : options.reply)
-    .mockResolvedValueOnce(
-      options.lastInbound === undefined
-        ? { type: 'VOICE' }
-        : options.lastInbound,
-    );
+    .mockResolvedValueOnce(options.reply === undefined ? reply : options.reply);
+  const last =
+    options.lastInbound === undefined
+      ? { type: 'VOICE', text: null }
+      : options.lastInbound && { text: null, ...options.lastInbound };
+  const findMany = vi.fn().mockResolvedValue(last ? [last] : []);
   const sendVoice = vi.fn(
     options.sendVoice ?? ((): Promise<void> => Promise.resolve()),
   );
@@ -40,17 +41,17 @@ function setup(options: {
     Promise.resolve(audio),
   );
   const service = new VoiceReplyService(
-    { message: { findFirst } } as never,
+    { message: { findFirst, findMany } } as never,
     { sendVoice } as never,
     { get: () => undefined } as never,
     options.tts ?? { synthesize },
   );
-  return { service, findFirst, sendVoice, synthesize };
+  return { service, findFirst, findMany, sendVoice, synthesize };
 }
 
 describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
   it('speaks a bot reply to a customer whose last message was a voice note', async () => {
-    const { service, sendVoice, synthesize, findFirst } = setup({});
+    const { service, sendVoice, synthesize, findFirst, findMany } = setup({});
     await service.afterTextSent('t1', 'm1');
     expect(synthesize).toHaveBeenCalledWith(reply.text, 'uz');
     expect(sendVoice).toHaveBeenCalledWith('42', audio, 'acc');
@@ -58,7 +59,7 @@ describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
     expect(findFirst.mock.calls[0]![0].where).toMatchObject({
       authorType: 'BOT',
     });
-    expect(findFirst.mock.calls[1]![0].where).toMatchObject({
+    expect(findMany.mock.calls[0]![0].where).toMatchObject({
       conversationId: 'c1',
       direction: 'INBOUND',
       sequence: { lt: 7 },
