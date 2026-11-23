@@ -51,7 +51,7 @@ afterAll(async () => {
 describe('action lifecycle evaluation', () => {
   it('has cases for both packs and every launch locale', () => {
     const keys = new Set(cases.map((c) => `${c.pack}/${c.locale}`));
-    for (const pack of ['education', 'travel'])
+    for (const pack of ['education', 'travel', 'general'])
       for (const locale of ['uz-Latn', 'uz-Cyrl', 'ru', 'en'])
         expect(keys.has(`${pack}/${locale}`), `${pack}/${locale}`).toBe(true);
   });

@@ -28,10 +28,12 @@ import type {
 import { groupOf } from './eval-coverage.js';
 import { EDUCATION_PACK } from '../../packs/education/education.pack.js';
 import { TRAVEL_PACK } from '../../packs/travel/travel.pack.js';
+import { GENERAL_PACK } from '../../packs/general/general.pack.js';
 import { unifyApostrophes } from '@agentcore/shared';
 import {
   educationConnector,
   extraction,
+  generalConnector,
   LOCALES as LOCALE_REGISTRY,
   runTurn,
   tourismConnector,
@@ -79,7 +81,7 @@ const StepSchema = z.union([
 export const EvalCaseSchema = z
   .object({
     id: z.string().regex(/^[a-z0-9-]+$/),
-    pack: z.enum(['education', 'travel']).default('education'),
+    pack: z.enum(['education', 'travel', 'general']).default('education'),
     locale: z.enum(LOCALES),
     category: z.string().min(1),
     description: z.string().min(1),
@@ -226,6 +228,7 @@ export function loadCases(root: string): EvalCase[] {
 export const EVAL_PACKS = {
   education: EDUCATION_PACK,
   travel: TRAVEL_PACK,
+  general: GENERAL_PACK,
 } as const;
 
 function toStep(
@@ -293,6 +296,21 @@ function connectorFor(
   kind: EvalCase['connector'],
   pack: EvalCase['pack'] = 'education',
 ): CrmConnector | null {
+  if (pack === 'general') {
+    // ADR 087: the general pack runs on the fictional shop and service catalog.
+    if (kind === 'default') return generalConnector();
+    if (kind === 'none') return null;
+    if (kind === 'down') return generalConnector({ failureMode: 'transient' });
+    if (kind === 'injected-catalog')
+      return generalConnector({
+        items: variantItems(
+          (offer) => offer,
+          INJECTED_DESCRIPTION,
+          'mock-general',
+        ),
+      });
+    throw new Error(`connector variant ${kind} is not defined for general`);
+  }
   if (pack === 'travel') {
     // The travel domain runs on the fictional tourism catalog.
     if (kind === 'default') return tourismConnector();
@@ -768,6 +786,14 @@ const TRAVEL_ESTABLISHING_MESSAGES: Readonly<Record<string, string>> = {
   en: 'Hello, I need a tour',
 };
 
+/** The same, for the general pack (ADR 087). */
+const GENERAL_ESTABLISHING_MESSAGES: Readonly<Record<string, string>> = {
+  'uz-Latn': 'Salom, menga telefon kerak',
+  'uz-Cyrl': 'Салом, менга телефон керак',
+  ru: 'Здравствуйте, мне нужен телефон',
+  en: 'Hello, I need a phone',
+};
+
 export async function runCase(
   evalCase: EvalCase,
   provider: LlmProvider = scriptedProvider(evalCase),
@@ -814,9 +840,11 @@ export async function runCase(
           ? [
               {
                 role: 'customer' as const,
-                text: (evalCase.pack === 'travel'
-                  ? TRAVEL_ESTABLISHING_MESSAGES
-                  : ESTABLISHING_MESSAGES)[evalCase.input.conversationLocale],
+                text: {
+                  education: ESTABLISHING_MESSAGES,
+                  travel: TRAVEL_ESTABLISHING_MESSAGES,
+                  general: GENERAL_ESTABLISHING_MESSAGES,
+                }[evalCase.pack][evalCase.input.conversationLocale],
               },
             ]
           : [],

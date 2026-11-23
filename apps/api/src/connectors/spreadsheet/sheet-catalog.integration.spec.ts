@@ -114,6 +114,12 @@ describe('spreadsheet catalog (ADR 064)', () => {
     expect(
       await connector.searchItems({ attributes: { nights: 7 } }),
     ).toHaveLength(4);
+    // Any pack's item type finds the sheet (education asks for 'course', the
+    // general pack for 'item'); rows are stored as 'tour'.
+    for (const itemType of ['course', 'item', 'tour'])
+      expect(
+        await connector.searchItems({ itemType, title: 'dubai' }),
+      ).toHaveLength(2);
     // Wildcards and odd attribute names are data, never patterns.
     expect(await connector.searchItems({ title: '%' })).toHaveLength(0);
     expect(

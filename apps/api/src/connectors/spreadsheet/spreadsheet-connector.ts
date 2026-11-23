@@ -169,8 +169,10 @@ export class SpreadsheetConnector implements CrmConnector {
       });
     const meta = await this.reader.meta(this.context.tenantId);
     if (!meta) return [];
+    // A tenant's sheet is one catalog of whatever the business sells: every
+    // row is stored as `tour`, so filtering by the pack's item type would hide
+    // the whole sheet from an education or general pack (2026-11-23).
     const items = await this.reader.searchItems(this.context.tenantId, {
-      itemType: parsed.data.itemType,
       title: parsed.data.title,
       attributes: parsed.data.attributes,
       limit: Math.min(parsed.data.limit ?? DEFAULT_LIMIT, 100),

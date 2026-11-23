@@ -269,6 +269,10 @@ export const UZ_LATN: LocalePack = {
     'ariza yaratildi',
     "so'rovingiz qayd etildi",
     'bron tasdiqlandi',
+    // ADR 087: shops and services claim orders, not bookings.
+    'buyurtmangiz tasdiqlandi',
+    'buyurtmangiz qabul qilindi',
+    'buyurtma rasmiylashtirildi',
   ],
   forbiddenClaimStems: forbiddenUz,
 };
@@ -491,6 +495,9 @@ export const UZ_CYRL: LocalePack = {
     'ариза яратилди',
     'сўровингиз қайд этилди',
     'брон тасдиқланди',
+    'буюртмангиз тасдиқланди',
+    'буюртмангиз қабул қилинди',
+    'буюртма расмийлаштирилди',
   ],
   forbiddenClaimStems: forbiddenUzCyrl,
 };
@@ -712,6 +719,9 @@ export const RU: LocalePack = {
     'вы зарегистрированы',
     'запрос зарегистрирован',
     'бронь подтверждена',
+    'заказ подтвержд',
+    'заказ оформлен',
+    'заказ принят',
   ],
   forbiddenClaimStems: ['скидк', 'гарант', 'бесплатн', 'акци', 'подар'],
 };
@@ -935,6 +945,9 @@ export const EN: LocalePack = {
     'recorded in our system',
     'booking is confirmed',
     'lead has been created',
+    'order is confirmed',
+    'order has been confirmed',
+    'order has been placed',
   ],
   forbiddenClaimStems: [
     'discount',

@@ -51,6 +51,20 @@ export function educationConnector(
 }
 
 /** The fictional tourism catalog (second-domain conformance example). */
+/** The fictional general shop and service catalog (ADR 087). */
+export function generalConnector(
+  overrides: Partial<ConstructorParameters<typeof MockConnector>[1]> = {},
+): MockConnector {
+  return new MockConnector(
+    { tenantId: 'tenant-eval', connectorKey: 'mock' },
+    {
+      sourceSystem: 'mock-general',
+      items: allFixtures('mock-general'),
+      ...overrides,
+    },
+  );
+}
+
 export function tourismConnector(
   overrides: Partial<ConstructorParameters<typeof MockConnector>[1]> = {},
 ): MockConnector {

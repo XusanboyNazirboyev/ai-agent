@@ -64,7 +64,7 @@ export const LIFECYCLE_MESSAGES = [
 export const LifecycleCaseSchema = z
   .object({
     id: z.string().regex(/^[a-z0-9-]+$/u),
-    pack: z.enum(['education', 'travel']),
+    pack: z.enum(['education', 'travel', 'general']),
     locale: z.enum(['uz-Latn', 'uz-Cyrl', 'ru', 'en']),
     category: z.enum([
       'action_confirm',

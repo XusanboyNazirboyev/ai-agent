@@ -168,14 +168,6 @@ export function SignupPage(): ReactNode {
               </option>
             ))}
           </Select>
-          {form.businessType === 'other' ? (
-            <span
-              className="text-xs font-normal text-muted"
-              data-testid="signup-type-other"
-            >
-              {t('signup.typeOtherNote')}
-            </span>
-          ) : null}
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           {t('signup.name')}
@@ -233,7 +225,6 @@ export function SignupPage(): ReactNode {
           type="submit"
           variant="primary"
           loading={busy}
-          disabled={form.businessType === 'other'}
           data-testid="signup-submit"
         >
           {t('signup.submit')}

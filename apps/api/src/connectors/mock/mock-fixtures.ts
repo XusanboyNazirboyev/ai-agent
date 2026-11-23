@@ -211,12 +211,69 @@ export function tourismFixtures(): MockItemFixture[] {
   ];
 }
 
+/**
+ * Deterministic, fictional fixtures of a general shop and service business
+ * (ADR 087 general pack): one product with an in-stock and a sold-out offer,
+ * one service. Not real offerings or prices.
+ */
+export function generalFixtures(): MockItemFixture[] {
+  return [
+    {
+      sourceEntityId: 'gen-phone-001',
+      itemType: 'item',
+      title: 'Smartphone Nova',
+      description: 'Smartphone, 128 GB',
+      attributes: { category: 'phone' },
+      offers: [
+        {
+          sourceEntityId: 'nova-black',
+          title: 'Black, 128 GB',
+          price: { amount: '320.00', currency: 'USD' },
+          pricingBasis: 'PER_UNIT',
+          availabilityStatus: 'AVAILABLE',
+          seatsLeft: 5,
+          attributes: { color: 'black' },
+        },
+        {
+          sourceEntityId: 'nova-white',
+          title: 'White, 128 GB',
+          price: { amount: '320.00', currency: 'USD' },
+          pricingBasis: 'PER_UNIT',
+          availabilityStatus: 'SOLD_OUT',
+          seatsLeft: 0,
+          attributes: { color: 'white' },
+        },
+      ],
+    },
+    {
+      sourceEntityId: 'gen-cleaning-001',
+      itemType: 'item',
+      title: 'Home Cleaning',
+      description: 'Standard cleaning of an apartment',
+      attributes: { category: 'service' },
+      offers: [
+        {
+          sourceEntityId: 'cleaning-standard',
+          title: 'Standard, up to 3 rooms',
+          price: { amount: '40.00', currency: 'USD' },
+          pricingBasis: 'PER_UNIT',
+          availabilityStatus: 'AVAILABLE',
+          attributes: {},
+        },
+      ],
+    },
+  ];
+}
+
 export function allFixtures(sourceSystem: string): MockItemFixture[] {
   if (sourceSystem.startsWith('mock-education')) {
     return educationFixtures();
   }
   if (sourceSystem.startsWith('mock-tourism')) {
     return tourismFixtures();
+  }
+  if (sourceSystem.startsWith('mock-general')) {
+    return generalFixtures();
   }
   return [];
 }

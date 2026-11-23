@@ -28,9 +28,9 @@ describe('signup helpers', () => {
     expect(signupFormProblem({ ...ok, businessType: '' })).toBe(
       'signup.form.typeRequired',
     );
-    // Owner 2026-11-23: no silent default pack for other businesses.
-    expect(signupFormProblem({ ...ok, businessType: 'other' })).toBe(
-      'signup.form.typeUnsupported',
+    // ADR 087: any other business gets the general pack.
+    expect(signupFormProblem({ ...ok, businessType: 'general' })).toBe(
+      undefined,
     );
     expect(signupFormProblem({ ...ok, businessType: 'education' })).toBe(
       undefined,

@@ -39,7 +39,7 @@ describe('agent evaluation suite (scripted)', () => {
     );
     const report = coverage(
       [...cases, ...lifecycle],
-      ['education', 'travel'],
+      ['education', 'travel', 'general'],
       ['uz-Latn', 'uz-Cyrl', 'ru', 'en'],
     );
     writeReport('coverage.json', report);
@@ -85,9 +85,9 @@ describe('false-success-claim gate is sensitive (mutation test)', () => {
     ),
   );
 
-  it('has claim-drafting cases for both packs', () => {
+  it('has claim-drafting cases for every pack', () => {
     expect(new Set(claimCases.map((c) => c.pack))).toEqual(
-      new Set(['education', 'travel']),
+      new Set(['education', 'travel', 'general']),
     );
   });
 

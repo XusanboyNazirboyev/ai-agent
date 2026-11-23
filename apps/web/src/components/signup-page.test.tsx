@@ -124,18 +124,17 @@ describe('SignupPage', () => {
 });
 
 describe('SignupPage business type (owner 2026-11-23)', () => {
-  it('does not send a business type without a pack', async () => {
+  it('sends the general pack for any other business', async () => {
+    statuses = [{ status: 'PENDING' }];
     view(<SignupPage />);
     await screen.findByTestId('signup-form');
     fill();
     fireEvent.change(screen.getByTestId('signup-type'), {
-      target: { value: 'other' },
+      target: { value: 'general' },
     });
-    expect(screen.getByTestId('signup-type-other')).toBeInTheDocument();
-    expect(screen.getByTestId('signup-submit')).toBeDisabled();
-    fireEvent.submit(screen.getByTestId('signup-form'));
-    expect(await screen.findByTestId('signup-error')).toBeInTheDocument();
-    expect(posts).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('signup-submit'));
+    await screen.findByTestId('signup-telegram');
+    expect(posts[0]).toMatchObject({ packKey: 'general' });
   });
 });
 

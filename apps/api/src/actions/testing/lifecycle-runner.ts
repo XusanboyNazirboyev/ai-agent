@@ -147,7 +147,11 @@ const CONSENT = {
   ru: 'Ваши данные будут переданы компании.',
   en: 'Your details will be sent to the company.',
 };
-const SOURCE = { education: 'mock-education', travel: 'mock-tourism' } as const;
+const SOURCE = {
+  education: 'mock-education',
+  travel: 'mock-tourism',
+  general: 'mock-general',
+} as const;
 
 export interface LifecycleOutcome {
   readonly id: string;
