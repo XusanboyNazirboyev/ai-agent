@@ -44,7 +44,6 @@ const SCORE_TONE: Record<LeadScore, Tone> = {
 
 interface ChannelFilter {
   type?: string;
-  accountId?: string;
 }
 
 interface ChannelChip extends ChannelFilter {
@@ -53,28 +52,15 @@ interface ChannelChip extends ChannelFilter {
   label?: string;
 }
 
-const CHAT_CHANNELS = ['telegram', 'instagram', 'facebook'];
+/** Owner 2026-11-23: only these two get a chip; every bot of a messenger is in it. */
+const CHAT_CHANNELS = ['telegram', 'instagram'];
 
-/**
- * "All", one chip per connected messenger, and one per account when a
- * messenger has several (owner 2026-11-23).
- */
+/** "All", then one chip per connected messenger (Telegram, Instagram). */
 export function chipsFor(accounts: readonly ChannelAccount[]): ChannelChip[] {
   const chips: ChannelChip[] = [{ key: 'all' }];
-  for (const type of CHAT_CHANNELS) {
-    const own = accounts.filter((account) => account.channelType === type);
-    if (own.length === 0) continue;
-    chips.push({ key: type, type, label: channelName(type) });
-    if (own.length > 1)
-      own.forEach((account, index) =>
-        chips.push({
-          key: account.id,
-          type,
-          accountId: account.id,
-          label: account.displayName ?? `${channelName(type)} ${index + 1}`,
-        }),
-      );
-  }
+  for (const type of CHAT_CHANNELS)
+    if (accounts.some((account) => account.channelType === type))
+      chips.push({ key: type, type, label: channelName(type) });
   return chips;
 }
 
@@ -127,7 +113,6 @@ export function ConversationList(props: {
       score,
       tagId,
       channel.type ?? '',
-      channel.accountId ?? '',
     ],
     initialPageParam: '',
     queryFn: ({ pageParam }) => {
@@ -137,8 +122,7 @@ export function ConversationList(props: {
       if (language) params.set('language', language);
       if (score) params.set('leadScore', score);
       if (tagId) params.set('tagId', tagId);
-      if (channel.accountId) params.set('channelAccountId', channel.accountId);
-      else if (channel.type) params.set('channelType', channel.type);
+      if (channel.type) params.set('channelType', channel.type);
       return api<ConversationPage>(
         `/api/v1/inbox/conversations?${params.toString()}`,
       );
@@ -146,9 +130,7 @@ export function ConversationList(props: {
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const filtered = Boolean(
-    q || language || score || tagId || channel.type || channel.accountId,
-  );
+  const filtered = Boolean(q || language || score || tagId || channel.type);
 
   function onTabKey(event: KeyboardEvent, index: number): void {
     const last = SCOPES.length - 1;
@@ -205,7 +187,7 @@ export function ConversationList(props: {
           );
         })}
       </div>
-      {channelChips.length > 2 ? (
+      {channelChips.length > 1 ? (
         <div
           role="group"
           aria-label={t('list.channels')}
@@ -213,21 +195,14 @@ export function ConversationList(props: {
           className="mx-3 mt-3 flex gap-1.5 overflow-x-auto pb-1"
         >
           {channelChips.map((chip) => {
-            const active =
-              (chip.accountId ?? '') === (channel.accountId ?? '') &&
-              (chip.type ?? '') === (channel.type ?? '');
+            const active = (chip.type ?? '') === (channel.type ?? '');
             return (
               <button
                 key={chip.key}
                 type="button"
                 aria-pressed={active}
                 data-testid={`inbox-channel-${chip.key}`}
-                onClick={() =>
-                  setChannel({
-                    ...(chip.type ? { type: chip.type } : {}),
-                    ...(chip.accountId ? { accountId: chip.accountId } : {}),
-                  })
-                }
+                onClick={() => setChannel(chip.type ? { type: chip.type } : {})}
                 className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium whitespace-nowrap transition-colors ${
                   active
                     ? 'border-primary bg-primary-soft text-primary-fg'

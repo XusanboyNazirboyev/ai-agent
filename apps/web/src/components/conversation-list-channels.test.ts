@@ -12,26 +12,25 @@ describe('inbox channel chips (owner 2026-11-23)', () => {
   it('offers all chats, then each connected messenger', () => {
     expect(
       chipsFor([account('t1', 'telegram'), account('i1', 'instagram')]).map(
-        (c) => [c.key, c.type, c.accountId],
+        (c) => [c.key, c.type],
       ),
     ).toEqual([
-      ['all', undefined, undefined],
-      ['telegram', 'telegram', undefined],
-      ['instagram', 'instagram', undefined],
+      ['all', undefined],
+      ['telegram', 'telegram'],
+      ['instagram', 'instagram'],
     ]);
   });
 
-  it('adds one chip per account when a messenger has several; skips manual leads', () => {
+  it('keeps every bot of a messenger in its one chip; no per-account or manual chips', () => {
     const chips = chipsFor([
       account('t1', 'telegram', 'SM TRAVEL'),
       account('t2', 'telegram'),
       account('m1', 'manual'),
+      account('f1', 'facebook'),
     ]);
-    expect(chips.map((c) => [c.key, c.label, c.accountId])).toEqual([
-      ['all', undefined, undefined],
-      ['telegram', 'Telegram', undefined],
-      ['t1', 'SM TRAVEL', 't1'],
-      ['t2', 'Telegram 2', 't2'],
+    expect(chips.map((c) => [c.key, c.label])).toEqual([
+      ['all', undefined],
+      ['telegram', 'Telegram'],
     ]);
   });
 });
