@@ -32,6 +32,7 @@ function fakePrisma(state: {
     lead: { updateMany: async () => ({ count: 1 }) },
     handover: { updateMany: async () => ({ count: 1 }) },
     actionProposal: { updateMany: async () => ({ count: 1 }) },
+    callRecording: { deleteMany: async () => ({ count: 0 }) },
     message: {
       updateMany: async (args: unknown) => {
         calls.push({ model: 'message', op: 'updateMany', args });
