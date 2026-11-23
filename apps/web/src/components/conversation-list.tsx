@@ -337,7 +337,9 @@ export function ConversationList(props: {
         className="min-h-0 flex-1 overflow-y-auto border-t border-line"
         data-testid="conversation-list"
       >
-        {query.isPending ? (
+        {/* The chips row appears once the accounts load: rows wait for it too,
+            so nothing jumps under a click (e2e 2026-11-23). */}
+        {query.isPending || accounts.isPending ? (
           <li role="status">
             <span className="sr-only">{t('app.loading')}</span>
             <SkeletonRows rows={5} />
@@ -357,7 +359,7 @@ export function ConversationList(props: {
             </Button>
           </li>
         ) : null}
-        {query.isSuccess && items.length === 0 ? (
+        {query.isSuccess && !accounts.isPending && items.length === 0 ? (
           <li className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted">
             <span className="grid h-12 w-12 place-items-center rounded-2xl bg-surface-2">
               <Icon name={filtered ? 'search' : 'inbox'} className="h-6 w-6" />
@@ -365,7 +367,7 @@ export function ConversationList(props: {
             <p>{filtered ? t('list.emptyFiltered') : t('list.empty')}</p>
           </li>
         ) : null}
-        {items.map((item) => (
+        {(accounts.isPending ? [] : items).map((item) => (
           <ConversationRow
             key={item.id}
             item={item}
