@@ -2,6 +2,10 @@
 
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
+## 2026-11-23 (feat/ui-words-menu)
+- **Language fix (staging):** an Uzbek chat moved to English on "aylts" (model called it English; reply then failed LANGUAGE_MISMATCH). `f9166eb` blocks that switch; `5c92fe7` returns a chat whose stored locale is already wrong to the language the customer last wrote in clearly. ADR 013 amendment 4 notes.
+- **Call analysis, ADR 085:** step 1 (`70e90b3`, `cf08329`: tables `telephony_accounts`, `call_recordings` with RLS, plan limit `callAnalysisMinutes`, erasure) and step 2 (`83a0a0a`: OnlinePBX client from the official spec, `/api/v1/telephony` connect/disconnect, 5-minute poller) done. Next: step 3a (download, OvozAI segments, Gemini summary), then 3b (S3 audio, needs infra) and UI. Open: C1 real OnlinePBX account, C2 Gladia training opt-out. After release: set Premium `callAnalysisMinutes` to 300 in the console.
+
 ## Status at 2026-11-14 (read this first; the dated entries below are older and kept as history)
 
 Staging runs `feat/production-pilot` (AWS, eu-central-1, deployed by pushing that branch; CI must be green first). This section was rewritten from the code, the ADRs and the roadmap files; the entries below it were not re-verified.
