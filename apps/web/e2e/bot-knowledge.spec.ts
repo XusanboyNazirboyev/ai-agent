@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { findOverflow, fixtures, newSession } from './helpers';
 
 test.describe('Assistant page', () => {
-  test('an admin switches the assistant on and off; an operator can only look', async ({
+  test('an admin switches the assistant; On waits for the setup; an operator can only look', async ({
     browser,
   }) => {
     const f = fixtures();
@@ -25,21 +25,32 @@ test.describe('Assistant page', () => {
     await expect(admin.page.getByRole('dialog')).toBeVisible();
     await admin.page.getByTestId('confirm-cancel').click();
     await expect(current).toHaveAttribute('data-mode', 'SHADOW');
+
+    // ADR 086: no real catalog and no business phone, so "On" is refused and
+    // the page says what is missing.
+    await expect(admin.page.getByTestId('bot-setup-CATALOG')).toBeVisible();
+    await expect(admin.page.getByTestId('bot-setup-PROFILE')).toBeVisible();
     await admin.page.getByTestId('bot-mode-LIVE').click({ force: true });
     await admin.page.getByTestId('confirm-accept').click();
-    await expect(current).toHaveAttribute('data-mode', 'LIVE');
-    await admin.page.reload();
-    await expect(current).toHaveAttribute('data-mode', 'LIVE');
+    await expect(admin.page.getByTestId('bot-error')).toBeVisible();
+    await expect(current).toHaveAttribute('data-mode', 'SHADOW');
+
+    // Filling the business profile clears that item; the catalog stays missing.
+    await admin.page.getByTestId('profile-phone').fill('+998 90 123 45 67');
+    await admin.page.getByTestId('profile-save').click();
+    await expect(admin.page.getByTestId('bot-setup-PROFILE')).toHaveCount(0);
+    await expect(admin.page.getByTestId('bot-setup-CATALOG')).toBeVisible();
 
     // An operator sees the state but every choice is disabled.
     const operator = await newSession(browser, f.a.operators.op1.email);
     await operator.page.goto('/settings/bot');
     await expect(operator.page.getByTestId('bot-current')).toHaveAttribute(
       'data-mode',
-      'LIVE',
+      'SHADOW',
     );
     await expect(operator.page.getByTestId('bot-mode-OFF')).toBeDisabled();
     await expect(operator.page.getByTestId('bot-mode-SHADOW')).toBeDisabled();
+    await expect(operator.page.getByTestId('profile-save')).toHaveCount(0);
     await operator.context.close();
 
     await admin.page.getByTestId('bot-mode-OFF').click({ force: true });
