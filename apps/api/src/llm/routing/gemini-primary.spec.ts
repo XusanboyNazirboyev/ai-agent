@@ -8,6 +8,7 @@ import {
 } from './routing-factory.js';
 import {
   GEMINI_LITE_ROUTING_POLICY,
+  GROQ_FIRST_ROUTING_POLICY,
   GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
   GEMINI_PRIMARY_ROUTING_POLICY,
 } from './routing-policy.js';
@@ -240,5 +241,31 @@ describe('gemini-lite routing policy (cost experiment 2026-11-21)', () => {
     });
     expect(lite.source).toBe('https://ai.google.dev/gemini-api/docs/pricing');
     expect(lite.validUntil).toBeUndefined();
+  });
+});
+
+describe('groq-first routing policy (owner 2026-11-23)', () => {
+  it('answers with free Groq first, paid Flash-Lite after it, and no OpenRouter free endpoint', () => {
+    expect(loadRoutingPolicy('builtin:groq-first')).toBe(
+      GROQ_FIRST_ROUTING_POLICY,
+    );
+    for (const tier of ['FAST', 'STRONG'] as const) {
+      const providers = GROQ_FIRST_ROUTING_POLICY.tiers[tier].map(
+        (c) => c.provider,
+      );
+      expect(providers).toEqual(['groq', 'gemini']);
+    }
+  });
+
+  it('builds with every candidate priced by the Flash-Lite snapshot', () => {
+    const built = buildRoutedProvider({
+      policy: GROQ_FIRST_ROUTING_POLICY,
+      snapshot: PRICING_CATALOG.snapshot('routing-gemini-lite-2026-11-21'),
+      env: ALL_KEYS,
+      trustedProviders: TRUSTED,
+      requestTimeoutMs: 500,
+      maxRetries: 0,
+    });
+    expect(built.skipped).toEqual([]);
   });
 });

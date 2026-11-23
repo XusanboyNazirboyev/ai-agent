@@ -146,12 +146,39 @@ export const GEMINI_LITE_ROUTING_POLICY: RoutingPolicy =
     breaker: GEMINI_PRIMARY_ROUTING_POLICY.breaker,
   });
 
+/**
+ * Owner 2026-11-23: free first, paid only when needed. Groq answers (its
+ * terms forbid training on inputs and outputs; Zero Data Retention switched on
+ * in its Data Controls by the owner on 2026-11-23); the paid
+ * `gemini-3.5-flash-lite` only when Groq fails (rate limit, outage). No
+ * OpenRouter `:free` endpoints: their providers' training policies are not
+ * verified. Same models as `gemini-lite`, so pricing
+ * `routing-gemini-lite-2026-11-21` applies. Selected with
+ * `LLM_ROUTING_POLICY_FILE=builtin:groq-first`.
+ */
+export const GROQ_FIRST_ROUTING_POLICY: RoutingPolicy =
+  RoutingPolicySchema.parse({
+    version: 'groq-first-2026-11-23',
+    tiers: {
+      FAST: [
+        { provider: 'groq', model: 'openai/gpt-oss-20b' },
+        { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+      ],
+      STRONG: [
+        { provider: 'groq', model: 'openai/gpt-oss-120b' },
+        { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+      ],
+    },
+    breaker: GEMINI_PRIMARY_ROUTING_POLICY.breaker,
+  });
+
 /** Policies selectable by name (`builtin:<name>`) instead of a file. */
 export const BUILTIN_ROUTING_POLICIES: Readonly<Record<string, RoutingPolicy>> =
   {
     'gemini-primary': GEMINI_PRIMARY_ROUTING_POLICY,
     'gemini-primary-fast-groq': GEMINI_PRIMARY_FAST_GROQ_ROUTING_POLICY,
     'gemini-lite': GEMINI_LITE_ROUTING_POLICY,
+    'groq-first': GROQ_FIRST_ROUTING_POLICY,
   };
 
 export const DEFAULT_ROUTING_POLICY: RoutingPolicy = RoutingPolicySchema.parse({
