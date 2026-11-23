@@ -6,7 +6,7 @@ import type {
 } from '../core/llm/budget-ledger.js';
 import type { LlmUsageEntry } from '../core/llm/metered-llm.js';
 import { PrismaService } from '../persistence/prisma.service.js';
-import { usageRow } from './llm-usage.store.js';
+import { conversationWindowStart, usageRow } from './llm-usage.store.js';
 
 /** States whose worst case still counts against the budget. */
 const COUNTED = ['RESERVED', 'UNKNOWN'] as const;
@@ -87,7 +87,11 @@ export class LlmBudgetLedger implements BudgetLedger {
       ) {
         const [spent, outstanding] = await Promise.all([
           tx.llmUsageRecord.aggregate({
-            where: { tenantId, conversationId },
+            where: {
+              tenantId,
+              conversationId,
+              createdAt: { gte: conversationWindowStart(this.clock()) },
+            },
             _sum: {
               costNano: true,
               inputTokens: true,
@@ -98,7 +102,12 @@ export class LlmBudgetLedger implements BudgetLedger {
             },
           }),
           tx.llmBudgetReservation.aggregate({
-            where: { tenantId, conversationId, state: { in: [...COUNTED] } },
+            where: {
+              tenantId,
+              conversationId,
+              state: { in: [...COUNTED] },
+              createdAt: { gte: conversationWindowStart(this.clock()) },
+            },
             _sum: { reservedNano: true, reservedTokens: true },
           }),
         ]);
@@ -201,7 +210,12 @@ export class LlmBudgetLedger implements BudgetLedger {
     conversationId: string,
   ): Promise<{ nano: number; tokens: number }> {
     const sum = await this.prisma.llmBudgetReservation.aggregate({
-      where: { tenantId, conversationId, state: { in: [...COUNTED] } },
+      where: {
+        tenantId,
+        conversationId,
+        state: { in: [...COUNTED] },
+        createdAt: { gte: conversationWindowStart(this.clock()) },
+      },
       _sum: { reservedNano: true, reservedTokens: true },
     });
     return {

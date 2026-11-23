@@ -4,6 +4,16 @@ import type { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 
 /** Ledger row for one usage entry (shared with the budget ledger). */
+/**
+ * Owner 2026-11-23: the per-conversation budget counts the last 24 hours,
+ * not the conversation's whole life. A Telegram chat lasts for weeks; a
+ * lifetime cap silenced a returning customer for good. The tenant's monthly
+ * budget stays the real ceiling.
+ */
+export const CONVERSATION_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const conversationWindowStart = (now: Date): Date =>
+  new Date(now.getTime() - CONVERSATION_BUDGET_WINDOW_MS);
+
 export function usageRow(
   entry: LlmUsageEntry,
 ): Prisma.LlmUsageRecordCreateManyInput {
@@ -55,7 +65,11 @@ export class LlmUsageStore implements LlmUsageSink {
     conversationId: string,
   ): Promise<number> {
     const result = await this.prisma.llmUsageRecord.aggregate({
-      where: { tenantId, conversationId },
+      where: {
+        tenantId,
+        conversationId,
+        createdAt: { gte: conversationWindowStart(new Date()) },
+      },
       _sum: { costNano: true },
     });
     return Number(result._sum.costNano ?? 0n);
@@ -67,7 +81,11 @@ export class LlmUsageStore implements LlmUsageSink {
     conversationId: string,
   ): Promise<number> {
     const result = await this.prisma.llmUsageRecord.aggregate({
-      where: { tenantId, conversationId },
+      where: {
+        tenantId,
+        conversationId,
+        createdAt: { gte: conversationWindowStart(new Date()) },
+      },
       _sum: {
         inputTokens: true,
         outputTokens: true,

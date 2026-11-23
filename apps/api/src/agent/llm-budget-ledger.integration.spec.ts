@@ -398,6 +398,38 @@ describe('conversation caps (PostgreSQL)', () => {
     });
   });
 
+  it('counts only the last 24 hours of a conversation (owner 2026-11-23)', async () => {
+    const tenantId = await tenant();
+    const chat = randomUUID();
+    const first = await reserveIn(workerA, tenantId, chat, 'old:0', {
+      nano: CAP,
+    });
+    if (!first.granted) throw new Error('unreachable');
+    await workerA.settle(
+      tenantId,
+      first.reservationId,
+      entry(tenantId, { conversationId: chat, costNano: CAP }),
+    );
+    expect(
+      (await reserveIn(workerB, tenantId, chat, 'now:0', { nano: CAP }))
+        .granted,
+    ).toBe(false);
+    // The same spend a day and an hour ago no longer counts.
+    const dayAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await owner.llmUsageRecord.updateMany({
+      where: { tenantId, conversationId: chat },
+      data: { createdAt: dayAgo },
+    });
+    await owner.llmBudgetReservation.updateMany({
+      where: { tenantId, conversationId: chat },
+      data: { createdAt: dayAgo },
+    });
+    expect(
+      (await reserveIn(workerB, tenantId, chat, 'later:0', { nano: CAP }))
+        .granted,
+    ).toBe(true);
+  });
+
   it('counts confirmed spend of the conversation and leaves other conversations independent', async () => {
     const tenantId = await tenant();
     const busy = randomUUID();
