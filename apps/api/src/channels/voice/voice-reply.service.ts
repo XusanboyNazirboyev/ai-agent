@@ -182,9 +182,9 @@ export class VoiceReplyService {
    * Speech counts on the same tenant-month and conversation caps as model
    * calls: reserved before the provider call, settled after it. A refusal
    * means text only.
-   * shortcut: every engine is priced at ElevenLabs' $0.04/1K chars (the
-   * dearest verified rate in the chain; Gemini TTS is ~4x cheaper, NeuronAI's
-   * price is unverified); price per engine once FirstReplyTts reports which
+   * shortcut: every engine is priced at ElevenLabs' $0.04/1K chars, the
+   * dearest rate in the chain (Gemini TTS ~4x cheaper; NeuronAI 0.3 UZS per
+   * char, also below it); price per engine once FirstReplyTts reports which
    * engine spoke.
    */
   private async meteredSynthesize(
