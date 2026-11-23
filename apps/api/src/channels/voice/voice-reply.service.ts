@@ -31,28 +31,41 @@ const LANGUAGE: Readonly<Record<string, string>> = {
   en: 'en',
 };
 
-// Owner 2026-11-23: a customer who asks for voice in text gets voice from then
-// on in that conversation. Uzbek (Latin and Cyrillic), Russian, English.
+// Owner 2026-11-23 (second call): voice only for the turn that asked for it,
+// in a voice note or in text. Uzbek (Latin and Cyrillic), Russian, English.
 const VOICE_REQUEST =
   /ovozli|ovoz\s*(bilan|orqali|xabar|habar|yubor|jo['ʻ‘’`]?nat)|овозли|голосов|голосом|\bvoice\b|\baudio\b|аудио/iu;
 
-/** A voice reply: the last message was a voice note, or the customer asked for voice. */
+/**
+ * The customer messages this reply answers: newest first, the earlier parts
+ * of the same bot reply skipped, up to the previous outbound message.
+ */
+export function currentTurn<T extends { direction: string }>(
+  recent: readonly T[],
+): T[] {
+  const start = recent.findIndex((m) => m.direction === 'INBOUND');
+  if (start < 0) return [];
+  const end = recent.findIndex(
+    (m, i) => i > start && m.direction !== 'INBOUND',
+  );
+  return recent.slice(start, end < 0 ? undefined : end);
+}
+
+/** A voice reply: this turn has a voice note, or asks for voice in text. */
 export function wantsVoice(
-  inbound: ReadonlyArray<{ type: string; text: string | null }>,
+  turn: ReadonlyArray<{ type: string; text: string | null }>,
 ): boolean {
-  return (
-    inbound[0]?.type === 'VOICE' ||
-    inbound.some(
-      (message) =>
-        message.type === 'TEXT' && VOICE_REQUEST.test(message.text ?? ''),
-    )
+  return turn.some(
+    (message) =>
+      message.type === 'VOICE' ||
+      (message.type === 'TEXT' && VOICE_REQUEST.test(message.text ?? '')),
   );
 }
 
 /**
  * Voice replies (owner 2026-11-21): after a bot text reply reached Telegram,
- * a customer whose last message was a voice note, or who asked for voice in
- * this conversation (owner 2026-11-23), also gets that reply as speech. The text stays (prices and dates remain readable and were checked
+ * a customer whose message was a voice note, or who asked for voice in that
+ * message (owner 2026-11-23), also gets that reply as speech. The text stays (prices and dates remain readable and were checked
  * by the guardrail). Best effort: any failure (quota, network, Telegram)
  * leaves the text reply alone; it runs once per reply because the caller
  * claims the message before sending it.
@@ -122,18 +135,17 @@ export class VoiceReplyService {
         },
       });
       if (!reply?.text) return;
-      const inbound = await this.prisma.message.findMany({
+      const recent = await this.prisma.message.findMany({
         where: {
           tenantId,
           conversationId: reply.conversationId,
-          direction: 'INBOUND',
           sequence: { lt: reply.sequence },
         },
         orderBy: { sequence: 'desc' },
-        take: 50,
-        select: { type: true, text: true },
+        take: 20,
+        select: { direction: true, type: true, text: true },
       });
-      if (!wantsVoice(inbound)) return;
+      if (!wantsVoice(currentTurn(recent))) return;
       const language = reply.conversation.language?.split('-')[0];
       const audio = await this.meteredSynthesize(
         tenantId,

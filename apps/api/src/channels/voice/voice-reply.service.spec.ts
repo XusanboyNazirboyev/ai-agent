@@ -31,8 +31,12 @@ function setup(options: {
     .mockResolvedValueOnce(options.reply === undefined ? reply : options.reply);
   const last =
     options.lastInbound === undefined
-      ? { type: 'VOICE', text: null }
-      : options.lastInbound && { text: null, ...options.lastInbound };
+      ? { direction: 'INBOUND', type: 'VOICE', text: null }
+      : options.lastInbound && {
+          direction: 'INBOUND',
+          text: null,
+          ...options.lastInbound,
+        };
   const findMany = vi.fn().mockResolvedValue(last ? [last] : []);
   const sendVoice = vi.fn(
     options.sendVoice ?? ((): Promise<void> => Promise.resolve()),
@@ -61,7 +65,6 @@ describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
     });
     expect(findMany.mock.calls[0]![0].where).toMatchObject({
       conversationId: 'c1',
-      direction: 'INBOUND',
       sequence: { lt: 7 },
     });
   });
@@ -112,7 +115,9 @@ describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
       const findFirst = vi.fn().mockResolvedValueOnce(reply);
       const findMany = vi
         .fn()
-        .mockResolvedValue([{ type: 'VOICE', text: null }]);
+        .mockResolvedValue([
+          { direction: 'INBOUND', type: 'VOICE', text: null },
+        ]);
       const sendVoice = vi.fn(() => Promise.resolve());
       const synthesize = vi.fn(() => Promise.resolve(audio));
       const ledger = {
