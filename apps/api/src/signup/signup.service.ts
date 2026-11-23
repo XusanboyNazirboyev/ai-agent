@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../config/environment.js';
 import { INITIAL_LOCALE_PACKS } from '../locales/locale-packs.js';
-import { DOMAIN_PACKS } from '../packs/registry.js';
+import { DOMAIN_PACKS, packByKey } from '../packs/registry.js';
 import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { normalizeEmail } from '../team/operator-invite.service.js';
@@ -49,6 +49,8 @@ export interface CreateSignupInput {
   readonly email: string;
   readonly password: string;
   readonly planCode: string;
+  /** A key from SIGNUP_PACK_KEYS (validated by the controller). */
+  readonly packKey: string;
 }
 
 export interface CreatedSignup {
@@ -150,6 +152,7 @@ export class SignupService {
         tokenHash: hashSignupSecret(token),
         bindingHash: hashSignupSecret(binding),
         businessName: input.businessName,
+        packKey: input.packKey,
         personName: input.name,
         email,
         passwordHash: await hashPassword(input.password, this.policy.scrypt),
@@ -416,7 +419,11 @@ export class SignupService {
       where: { id: signup.planId, isActive: true, isPublic: true },
     });
     if (!plan) throw new Refusal('unavailable', 'PLAN_INVALID');
-    const pack = [...DOMAIN_PACKS.values()][0];
+    // Owner 2026-11-23: the picked business type, never a silent default;
+    // a signup started before the type existed keeps the old first pack.
+    const pack = signup.packKey
+      ? packByKey(signup.packKey)
+      : [...DOMAIN_PACKS.values()][0];
     if (!pack) throw new Refusal('unavailable', 'NO_PACK');
     let slug = '';
     for (const candidate of slugCandidates(signup.businessName)) {

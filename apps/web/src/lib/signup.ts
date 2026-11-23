@@ -7,8 +7,16 @@ export const SIGNUP_MIN_PASSWORD = 10;
 /** Plan code used when neither `?plan=` nor the public plans give one. */
 export const DEFAULT_PLAN_CODE = 'basic';
 
+/**
+ * Business types offered at signup (owner 2026-11-23): each maps to the API's
+ * Domain Pack key. `other` is shown but cannot be sent until a pack fits it.
+ */
+export const BUSINESS_TYPES = ['travel', 'education', 'other'] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number] | '';
+
 export interface SignupForm {
   businessName: string;
+  businessType: BusinessType;
   name: string;
   email: string;
   password: string;
@@ -36,6 +44,8 @@ export function planFromSearch(search: string): string | undefined {
 export function signupFormProblem(form: SignupForm): string | undefined {
   if (form.businessName.trim().length < 2)
     return 'signup.form.businessRequired';
+  if (!form.businessType) return 'signup.form.typeRequired';
+  if (form.businessType === 'other') return 'signup.form.typeUnsupported';
   if (!form.name.trim()) return 'signup.form.nameRequired';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(form.email.trim()))
     return 'signup.form.emailInvalid';

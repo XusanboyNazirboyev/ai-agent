@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import type { PublicPlans } from '@/lib/public-site';
 import {
+  BUSINESS_TYPES,
   DEFAULT_PLAN_CODE,
   SIGNUP_MIN_PASSWORD,
   SIGNUP_POLL_MS,
@@ -15,13 +16,16 @@ import {
   pollAction,
   signupExpired,
   signupFormProblem,
+  type BusinessType,
   type SignupCreated,
+  type SignupForm,
   type SignupStatus,
 } from '@/lib/signup';
 import { AuthCard } from './auth-card';
 import { Button, buttonClass } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { Select } from './ui/select';
 
 /**
  * Public signup (ADR 080), two steps: the form, then "Confirm in Telegram".
@@ -55,8 +59,9 @@ export function SignupPage(): ReactNode {
   const planName =
     plans.data?.plans.find((plan) => plan.code === planCode)?.name ?? planCode;
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SignupForm>({
     businessName: '',
+    businessType: '',
     name: '',
     email: '',
     password: '',
@@ -77,6 +82,7 @@ export function SignupPage(): ReactNode {
           method: 'POST',
           body: {
             businessName: form.businessName.trim(),
+            packKey: form.businessType,
             name: form.name.trim(),
             email: form.email.trim(),
             password: form.password,
@@ -90,7 +96,7 @@ export function SignupPage(): ReactNode {
     setBusy(false);
   }
 
-  function field(key: keyof typeof form): {
+  function field(key: Exclude<keyof SignupForm, 'businessType'>): {
     value: string;
     onChange: (e: { target: { value: string } }) => void;
   } {
@@ -137,6 +143,39 @@ export function SignupPage(): ReactNode {
             className={fieldClass}
             {...field('businessName')}
           />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          {t('signup.type')}
+          <Select
+            field
+            name="businessType"
+            value={form.businessType}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                businessType: e.target.value as BusinessType,
+              })
+            }
+            className="w-full"
+            data-testid="signup-type"
+          >
+            <option value="" disabled>
+              {t('signup.typeChoose')}
+            </option>
+            {BUSINESS_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {t(`signup.typeOption.${type}`)}
+              </option>
+            ))}
+          </Select>
+          {form.businessType === 'other' ? (
+            <span
+              className="text-xs font-normal text-muted"
+              data-testid="signup-type-other"
+            >
+              {t('signup.typeOtherNote')}
+            </span>
+          ) : null}
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           {t('signup.name')}
@@ -194,6 +233,7 @@ export function SignupPage(): ReactNode {
           type="submit"
           variant="primary"
           loading={busy}
+          disabled={form.businessType === 'other'}
           data-testid="signup-submit"
         >
           {t('signup.submit')}

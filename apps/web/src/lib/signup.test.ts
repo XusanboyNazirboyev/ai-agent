@@ -8,6 +8,7 @@ import {
 
 const ok = {
   businessName: 'Shop',
+  businessType: 'travel' as const,
   name: 'Ali',
   email: 'a@b.co',
   password: '0123456789',
@@ -23,6 +24,16 @@ describe('signup helpers', () => {
     expect(signupFormProblem(ok)).toBeUndefined();
     expect(signupFormProblem({ ...ok, businessName: 'S' })).toBe(
       'signup.form.businessRequired',
+    );
+    expect(signupFormProblem({ ...ok, businessType: '' })).toBe(
+      'signup.form.typeRequired',
+    );
+    // Owner 2026-11-23: no silent default pack for other businesses.
+    expect(signupFormProblem({ ...ok, businessType: 'other' })).toBe(
+      'signup.form.typeUnsupported',
+    );
+    expect(signupFormProblem({ ...ok, businessType: 'education' })).toBe(
+      undefined,
     );
     expect(signupFormProblem({ ...ok, name: ' ' })).toBe(
       'signup.form.nameRequired',

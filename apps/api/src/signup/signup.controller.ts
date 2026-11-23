@@ -19,6 +19,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
+import { SIGNUP_PACK_KEYS } from '../packs/registry.js';
 import type { AppEnvironment } from '../config/environment.js';
 import {
   loginClientAddress,
@@ -55,6 +56,8 @@ const CreateBody = z.object({
   email: z.string().min(3).max(254),
   password: z.string().min(10).max(200),
   planCode: z.string().min(1).max(60),
+  // Owner 2026-11-23: the business type decides the Domain Pack.
+  packKey: z.string().refine((key) => SIGNUP_PACK_KEYS.includes(key)),
 });
 
 export const BINDING_COOKIE = 'tezda_signup';

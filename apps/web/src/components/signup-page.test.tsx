@@ -73,6 +73,7 @@ function view(node: React.ReactNode): void {
 function fill(): void {
   for (const [id, value] of [
     ['signup-business', 'My Shop'],
+    ['signup-type', 'travel'],
     ['signup-name', 'Ali'],
     ['signup-email', 'ali@example.com'],
     ['signup-password', '0123456789'],
@@ -99,6 +100,7 @@ describe('SignupPage', () => {
     expect(open).toHaveAttribute('href', 'https://t.me/tezda_bot?start=tok');
     expect(posts[0]).toMatchObject({
       planCode: 'basic',
+      packKey: 'travel',
       email: 'ali@example.com',
     });
     await waitFor(
@@ -119,6 +121,22 @@ describe('SignupPage', () => {
       await screen.findByTestId('signup-refused', undefined, { timeout: 5000 }),
     ).toBeInTheDocument();
   }, 10000);
+});
+
+describe('SignupPage business type (owner 2026-11-23)', () => {
+  it('does not send a business type without a pack', async () => {
+    view(<SignupPage />);
+    await screen.findByTestId('signup-form');
+    fill();
+    fireEvent.change(screen.getByTestId('signup-type'), {
+      target: { value: 'other' },
+    });
+    expect(screen.getByTestId('signup-type-other')).toBeInTheDocument();
+    expect(screen.getByTestId('signup-submit')).toBeDisabled();
+    fireEvent.submit(screen.getByTestId('signup-form'));
+    expect(await screen.findByTestId('signup-error')).toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
 });
 
 describe('SetupGuide', () => {

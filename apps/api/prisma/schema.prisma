@@ -2197,6 +2197,8 @@ model PendingSignup {
   tokenHash       String           @unique @map("token_hash") @db.VarChar(64)
   bindingHash     String           @map("binding_hash") @db.VarChar(64)
   businessName    String           @map("business_name") @db.VarChar(120)
+  /// Domain Pack key the owner picked as the business type (null: signup started before 2026-11-23).
+  packKey         String?          @map("pack_key") @db.VarChar(100)
   personName      String           @map("person_name") @db.VarChar(80)
   email           String           @db.VarChar(254)
   passwordHash    String           @map("password_hash") @db.VarChar(255)

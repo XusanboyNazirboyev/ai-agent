@@ -142,6 +142,7 @@ async function start(
       email,
       password: PASSWORD,
       planCode: PLAN,
+      packKey: 'travel',
     },
   });
   expect(result.status).toBe(201);
@@ -225,6 +226,8 @@ describe('self-serve signup (ADR 080)', () => {
       where: { id: row.createdTenantId as string },
     });
     expect(tenant.config).toMatchObject({ billing: { required: true } });
+    // Owner 2026-11-23: the picked business type, not the first pack.
+    expect(tenant.packKey).toBe('travel');
     const owners = await db.operator.findMany({
       where: { tenantId: tenant.id },
     });
@@ -340,6 +343,7 @@ describe('self-serve signup (ADR 080)', () => {
         email: s.email.toUpperCase(),
         password: PASSWORD,
         planCode: PLAN,
+        packKey: 'travel',
       },
     });
     expect(taken.status).toBe(409);
@@ -351,9 +355,23 @@ describe('self-serve signup (ADR 080)', () => {
         email: 'x@example.test',
         password: PASSWORD,
         planCode: 'nope',
+        packKey: 'travel',
       },
     });
     expect(plan.status).toBe(400);
+    for (const packKey of [undefined, 'shop', 'other']) {
+      const type = await http('POST', '/api/v1/public/signups', {
+        body: {
+          businessName: 'Again',
+          name: 'Ali',
+          email: 'x@example.test',
+          password: PASSWORD,
+          planCode: PLAN,
+          ...(packKey ? { packKey } : {}),
+        },
+      });
+      expect(type.status).toBe(400);
+    }
     const weak = await http('POST', '/api/v1/public/signups', {
       body: {
         businessName: 'Again',
@@ -361,6 +379,7 @@ describe('self-serve signup (ADR 080)', () => {
         email: 'x@example.test',
         password: 'short',
         planCode: PLAN,
+        packKey: 'travel',
       },
     });
     expect(weak.status).toBe(400);
@@ -371,6 +390,7 @@ describe('self-serve signup (ADR 080)', () => {
         email: 'x@example.test',
         password: PASSWORD,
         planCode: PLAN,
+        packKey: 'travel',
       },
       headers: { origin: 'https://evil.example' },
     });
