@@ -98,6 +98,12 @@ const PATHS = {
       <line x1="21" x2="9" y1="12" y2="12" />
     </>
   ),
+  card: (
+    <>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <line x1="2" y1="10" x2="22" y2="10" />
+    </>
+  ),
   clock: (
     <>
       <circle cx="12" cy="12" r="10" />

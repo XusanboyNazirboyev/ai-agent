@@ -114,7 +114,7 @@ describe('SubscriptionPay', () => {
 
   it('after return shows the confirming notice and refetches', () => {
     vi.useFakeTimers();
-    window.history.replaceState(null, '', '/settings/subscription?paid=1');
+    window.history.replaceState(null, '', '/billing?paid=1');
     const refetch = vi.fn();
     renderIt(BASE, vi.fn(), refetch);
     expect(screen.getByTestId('pay-notice').textContent).toBe(

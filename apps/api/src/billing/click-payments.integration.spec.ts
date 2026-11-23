@@ -152,7 +152,7 @@ describe('Click checkout', () => {
       merchant_id: '777',
       amount: '150000.00',
       transaction_param: o.paymentId,
-      return_url: 'https://app.example.test/settings/subscription?paid=1',
+      return_url: 'https://app.example.test/billing?paid=1',
     });
     expect(o.url).not.toContain(SECRET);
     // A second press reuses the open order.

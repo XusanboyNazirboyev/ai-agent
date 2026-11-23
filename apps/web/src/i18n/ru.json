@@ -2021,5 +2021,11 @@
   "agent.rules.noGuess": "Название, адрес, телефон и часы работы — только из «Данных бизнеса»; если их нет, передаёт вопрос оператору.",
   "agent.rules.noClaim": "Никогда не говорит, что заказ, бронь или оплата подтверждены: это делает ваша команда.",
   "list.channelAll": "Все",
-  "list.channels": "По каналу"
+  "list.channels": "По каналу",
+  "nav.billing": "Подписка",
+  "subscription.period": "Период подписки",
+  "subscription.left": "Осталось",
+  "subscription.daysLeft": "{days} дн.",
+  "subscription.plans": "Тарифы",
+  "subscription.currentPlan": "Текущий тариф"
 }

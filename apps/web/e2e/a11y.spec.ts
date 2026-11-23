@@ -548,7 +548,7 @@ test.describe('platform console and the ADR 047 tenant pages', () => {
       await check(admin.page, 'team invite dialog');
       await admin.page.keyboard.press('Escape');
       await expect(admin.page.getByTestId('team-invite')).toBeFocused();
-      await admin.page.goto('/settings/subscription');
+      await admin.page.goto('/billing');
       await expect(admin.page.getByTestId('own-status')).toBeVisible();
       await check(admin.page, 'subscription');
       await admin.context.close();

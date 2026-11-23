@@ -2,7 +2,14 @@ import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
 export type NavKey =
-  'agent' | 'today' | 'inbox' | 'leads' | 'tasks' | 'analytics' | 'settings';
+  | 'agent'
+  | 'today'
+  | 'inbox'
+  | 'leads'
+  | 'tasks'
+  | 'analytics'
+  | 'billing'
+  | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -44,6 +51,13 @@ export const NAV: NavItem[] = [
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
   },
   { key: 'analytics', icon: 'chart', roles: ['OWNER', 'ADMIN'] },
+  // Owner 2026-11-23: the plan, its period and the prices in plain sight.
+  {
+    key: 'billing',
+    icon: 'card',
+    roles: ['OWNER', 'ADMIN'],
+    alsoUnder: ['/settings/subscription'],
+  },
   {
     key: 'settings',
     icon: 'sliders',

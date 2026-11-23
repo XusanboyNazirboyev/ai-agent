@@ -63,7 +63,6 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
     await page.waitForURL(/\/settings\/team$/u);
     await expect(tabs.getByRole('link')).toHaveText([
       'Team',
-      'Subscription',
       'Security',
       'History',
       'General',

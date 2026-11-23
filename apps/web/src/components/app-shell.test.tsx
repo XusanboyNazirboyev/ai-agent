@@ -116,7 +116,7 @@ describe('AppShell rail', () => {
     renderShell('ADMIN');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(7);
+    expect(links).toHaveLength(8);
     expect(links.map((link) => link.textContent)).toEqual([
       'AI agent',
       'Today',
@@ -124,6 +124,7 @@ describe('AppShell rail', () => {
       'Leads',
       'Tasks',
       'Analytics',
+      'Billing',
       'Settings',
     ]);
   });

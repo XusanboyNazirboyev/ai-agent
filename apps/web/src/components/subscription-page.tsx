@@ -10,7 +10,6 @@ import type { OwnSubscription } from '@/lib/types';
 import { useShell } from './app-shell';
 import { SubscriptionBadge } from './console/console-format';
 import { SubscriptionPay } from './subscription-pay';
-import { SettingsSubPage } from './settings-section-nav';
 import { EmptyState, QueryState } from './ui/error-note';
 import { Icon } from './ui/icons';
 
@@ -36,6 +35,11 @@ function Row(props: {
  * Settings → Subscription (ADR 047 §5): read-only. Plans, periods and
  * payments are managed by tezda in the platform console.
  */
+/** Whole days until the period ends, never below zero (rounded up). */
+export function daysLeft(end: string, now: number): number {
+  return Math.max(0, Math.ceil((Date.parse(end) - now) / 86_400_000));
+}
+
 export function SubscriptionPage(): ReactNode {
   const { t, locale } = useI18n();
   const { operator } = useShell();
@@ -49,11 +53,11 @@ export function SubscriptionPage(): ReactNode {
   const subscription = data?.subscription ?? null;
 
   return (
-    <SettingsSubPage active="subscription">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         role="region"
         tabIndex={0}
-        aria-label={t('settings.section.subscription')}
+        aria-label={t('nav.billing')}
         className="min-h-0 flex-1 overflow-y-auto"
       >
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
@@ -96,8 +100,15 @@ export function SubscriptionPage(): ReactNode {
                   <Row label={t('console.field.status')} testId="own-status">
                     <SubscriptionBadge status={subscription.status} />
                   </Row>
-                  <Row label={t('console.field.periodEnd')}>
+                  {/* Owner 2026-11-23: from when to when, and how long is left. */}
+                  <Row label={t('subscription.period')} testId="own-period">
+                    {formatDate(subscription.currentPeriodStart, locale)} –{' '}
                     {formatDate(subscription.currentPeriodEnd, locale)}
+                  </Row>
+                  <Row label={t('subscription.left')} testId="own-days-left">
+                    {t('subscription.daysLeft', {
+                      days: daysLeft(subscription.currentPeriodEnd, Date.now()),
+                    })}
                   </Row>
                   {subscription.graceUntil ? (
                     <Row label={t('console.field.graceUntil')}>
@@ -115,6 +126,49 @@ export function SubscriptionPage(): ReactNode {
                   ? t('subscription.botOn')
                   : t('banner.expired')}
               </p>
+            </section>
+          ) : null}
+          {data && data.plans.length > 0 ? (
+            <section
+              aria-labelledby="own-plans"
+              data-testid="own-plans"
+              className="flex flex-col gap-3"
+            >
+              <h2 id="own-plans" className="font-semibold">
+                {t('subscription.plans')}
+              </h2>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {data.plans.map((plan) => (
+                  <li
+                    key={plan.code}
+                    data-testid="own-plan-option"
+                    className={`flex flex-col gap-1 rounded-xl border p-3 text-sm ${
+                      plan.code === data.currentPlanCode
+                        ? 'border-primary bg-primary-soft'
+                        : 'border-line bg-surface'
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2 font-semibold">
+                      {plan.name}
+                      {plan.code === data.currentPlanCode ? (
+                        <span className="text-xs font-medium text-primary-fg">
+                          {t('subscription.currentPlan')}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="tabular-nums">
+                      {t('subscription.pricePer', {
+                        price: formatMoney(
+                          plan.priceMinor,
+                          plan.currency,
+                          locale,
+                        ),
+                        days: plan.periodDays,
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
           {data ? (
@@ -167,6 +221,6 @@ export function SubscriptionPage(): ReactNode {
           ) : null}
         </div>
       </div>
-    </SettingsSubPage>
+    </div>
   );
 }

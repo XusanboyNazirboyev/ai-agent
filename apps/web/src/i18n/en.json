@@ -2021,5 +2021,11 @@
   "agent.rules.noGuess": "Business name, address, phone and opening hours come only from Business details; anything missing goes to an operator.",
   "agent.rules.noClaim": "It never says an order, booking or payment is confirmed: your team does that.",
   "list.channelAll": "All",
-  "list.channels": "By channel"
+  "list.channels": "By channel",
+  "nav.billing": "Billing",
+  "subscription.period": "Subscription period",
+  "subscription.left": "Left",
+  "subscription.daysLeft": "{days} days",
+  "subscription.plans": "Plans",
+  "subscription.currentPlan": "Current plan"
 }

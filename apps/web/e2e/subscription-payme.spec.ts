@@ -38,11 +38,11 @@ test('Payme checkout uses the selected server plan and mapped locale', async ({
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ url: '/settings/subscription?paid=1' }),
+      body: JSON.stringify({ url: '/billing?paid=1' }),
     });
   });
 
-  await page.goto('/settings/subscription');
+  await page.goto('/billing');
   await expect(page.getByTestId('pay-payme')).toBeVisible();
   await expect(page.getByTestId('pay-click')).toHaveCount(0);
   await page.getByTestId('pay-payme').click();
@@ -52,6 +52,6 @@ test('Payme checkout uses the selected server plan and mapped locale', async ({
       planCode: 'basic',
       locale: 'uz',
     });
-  await expect(page).toHaveURL(/\/settings\/subscription\?paid=1$/u);
+  await expect(page).toHaveURL(/\/billing\?paid=1$/u);
   await context.close();
 });

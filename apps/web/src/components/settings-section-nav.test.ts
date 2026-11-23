@@ -14,7 +14,6 @@ const ALL: SettingsSection[] = [
   'pipeline',
   'fields',
   'team',
-  'subscription',
   'security',
   'history',
   'general',
@@ -49,9 +48,7 @@ describe('settings groups', () => {
       );
     expect(keys(true).sort()).toEqual([...ALL].sort());
     expect(keys(false).sort()).toEqual(
-      ALL.filter(
-        (k) => !['team', 'subscription', 'history'].includes(k),
-      ).sort(),
+      ALL.filter((k) => !['team', 'history'].includes(k)).sort(),
     );
   });
 
@@ -66,7 +63,6 @@ describe('settings groups', () => {
       fields: '/settings/fields',
       crm: '/settings/crm',
       team: '/settings/team',
-      subscription: '/settings/subscription',
       security: '/settings/security',
       history: '/settings/history',
       general: '/settings',

@@ -12,6 +12,7 @@ const FULL: NavKey[] = [
   'leads',
   'tasks',
   'analytics',
+  'billing',
   'settings',
 ];
 const WITHOUT_ANALYTICS: NavKey[] = [

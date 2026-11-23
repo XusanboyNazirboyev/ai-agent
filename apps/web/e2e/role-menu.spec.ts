@@ -19,6 +19,7 @@ const ADMIN_ITEMS = [
   'Leads',
   'Tasks',
   'Analytics',
+  'Billing',
   'Settings',
 ];
 

@@ -82,7 +82,7 @@ export class ClickPaymentsService {
   private returnUrl(): string {
     const origins = this.config.get('WEB_ORIGINS', { infer: true });
     const origin = origins[0] ?? 'http://localhost:3000';
-    return `${origin.replace(/\/+$/u, '')}/settings/subscription?paid=1`;
+    return `${origin.replace(/\/+$/u, '')}/billing?paid=1`;
   }
 
   /** Creates (or reuses) the PENDING payment and returns the pay link. */

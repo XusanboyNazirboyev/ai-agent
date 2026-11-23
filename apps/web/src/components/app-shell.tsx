@@ -430,10 +430,7 @@ export function AccessBanner(props: {
         </span>
       </span>
       {props.manager ? (
-        <Link
-          href="/settings/subscription"
-          className="underline underline-offset-2"
-        >
+        <Link href="/billing" className="underline underline-offset-2">
           {t('banner.subscriptionLink')}
         </Link>
       ) : null}

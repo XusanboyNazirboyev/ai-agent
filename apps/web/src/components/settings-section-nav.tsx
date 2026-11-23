@@ -14,7 +14,6 @@ export type SettingsSection =
   | 'pipeline'
   | 'fields'
   | 'team'
-  | 'subscription'
   | 'security'
   | 'history'
   | 'general';
@@ -82,12 +81,6 @@ export const SETTINGS_GROUPS: GroupDef[] = [
         key: 'team',
         href: '/settings/team',
         label: 'settings.section.team',
-        managers: true,
-      },
-      {
-        key: 'subscription',
-        href: '/settings/subscription',
-        label: 'settings.section.subscription',
         managers: true,
       },
       {

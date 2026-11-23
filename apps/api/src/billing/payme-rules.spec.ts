@@ -12,7 +12,7 @@ describe('Payme protocol rules', () => {
       paymentId: '019ab123-4567-789a-bcde-f0123456789a',
       amountMinor: 15_000_000n,
       locale: 'uz',
-      returnUrl: 'https://app.example.test/settings/subscription?paid=1',
+      returnUrl: 'https://app.example.test/billing?paid=1',
     });
     expect(url.startsWith(`${PAYME_CHECKOUT_URL}/`)).toBe(true);
     expect(
@@ -23,7 +23,7 @@ describe('Payme protocol rules', () => {
       'm=507f1f77bcf86cd799439011;' +
         'ac.order_id=019ab123-4567-789a-bcde-f0123456789a;' +
         'a=15000000;l=uz;' +
-        'c=https://app.example.test/settings/subscription?paid=1;' +
+        'c=https://app.example.test/billing?paid=1;' +
         'ct=15000;cr=0',
     );
   });

@@ -119,10 +119,10 @@ describe('Click pay link and error table', () => {
       merchantId: '55',
       amountMinor: 15000000n,
       paymentId: 'abc',
-      returnUrl: 'https://app.example/settings/subscription?paid=1',
+      returnUrl: 'https://app.example/billing?paid=1',
     });
     expect(url).toBe(
-      'https://my.click.uz/services/pay/?service_id=9001&merchant_id=55&amount=150000.00&transaction_param=abc&return_url=https%3A%2F%2Fapp.example%2Fsettings%2Fsubscription%3Fpaid%3D1',
+      'https://my.click.uz/services/pay/?service_id=9001&merchant_id=55&amount=150000.00&transaction_param=abc&return_url=https%3A%2F%2Fapp.example%2Fbilling%3Fpaid%3D1',
     );
   });
 
