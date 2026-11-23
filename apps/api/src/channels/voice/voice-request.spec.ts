@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { describe, expect, it } from 'vitest';
-import { currentTurn, wantsVoice } from './voice-reply.service.js';
+import { currentTurn, speechText, wantsVoice } from './voice-reply.service.js';
 
 const text = (t: string) => ({ type: 'TEXT', text: t });
 
@@ -57,5 +57,29 @@ describe('currentTurn', () => {
     ]);
     expect(wantsVoice(currentTurn(recent))).toBe(true);
     expect(currentTurn([out('only bot')])).toEqual([]);
+  });
+});
+
+describe('speechText (owner 2026-11-23: bullets and times read wrong)', () => {
+  it('drops list markers, turns lines into sentences and keeps digits', () => {
+    expect(
+      speechText(
+        'Sizga mos variantlar:\n• IELTS Preparation\n- General English\nXohlasangiz, yozing.',
+      ),
+    ).toBe(
+      'Sizga mos variantlar: IELTS Preparation. General English. Xohlasangiz, yozing.',
+    );
+    expect(speechText('1) **Narxi** 1 500 000 soʻm')).toBe(
+      'Narxi 1 500 000 soʻm.',
+    );
+  });
+
+  it('speaks clock times as two numbers and never sends bracket tags', () => {
+    expect(speechText('Darslar 18:30 da, 9:05 da va 24:00 da')).toBe(
+      'Darslar 18 30 da, 9 05 da va 24:00 da.',
+    );
+    expect(speechText('Kurs [IELTS] boshlandi.')).toBe(
+      'Kurs (IELTS) boshlandi.',
+    );
   });
 });

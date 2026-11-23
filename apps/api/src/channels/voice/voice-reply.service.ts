@@ -51,6 +51,30 @@ export function currentTurn<T extends { direction: string }>(
   return recent.slice(start, end < 0 ? undefined : end);
 }
 
+/**
+ * The reply as it should be spoken (owner 2026-11-23: list bullets and clock
+ * times were read wrong). Locale-neutral: list markers and markup go, line
+ * breaks become sentence pauses, `18:30` becomes `18 30` (NeuronAI read
+ * "18:30 da" as "18 dan 30"), and `[...]` becomes `(...)` because NeuronAI
+ * acts out square-bracket tags. Prices and dates keep their digits.
+ */
+export function speechText(text: string): string {
+  return text
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s*(?:[•·▪◦‣*-]|\d{1,2}[.)])\s+/u, '')
+        .replace(/[*_#`~]/gu, '')
+        .trim(),
+    )
+    .filter((line) => line.length > 0)
+    .map((line) => (/[.!?…:;,]$/u.test(line) ? line : `${line}.`))
+    .join(' ')
+    .replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/gu, '$1 $2')
+    .replace(/\[/gu, '(')
+    .replace(/\]/gu, ')');
+}
+
 /** A voice reply: this turn has a voice note, or asks for voice in text. */
 export function wantsVoice(
   turn: ReadonlyArray<{ type: string; text: string | null }>,
@@ -151,7 +175,7 @@ export class VoiceReplyService {
         tenantId,
         reply.conversationId,
         messageId,
-        reply.text,
+        speechText(reply.text),
         language ? LANGUAGE[language] : undefined,
       );
       if (audio === 'BUDGET') {
