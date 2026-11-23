@@ -96,17 +96,17 @@ test('an admin sees the assistant light and the getting-started list with a plac
       if ((await step.getAttribute('data-done')) === 'false')
         await expect(step.getByRole('link')).toHaveAttribute(
           'href',
-          /^\/settings\//u,
+          /^\/(settings|agent)(\/|$)/u,
         );
       else await expect(step).toContainText('Done');
     }
-    // The tabs are in the menu on every page: Today is the first item.
-    await expect(
-      page
-        .getByRole('navigation', { name: 'Main navigation' })
-        .getByRole('link')
-        .first(),
-    ).toHaveText('Today');
+    // The tabs are in the menu on every page: the AI agent comes first, then
+    // Today (owner 2026-11-23).
+    const menu = page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link');
+    await expect(menu.first()).toHaveText('AI agent');
+    await expect(menu.nth(1)).toHaveText('Today');
   } finally {
     await context.close();
   }
