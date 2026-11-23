@@ -51,6 +51,7 @@ import { KnowledgeRetriever } from '../knowledge/knowledge-retriever.js';
 import type { KnowledgeService } from '../knowledge/knowledge.service.js';
 import { ActionService } from '../actions/action.service.js';
 import { LlmBudgetLedger } from './llm-budget-ledger.js';
+import { businessProfileOf } from './business-profile.js';
 import { LlmUsageStore } from './llm-usage.store.js';
 
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
@@ -566,6 +567,7 @@ export class AgentConversationService implements OnModuleInit {
       supportedLocales: supported,
       defaultLocale,
       timeZone: tenant.timezone,
+      businessProfile: businessProfileOf(tenant),
     };
     const timeoutMs = this.config.get('AGENT_TURN_TIMEOUT_MS', { infer: true });
     let timer: ReturnType<typeof setTimeout> | undefined;

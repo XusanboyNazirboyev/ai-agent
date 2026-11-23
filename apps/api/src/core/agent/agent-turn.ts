@@ -36,7 +36,7 @@ import {
   type ActionTurnContext,
 } from '../actions/actions.js';
 import { displayPolicyFor, type DisplayPolicy } from './display-gate.js';
-import { FactStore, type Fact } from './facts.js';
+import { FactStore, type BusinessProfile, type Fact } from './facts.js';
 import {
   checkDraft,
   titleCarriesHardFact,
@@ -122,6 +122,8 @@ export interface AgentTurnInput {
   readonly supportedLocales: readonly LocaleId[];
   readonly defaultLocale: LocaleId;
   readonly timeZone: string;
+  /** Owner 2026-11-23: the business's own details, from tenant settings. */
+  readonly businessProfile?: BusinessProfile;
   /**
    * Progress signals for the STUCK trigger and the contact request, supplied
    * by the conversation layer from stored turns (oldest first).
@@ -948,7 +950,12 @@ export async function runAgentTurn(
         llm.withTools({
           tier: 'FAST',
           purpose: 'respond',
-          system: conversationalSystemPrompt(pack, locale(), brief),
+          system: conversationalSystemPrompt(
+            pack,
+            locale(),
+            brief,
+            input.businessProfile,
+          ),
           messages: [
             {
               role: 'user',
@@ -973,6 +980,12 @@ export async function runAgentTurn(
   const guard = (text: string): ReturnType<typeof checkDraft> =>
     stopwatch.timeSync('guardrail', () => {
       facts.addClockIfReferenced(text, now(), deps.scope);
+      facts.addProfileIfReferenced(
+        text,
+        input.businessProfile,
+        deps.scope,
+        now(),
+      );
       return checkDraft(text, {
         facts,
         locale: locale(),
@@ -1415,8 +1428,8 @@ export async function runAgentTurn(
     }).format(nowDate),
   };
   const systemPrompt = schedulingTurn
-    ? schedulingSystemPrompt(pack, locale(), today)
-    : responseSystemPrompt(pack, locale());
+    ? schedulingSystemPrompt(pack, locale(), today, input.businessProfile)
+    : responseSystemPrompt(pack, locale(), input.businessProfile);
   const draft = await respond(deps, tools!, stopwatch, {
     system: systemPrompt,
     user: schedulingTurn

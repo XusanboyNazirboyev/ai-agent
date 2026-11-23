@@ -117,6 +117,24 @@ export function renderFactValue(
   }
 }
 
+/**
+ * The business's own details (owner 2026-11-23: a bot must never invent its
+ * agency's name, address or phone). Entered by the tenant in settings; each
+ * set field is offered to the model only as its reserved reference, and code
+ * renders the stored text. Ids sit far above the per-turn tool facts.
+ */
+export const PROFILE_FACT_IDS = {
+  name: 'F901',
+  address: 'F902',
+  phone: 'F903',
+  hours: 'F904',
+  website: 'F905',
+} as const;
+export type BusinessProfile = Partial<
+  Record<keyof typeof PROFILE_FACT_IDS, string>
+>;
+const FIRST_RESERVED_SEQUENCE = 900;
+
 export class FactStore {
   private readonly facts = new Map<string, Fact>();
   private readonly byKey = new Map<string, string>();
@@ -132,6 +150,9 @@ export class FactStore {
     const existing = this.byKey.get(key);
     if (existing) return existing;
     this.sequence += 1;
+    // Tool calls are capped per turn far below this; never reuse a reserved id.
+    if (this.sequence >= FIRST_RESERVED_SEQUENCE)
+      throw new Error('fact sequence reached the reserved range');
     const id = `F${this.sequence}`;
     this.facts.set(id, { id, value, provenance });
     this.byKey.set(key, id);
@@ -166,6 +187,40 @@ export class FactStore {
         conversationId: scope.conversationId,
       },
     });
+  }
+
+  /** Registers the business-profile facts a draft references. */
+  addProfileIfReferenced(
+    draft: string,
+    profile: BusinessProfile | undefined,
+    scope: { readonly tenantId: string; readonly conversationId: string },
+    now: Date,
+  ): void {
+    if (!profile) return;
+    const used = new Set(FactStore.references(draft));
+    for (const [field, id] of Object.entries(PROFILE_FACT_IDS)) {
+      const text = profile[field as keyof BusinessProfile]?.trim();
+      if (!text || !used.has(id) || this.facts.has(id)) continue;
+      this.facts.set(id, {
+        id,
+        value: {
+          kind: 'knowledge',
+          text,
+          source: 'business_profile',
+          updatedAt: now.toISOString(),
+          regulated: false,
+        },
+        provenance: {
+          tool: 'business_profile',
+          connectorKey: 'system',
+          sourceSystem: 'tenant_profile',
+          sourceEntityId: field,
+          retrievedAt: now.toISOString(),
+          tenantId: scope.tenantId,
+          conversationId: scope.conversationId,
+        },
+      });
+    }
   }
 
   list(): Fact[] {

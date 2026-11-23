@@ -10,11 +10,14 @@ import {
   Put,
   Req,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import { modeRefusalCode, type AgentModePolicy } from '../agent/agent-mode.js';
+import { goLiveGaps } from '../agent/go-live.js';
+import { ConnectorSelector } from '../connectors/connector-selector.js';
 import type { AppEnvironment } from '../config/environment.js';
 import { PrismaService } from '../persistence/prisma.service.js';
 import { ChannelSecretStore } from '../secrets/channel-secret-store.js';
@@ -42,6 +45,8 @@ export class ChannelsController {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<AppEnvironment, true>,
     private readonly secrets: ChannelSecretStore,
+    // Always provided by WebinboxModule; optional only for older unit wiring.
+    @Optional() private readonly selector?: ConnectorSelector,
   ) {}
 
   private policy(): AgentModePolicy {
@@ -146,6 +151,21 @@ export class ChannelsController {
         message: 'This mode is not allowed now',
         i18nKey: 'errors.modeRefused',
       });
+    if (mode === 'LIVE' && account.agentMode !== 'LIVE' && this.selector) {
+      const missing = await goLiveGaps(
+        this.prisma,
+        this.selector,
+        principal.tenantId,
+        { testAccount: account.isTestAccount },
+      );
+      if (missing.length > 0)
+        throw new ForbiddenException({
+          code: 'SETUP_INCOMPLETE',
+          missing,
+          message: 'Finish the setup before the bot answers customers',
+          i18nKey: 'errors.setupIncomplete',
+        });
+    }
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.channelAccount.update({
         where: { id: account.id },

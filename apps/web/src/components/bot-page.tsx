@@ -9,6 +9,7 @@ import { channelName } from '@/lib/channel-names';
 import { effectiveNotice } from '@/lib/effective-mode';
 import type { AgentMode, ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
+import { BusinessProfileCard } from './business-profile-card';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
@@ -57,6 +58,15 @@ export function BotPage(): ReactNode {
     else change.mutate({ id: account.id, mode });
   }
 
+  // Owner 2026-11-23: what still keeps the bot from answering customers.
+  const readiness = useQuery({
+    queryKey: ['go-live'],
+    queryFn: () =>
+      api<{ missing: ('CATALOG' | 'PROFILE')[] }>(
+        '/api/v1/business-profile/readiness',
+      ),
+  });
+  const missing = readiness.data?.missing ?? [];
   const items = query.data?.items ?? [];
   return (
     <div
@@ -67,6 +77,35 @@ export function BotPage(): ReactNode {
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('bot.intro')}</p>
+        {missing.length > 0 ? (
+          <section
+            data-testid="bot-setup"
+            className="flex flex-col gap-2 rounded-2xl border border-line bg-warning-soft p-4 sm:p-5"
+          >
+            <h2 className="font-semibold">{t('bot.setup.title')}</h2>
+            <p className="text-sm text-muted">{t('bot.setup.body')}</p>
+            <ul className="flex flex-col gap-2 text-sm">
+              {missing.map((gap) => (
+                <li
+                  key={gap}
+                  data-testid={`bot-setup-${gap}`}
+                  className="flex items-start gap-2"
+                >
+                  <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
+                  {gap === 'CATALOG' ? (
+                    <Link href="/settings/catalog" className="underline">
+                      {t('bot.setup.catalog')}
+                    </Link>
+                  ) : (
+                    <a href="#business-profile" className="underline">
+                      {t('bot.setup.profile')}
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {canChange ? (
           <Link
             href="/settings/bot/test"
@@ -229,6 +268,8 @@ export function BotPage(): ReactNode {
             </div>
           </section>
         ))}
+
+        <BusinessProfileCard canChange={canChange} />
 
         <section className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 sm:p-5">
           <h2 className="font-semibold">{t('bot.rulesTitle')}</h2>

@@ -26,6 +26,7 @@ import { AccessModule } from '../access/access.module.js';
 import { TeamModule } from '../team/team.module.js';
 import { RetentionModule } from '../retention/retention.module.js';
 import { TeamController } from './team.controller.js';
+import { BusinessProfileController } from './business-profile.controller.js';
 import { SubscriptionController } from './subscription.controller.js';
 import { AuthController } from './auth.controller.js';
 import { AnalyticsController } from './analytics.controller.js';
@@ -86,6 +87,7 @@ import { ExportLock } from '../exports/export-lock.js';
     RetentionModule,
   ],
   controllers: [
+    BusinessProfileController,
     AuthController,
     InboxController,
     EventsController,
