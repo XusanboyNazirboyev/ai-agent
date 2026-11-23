@@ -70,6 +70,10 @@ const ALLOWED = new Map([
   ['access/lead-limit-scan.service.ts', 'plans with a lead limit'],
   ['tasks/lead-tasks.ts', 'tasks that fell due'],
   ['connectors/bitrix24/crm-stage-sync.service.ts', 'stage syncs due a poll'],
+  [
+    'telephony/call-poll.scan.ts',
+    'connected PBX accounts due a poll (ADR 085)',
+  ],
   ['leads/lead-sync.service.ts', 'CRM writes to retry or recover'],
   ['retention/retention.service.ts', 'tenants to purge'],
   ['actions/action.service.ts', 'stale proposals, retries, recoveries'],

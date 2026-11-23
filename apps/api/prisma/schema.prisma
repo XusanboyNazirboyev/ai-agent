@@ -1821,7 +1821,7 @@ model PaymeTransaction {
 
 /// ADR 085: a tenant's IP telephony account whose call recordings are
 /// analysed. The API key is sealed with the channel-secret cipher (AAD
-/// `telephony:{tenantId}:{id}:api_key`); only TelephonyAccountStore reads it.
+/// `telephony:{tenantId}:{provider}:api_key`); null after a disconnect.
 model TelephonyAccount {
   id           String            @id @default(uuid(7)) @db.Uuid
   tenantId     String            @map("tenant_id") @db.Uuid
@@ -1829,10 +1829,10 @@ model TelephonyAccount {
   /// OnlinePBX: the tenant's PBX domain, e.g. example.onpbx.ru.
   domain       String            @db.VarChar(253)
   enabled      Boolean           @default(true)
-  apiKeyKeyId  String            @map("api_key_key_id") @db.VarChar(40)
-  apiKeyNonce  Bytes             @map("api_key_nonce")
+  apiKeyKeyId  String?           @map("api_key_key_id") @db.VarChar(40)
+  apiKeyNonce  Bytes?            @map("api_key_nonce")
   /// Ciphertext followed by the 16-byte GCM tag.
-  apiKeyCipher Bytes             @map("api_key_cipher")
+  apiKeyCipher Bytes?            @map("api_key_cipher")
   /// The poller has read every call that ended before this instant.
   polledUntil  DateTime?         @map("polled_until") @db.Timestamptz(6)
   lastError    String?           @map("last_error") @db.VarChar(200)

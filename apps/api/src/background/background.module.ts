@@ -27,6 +27,8 @@ import { AlertsService } from '../observability/alerts.service.js';
 import { PersistenceModule } from '../persistence/persistence.module.js';
 import { RetentionModule } from '../retention/retention.module.js';
 import { RetentionService } from '../retention/retention.service.js';
+import { SecretsModule } from '../secrets/secrets.module.js';
+import { CallPollScan } from '../telephony/call-poll.scan.js';
 
 /**
  * The periodic scans of the API process: SLA alerts, CRM lead retries,
@@ -45,8 +47,10 @@ import { RetentionService } from '../retention/retention.service.js';
     AccessModule,
     RetentionModule,
     ConnectorsModule,
+    SecretsModule,
   ],
   providers: [
+    CallPollScan,
     LeadTaskReminders,
     SignupCleanupScan,
     FollowUpService,
@@ -71,6 +75,7 @@ import { RetentionService } from '../retention/retention.service.js';
         LeadBackfillScan,
         CrmStageSyncService,
         SignupCleanupScan,
+        CallPollScan,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -88,6 +93,7 @@ import { RetentionService } from '../retention/retention.service.js';
         leadBackfill: LeadBackfillScan,
         crmStageSync: CrmStageSyncService,
         signupCleanup: SignupCleanupScan,
+        callPoll: CallPollScan,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -104,6 +110,7 @@ import { RetentionService } from '../retention/retention.service.js';
         leadBackfill,
         crmStageSync,
         signupCleanup,
+        callPoll,
       ],
     },
     HandoverRuntime,
