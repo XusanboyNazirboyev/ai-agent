@@ -27,8 +27,8 @@ import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
 import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
+import { ThemeToggle, UserMenu } from './header-controls';
 import { PageLoading } from './page-loading';
-import { Avatar } from './ui/avatar';
 import { Badge, type Tone } from './ui/badge';
 import { BrandMark } from './ui/brand';
 import { Button } from './ui/button';
@@ -303,29 +303,13 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5 text-sm sm:gap-2">
-              <LocaleSwitcher />
-              <span className="hidden items-center gap-2 rounded-lg border border-line px-2 py-1 sm:flex">
-                <Avatar name={operator.displayName} size="sm" />
-                <span
-                  data-testid="operator"
-                  className="sr-only text-sm lg:not-sr-only"
-                >
-                  {t('header.signedInAs', {
-                    name: operator.displayName,
-                    role: t(`role.${operator.role}`),
-                  })}
-                </span>
-              </span>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon="logout"
-                onClick={() => void logout()}
-              >
-                <span className="sr-only sm:not-sr-only">
-                  {t('header.logout')}
-                </span>
-              </Button>
+              <ThemeToggle />
+              <LocaleSwitcher compact />
+              <UserMenu
+                name={operator.displayName}
+                role={operator.role}
+                onLogout={() => void logout()}
+              />
             </div>
           </header>
           <AccessBanner

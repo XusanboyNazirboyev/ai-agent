@@ -285,7 +285,7 @@ test('an expired subscription shows the banner and the read-only subscription pa
   await expect(banner).toContainText('The assistant is paused');
   await expect(banner).toContainText('answer customers by hand');
   await banner.getByRole('link', { name: 'Subscription details' }).click();
-  await page.waitForURL(/\/settings\/subscription/u);
+  await page.waitForURL(/\/billing/u);
   await expect(page.getByTestId('own-plan')).toHaveText(f.expired.planName);
   await expect(page.getByTestId('own-status')).toContainText('Expired');
   await expect(page.getByTestId('own-payment')).toHaveCount(1);

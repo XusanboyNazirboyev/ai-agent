@@ -2027,5 +2027,8 @@
   "subscription.left": "Left",
   "subscription.daysLeft": "{days} days",
   "subscription.plans": "Plans",
-  "subscription.currentPlan": "Current plan"
+  "subscription.currentPlan": "Current plan",
+  "header.themeDark": "Dark theme",
+  "header.themeLight": "Light theme",
+  "header.account": "Account"
 }

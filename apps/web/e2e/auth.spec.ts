@@ -56,7 +56,9 @@ test('logging out ends the session everywhere', async ({ browser }) => {
   const f = fixtures();
   const { page, context } = await newSession(browser, f.a.operators.op1.email);
   const cookie = await cookieHeader(context);
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  // Owner 2026-11-23: signing out is in the account menu.
+  await page.getByTestId('user-menu').click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login/u);
   const after = await context.request.get('/api/v1/auth/me');
   expect(after.status()).toBe(401);

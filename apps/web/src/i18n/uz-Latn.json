@@ -2027,5 +2027,8 @@
   "subscription.left": "Qoldi",
   "subscription.daysLeft": "{days} kun",
   "subscription.plans": "Tariflar",
-  "subscription.currentPlan": "Joriy tarif"
+  "subscription.currentPlan": "Joriy tarif",
+  "header.themeDark": "Qorong‘i mavzu",
+  "header.themeLight": "Yorug‘ mavzu",
+  "header.account": "Hisob"
 }

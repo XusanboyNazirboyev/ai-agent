@@ -6,15 +6,17 @@ test('the interface switches between English, Russian and Uzbek and remembers th
 }) => {
   const f = fixtures();
   await login(page, f.a.operators.op1.email, f.password);
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account' })).toBeVisible();
   await page.getByLabel('Language', { exact: true }).selectOption('ru');
-  await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+  await page.getByRole('button', { name: 'Аккаунт' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Выйти' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('tab', { name: 'Ожидают' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Аккаунт' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
   await page.getByLabel('Язык', { exact: true }).selectOption('uz-Latn');
-  await expect(page.getByRole('button', { name: 'Chiqish' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hisob' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'uz');
 });
 

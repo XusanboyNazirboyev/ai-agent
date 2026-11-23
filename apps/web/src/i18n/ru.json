@@ -2027,5 +2027,8 @@
   "subscription.left": "Осталось",
   "subscription.daysLeft": "{days} дн.",
   "subscription.plans": "Тарифы",
-  "subscription.currentPlan": "Текущий тариф"
+  "subscription.currentPlan": "Текущий тариф",
+  "header.themeDark": "Тёмная тема",
+  "header.themeLight": "Светлая тема",
+  "header.account": "Аккаунт"
 }
