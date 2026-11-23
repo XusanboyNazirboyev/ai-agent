@@ -590,6 +590,8 @@ export class InboundProcessor {
     if (kind === 'instagram')
       await this.sendCarousel(tenantId, message, message.richContent);
     await this.afterDelivery(tenantId, message.id);
+    if (kind === 'instagram')
+      await this.voiceReplies?.afterTextSent(tenantId, message.id);
   }
 
   /**

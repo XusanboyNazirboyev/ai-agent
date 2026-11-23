@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { encodeWavToOggOpus } from './ogg-opus-encoder.js';
+import { encodeToAac, encodeWavToOggOpus } from './ogg-opus-encoder.js';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 
@@ -41,6 +41,24 @@ describe('encodeWavToOggOpus', () => {
   it('returns null when the encoder is missing', async () => {
     expect(
       await encodeWavToOggOpus(silentWav(1), { ffmpeg: '/nonexistent/ffmpeg' }),
+    ).toBeNull();
+  });
+});
+
+describe('encodeToAac (Instagram voice replies)', () => {
+  it.skipIf(!hasFfmpeg)('turns WAV and OGG/Opus into ADTS AAC', async () => {
+    const fromWav = await encodeToAac(silentWav(1));
+    expect(fromWav).not.toBeNull();
+    // ADTS frames start with the 12-bit sync word 0xFFF.
+    expect(fromWav![0]).toBe(0xff);
+    expect(fromWav![1]! & 0xf0).toBe(0xf0);
+    const ogg = await encodeWavToOggOpus(silentWav(1));
+    expect((await encodeToAac(ogg!))?.[0]).toBe(0xff);
+  });
+
+  it('is null when ffmpeg is missing', async () => {
+    expect(
+      await encodeToAac(silentWav(1), { ffmpeg: '/nonexistent/ffmpeg' }),
     ).toBeNull();
   });
 });

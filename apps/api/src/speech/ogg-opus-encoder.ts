@@ -10,6 +10,34 @@ export function encodeWavToOggOpus(
   wav: Uint8Array,
   options: { ffmpeg?: string; timeoutMs?: number } = {},
 ): Promise<Uint8Array | null> {
+  return transcode(
+    wav,
+    ['-c:a', 'libopus', '-b:a', '32k', '-f', 'ogg'],
+    options,
+  );
+}
+
+/**
+ * Instagram audio attachments accept aac, m4a, wav or mp4 up to 25 MB (Meta
+ * "Instagram API with Instagram Login: Send Messages", read 2026-11-23).
+ * ADTS AAC streams through a pipe (an .m4a needs a seekable output).
+ */
+export function encodeToAac(
+  audio: Uint8Array,
+  options: { ffmpeg?: string; timeoutMs?: number } = {},
+): Promise<Uint8Array | null> {
+  return transcode(
+    audio,
+    ['-c:a', 'aac', '-b:a', '48k', '-f', 'adts'],
+    options,
+  );
+}
+
+function transcode(
+  input: Uint8Array,
+  output: readonly string[],
+  options: { ffmpeg?: string; timeoutMs?: number },
+): Promise<Uint8Array | null> {
   return new Promise((resolve) => {
     let settled = false;
     const done = (value: Uint8Array | null): void => {
@@ -26,12 +54,7 @@ export function encodeWavToOggOpus(
         'error',
         '-i',
         'pipe:0',
-        '-c:a',
-        'libopus',
-        '-b:a',
-        '32k',
-        '-f',
-        'ogg',
+        ...output,
         'pipe:1',
       ],
       { stdio: ['pipe', 'pipe', 'ignore'] },
@@ -48,6 +71,6 @@ export function encodeWavToOggOpus(
       done(code === 0 && out.byteLength > 0 ? new Uint8Array(out) : null);
     });
     child.stdin.on('error', () => undefined);
-    child.stdin.end(Buffer.from(wav));
+    child.stdin.end(Buffer.from(input));
   });
 }

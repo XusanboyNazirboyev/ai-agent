@@ -10,6 +10,7 @@ import { TelegramCredentialsModule } from './telegram-credentials.js';
 import { TelegramAgentPipeline } from './telegram-agent-pipeline.js';
 import { VoiceTranscriptionService } from '../voice/voice-transcription.service.js';
 import { VoiceReplyService } from '../voice/voice-reply.service.js';
+import { VoiceMediaController, VoiceMediaStore } from '../voice/voice-media.js';
 import { InboundProcessor } from '../inbound/inbound-processor.js';
 import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
 import { TelegramSender } from './telegram-sender.js';
@@ -27,13 +28,14 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     TelegramCredentialsModule,
     InstagramModule,
   ],
-  controllers: [TelegramWebhookController],
+  controllers: [TelegramWebhookController, VoiceMediaController],
   providers: [
     TelegramWebhookService,
     TelegramSender,
     TelegramAgentPipeline,
     InboundProcessor,
     VoiceReplyService,
+    VoiceMediaStore,
     TelegramQueueRuntime,
     VoiceTranscriptionService,
   ],

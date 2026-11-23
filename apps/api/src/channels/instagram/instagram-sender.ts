@@ -131,6 +131,30 @@ export class InstagramSender {
     );
   }
 
+  /**
+   * A voice reply (owner 2026-11-23): an `audio` attachment Meta fetches from
+   * `url` (aac, m4a, wav or mp4, at most 25 MB; Instagram API with Instagram
+   * Login "Send Messages", read 2026-11-23).
+   */
+  async sendAudio(
+    tenantId: string,
+    channelAccountId: string,
+    recipientId: string,
+    url: string,
+  ): Promise<{ readonly messageId: string }> {
+    const { igUserId, credential } = await this.account(
+      tenantId,
+      channelAccountId,
+    );
+    return this.graph.sendTemplate(
+      igUserId,
+      credential.token,
+      recipientId,
+      { attachment: { type: 'audio', payload: { url } } },
+      credential.kind === 'unified' ? 'unified' : 'instagram',
+    );
+  }
+
   /** ADR 043: the one private reply to a public comment. */
   async sendPrivateReply(
     tenantId: string,

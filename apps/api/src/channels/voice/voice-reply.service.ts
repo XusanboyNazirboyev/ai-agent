@@ -18,6 +18,9 @@ import {
   sdkTtsCall,
 } from '../../speech/gemini-reply-tts.js';
 import { NeuronAiReplyTts } from '../../speech/neuronai-reply-tts.js';
+import { encodeToAac } from '../../speech/ogg-opus-encoder.js';
+import { InstagramSender } from '../instagram/instagram-sender.js';
+import { VoiceMediaStore } from './voice-media.js';
 import { ELEVENLABS_PRICING, ttsCostNano } from '../../voice/metering.js';
 import { TelegramSender } from '../telegram/telegram-sender.js';
 
@@ -87,7 +90,8 @@ export function wantsVoice(
 }
 
 /**
- * Voice replies (owner 2026-11-21): after a bot text reply reached Telegram,
+ * Voice replies (owner 2026-11-21; Instagram 2026-11-23): after a bot text
+ * reply reached Telegram or Instagram,
  * a customer whose message was a voice note, or who asked for voice in that
  * message (owner 2026-11-23), also gets that reply as speech. The text stays (prices and dates remain readable and were checked
  * by the guardrail). Best effort: any failure (quota, network, Telegram)
@@ -106,6 +110,8 @@ export class VoiceReplyService {
     private readonly config: ConfigService<AppEnvironment, true>,
     @Optional() @Inject(REPLY_TTS) tts?: ReplyTts,
     @Optional() private readonly ledger?: LlmBudgetLedger,
+    @Optional() private readonly instagram?: InstagramSender,
+    @Optional() private readonly media?: VoiceMediaStore,
   ) {
     const mode = config.get('VOICE_REPLIES', { infer: true });
     const apiKey = config.get('ELEVENLABS_API_KEY', { infer: true });
@@ -156,9 +162,18 @@ export class VoiceReplyService {
           providerChatId: true,
           channelAccountId: true,
           conversation: { select: { language: true } },
+          channelAccount: { select: { channelType: true } },
         },
       });
       if (!reply?.text) return;
+      const channel = reply.channelAccount.channelType;
+      // Telegram and Instagram speak (owner 2026-11-23); Instagram needs a
+      // public URL for the audio, so nothing is synthesized without one.
+      if (
+        channel !== 'telegram' &&
+        !(channel === 'instagram' && this.instagram && this.media)
+      )
+        return;
       const recent = await this.prisma.message.findMany({
         where: {
           tenantId,
@@ -187,6 +202,23 @@ export class VoiceReplyService {
       if (!audio) {
         this.logger.warn(
           JSON.stringify({ event: 'voice_reply.skipped', reason: 'tts' }),
+        );
+        return;
+      }
+      if (channel === 'instagram') {
+        const aac = await encodeToAac(audio);
+        const url = aac ? await this.media!.put(aac) : null;
+        if (!url) {
+          this.logger.warn(
+            JSON.stringify({ event: 'voice_reply.skipped', reason: 'media' }),
+          );
+          return;
+        }
+        await this.instagram!.sendAudio(
+          tenantId,
+          reply.channelAccountId,
+          reply.providerChatId,
+          url,
         );
         return;
       }

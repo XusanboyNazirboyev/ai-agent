@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReplyTts } from '../../speech/elevenlabs-reply-tts.js';
 import { VoiceReplyService } from './voice-reply.service.js';
 
+vi.mock('../../speech/ogg-opus-encoder.js', () => ({
+  encodeToAac: vi.fn(() => Promise.resolve(new Uint8Array([0xff, 0xf1]))),
+}));
+
 const audio = new Uint8Array([1, 2, 3]);
 const reply = {
   text: 'Kurs narxi {{F1}} emas, 1 500 000 soʻm.',
@@ -10,6 +14,7 @@ const reply = {
   providerChatId: '42',
   channelAccountId: 'acc',
   conversation: { language: 'uz' },
+  channelAccount: { channelType: 'telegram' },
 };
 
 type Setup = {
@@ -192,6 +197,59 @@ describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
       expect(ledger.release).toHaveBeenCalledWith('t1', 'r1');
       expect(ledger.settle).not.toHaveBeenCalled();
       expect(sendVoice).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Instagram (owner 2026-11-23: same rules as Telegram)', () => {
+    // eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- test fixture
+    function instagram(options: { media?: boolean; channelType?: string }) {
+      const findFirst = vi.fn().mockResolvedValueOnce({
+        ...reply,
+        channelAccount: { channelType: options.channelType ?? 'instagram' },
+      });
+      const findMany = vi
+        .fn()
+        .mockResolvedValue([
+          { direction: 'INBOUND', type: 'VOICE', text: null },
+        ]);
+      const sendVoice = vi.fn(() => Promise.resolve());
+      const synthesize = vi.fn(() => Promise.resolve(audio));
+      const sendAudio = vi.fn(() => Promise.resolve({ messageId: 'mid' }));
+      const put = vi.fn(() =>
+        Promise.resolve('https://tezda.example/webhooks/instagram/voice/t.aac'),
+      );
+      const service = new VoiceReplyService(
+        { message: { findFirst, findMany } } as never,
+        { sendVoice } as never,
+        { get: () => undefined } as never,
+        { synthesize },
+        undefined,
+        { sendAudio } as never,
+        options.media === false ? undefined : ({ put } as never),
+      );
+      return { service, sendVoice, synthesize, sendAudio, put };
+    }
+
+    it('answers an Instagram voice note with an AAC audio attachment by URL', async () => {
+      const { service, sendAudio, put, sendVoice } = instagram({});
+      await service.afterTextSent('t1', 'm1');
+      expect(put).toHaveBeenCalledWith(new Uint8Array([0xff, 0xf1]));
+      expect(sendAudio).toHaveBeenCalledWith(
+        't1',
+        'acc',
+        '42',
+        'https://tezda.example/webhooks/instagram/voice/t.aac',
+      );
+      expect(sendVoice).not.toHaveBeenCalled();
+    });
+
+    it('spends nothing on speech it cannot deliver (no media store, or another channel)', async () => {
+      for (const options of [{ media: false }, { channelType: 'facebook' }]) {
+        const { service, synthesize, sendAudio } = instagram(options);
+        await service.afterTextSent('t1', 'm1');
+        expect(synthesize).not.toHaveBeenCalled();
+        expect(sendAudio).not.toHaveBeenCalled();
+      }
     });
   });
 });
