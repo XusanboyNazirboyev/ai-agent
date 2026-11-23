@@ -373,6 +373,7 @@ function replyLocale(
   input: AgentTurnInput,
   locales: LocaleRegistry,
   assessment: LanguageAssessment,
+  established: LocaleId | undefined,
 ): LocaleId {
   if (
     assessment.confidenceClass === 'HIGH' &&
@@ -380,8 +381,11 @@ function replyLocale(
     input.supportedLocales.includes(assessment.localeId)
   )
     return assessment.localeId;
+  // A message that names no language keeps the one the customer last wrote
+  // in clearly (D17), before the stored locale: that may be stale, e.g. set
+  // by a wrong switch (staging 2026-11-23, "aylts" stuck in English).
   return chooseLocale(detectLanguage(input.customerText), {
-    current: input.conversationLocale,
+    current: established ?? input.conversationLocale,
     supported: input.supportedLocales,
     fallback: input.defaultLocale,
     registry: locales,
@@ -405,7 +409,6 @@ export async function runAgentTurn(
     locales,
     languagePolicy,
   );
-  let localeId = replyLocale(input, locales, languageAssessment);
   // An explicit request ("write in Russian") outranks detection, now and
   // until the customer asks for another language, asks to be answered in the
   // language they write in, or clearly writes in another supported one (D17;
@@ -423,6 +426,12 @@ export async function runAgentTurn(
     locales,
     languagePolicy,
     input.supportedLocales,
+  );
+  let localeId = replyLocale(
+    input,
+    locales,
+    languageAssessment,
+    past.established,
   );
   const wroteOther =
     languageAssessment.confidenceClass === 'HIGH' &&
@@ -1754,6 +1763,12 @@ export function interruptedTurnResult(
     input,
     locales,
     assessLanguage(input.customerText, locales, DEFAULT_LANGUAGE_POLICY),
+    languageHistory(
+      input.history,
+      locales,
+      DEFAULT_LANGUAGE_POLICY,
+      input.supportedLocales,
+    ).established,
   );
   return {
     reply: locales.get(localeId).templates.handover[reason],

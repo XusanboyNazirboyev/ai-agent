@@ -568,6 +568,30 @@ describe('explicit language requests', () => {
     expect(result.locale).toBe('uz-Latn');
   });
 
+  // Same chat after the release: the stored conversation locale was already
+  // en, so every unreadable message stayed English.
+  it('returns an unreadable message to the language the customer wrote in, not a stale stored locale', async () => {
+    const provider = new ScriptedLlmProvider([
+      extraction({ subject: 'IELTS' }, 'search', 'en', 'Latn'),
+      { kind: 'tools', text: 'Sizga {{F1}} kursi mos keladi.' },
+    ]);
+    const { result } = await runTurn({
+      provider,
+      text: 'aylts',
+      input: {
+        conversationLocale: 'en',
+        history: [
+          {
+            role: 'customer',
+            text: "menga o'zbek tilida ovozli habar jo'nata olasanmi",
+          },
+          { role: 'customer', text: 'aylts' },
+        ],
+      },
+    });
+    expect(result.locale).toBe('uz-Latn');
+  });
+
   it('follows a clear message in another language after a request', async () => {
     const provider = new ScriptedLlmProvider([
       extraction({ subject: 'IELTS' }, 'search', 'uz', 'Latn'),
