@@ -7,7 +7,6 @@ import { api, errorKey } from '@/lib/api';
 import { CANNED_QUERY, useCannedResponses } from '@/lib/canned';
 import type { CannedResponse } from '@/lib/types';
 import { useShell } from './app-shell';
-import { SettingsSubPage } from './settings-section-nav';
 import { Button } from './ui/button';
 import { ConfirmDialog } from './ui/confirm-dialog';
 import { fieldClass, textareaClass } from './ui/fields';
@@ -19,22 +18,20 @@ import { useToast } from './ui/toast';
 export function RepliesSettingsPage(): ReactNode {
   const { t } = useI18n();
   return (
-    <SettingsSubPage active="replies">
-      <div
-        role="region"
-        tabIndex={0}
-        aria-label={t('replies.title')}
-        className="min-h-0 flex-1 overflow-y-auto"
-      >
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">{t('replies.title')}</h2>
-            <p className="text-sm text-muted">{t('replies.intro')}</p>
-          </div>
-          <RepliesManager />
+    <div
+      role="region"
+      tabIndex={0}
+      aria-label={t('replies.title')}
+      className="min-h-0 flex-1 overflow-y-auto"
+    >
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold">{t('replies.title')}</h2>
+          <p className="text-sm text-muted">{t('replies.intro')}</p>
         </div>
+        <RepliesManager />
       </div>
-    </SettingsSubPage>
+    </div>
   );
 }
 

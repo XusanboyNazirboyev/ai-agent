@@ -25,11 +25,12 @@ export interface TelephonyStatus {
 }
 
 /**
- * Owner 2026-11-24: calls belong in the CRM section. Connecting OnlinePBX
- * (ADR 085, the API already exists); the per-call summary and next step
- * come on the lead card once the analysis step ships.
+ * Owner 2026-11-24: calls belong in the CRM section; connecting OnlinePBX
+ * (ADR 085) lives in Settings > Integrations (`settings`), the CRM tab only
+ * shows the state and links there. The per-call summary and next step come
+ * on the lead card once the analysis step ships.
  */
-export function CallsPage(): ReactNode {
+export function CallsPage(props: { settings?: boolean }): ReactNode {
   const { t, formatDateTime } = useI18n();
   const { operator } = useShell();
   const toast = useToast();
@@ -123,16 +124,26 @@ export function CallsPage(): ReactNode {
                     {t('calls.lastError')}
                   </p>
                 ) : null}
-                <Button
-                  variant="secondary"
-                  loading={disconnect.isPending}
-                  onClick={() => disconnect.mutate()}
-                  data-testid="calls-disconnect"
-                  className="self-start"
-                >
-                  {t('calls.disconnect')}
-                </Button>
+                {props.settings ? (
+                  <Button
+                    variant="secondary"
+                    loading={disconnect.isPending}
+                    onClick={() => disconnect.mutate()}
+                    data-testid="calls-disconnect"
+                    className="self-start"
+                  >
+                    {t('calls.disconnect')}
+                  </Button>
+                ) : null}
               </>
+            ) : !props.settings ? (
+              <Link
+                href="/settings/telephony"
+                data-testid="calls-connect-link"
+                className="self-start text-sm underline"
+              >
+                {t('calls.connectInSettings')}
+              </Link>
             ) : (
               <form
                 onSubmit={submit}

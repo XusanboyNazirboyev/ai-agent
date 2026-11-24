@@ -456,9 +456,8 @@
   "settings.intro": "Account details and preferences for this browser.",
   "settings.sections": "Settings sections",
   "settings.group.assistant": "Assistant",
-  "settings.group.channels": "Channels",
   "settings.group.sales": "Sales",
-  "settings.group.account": "Team and account",
+  "settings.group.account": "General",
   "settings.sub.bot": "On and off",
   "settings.sub.knowledge": "Knowledge",
   "settings.sub.test": "Test chat",
@@ -2075,5 +2074,9 @@
   "comments.keywordsHint": "price, how much",
   "comments.keywordsNote": "Separate with commas. Empty: the AI decides; filled: it answers only comments with these words.",
   "comments.permissionNote": "Your Meta app needs the comments permission; without it saving fails.",
-  "comments.saved": "Comment settings saved"
+  "comments.saved": "Comment settings saved",
+  "settings.group.integrations": "Integrations",
+  "settings.section.telephony": "Telephony",
+  "calls.connectInSettings": "Connect telephony in Settings",
+  "channels.tab.replies": "Quick replies"
 }

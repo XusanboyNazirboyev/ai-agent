@@ -15,7 +15,7 @@ test('an admin writes a quick reply and an operator inserts it into a reply', as
   });
   try {
     await admin.page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
-    await admin.page.goto('/settings/replies');
+    await admin.page.goto('/channels/replies');
     await admin.page.getByTestId('reply-title').fill(name);
     await admin.page.getByTestId('reply-text').fill(text);
     await admin.page.getByTestId('reply-save').click();
@@ -43,7 +43,7 @@ test('an admin writes a quick reply and an operator inserts it into a reply', as
     // The fixture workspace is shared: leave it with the built-in replies.
     const row = admin.page.getByTestId('reply-item').filter({ hasText: name });
     if (await row.count()) {
-      await admin.page.goto('/settings/replies');
+      await admin.page.goto('/channels/replies');
       await row.getByTestId('reply-delete').click();
       await admin.page
         .getByRole('button', { name: 'Delete', exact: true })

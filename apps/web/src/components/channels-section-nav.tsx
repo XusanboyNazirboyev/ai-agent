@@ -4,16 +4,18 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { ChannelLogo } from './ui/channel-logo';
+import { Icon } from './ui/icons';
 
-export type ChannelsSection = 'telegram' | 'instagram';
+export type ChannelsSection = 'telegram' | 'instagram' | 'replies';
 
-/** Owner 2026-11-24: Telegram and Instagram each have their own tab. */
+/** Owner 2026-11-24: Telegram and Instagram each have their own tab, quick replies the third. */
 export const CHANNELS_SECTIONS: readonly {
   key: ChannelsSection;
   href: string;
 }[] = [
   { key: 'telegram', href: '/channels/telegram' },
   { key: 'instagram', href: '/channels/instagram' },
+  { key: 'replies', href: '/channels/replies' },
 ];
 
 export function ChannelsSubPage(props: {
@@ -41,7 +43,11 @@ export function ChannelsSubPage(props: {
                     : 'text-muted hover:bg-surface-2 hover:text-fg'
                 }`}
               >
-                <ChannelLogo channelType={section.key} decorative />
+                {section.key === 'replies' ? (
+                  <Icon name="message" className="h-4 w-4 shrink-0" />
+                ) : (
+                  <ChannelLogo channelType={section.key} decorative />
+                )}
                 {t(`channels.tab.${section.key}`)}
               </Link>
             </li>

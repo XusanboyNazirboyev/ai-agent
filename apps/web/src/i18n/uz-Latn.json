@@ -456,9 +456,8 @@
   "settings.intro": "Hisob ma’lumotlari va shu brauzer sozlamalari.",
   "settings.sections": "Sozlamalar bo‘limlari",
   "settings.group.assistant": "Yordamchi",
-  "settings.group.channels": "Kanallar",
   "settings.group.sales": "Sotuv",
-  "settings.group.account": "Jamoa va hisob",
+  "settings.group.account": "Umumiy",
   "settings.sub.bot": "Yoqish va o‘chirish",
   "settings.sub.knowledge": "Bilimlar",
   "settings.sub.test": "Sinov chat",
@@ -2075,5 +2074,9 @@
   "comments.keywordsHint": "narx, qancha, price",
   "comments.keywordsNote": "Vergul bilan ajrating. Bo‘sh qolsa, AI o‘zi hal qiladi; to‘ldirilsa, faqat shu so‘zli kommentlarga javob beradi.",
   "comments.permissionNote": "Ishlashi uchun Meta ilovangizda kommentlar ruxsati bo‘lishi kerak; ruxsat bo‘lmasa, saqlashda xato chiqadi.",
-  "comments.saved": "Komment sozlamalari saqlandi"
+  "comments.saved": "Komment sozlamalari saqlandi",
+  "settings.group.integrations": "Integratsiyalar",
+  "settings.section.telephony": "Telefoniya",
+  "calls.connectInSettings": "Telefoniyani sozlamalarda ulash",
+  "channels.tab.replies": "Tezkor javoblar"
 }

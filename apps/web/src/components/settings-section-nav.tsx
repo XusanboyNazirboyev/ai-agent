@@ -8,8 +8,8 @@ import { useShell } from './app-shell';
 import { Icon, type IconName } from './ui/icons';
 
 export type SettingsSection =
-  | 'replies'
   | 'crm'
+  | 'telephony'
   | 'pipeline'
   | 'fields'
   | 'team'
@@ -27,26 +27,27 @@ interface SectionDef {
 }
 
 interface GroupDef {
-  key: 'channels' | 'sales' | 'account';
+  key: 'integrations' | 'sales' | 'account';
   icon: IconName;
   sections: SectionDef[];
 }
 
 /**
- * Settings in four groups (UX review A2, A3) instead of one row of ten tabs:
- * the assistant (on and off, what it knows, trying it), the channels, what
- * belongs to selling, and the team and the account. Each section keeps its
- * own address; only the way to reach it changed.
+ * Owner 2026-11-24: settings in three groups: integrations (CRMs and
+ * telephony), sales stages (with their tags and fields), and general (team,
+ * security, history and the account). Each section keeps its own address.
  */
 export const SETTINGS_GROUPS: GroupDef[] = [
   {
-    key: 'channels',
+    key: 'integrations',
     icon: 'link',
     sections: [
+      { key: 'crm', href: '/settings/crm', label: 'settings.section.crm' },
       {
-        key: 'replies',
-        href: '/settings/replies',
-        label: 'settings.section.replies',
+        key: 'telephony',
+        href: '/settings/telephony',
+        label: 'settings.section.telephony',
+        managers: true,
       },
     ],
   },
@@ -64,7 +65,6 @@ export const SETTINGS_GROUPS: GroupDef[] = [
         href: '/settings/fields',
         label: 'settings.section.fields',
       },
-      { key: 'crm', href: '/settings/crm', label: 'settings.section.crm' },
     ],
   },
   {

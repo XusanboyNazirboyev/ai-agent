@@ -456,9 +456,8 @@
   "settings.intro": "Данные аккаунта и настройки этого браузера.",
   "settings.sections": "Разделы настроек",
   "settings.group.assistant": "Ассистент",
-  "settings.group.channels": "Каналы",
   "settings.group.sales": "Продажи",
-  "settings.group.account": "Команда и аккаунт",
+  "settings.group.account": "Общие",
   "settings.sub.bot": "Включение",
   "settings.sub.knowledge": "База знаний",
   "settings.sub.test": "Тестовый чат",
@@ -2075,5 +2074,9 @@
   "comments.keywordsHint": "цена, сколько, price",
   "comments.keywordsNote": "Через запятую. Пусто — ИИ решает сам; заполнено — отвечает только на комментарии с этими словами.",
   "comments.permissionNote": "Нужно разрешение на комментарии в вашем приложении Meta; без него при сохранении будет ошибка.",
-  "comments.saved": "Настройки комментариев сохранены"
+  "comments.saved": "Настройки комментариев сохранены",
+  "settings.group.integrations": "Интеграции",
+  "settings.section.telephony": "Телефония",
+  "calls.connectInSettings": "Подключить телефонию в настройках",
+  "channels.tab.replies": "Быстрые ответы"
 }

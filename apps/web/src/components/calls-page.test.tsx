@@ -83,7 +83,7 @@ describe('CRM section (owner 2026-11-24)', () => {
             : base,
         ) as never,
     );
-    view(<CallsPage />);
+    view(<CallsPage settings />);
     fireEvent.change(await screen.findByTestId('calls-domain-input'), {
       target: { value: 'shop.onpbx.ru' },
     });
@@ -100,6 +100,17 @@ describe('CRM section (owner 2026-11-24)', () => {
       method: 'POST',
       body: { domain: 'shop.onpbx.ru', apiKey: 'secret-key' },
     });
+  });
+
+  // Owner 2026-11-24: connecting moved to Settings > Integrations.
+  it('links the CRM tab to Settings instead of asking for the key', async () => {
+    vi.mocked(api).mockResolvedValue(base as never);
+    view(<CallsPage />);
+    expect(await screen.findByTestId('calls-connect-link')).toHaveAttribute(
+      'href',
+      '/settings/telephony',
+    );
+    expect(screen.queryByTestId('calls-domain-input')).toBeNull();
   });
 
   it('asks nothing of the API for an operator', () => {

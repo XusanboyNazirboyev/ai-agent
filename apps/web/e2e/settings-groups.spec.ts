@@ -48,7 +48,7 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
     await page.goto('/settings/pipeline');
     const groups = page.getByRole('navigation', { name: 'Settings sections' });
     await expect(groups.getByRole('link')).toHaveCount(3);
-    for (const name of ['Channels', 'Sales', 'Team and account'])
+    for (const name of ['Integrations', 'Sales', 'General'])
       await expect(groups.getByRole('link', { name })).toHaveCount(1);
     const tabs = page.getByTestId('settings-subtabs');
     await page.getByTestId('settings-group-sales').click();
@@ -56,7 +56,6 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
     await expect(tabs.getByRole('link')).toHaveText([
       'Sales stages',
       'Tags and fields',
-      'External CRM',
     ]);
 
     await page.getByTestId('settings-group-account').click();
@@ -77,10 +76,22 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
     await page.getByTestId('settings-tab-general').click();
     await page.waitForURL(/\/settings$/u);
 
-    // The channels themselves moved to their own menu section (2026-11-24);
-    // the operators' quick replies (ADR 070) stay in this group.
-    await page.getByTestId('settings-group-channels').click();
-    await page.waitForURL(/\/settings\/replies$/u);
+    // Owner 2026-11-24: CRMs and telephony under integrations; quick
+    // replies moved to the Channels section.
+    await page.getByTestId('settings-group-integrations').click();
+    await page.waitForURL(/\/settings\/crm$/u);
+    await expect(tabs.getByRole('link')).toHaveText([
+      'External CRM',
+      'Telephony',
+    ]);
+    await page.getByTestId('settings-tab-telephony').click();
+    await page.waitForURL(/\/settings\/telephony$/u);
+    await page.goto('/settings/replies');
+    await page.waitForURL(/\/channels\/replies$/u);
+    await expect(page.getByTestId('channels-tab-replies')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   } finally {
     await context.close();
   }
@@ -106,10 +117,12 @@ test('an operator sees only what they may open', async ({ browser }) => {
     await expect(tabs.getByRole('link')).toHaveText([
       'Sales stages',
       'Tags and fields',
-      'External CRM',
     ]);
     await page.getByTestId('settings-group-account').click();
     await expect(tabs.getByRole('link')).toHaveText(['Security', 'General']);
+    // No telephony tab (owners and admins only), so no sub-tab row.
+    await page.getByTestId('settings-group-integrations').click();
+    await page.waitForURL(/\/settings\/crm$/u);
   } finally {
     await context.close();
   }
@@ -138,7 +151,7 @@ test('the groups fit a phone without a sideways scroll and have no accessibility
         await expect(page.getByTestId('settings-subtabs')).toBeVisible();
         // The groups are all in view at once (the old row scrolled sideways).
         const groups = page.getByRole('navigation').filter({
-          has: page.getByTestId('settings-group-channels'),
+          has: page.getByTestId('settings-group-integrations'),
         });
         const box = (await groups.boundingBox())!;
         const scroll = await groups.evaluate(

@@ -8,8 +8,8 @@ import {
 import { AGENT_SECTIONS, visibleAgentSections } from './agent-section-nav';
 
 const ALL: SettingsSection[] = [
-  'replies',
   'crm',
+  'telephony',
   'pipeline',
   'fields',
   'team',
@@ -22,7 +22,7 @@ describe('settings groups', () => {
   // Owner 2026-11-23: the assistant group moved to its own AI agent section.
   it('has three groups and puts every section in exactly one of them', () => {
     expect(SETTINGS_GROUPS.map((g) => g.key)).toEqual([
-      'channels',
+      'integrations',
       'sales',
       'account',
     ]);
@@ -31,11 +31,12 @@ describe('settings groups', () => {
     expect(new Set(placed).size).toBe(placed.length);
   });
 
-  it('groups the selling and the account as the UX review asks', () => {
+  // Owner 2026-11-24: integrations, sales stages, general.
+  it('groups integrations, selling and the account', () => {
+    expect(groupOf('crm')).toBe('integrations');
+    expect(groupOf('telephony')).toBe('integrations');
     expect(groupOf('pipeline')).toBe('sales');
-    expect(groupOf('crm')).toBe('sales');
     expect(groupOf('fields')).toBe('sales');
-    expect(groupOf('replies')).toBe('channels');
     expect(groupOf('team')).toBe('account');
     expect(groupOf('security')).toBe('account');
   });
@@ -47,7 +48,7 @@ describe('settings groups', () => {
       );
     expect(keys(true).sort()).toEqual([...ALL].sort());
     expect(keys(false).sort()).toEqual(
-      ALL.filter((k) => !['team', 'history'].includes(k)).sort(),
+      ALL.filter((k) => !['team', 'history', 'telephony'].includes(k)).sort(),
     );
   });
 
@@ -56,7 +57,7 @@ describe('settings groups', () => {
       SETTINGS_GROUPS.flatMap((g) => g.sections.map((s) => [s.key, s.href])),
     );
     expect(hrefs).toMatchObject({
-      replies: '/settings/replies',
+      telephony: '/settings/telephony',
       pipeline: '/settings/pipeline',
       fields: '/settings/fields',
       crm: '/settings/crm',
