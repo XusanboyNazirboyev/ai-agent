@@ -12,12 +12,16 @@ import { useI18n } from '@/i18n';
 import { isStartCommand } from '@/lib/bot-command';
 import { channelName } from '@/lib/channel-names';
 import { api, errorKey } from '@/lib/api';
+import {
+  channelsQuery,
+  conversationsQuery,
+  waitingCountQuery,
+} from '@/lib/queries';
 import { shortTime } from '@/lib/inbox-row';
 import { isUnread } from '@/lib/seen';
 import type {
   ChannelAccount,
   ConversationListItem,
-  ConversationPage,
   LeadScore,
   Scope,
   TagRef,
@@ -100,20 +104,11 @@ export function ConversationList(props: {
   // Owner 2026-11-23: all chats, one messenger, or one account of it.
   const [channel, setChannel] = useState<ChannelFilter>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const accounts = useQuery({
-    queryKey: ['channels'],
-    queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
-  });
+  const accounts = useQuery(channelsQuery);
   const channelChips = chipsFor(accounts.data?.items ?? []);
   // Owner 2026-11-23: how many chats wait for a person, per messenger. The
   // same cached query as the menu's Inbox count, so the numbers agree.
-  const waiting = useQuery({
-    queryKey: ['conversations', 'waiting-count'],
-    queryFn: () =>
-      api<ConversationPage>(
-        '/api/v1/inbox/conversations?scope=waiting&limit=50',
-      ),
-  });
+  const waiting = useQuery(waitingCountQuery);
   const waitingBy = waitingCounts(waiting.data?.items ?? []);
   const activeFilters = (language ? 1 : 0) + (score ? 1 : 0) + (tagId ? 1 : 0);
   const tagList = useQuery({
@@ -125,31 +120,16 @@ export function ConversationList(props: {
   const now = useNow();
   const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
 
-  const query = useInfiniteQuery({
-    queryKey: [
-      'conversations',
-      props.scope,
+  const query = useInfiniteQuery(
+    conversationsQuery({
+      scope: props.scope,
       q,
       language,
       score,
       tagId,
-      channel.type ?? '',
-    ],
-    initialPageParam: '',
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ scope: props.scope, limit: '25' });
-      if (pageParam) params.set('cursor', pageParam);
-      if (q) params.set('q', q);
-      if (language) params.set('language', language);
-      if (score) params.set('leadScore', score);
-      if (tagId) params.set('tagId', tagId);
-      if (channel.type) params.set('channelType', channel.type);
-      return api<ConversationPage>(
-        `/api/v1/inbox/conversations?${params.toString()}`,
-      );
-    },
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-  });
+      channelType: channel.type ?? '',
+    }),
+  );
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const filtered = Boolean(q || language || score || tagId || channel.type);
 

@@ -3,7 +3,8 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
-import { api, errorKey } from '@/lib/api';
+import { errorKey } from '@/lib/api';
+import { analyticsQuery } from '@/lib/queries';
 import {
   metricFormat,
   presetRange,
@@ -471,11 +472,7 @@ export function AnalyticsPage(): ReactNode {
   const [today, setToday] = useState<string | null>(null);
   const fmt = useMemo(() => metricFormat(locale), [locale]);
   const query = useQuery({
-    queryKey: ['analytics', range?.from ?? null, range?.to ?? null],
-    queryFn: () =>
-      api<AnalyticsReport>(
-        `/api/v1/analytics${range ? `?from=${range.from}&to=${range.to}` : ''}`,
-      ),
+    ...analyticsQuery(range),
     enabled: canManage,
     placeholderData: keepPreviousData,
   });

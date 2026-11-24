@@ -36,6 +36,38 @@ async function settle(page: Page, pathPart: string): Promise<void> {
 }
 
 test.describe('navigation on a slow server', () => {
+  test('pointing at Inbox starts its reads, so the list opens with its data', async ({
+    browser,
+  }) => {
+    const { page } = await newSession(
+      browser,
+      fixtures().a.operators.op1.email,
+      { viewport: { width: 1280, height: 800 } },
+    );
+    await page.goto('/today');
+    await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption('en');
+    const inbox = page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('link', { name: /Inbox/u });
+    const listed = page.waitForResponse((response) =>
+      response.url().includes('/api/v1/inbox/conversations?scope=all'),
+    );
+    await inbox.hover();
+    await listed;
+    // From now on the list answer is slow: only a prefetched list is fast.
+    await page.route(
+      '**/api/v1/inbox/conversations?scope=all*',
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, SERVER_DELAY_MS));
+        await route.continue();
+      },
+    );
+    await inbox.click();
+    await expect(page.getByTestId('conversation-item').first()).toBeVisible({
+      timeout: FEEDBACK_MS + 500,
+    });
+  });
+
   test('a menu click shows the new page loading at once', async ({
     browser,
   }) => {
@@ -52,9 +84,13 @@ test.describe('navigation on a slow server', () => {
 
     await rail.getByRole('link', { name: 'Leads' }).click();
     await expect(page).toHaveURL(/\/leads$/u, { timeout: FEEDBACK_MS });
-    await expect(page.getByTestId('page-loading')).toBeVisible({
-      timeout: FEEDBACK_MS,
-    });
+    // Menu pages are prefetched in full (2026-11-24): the page itself may
+    // already be here; otherwise its loading state shows. Never the old page.
+    await expect(
+      page
+        .getByTestId('page-loading')
+        .or(page.getByRole('heading', { level: 1, name: 'Leads' })),
+    ).toBeVisible({ timeout: FEEDBACK_MS });
     await expect(
       page.getByRole('heading', { level: 1, name: 'Leads' }),
     ).toBeVisible({ timeout: SERVER_DELAY_MS + 7_000 });

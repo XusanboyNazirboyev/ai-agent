@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { pipelinesQuery } from '@/lib/queries';
 import { downloadCsv } from '@/lib/export-csv';
 import { useToast } from '@/components/ui/toast';
 import type {
@@ -83,10 +84,7 @@ export function LeadsBoard(): ReactNode {
   // The add-lead dialog: open flag and the stage to preselect (column "+").
   const [adding, setAdding] = useState<{ stageId: string | null } | null>(null);
 
-  const pipelines = useQuery({
-    queryKey: ['pipelines'],
-    queryFn: () => api<{ items: PipelineView[] }>('/api/v1/pipelines'),
-  });
+  const pipelines = useQuery(pipelinesQuery);
   const list = pipelines.data?.items ?? [];
   const urlPipeline = params.get('pipeline');
   const [activeId, setActiveId] = useState<string | null>(null);

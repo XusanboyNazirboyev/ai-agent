@@ -3,10 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
-import { api } from '@/lib/api';
+import { subscriptionQuery } from '@/lib/queries';
 import { formatDate, formatMoney } from '@/lib/money';
 import { canManageTeam } from '@/lib/roles';
-import type { OwnSubscription } from '@/lib/types';
 import { useShell } from './app-shell';
 import { SubscriptionBadge } from './console/console-format';
 import { SubscriptionPay } from './subscription-pay';
@@ -44,11 +43,7 @@ export function SubscriptionPage(): ReactNode {
   const { t, locale } = useI18n();
   const { operator } = useShell();
   const manager = canManageTeam(operator.role);
-  const query = useQuery({
-    queryKey: ['subscription'],
-    queryFn: () => api<OwnSubscription>('/api/v1/subscription'),
-    enabled: manager,
-  });
+  const query = useQuery({ ...subscriptionQuery, enabled: manager });
   const data = query.data;
   const subscription = data?.subscription ?? null;
 

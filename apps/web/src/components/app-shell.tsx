@@ -14,6 +14,8 @@ import {
 import { useI18n } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
 import { NAV, visibleNav, type NavKey } from '@/lib/nav';
+import { PAGE_PREFETCH } from '@/lib/page-prefetch';
+import { waitingCountQuery } from '@/lib/queries';
 import {
   useLiveUpdates,
   type ConnectionState,
@@ -21,7 +23,7 @@ import {
 } from '@/lib/live-updates';
 import { usePreferences } from '@/lib/preferences';
 import { canManageTeam } from '@/lib/roles';
-import type { ConversationPage, Me, Role, TenantAccess } from '@/lib/types';
+import type { Me, Role, TenantAccess } from '@/lib/types';
 import { useNow } from '@/lib/use-now';
 import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
@@ -84,10 +86,18 @@ function NavLink(props: {
   active: boolean;
   count?: number;
   layout: 'rail' | 'bar';
+  /** Starts the page's reads when the pointer or focus arrives (2026-11-24). */
+  onIntent?: () => void;
 }): ReactNode {
   return (
     <Link
       href={props.href}
+      // The whole page (not only its loading shell) is fetched ahead; the
+      // 5-minute page cache keeps it (ADR 083 amendment 2026-11-24).
+      prefetch
+      onMouseEnter={props.onIntent}
+      onFocus={props.onIntent}
+      onTouchStart={props.onIntent}
       aria-current={props.active ? 'page' : undefined}
       className={`group flex min-w-0 flex-col items-center rounded-xl px-0.5 text-center text-[0.6875rem] leading-tight font-medium ${
         props.layout === 'rail' ? 'w-full gap-1 py-1.5' : 'flex-1 gap-0.5 py-1'
@@ -181,14 +191,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
   );
   const connection = useLiveUpdates(me.isSuccess, onEvent);
 
-  const waiting = useQuery({
-    queryKey: ['conversations', 'waiting-count'],
-    queryFn: () =>
-      api<ConversationPage>(
-        '/api/v1/inbox/conversations?scope=waiting&limit=50',
-      ),
-    enabled: me.isSuccess,
-  });
+  const waiting = useQuery({ ...waitingCountQuery, enabled: me.isSuccess });
   const waitingCount = waiting.data?.items.length ?? 0;
   const now = useNow();
   const overdue = (waiting.data?.items ?? []).filter(
@@ -279,6 +282,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                 label={t(`nav.${item.key}`)}
                 active={current?.key === item.key}
                 count={item.key === 'inbox' ? waitingCount : undefined}
+                onIntent={() => PAGE_PREFETCH[item.key]?.(queryClient)}
               />
             );
           })}
@@ -350,6 +354,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                     label={t(`nav.${item.key}`)}
                     active={current?.key === item.key}
                     count={item.key === 'inbox' ? waitingCount : undefined}
+                    onIntent={() => PAGE_PREFETCH[item.key]?.(queryClient)}
                   />
                 );
               })}

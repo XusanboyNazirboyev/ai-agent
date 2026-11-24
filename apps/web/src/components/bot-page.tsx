@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { channelsQuery, goLiveQuery } from '@/lib/queries';
 import { channelName } from '@/lib/channel-names';
 import { effectiveNotice } from '@/lib/effective-mode';
 import type { AgentMode, ChannelAccount } from '@/lib/types';
@@ -34,10 +35,7 @@ export function BotPage(): ReactNode {
   const canChange = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const [pendingLive, setPendingLive] = useState<string | null>(null);
 
-  const query = useQuery({
-    queryKey: ['channels'],
-    queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
-  });
+  const query = useQuery(channelsQuery);
   const change = useMutation({
     mutationFn: (input: { id: string; mode: AgentMode }) =>
       api<ChannelAccount>(`/api/v1/channels/${input.id}/agent-mode`, {
@@ -58,13 +56,7 @@ export function BotPage(): ReactNode {
   }
 
   // Owner 2026-11-23: what still keeps the bot from answering customers.
-  const readiness = useQuery({
-    queryKey: ['go-live'],
-    queryFn: () =>
-      api<{ missing: ('CATALOG' | 'PROFILE')[] }>(
-        '/api/v1/business-profile/readiness',
-      ),
-  });
+  const readiness = useQuery(goLiveQuery);
   const missing = readiness.data?.missing ?? [];
   const items = query.data?.items ?? [];
   return (

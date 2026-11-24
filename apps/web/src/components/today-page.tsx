@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
-import { api, errorKey } from '@/lib/api';
+import { errorKey } from '@/lib/api';
+import { channelsQuery, todayQuery } from '@/lib/queries';
 import {
   assistantLight,
   greetingPart,
@@ -14,7 +15,6 @@ import {
   type SetupKey,
   type TodaySummary,
 } from '@/lib/today';
-import type { ChannelAccount } from '@/lib/types';
 import { useShell } from './app-shell';
 import { MyTasksCard } from './lead-tasks';
 import { SetupGuide } from './setup-guide';
@@ -48,15 +48,8 @@ export function TodayPage(): ReactNode {
   const { operator, timeZone } = useShell();
   const manager = operator.role === 'OWNER' || operator.role === 'ADMIN';
 
-  const summary = useQuery({
-    queryKey: ['today'],
-    queryFn: () => api<TodaySummary>('/api/v1/today'),
-    refetchInterval: 30_000,
-  });
-  const channels = useQuery({
-    queryKey: ['channels'],
-    queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
-  });
+  const summary = useQuery({ ...todayQuery, refetchInterval: 30_000 });
+  const channels = useQuery(channelsQuery);
 
   const light: AssistantLight | null = channels.data
     ? assistantLight(channels.data.items)
