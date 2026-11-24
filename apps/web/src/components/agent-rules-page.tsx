@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { canManageTeam } from '@/lib/roles';
 import { useShell } from './app-shell';
+import { BotScheduleCard } from './bot-schedule-card';
 import { BusinessProfileCard } from './business-profile-card';
 import { OwnerRulesCard } from './owner-rules-card';
 import { Icon } from './ui/icons';
@@ -34,6 +35,7 @@ export function AgentRulesPage(): ReactNode {
         <p className="text-sm text-muted">{t('agent.rules.intro')}</p>
         <BusinessProfileCard canChange={canManageTeam(operator.role)} />
         <OwnerRulesCard canChange={canManageTeam(operator.role)} />
+        <BotScheduleCard canChange={canManageTeam(operator.role)} />
         <section
           data-testid="agent-rules"
           className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 sm:p-5"

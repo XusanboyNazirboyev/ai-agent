@@ -78,6 +78,8 @@ async function pipelineApplies(c: Case): Promise<EffectiveAgentMode> {
         channelAccount: { agentMode: c.mode, isTestAccount: c.isTestAccount },
       }),
     },
+    // No schedule: the bot is always on duty (ADR 089).
+    tenant: { findFirst: async () => null },
   } as unknown as PrismaService;
   const pipeline = new TelegramAgentPipeline(
     prisma,

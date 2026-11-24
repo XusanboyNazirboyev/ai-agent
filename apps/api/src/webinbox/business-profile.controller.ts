@@ -18,6 +18,11 @@ import {
   MAX_OWNER_RULES,
   ownerRulesOf,
 } from '../agent/business-profile.js';
+import {
+  BotScheduleSchema,
+  botScheduleOf,
+  type BotSchedule,
+} from '../agent/bot-schedule.js';
 import { goLiveGaps, type GoLiveGap } from '../agent/go-live.js';
 import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { PrismaService } from '../persistence/prisma.service.js';
@@ -146,6 +151,66 @@ export class BusinessProfileController {
         },
       });
       return { rules: ownerRulesOf(saved) };
+    });
+  }
+
+  /** ADR 089: when the bot answers customers. */
+  @Get('schedule')
+  async schedule(@Req() request: InboxRequest): Promise<BotSchedule> {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: request.principal!.tenantId },
+      select: { config: true },
+    });
+    return botScheduleOf(tenant.config);
+  }
+
+  /** OWNER/ADMIN only; audited. */
+  @Put('schedule')
+  async putSchedule(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<BotSchedule> {
+    const principal = request.principal!;
+    if (principal.role !== 'OWNER' && principal.role !== 'ADMIN')
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Not allowed',
+        i18nKey: 'errors.forbidden',
+      });
+    const parsed = BotScheduleSchema.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'INVALID_BODY',
+        message: 'Invalid body',
+        i18nKey: 'errors.invalidBody',
+      });
+    const schedule = botScheduleOf({ botSchedule: parsed.data });
+    return this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.findUniqueOrThrow({
+        where: { id: principal.tenantId },
+        select: { config: true },
+      });
+      await tx.tenant.update({
+        where: { id: principal.tenantId },
+        data: {
+          config: {
+            ...((tenant.config as Record<string, unknown> | null) ?? {}),
+            botSchedule: schedule,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          tenantId: principal.tenantId,
+          actorType: 'OPERATOR',
+          actorId: principal.operatorId,
+          action: 'tenant.bot_schedule.updated',
+          entityType: 'tenant',
+          entityId: principal.tenantId,
+          safeInputSummary: { ...schedule, days: schedule.days.join(',') },
+        },
+      });
+      return schedule;
     });
   }
 

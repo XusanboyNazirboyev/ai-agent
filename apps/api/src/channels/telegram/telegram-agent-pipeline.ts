@@ -1,4 +1,5 @@
 import { buildCarousel } from '../instagram/instagram-carousel.js';
+import { botOnDuty, botScheduleOf } from '../../agent/bot-schedule.js';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { HandoverSummary } from '@agentcore/shared';
@@ -237,6 +238,18 @@ export class TelegramAgentPipeline {
       return;
     }
     if (effective.mode === 'OFF') return;
+    if (!(await this.onDuty(event.tenantId))) {
+      // ADR 089: outside the bot's hours the team answers; no late replay.
+      this.logger.log(
+        JSON.stringify({
+          event: 'agent.off_schedule',
+          tenant: event.tenantId,
+          conversation: input.conversationId,
+        }),
+      );
+      await this.hold(event, input.inboundEventId, input.conversationId);
+      return;
+    }
     for (let round = 1; round <= MAX_ROUNDS; round++) {
       const claimed = await this.claim(
         event,
@@ -301,6 +314,15 @@ export class TelegramAgentPipeline {
     }
     // Still superseded: the batch is RECEIVED again and the newest message's
     // own job answers it once the customer pauses.
+  }
+
+  private async onDuty(tenantId: string): Promise<boolean> {
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: { config: true, timezone: true },
+    });
+    if (!tenant) return true;
+    return botOnDuty(botScheduleOf(tenant.config), new Date(), tenant.timezone);
   }
 
   /**

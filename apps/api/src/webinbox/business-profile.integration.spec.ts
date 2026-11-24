@@ -146,4 +146,42 @@ describe('business profile (owner 2026-11-23)', () => {
     });
     expect(audit.safeInputSummary).toEqual({ count: 2 });
   });
+
+  it('bot schedule (ADR 089): always by default, managers change it, rules survive', async () => {
+    const w = await world();
+    expect((await controller.schedule(w.as('VIEWER'))).mode).toBe('always');
+    const schedule = {
+      mode: 'off_hours',
+      days: [5, 1, 1, 2],
+      from: '09:00',
+      to: '18:00',
+    };
+    expect(
+      await status(() => controller.putSchedule(w.as('OPERATOR'), schedule)),
+    ).toBe(403);
+    for (const bad of [
+      { ...schedule, days: [] },
+      { ...schedule, to: '09:00' },
+      { ...schedule, from: '24:00' },
+      { ...schedule, days: [0] },
+      { ...schedule, mode: 'sometimes' },
+    ])
+      expect(
+        await status(() => controller.putSchedule(w.as('OWNER'), bad)),
+      ).toBe(400);
+    await controller.putRules(w.as('OWNER'), { rules: ['Qoida'] });
+    expect(await controller.putSchedule(w.as('ADMIN'), schedule)).toEqual({
+      ...schedule,
+      days: [1, 2, 5],
+    });
+    expect((await controller.schedule(w.as('VIEWER'))).days).toEqual([1, 2, 5]);
+    expect((await controller.rules(w.as('VIEWER'))).rules).toEqual(['Qoida']);
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: { tenantId: w.tenantId, action: 'tenant.bot_schedule.updated' },
+    });
+    expect(audit.safeInputSummary).toMatchObject({
+      mode: 'off_hours',
+      days: '1,2,5',
+    });
+  });
 });
