@@ -9,13 +9,13 @@ const account = (
 ): ChannelAccount => ({ id, channelType, displayName }) as ChannelAccount;
 
 describe('inbox channel chips (owner 2026-11-23)', () => {
-  it('offers all chats, then each connected messenger', () => {
+  // Owner 2026-11-24: no "All" chip; the active chip toggles back to all.
+  it('offers each connected messenger', () => {
     expect(
       chipsFor([account('t1', 'telegram'), account('i1', 'instagram')]).map(
         (c) => [c.key, c.type],
       ),
     ).toEqual([
-      ['all', undefined],
       ['telegram', 'telegram'],
       ['instagram', 'instagram'],
     ]);
@@ -29,7 +29,6 @@ describe('inbox channel chips (owner 2026-11-23)', () => {
       account('f1', 'facebook'),
     ]);
     expect(chips.map((c) => [c.key, c.label])).toEqual([
-      ['all', undefined],
       ['telegram', 'Telegram'],
     ]);
   });

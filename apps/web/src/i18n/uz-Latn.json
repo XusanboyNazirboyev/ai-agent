@@ -2019,7 +2019,6 @@
   "agent.rules.intro": "AI agent biznesingiz haqida faqat shu yerdagi ma’lumotlarni aytadi va quyidagi qoidalarga doim amal qiladi.",
   "agent.rules.noGuess": "Biznes nomi, manzili, telefoni va ish vaqtini faqat «Biznes ma’lumotlari»dan aytadi; yo‘q bo‘lsa operatorga topshiradi.",
   "agent.rules.noClaim": "Buyurtma, bron yoki to‘lov tasdiqlandi deb hech qachon aytmaydi: buni jamoangiz qiladi.",
-  "list.channelAll": "Hammasi",
   "list.channels": "Kanal bo‘yicha",
   "nav.billing": "Obuna",
   "subscription.period": "Obuna davri",

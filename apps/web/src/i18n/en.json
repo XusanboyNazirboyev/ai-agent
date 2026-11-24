@@ -2019,7 +2019,6 @@
   "agent.rules.intro": "The AI agent states only these details about your business and always follows the rules below.",
   "agent.rules.noGuess": "Business name, address, phone and opening hours come only from Business details; anything missing goes to an operator.",
   "agent.rules.noClaim": "It never says an order, booking or payment is confirmed: your team does that.",
-  "list.channelAll": "All",
   "list.channels": "By channel",
   "nav.billing": "Billing",
   "subscription.period": "Subscription period",

@@ -50,18 +50,22 @@ interface ChannelFilter {
   type?: string;
 }
 
-interface ChannelChip extends ChannelFilter {
+interface ChannelChip {
   key: string;
-  /** Undefined for "all chats" (translated). */
-  label?: string;
+  type: string;
+  label: string;
 }
 
 /** Owner 2026-11-23: only these two get a chip; every bot of a messenger is in it. */
 const CHAT_CHANNELS = ['telegram', 'instagram'];
 
-/** "All", then one chip per connected messenger (Telegram, Instagram). */
+/**
+ * One chip per connected messenger (Telegram, Instagram). Owner 2026-11-24:
+ * no "All" chip next to the "All" tab; pressing the active chip again shows
+ * every chat.
+ */
 export function chipsFor(accounts: readonly ChannelAccount[]): ChannelChip[] {
-  const chips: ChannelChip[] = [{ key: 'all' }];
+  const chips: ChannelChip[] = [];
   for (const type of CHAT_CHANNELS)
     if (accounts.some((account) => account.channelType === type))
       chips.push({ key: type, type, label: channelName(type) });
@@ -196,33 +200,31 @@ export function ConversationList(props: {
           className="mx-3 mt-3 flex gap-1.5 overflow-x-auto pb-1"
         >
           {channelChips.map((chip) => {
-            const active = (chip.type ?? '') === (channel.type ?? '');
+            const active = chip.type === channel.type;
             return (
               <button
                 key={chip.key}
                 type="button"
                 aria-pressed={active}
                 data-testid={`inbox-channel-${chip.key}`}
-                onClick={() => setChannel(chip.type ? { type: chip.type } : {})}
+                onClick={() => setChannel(active ? {} : { type: chip.type })}
                 className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm font-medium whitespace-nowrap transition-colors ${
                   active
                     ? 'border-primary bg-primary-soft text-primary-fg'
                     : 'border-line bg-surface text-muted hover:bg-surface-2 hover:text-fg'
                 }`}
               >
-                {chip.type ? (
-                  <ChannelLogo channelType={chip.type} decorative />
-                ) : null}
-                {chip.label ?? t('list.channelAll')}
-                {waitingBy[chip.type ?? 'all'] ? (
+                <ChannelLogo channelType={chip.type} decorative />
+                {chip.label}
+                {waitingBy[chip.type] ? (
                   <span
                     data-testid={`inbox-channel-count-${chip.key}`}
                     aria-label={t('list.waitingCount', {
-                      count: waitingBy[chip.type ?? 'all']!,
+                      count: waitingBy[chip.type]!,
                     })}
                     className="min-w-5 rounded-full bg-primary px-1.5 text-center text-xs leading-5 text-white tabular-nums"
                   >
-                    {waitingBy[chip.type ?? 'all']}
+                    {waitingBy[chip.type]}
                   </span>
                 ) : null}
               </button>
