@@ -6,9 +6,10 @@ import { FactStore, type BusinessProfile } from '../core/agent/facts.js';
 import { checkDraft } from '../core/agent/guardrails.js';
 import {
   businessProfileRule,
+  conversationalSystemPrompt,
   responseSystemPrompt,
 } from '../core/agent/prompts.js';
-import { businessProfileOf } from './business-profile.js';
+import { businessProfileOf, ownerRulesOf } from './business-profile.js';
 
 const now = new Date('2026-11-23T08:00:00Z');
 const scope = { tenantId: 't1', conversationId: 'c1' };
@@ -80,5 +81,50 @@ describe('business profile (owner 2026-11-23: never a wrong agency name or phone
     const prompt = responseSystemPrompt(TRAVEL_PACK, UZ_LATN, profile);
     expect(prompt).toContain('10. Business details');
     expect(prompt).toContain(`11. ${TRAVEL_PACK.prompt.rules[0]}`);
+  });
+});
+
+describe('owner rules (owner 2026-11-24: the Rules tab)', () => {
+  it('reads at most ten trimmed one-line rules and ignores anything else', () => {
+    expect(
+      ownerRulesOf({
+        config: {
+          agentRules: [
+            ' Chegirma so‘ralsa,\n operatorga ulang ',
+            5,
+            '',
+            'x'.repeat(400),
+          ],
+        },
+      }),
+    ).toEqual(['Chegirma so‘ralsa, operatorga ulang', 'x'.repeat(300)]);
+    expect(ownerRulesOf({ config: { agentRules: 'no' } })).toEqual([]);
+    expect(
+      ownerRulesOf({ config: { agentRules: Array(12).fill('a') } }),
+    ).toHaveLength(10);
+  });
+
+  it('puts the owner rules last, below every built-in rule, and only when there are some', () => {
+    const rules = ['If a discount is asked, hand over to an operator'];
+    const prompt = responseSystemPrompt(TRAVEL_PACK, UZ_LATN, profile, rules);
+    const last = prompt.split('\n').at(-1)!;
+    expect(last).toContain("The business owner's instructions");
+    expect(last).toContain('unless a rule above says otherwise');
+    expect(last).toContain(JSON.stringify(rules[0]));
+    expect(prompt.indexOf(TRAVEL_PACK.prompt.rules[0]!)).toBeLessThan(
+      prompt.indexOf(rules[0]!),
+    );
+    expect(
+      responseSystemPrompt(TRAVEL_PACK, UZ_LATN, profile, []),
+    ).not.toContain("owner's instructions");
+    expect(
+      conversationalSystemPrompt(
+        TRAVEL_PACK,
+        UZ_LATN,
+        { kind: 'small_talk', convey: '', ask: '' },
+        profile,
+        rules,
+      ),
+    ).toContain(JSON.stringify(rules[0]));
   });
 });

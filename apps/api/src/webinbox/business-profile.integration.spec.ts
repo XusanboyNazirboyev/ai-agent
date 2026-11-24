@@ -111,4 +111,39 @@ describe('business profile (owner 2026-11-23)', () => {
     });
     expect(JSON.stringify(audit.safeInputSummary)).not.toContain('998');
   });
+
+  it('owner rules: managers save up to ten, everyone reads, the audit holds only the count', async () => {
+    const w = await world();
+    const rules = [
+      'Chegirma so‘ralsa, operatorga ulang',
+      '',
+      'Always answer politely',
+    ];
+    expect(
+      await status(() => controller.putRules(w.as('OPERATOR'), { rules })),
+    ).toBe(403);
+    expect(
+      await status(() =>
+        controller.putRules(w.as('OWNER'), { rules: Array(11).fill('a') }),
+      ),
+    ).toBe(400);
+    expect(
+      await status(() =>
+        controller.putRules(w.as('OWNER'), { rules: ['x'.repeat(301)] }),
+      ),
+    ).toBe(400);
+    await controller.put(w.as('OWNER'), body);
+    const saved = await controller.putRules(w.as('ADMIN'), { rules });
+    expect(saved.rules).toEqual([
+      'Chegirma so‘ralsa, operatorga ulang',
+      'Always answer politely',
+    ]);
+    expect((await controller.rules(w.as('VIEWER'))).rules).toEqual(saved.rules);
+    // The profile saved before stays.
+    expect((await controller.get(w.as('VIEWER'))).phone).toBe(body.phone);
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: { tenantId: w.tenantId, action: 'tenant.agent_rules.updated' },
+    });
+    expect(audit.safeInputSummary).toEqual({ count: 2 });
+  });
 });

@@ -2031,5 +2031,12 @@
   "header.themeDark": "Qorong‘i mavzu",
   "header.themeLight": "Yorug‘ mavzu",
   "header.account": "Hisob",
-  "list.waitingCount": "{count} ta suhbat operatorni kutmoqda"
+  "list.waitingCount": "{count} ta suhbat operatorni kutmoqda",
+  "agent.ownerRules.title": "Sizning qoidalaringiz",
+  "agent.ownerRules.intro": "AI agentga o‘zingizning ko‘rsatmalaringiz. Har bir qatorga bitta qoida. Ular pastdagi o‘rnatilgan qoidalardan ustun emas: narx, chegirma va «tasdiqlandi» degan gaplarni baribir kod nazorat qiladi.",
+  "agent.ownerRules.label": "Qoidalar (har qatorga bittadan, {max} tagacha)",
+  "agent.ownerRules.placeholder": "Masalan: Chegirma so‘ralsa, operatorga ulang.",
+  "agent.ownerRules.tooMany": "Ko‘pi bilan {max} ta qoida yozish mumkin.",
+  "agent.ownerRules.tooLong": "Har bir qoida {max} belgidan oshmasin.",
+  "agent.ownerRules.saved": "Qoidalar saqlandi"
 }

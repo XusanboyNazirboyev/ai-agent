@@ -2031,5 +2031,12 @@
   "header.themeDark": "Тёмная тема",
   "header.themeLight": "Светлая тема",
   "header.account": "Аккаунт",
-  "list.waitingCount": "Ждут оператора: {count}"
+  "list.waitingCount": "Ждут оператора: {count}",
+  "agent.ownerRules.title": "Ваши правила",
+  "agent.ownerRules.intro": "Ваши указания ИИ-агенту, по одному на строку. Они не важнее встроенных правил ниже: цены, скидки и слова «подтверждено» всё равно контролирует код.",
+  "agent.ownerRules.label": "Правила (по одному на строку, до {max})",
+  "agent.ownerRules.placeholder": "Например: если спрашивают скидку, передай оператору.",
+  "agent.ownerRules.tooMany": "Можно не больше {max} правил.",
+  "agent.ownerRules.tooLong": "Каждое правило — не длиннее {max} символов.",
+  "agent.ownerRules.saved": "Правила сохранены"
 }

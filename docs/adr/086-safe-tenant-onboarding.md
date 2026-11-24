@@ -18,3 +18,6 @@ Status: accepted by the owner on 2026-11-23 (chat: "1+2+3 now, then a general pa
 - Tool fact ids now stop below 900 (`FactStore.add` throws at the reserved range; tool calls are capped far below it).
 - Tests: signup integration (pack stored and used; missing/unknown type refused), business profile unit (render, unknown reference rejected, typed phone rejected, prompt rule) and integration (roles, validation, config kept, audit without values), go-live integration (no catalog/profile, demo catalog, test account, SHADOW not gated, LIVE not re-checked), web form and card tests.
 - Not verified: a live model run that answers "what is your address?" with the profile reference (the eval suite has no such case yet).
+
+## Amendment — the owner's own rules (2026-11-24)
+The Rules tab of the AI agent section has "Your rules": up to 10 one-line instructions of at most 300 characters (`tenant.config.agentRules`, `GET/PUT /api/v1/business-profile/rules`, PUT for OWNER/ADMIN, audited with the count only). They are appended last to the response and conversational prompts as "the business owner's instructions", explicitly below every built-in rule; the guardrail still blocks invented facts, prices, discounts and success claims whatever a rule says. Tests: rule parsing and prompt placement (unit), roles, limits, profile kept and audit (integration), the card (web).

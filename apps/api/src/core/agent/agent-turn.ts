@@ -124,6 +124,8 @@ export interface AgentTurnInput {
   readonly timeZone: string;
   /** Owner 2026-11-23: the business's own details, from tenant settings. */
   readonly businessProfile?: BusinessProfile;
+  /** Owner 2026-11-24: the owner's own instructions (Rules tab). */
+  readonly ownerRules?: readonly string[];
   /**
    * Progress signals for the STUCK trigger and the contact request, supplied
    * by the conversation layer from stored turns (oldest first).
@@ -955,6 +957,7 @@ export async function runAgentTurn(
             locale(),
             brief,
             input.businessProfile,
+            input.ownerRules,
           ),
           messages: [
             {
@@ -1428,8 +1431,19 @@ export async function runAgentTurn(
     }).format(nowDate),
   };
   const systemPrompt = schedulingTurn
-    ? schedulingSystemPrompt(pack, locale(), today, input.businessProfile)
-    : responseSystemPrompt(pack, locale(), input.businessProfile);
+    ? schedulingSystemPrompt(
+        pack,
+        locale(),
+        today,
+        input.businessProfile,
+        input.ownerRules,
+      )
+    : responseSystemPrompt(
+        pack,
+        locale(),
+        input.businessProfile,
+        input.ownerRules,
+      );
   const draft = await respond(deps, tools!, stopwatch, {
     system: systemPrompt,
     user: schedulingTurn

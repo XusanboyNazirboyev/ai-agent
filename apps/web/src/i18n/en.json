@@ -2031,5 +2031,12 @@
   "header.themeDark": "Dark theme",
   "header.themeLight": "Light theme",
   "header.account": "Account",
-  "list.waitingCount": "{count} waiting for an operator"
+  "list.waitingCount": "{count} waiting for an operator",
+  "agent.ownerRules.title": "Your rules",
+  "agent.ownerRules.intro": "Your own instructions for the AI agent, one per line. They never outrank the built-in rules below: prices, discounts and “confirmed” claims stay under the code's control.",
+  "agent.ownerRules.label": "Rules (one per line, up to {max})",
+  "agent.ownerRules.placeholder": "For example: if a discount is asked, hand over to an operator.",
+  "agent.ownerRules.tooMany": "At most {max} rules.",
+  "agent.ownerRules.tooLong": "Each rule at most {max} characters.",
+  "agent.ownerRules.saved": "Rules saved"
 }

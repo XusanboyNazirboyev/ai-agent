@@ -4,6 +4,7 @@ import { useI18n } from '@/i18n';
 import { canManageTeam } from '@/lib/roles';
 import { useShell } from './app-shell';
 import { BusinessProfileCard } from './business-profile-card';
+import { OwnerRulesCard } from './owner-rules-card';
 import { Icon } from './ui/icons';
 
 /** The built-in rules the agent always follows (code enforces them, ADR 086/087). */
@@ -32,6 +33,7 @@ export function AgentRulesPage(): ReactNode {
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-3 sm:p-6">
         <p className="text-sm text-muted">{t('agent.rules.intro')}</p>
         <BusinessProfileCard canChange={canManageTeam(operator.role)} />
+        <OwnerRulesCard canChange={canManageTeam(operator.role)} />
         <section
           data-testid="agent-rules"
           className="flex flex-col gap-2 rounded-2xl border border-line bg-surface p-4 sm:p-5"

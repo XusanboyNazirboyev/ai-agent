@@ -12,7 +12,12 @@ import {
 import { z } from 'zod';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { BusinessProfile } from '../core/agent/facts.js';
-import { businessProfileOf } from '../agent/business-profile.js';
+import {
+  businessProfileOf,
+  MAX_OWNER_RULE_LENGTH,
+  MAX_OWNER_RULES,
+  ownerRulesOf,
+} from '../agent/business-profile.js';
 import { goLiveGaps, type GoLiveGap } from '../agent/go-live.js';
 import { ConnectorSelector } from '../connectors/connector-selector.js';
 import { PrismaService } from '../persistence/prisma.service.js';
@@ -35,6 +40,10 @@ const ProfileBody = z.object({
   ),
 });
 export type ProfileForm = z.infer<typeof ProfileBody>;
+
+const RulesBody = z.object({
+  rules: z.array(Text(MAX_OWNER_RULE_LENGTH)).max(MAX_OWNER_RULES),
+});
 
 function form(profile: BusinessProfile): ProfileForm {
   return {
@@ -77,6 +86,67 @@ export class BusinessProfileController {
       select: { name: true, config: true },
     });
     return form(businessProfileOf(tenant));
+  }
+
+  /** Owner 2026-11-24: the owner's own instructions for the AI agent. */
+  @Get('rules')
+  async rules(@Req() request: InboxRequest): Promise<{ rules: string[] }> {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: request.principal!.tenantId },
+      select: { config: true },
+    });
+    return { rules: ownerRulesOf(tenant) };
+  }
+
+  /** OWNER/ADMIN only; audited with the count, never the text. */
+  @Put('rules')
+  async putRules(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<{ rules: string[] }> {
+    const principal = request.principal!;
+    if (principal.role !== 'OWNER' && principal.role !== 'ADMIN')
+      throw new ForbiddenException({
+        code: 'FORBIDDEN',
+        message: 'Not allowed',
+        i18nKey: 'errors.forbidden',
+      });
+    const parsed = RulesBody.safeParse(body);
+    if (!parsed.success)
+      throw new BadRequestException({
+        code: 'INVALID_BODY',
+        message: 'Invalid body',
+        i18nKey: 'errors.invalidBody',
+      });
+    const rules = parsed.data.rules.filter(Boolean);
+    return this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.findUniqueOrThrow({
+        where: { id: principal.tenantId },
+        select: { config: true },
+      });
+      const saved = await tx.tenant.update({
+        where: { id: principal.tenantId },
+        data: {
+          config: {
+            ...((tenant.config as Record<string, unknown> | null) ?? {}),
+            agentRules: rules,
+          } as Prisma.InputJsonValue,
+        },
+        select: { config: true },
+      });
+      await tx.auditEvent.create({
+        data: {
+          tenantId: principal.tenantId,
+          actorType: 'OPERATOR',
+          actorId: principal.operatorId,
+          action: 'tenant.agent_rules.updated',
+          entityType: 'tenant',
+          entityId: principal.tenantId,
+          safeInputSummary: { count: rules.length },
+        },
+      });
+      return { rules: ownerRulesOf(saved) };
+    });
   }
 
   /** OWNER/ADMIN only; audited with field names, never the values. */
