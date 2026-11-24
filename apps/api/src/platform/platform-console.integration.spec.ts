@@ -12,6 +12,7 @@ import {
 } from '../persistence/testing/test-clients.js';
 import { base32Decode, totpCode } from '../auth/totp.js';
 import { hashPassword } from '../webinbox/password.js';
+import { minorToDecimal } from './overview-math.js';
 
 /**
  * ADR 047 over HTTP on the real AppModule and database: platform sign-in and
@@ -1414,26 +1415,32 @@ describe('platform overview', () => {
     expect(md(m0, 'churned')).toBe(1);
     expect(md(m1, 'activeCompanies')).toBe(1);
     expect(md(m0, 'activeCompanies')).toBe(1);
-    // Exact money (a random currency code per run).
+    // Exact money. Random codes can also be real ISO currencies (for example
+    // XPF has zero fraction digits), so this integration test follows each
+    // code's fraction digits. overview-math.spec.ts tests formatting itself.
+    const aPayment = minorToDecimal(3_000_000n, CUR_A);
+    const aTwoPayments = minorToDecimal(6_000_000n, CUR_A);
+    const bPayment = minorToDecimal(36_500n, CUR_B);
+    const bMonthly = minorToDecimal(3_000n, CUR_B);
     expect(month(after, m1).revenue).toMatchObject({
-      [CUR_A]: '30000.00',
-      [CUR_B]: '365.00',
+      [CUR_A]: aPayment,
+      [CUR_B]: bPayment,
     });
-    expect(month(after, m0).revenue[CUR_A]).toBe('30000.00');
+    expect(month(after, m0).revenue[CUR_A]).toBe(aPayment);
     expect(month(after, m0).revenue.XTB).toBeUndefined();
     expect(after.revenue.allTime).toMatchObject({
-      [CUR_A]: '60000.00',
-      [CUR_B]: '365.00',
+      [CUR_A]: aTwoPayments,
+      [CUR_B]: bPayment,
     });
-    expect(after.revenue.thisMonth[CUR_A]).toBe('30000.00');
+    expect(after.revenue.thisMonth[CUR_A]).toBe(aPayment);
     expect(after.revenue.lastMonth).toMatchObject({
-      [CUR_A]: '30000.00',
-      [CUR_B]: '365.00',
+      [CUR_A]: aPayment,
+      [CUR_B]: bPayment,
     });
     // MRR: A pays 3 000 000 / 30 days; D 36 500 per 365 days = 3 000 per 30.
     expect(after.revenue.mrr).toMatchObject({
-      [CUR_A]: '30000.00',
-      [CUR_B]: '30.00',
+      [CUR_A]: aPayment,
+      [CUR_B]: bMonthly,
     });
     expect(delta((o) => o.usageThisMonth.conversations)).toBe(1);
     expect(delta((o) => o.usageThisMonth.inboundMessages)).toBe(1);
@@ -1446,7 +1453,7 @@ describe('platform overview', () => {
     // months=1 still knows last month.
     const one = await ovr(support, '?months=1');
     expect(one.months).toHaveLength(1);
-    expect(one.revenue.lastMonth[CUR_A]).toBe('30000.00');
+    expect(one.revenue.lastMonth[CUR_A]).toBe(aPayment);
   });
 
   it('refuses bad queries and non-platform callers', async () => {
