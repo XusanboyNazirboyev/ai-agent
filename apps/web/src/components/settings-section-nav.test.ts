@@ -8,7 +8,6 @@ import {
 import { AGENT_SECTIONS, visibleAgentSections } from './agent-section-nav';
 
 const ALL: SettingsSection[] = [
-  'channels',
   'replies',
   'crm',
   'pipeline',
@@ -57,7 +56,6 @@ describe('settings groups', () => {
       SETTINGS_GROUPS.flatMap((g) => g.sections.map((s) => [s.key, s.href])),
     );
     expect(hrefs).toMatchObject({
-      channels: '/settings/channels',
       replies: '/settings/replies',
       pipeline: '/settings/pipeline',
       fields: '/settings/fields',

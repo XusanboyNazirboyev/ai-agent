@@ -1,11 +1,7 @@
+import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { ChannelsPage } from '@/components/channels-page';
-import { SettingsSubPage } from '@/components/settings-section-nav';
 
-export default function ChannelSettings(): ReactNode {
-  return (
-    <SettingsSubPage active="channels">
-      <ChannelsPage />
-    </SettingsSubPage>
-  );
+/** Owner 2026-11-24: channels are their own menu section now. */
+export default function Moved(): ReactNode {
+  redirect('/channels/telegram');
 }

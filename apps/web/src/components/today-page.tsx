@@ -217,7 +217,7 @@ function AssistantCard(props: {
       </div>
       {props.manager ? (
         <Link
-          href={light === 'none' ? '/settings/channels' : '/agent'}
+          href={light === 'none' ? '/channels/telegram' : '/agent'}
           className={`${buttonClass('secondary')} shrink-0`}
         >
           {light === 'none'

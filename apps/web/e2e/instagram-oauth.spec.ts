@@ -113,7 +113,7 @@ test('an admin connects Instagram with one click through Unified login, then ena
     browser,
     f.a.operators.owner.email,
   );
-  await page.goto('/channels');
+  await page.goto('/channels/instagram');
   await page.getByTestId('connect-instagram').click();
   // No token to find: the token form is folded away behind the fallback.
   await expect(page.getByTestId('ig-connect-token')).toHaveCount(0);
@@ -145,7 +145,7 @@ test('an admin connects Instagram with one click through Unified login, then ena
   await page.getByTestId('ig-callback-enable').click();
   await expect(page.getByTestId('ig-callback-enabled')).toBeVisible();
   await page.getByTestId('ig-callback-back').click();
-  await expect(page).toHaveURL(/\/settings\/channels$/u);
+  await expect(page).toHaveURL(/\/channels\/instagram$/u);
   await expect(
     page.getByTestId('channel-account').filter({ hasText: `@${USERNAME}` }),
   ).toBeVisible();

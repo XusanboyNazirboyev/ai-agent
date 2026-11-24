@@ -73,7 +73,7 @@ test('an admin connects an Instagram account with its token, enables and disable
   const f = fixtures();
   const admin = await newSession(browser, f.a.operators.admin.email);
   const { page } = admin;
-  await page.goto('/settings/channels');
+  await page.goto('/channels/instagram');
   await page.getByTestId('connect-instagram').click();
   // Business Login is set up in the e2e; the token form is the fallback.
   await page.getByTestId('ig-token-toggle').click();
@@ -153,7 +153,7 @@ test('refuses an empty token, a /me reply without user_id, and keeps the account
   const f = fixtures();
   const admin = await newSession(browser, f.a.operators.admin.email);
   const { page } = admin;
-  await page.goto('/settings/channels');
+  await page.goto('/channels/instagram');
   await page.getByTestId('connect-instagram').click();
   // Business Login is set up in the e2e; the token form is the fallback.
   await page.getByTestId('ig-token-toggle').click();
@@ -189,7 +189,7 @@ test('refuses an empty token, a /me reply without user_id, and keeps the account
 test('an operator sees no Instagram connect button', async ({ browser }) => {
   const f = fixtures();
   const operator = await newSession(browser, f.a.operators.op1.email);
-  await operator.page.goto('/settings/channels');
+  await operator.page.goto('/channels/instagram');
   await expect(
     operator.page.getByTestId('channel-card-instagram'),
   ).toBeVisible();

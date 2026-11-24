@@ -336,6 +336,9 @@ export interface FaqItem {
 export interface ChannelAccount {
   id: string;
   channelType: string;
+  /** Instagram only (ADR 043 amendment). */
+  commentReplies?: boolean;
+  commentKeywords?: string[];
   status: 'ACTIVE' | 'DISABLED';
   agentMode: AgentMode;
   effectiveMode: EffectiveMode;

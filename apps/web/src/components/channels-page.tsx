@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
+import { CommentRepliesCard } from './comment-replies-card';
 import type { ChannelAccount, ChannelList, TelegramTest } from '@/lib/types';
 import { useShell } from './app-shell';
 import { OperatorGroupDialog } from './operator-group-dialog';
@@ -402,7 +403,10 @@ function InstagramGuide(): ReactNode {
 }
 
 /** Connected messenger accounts, with connecting, checking and disconnecting. */
-export function ChannelsPage(): ReactNode {
+/** Owner 2026-11-24: the Channels section shows one messenger per tab. */
+export function ChannelsPage(props: {
+  only?: 'telegram' | 'instagram';
+}): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();
   const queryClient = useQueryClient();
@@ -419,6 +423,7 @@ export function ChannelsPage(): ReactNode {
   // conversations; it is not shown as a channel. Connecting it again brings it back.
   const shown = items.filter(
     (account) =>
+      (!props.only || account.channelType === props.only) &&
       !(
         account.channelType === 'instagram' &&
         account.status === 'DISABLED' &&
@@ -515,6 +520,15 @@ export function ChannelsPage(): ReactNode {
               />
             ))}
           </ul>
+          {props.only === 'instagram'
+            ? shown.map((account) => (
+                <CommentRepliesCard
+                  key={`comments-${account.id}`}
+                  account={account}
+                  canManage={canManage}
+                />
+              ))
+            : null}
         </section>
 
         <section
@@ -525,7 +539,9 @@ export function ChannelsPage(): ReactNode {
             {t('channels.available')}
           </h2>
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {CHANNELS.map((channel) => {
+            {CHANNELS.filter(
+              (channel) => !props.only || channel.key === props.only,
+            ).map((channel) => {
               const connected =
                 channel.available &&
                 items.some((account) => account.channelType === channel.key);

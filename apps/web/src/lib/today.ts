@@ -61,7 +61,7 @@ export function setupItems(
     {
       key: 'channel',
       done: checklist.channelConnected,
-      href: '/settings/channels',
+      href: '/channels/telegram',
     },
     { key: 'content', done: checklist.hasContent, href: '/agent/prices' },
     {
@@ -71,7 +71,7 @@ export function setupItems(
     },
     { key: 'assistant', done: light === 'live', href: '/agent' },
     { key: 'team', done: checklist.teamInvited, href: '/settings/team' },
-    { key: 'group', done: checklist.operatorGroup, href: '/settings/channels' },
+    { key: 'group', done: checklist.operatorGroup, href: '/channels/telegram' },
   ];
 }
 

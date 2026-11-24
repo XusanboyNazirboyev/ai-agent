@@ -2065,5 +2065,15 @@
   "errors.PLAN_REQUIRED": "Bu imkoniyat tarifingizda yo‘q.",
   "errors.PBX_REJECTED": "OnlinePBX kalitni qabul qilmadi.",
   "errors.PBX_UNREACHABLE": "OnlinePBX bilan bog‘lanib bo‘lmadi, keyinroq urinib ko‘ring.",
-  "calls.domainExample": "example.onpbx.ru"
+  "calls.domainExample": "example.onpbx.ru",
+  "channels.tab.telegram": "Telegram",
+  "channels.tab.instagram": "Instagram",
+  "comments.title": "Kommentlarga avto-javob",
+  "comments.intro": "AI savol yoki qiziqish bildirgan kommentlarga shaxsiy xabarda javob beradi va komment ostiga qisqa javob qoldiradi. Maqtov, emoji va spamga javob bermaydi.",
+  "comments.enable": "Yoqilgan",
+  "comments.keywords": "Kalit so‘zlar (ixtiyoriy)",
+  "comments.keywordsHint": "narx, qancha, price",
+  "comments.keywordsNote": "Vergul bilan ajrating. Bo‘sh qolsa, AI o‘zi hal qiladi; to‘ldirilsa, faqat shu so‘zli kommentlarga javob beradi.",
+  "comments.permissionNote": "Ishlashi uchun Meta ilovangizda kommentlar ruxsati bo‘lishi kerak; ruxsat bo‘lmasa, saqlashda xato chiqadi.",
+  "comments.saved": "Komment sozlamalari saqlandi"
 }

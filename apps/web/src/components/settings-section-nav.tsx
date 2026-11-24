@@ -8,7 +8,6 @@ import { useShell } from './app-shell';
 import { Icon, type IconName } from './ui/icons';
 
 export type SettingsSection =
-  | 'channels'
   | 'replies'
   | 'crm'
   | 'pipeline'
@@ -44,11 +43,6 @@ export const SETTINGS_GROUPS: GroupDef[] = [
     key: 'channels',
     icon: 'link',
     sections: [
-      {
-        key: 'channels',
-        href: '/settings/channels',
-        label: 'settings.section.channels',
-      },
       {
         key: 'replies',
         href: '/settings/replies',

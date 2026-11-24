@@ -2,7 +2,7 @@ import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
 export type NavKey =
-  'agent' | 'today' | 'inbox' | 'crm' | 'billing' | 'settings';
+  'agent' | 'today' | 'inbox' | 'crm' | 'channels' | 'billing' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -42,6 +42,14 @@ export const NAV: NavItem[] = [
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
     href: '/leads',
     alsoUnder: ['/leads', '/contacts', '/tasks', '/calls', '/analytics'],
+  },
+  // Owner 2026-11-24: Telegram and Instagram in their own section.
+  {
+    key: 'channels',
+    icon: 'link',
+    roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
+    href: '/channels/telegram',
+    alsoUnder: ['/settings/channels'],
   },
   // Owner 2026-11-23: the plan, its period and the prices in plain sight.
   {

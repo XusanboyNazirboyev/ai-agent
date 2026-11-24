@@ -77,13 +77,10 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
     await page.getByTestId('settings-tab-general').click();
     await page.waitForURL(/\/settings$/u);
 
-    // Channels and the operators' quick replies (ADR 070) share a group.
+    // The channels themselves moved to their own menu section (2026-11-24);
+    // the operators' quick replies (ADR 070) stay in this group.
     await page.getByTestId('settings-group-channels').click();
-    await page.waitForURL(/\/settings\/channels$/u);
-    await expect(tabs.getByRole('link')).toHaveText([
-      'Channels',
-      'Quick replies',
-    ]);
+    await page.waitForURL(/\/settings\/replies$/u);
   } finally {
     await context.close();
   }
@@ -136,11 +133,7 @@ test('the groups fit a phone without a sideways scroll and have no accessibility
     );
     try {
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
-      for (const path of [
-        '/settings/channels',
-        '/settings/team',
-        '/settings/pipeline',
-      ]) {
+      for (const path of ['/settings/team', '/settings/pipeline']) {
         await page.goto(path);
         await expect(page.getByTestId('settings-subtabs')).toBeVisible();
         // The groups are all in view at once (the old row scrolled sideways).

@@ -96,7 +96,7 @@ test('an admin sees the assistant light and the getting-started list with a plac
       if ((await step.getAttribute('data-done')) === 'false')
         await expect(step.getByRole('link')).toHaveAttribute(
           'href',
-          /^\/(settings|agent)(\/|$)/u,
+          /^\/(settings|agent|channels)(\/|$)/u,
         );
       else await expect(step).toContainText('Done');
     }

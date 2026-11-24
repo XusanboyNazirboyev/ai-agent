@@ -20,7 +20,7 @@ test('the guide reads in every language, fits a phone and has no accessibility v
     );
     try {
       await page.getByLabel(/^(Language|Язык|Til)$/u).selectOption(language);
-      await page.goto('/settings/channels');
+      await page.goto('/channels/telegram');
       await page.getByTestId('connect-telegram').click();
       const guide = page.getByTestId('botfather-guide');
       await expect(guide).toContainText(title);

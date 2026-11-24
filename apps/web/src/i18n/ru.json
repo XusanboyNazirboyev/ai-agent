@@ -2065,5 +2065,15 @@
   "errors.PLAN_REQUIRED": "Эта возможность не входит в ваш тариф.",
   "errors.PBX_REJECTED": "OnlinePBX не принял ключ.",
   "errors.PBX_UNREACHABLE": "Не удалось связаться с OnlinePBX, попробуйте позже.",
-  "calls.domainExample": "example.onpbx.ru"
+  "calls.domainExample": "example.onpbx.ru",
+  "channels.tab.telegram": "Telegram",
+  "channels.tab.instagram": "Instagram",
+  "comments.title": "Автоответ на комментарии",
+  "comments.intro": "ИИ отвечает в личных сообщениях на комментарии с вопросом или интересом и оставляет короткий ответ под комментарием. На похвалу, эмодзи и спам не отвечает.",
+  "comments.enable": "Включено",
+  "comments.keywords": "Ключевые слова (необязательно)",
+  "comments.keywordsHint": "цена, сколько, price",
+  "comments.keywordsNote": "Через запятую. Пусто — ИИ решает сам; заполнено — отвечает только на комментарии с этими словами.",
+  "comments.permissionNote": "Нужно разрешение на комментарии в вашем приложении Meta; без него при сохранении будет ошибка.",
+  "comments.saved": "Настройки комментариев сохранены"
 }

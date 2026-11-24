@@ -100,7 +100,7 @@ test.describe('no overflow in the signed-in pages', () => {
           expect(await findOverflow(page), `${path} ${language}`).toEqual([]);
         }
 
-        await page.goto('/settings/channels');
+        await page.goto('/channels/telegram');
         await expect(page.getByTestId('channel-account').first()).toBeVisible();
         expect(await findOverflow(page), `channels ${language}`).toEqual([]);
 

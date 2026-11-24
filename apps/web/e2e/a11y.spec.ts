@@ -209,7 +209,7 @@ test.describe('leads, settings and status pages', () => {
         ).toBeVisible();
         await audit(page, `${path} ${scheme} ${language} ${viewport.width}`);
       }
-      await page.goto('/settings/channels');
+      await page.goto('/channels/telegram');
       await expect(page.getByTestId('channel-account').first()).toBeVisible();
       await audit(page, `channels ${scheme} ${language} ${viewport.width}`);
       await page.goto('/settings');
@@ -411,13 +411,14 @@ test('the channels page with controls and the connect dialog have no violations'
     browser,
     f.a.operators.admin.email,
   );
-  await page.goto('/settings/channels');
+  await page.goto('/channels/telegram');
   await expect(page.getByTestId('connect-telegram')).toBeVisible();
   await audit(page, 'channels as admin');
   await page.getByTestId('connect-telegram').click();
   await expect(page.getByTestId('telegram-connect-dialog')).toBeVisible();
   await audit(page, 'connect dialog');
   await page.getByTestId('connect-cancel').click();
+  await page.goto('/channels/instagram');
   await page.locator('details summary').first().click();
   await audit(page, 'instagram guide open');
   await context.close();

@@ -4,12 +4,20 @@ import { fixtures, newSession } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-const OPERATOR_ITEMS = ['AI agent', 'Today', 'Inbox', 'CRM', 'Settings'];
+const OPERATOR_ITEMS = [
+  'AI agent',
+  'Today',
+  'Inbox',
+  'CRM',
+  'Channels',
+  'Settings',
+];
 const ADMIN_ITEMS = [
   'AI agent',
   'Today',
   'Inbox',
   'CRM',
+  'Channels',
   'Billing',
   'Settings',
 ];

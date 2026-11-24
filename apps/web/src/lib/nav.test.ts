@@ -10,6 +10,7 @@ const FULL: NavKey[] = [
   'today',
   'inbox',
   'crm',
+  'channels',
   'billing',
   'settings',
 ];
@@ -18,6 +19,7 @@ const WITHOUT_MANAGER_ITEMS: NavKey[] = [
   'today',
   'inbox',
   'crm',
+  'channels',
   'settings',
 ];
 

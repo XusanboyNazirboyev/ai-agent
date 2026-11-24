@@ -2065,5 +2065,15 @@
   "errors.PLAN_REQUIRED": "Your plan does not include this.",
   "errors.PBX_REJECTED": "OnlinePBX did not accept the key.",
   "errors.PBX_UNREACHABLE": "Could not reach OnlinePBX; try again later.",
-  "calls.domainExample": "example.onpbx.ru"
+  "calls.domainExample": "example.onpbx.ru",
+  "channels.tab.telegram": "Telegram",
+  "channels.tab.instagram": "Instagram",
+  "comments.title": "Comment auto-replies",
+  "comments.intro": "The AI answers comments that ask something or show interest in a private message and leaves a short reply under the comment. It does not answer praise, emoji or spam.",
+  "comments.enable": "On",
+  "comments.keywords": "Keywords (optional)",
+  "comments.keywordsHint": "price, how much",
+  "comments.keywordsNote": "Separate with commas. Empty: the AI decides; filled: it answers only comments with these words.",
+  "comments.permissionNote": "Your Meta app needs the comments permission; without it saving fails.",
+  "comments.saved": "Comment settings saved"
 }

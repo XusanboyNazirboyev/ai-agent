@@ -48,7 +48,7 @@ export function guideSteps(
   };
   const href: Record<GuideKey, string> = {
     business: '/settings/crm',
-    channel: '/settings/channels',
+    channel: '/channels/telegram',
     content: '/agent/prices',
     test: '/agent/test',
     assistant: '/agent',
