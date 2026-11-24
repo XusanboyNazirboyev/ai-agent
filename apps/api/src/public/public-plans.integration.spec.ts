@@ -76,6 +76,7 @@ describe('GET /api/v1/public/plans', () => {
       config({
         PUBLIC_SALES_CONTACT_URL: 'https://t.me/example',
         PUBLIC_SALES_VIDEO_URL: 'https://cdn.example/demo.mp4',
+        SALES_INQUIRY_CHAT_ID: '12345',
       }),
     );
     const body = await controller.plans(request);
@@ -107,6 +108,7 @@ describe('GET /api/v1/public/plans', () => {
     ]);
     expect(body.contactUrl).toBe('https://t.me/example');
     expect(body.videoUrl).toBe('https://cdn.example/demo.mp4');
+    expect(body.inquiryForm).toBe(true);
   });
 
   it('caches for a minute and rate limits per address', async () => {
@@ -125,6 +127,7 @@ describe('GET /api/v1/public/plans', () => {
     expect(second).toBe(first);
     expect(first.contactUrl).toBeNull();
     expect(first.videoUrl).toBeNull();
+    expect(first.inquiryForm).toBe(false);
     let error: unknown;
     for (let i = 0; i < 70; i += 1)
       await controller.plans(request).catch((e: unknown) => (error = e));

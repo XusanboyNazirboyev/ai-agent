@@ -18,6 +18,7 @@ export interface PublicPlans {
   plans: PublicPlan[];
   contactUrl: string | null;
   videoUrl?: string | null;
+  inquiryForm?: boolean;
 }
 
 /** Link of a plan button: signup with the plan code. */

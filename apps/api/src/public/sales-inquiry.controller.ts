@@ -35,7 +35,7 @@ const InquiryBody = z.object({
   website: z.string().max(200).optional(),
 });
 
-/** The chat message: plain text (no parse mode), so customer text stays text. */
+/** The chat message (Uzbek, owner 2026-11-24): plain text, no parse mode, so customer text stays text. */
 export function inquiryText(inquiry: {
   name: string;
   phone: string;
@@ -43,11 +43,11 @@ export function inquiryText(inquiry: {
   message?: string | undefined;
 }): string {
   return [
-    'tezda: new request from the website',
-    `Name: ${inquiry.name}`,
-    `Phone: ${inquiry.phone}`,
-    inquiry.company ? `Company: ${inquiry.company}` : null,
-    inquiry.message ? `Message: ${inquiry.message}` : null,
+    'tezda: saytdan yangi so‘rov',
+    `Ism: ${inquiry.name}`,
+    `Telefon: ${inquiry.phone}`,
+    inquiry.company ? `Kompaniya: ${inquiry.company}` : null,
+    inquiry.message ? `Xabar: ${inquiry.message}` : null,
   ]
     .filter(Boolean)
     .join('\n');

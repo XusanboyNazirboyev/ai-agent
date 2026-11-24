@@ -2111,7 +2111,7 @@
   "site.result4.body": "Чаты Telegram и Instagram, лиды и задачи в одном месте; при необходимости разговор берёт человек.",
   "site.clients.title": "Уже продают с tezda",
   "site.contact.title": "Хотите такой же результат с tezda?",
-  "site.contact.body": "Оставьте номер: покажем tezda на вашем бизнесе, настроим вместе с вами и ответим на все вопросы.",
+  "site.contact.body": "Оставьте номер или напишите в Telegram: покажем tezda на вашем бизнесе, настроим вместе с вами и ответим на все вопросы.",
   "site.contact.name": "Ваше имя",
   "site.contact.phone": "Телефон",
   "site.contact.phoneExample": "+998 90 123 45 67",
@@ -2121,5 +2121,6 @@
   "site.contact.submit": "Отправить",
   "site.contact.telegram": "Или напишите в Telegram",
   "site.contact.doneTitle": "Спасибо, заявка получена!",
-  "site.contact.doneBody": "Скоро мы вам позвоним."
+  "site.contact.doneBody": "Скоро мы вам позвоним.",
+  "site.contact.telegramCta": "Написать в Telegram"
 }

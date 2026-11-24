@@ -2111,7 +2111,7 @@
   "site.result4.body": "Telegram and Instagram chats, leads and tasks in one window; a person takes over when needed.",
   "site.clients.title": "Businesses already selling with tezda",
   "site.contact.title": "Want the same result with tezda?",
-  "site.contact.body": "Leave your number: we will show tezda on your own business, set it up with you and answer every question.",
+  "site.contact.body": "Leave your number, or write to us on Telegram: we will show tezda on your own business, set it up with you and answer every question.",
   "site.contact.name": "Your name",
   "site.contact.phone": "Phone",
   "site.contact.phoneExample": "+998 90 123 45 67",
@@ -2121,5 +2121,6 @@
   "site.contact.submit": "Send",
   "site.contact.telegram": "Or write on Telegram",
   "site.contact.doneTitle": "Thank you, we got it!",
-  "site.contact.doneBody": "We will call you soon."
+  "site.contact.doneBody": "We will call you soon.",
+  "site.contact.telegramCta": "Write to us on Telegram"
 }

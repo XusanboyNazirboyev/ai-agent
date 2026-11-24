@@ -81,7 +81,7 @@ describe('POST /api/v1/public/inquiries', () => {
       notified: true,
     });
     expect(sent).toEqual([
-      { chatId: '12345', text: expect.stringContaining('Name: Ali Valiyev') },
+      { chatId: '12345', text: expect.stringContaining('Ism: Ali Valiyev') },
     ]);
   });
 
@@ -132,7 +132,7 @@ describe('POST /api/v1/public/inquiries', () => {
 
   it('writes plain text, the customer text only as values', () => {
     expect(inquiryText({ name: '<b>Ali</b>', phone: '+998901234567' })).toBe(
-      'tezda: new request from the website\nName: <b>Ali</b>\nPhone: +998901234567',
+      'tezda: saytdan yangi so‘rov\nIsm: <b>Ali</b>\nTelefon: +998901234567',
     );
   });
 });

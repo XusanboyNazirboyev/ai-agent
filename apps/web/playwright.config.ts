@@ -55,6 +55,8 @@ export const E2E_ENV = {
   // The fixtures seed their own leads; the one-time backfill would add more.
   LEAD_BACKFILL_ENABLED: 'false',
   PUBLIC_BASE_URL: 'https://e2e.example.test',
+  // The sales page shows its contact form only when requests reach a chat.
+  SALES_INQUIRY_CHAT_ID: '1000',
   TELEGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
   INSTAGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_INSTAGRAM_PORT}/v26.0`,
   // Generated per run: enabling an Instagram account needs both on the server.

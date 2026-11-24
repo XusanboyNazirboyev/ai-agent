@@ -33,6 +33,8 @@ export interface PublicPlansResponse {
   contactUrl: string | null;
   /** Owner 2026-11-24: the demo video the sales page opens with. */
   videoUrl: string | null;
+  /** The contact form shows only when its requests reach a Telegram chat. */
+  inquiryForm: boolean;
 }
 
 const TTL_MS = 60_000;
@@ -106,6 +108,9 @@ export class PublicPlansController {
         this.config.get('PUBLIC_SALES_CONTACT_URL', { infer: true }) ?? null,
       videoUrl:
         this.config.get('PUBLIC_SALES_VIDEO_URL', { infer: true }) ?? null,
+      inquiryForm: Boolean(
+        this.config.get('SALES_INQUIRY_CHAT_ID', { infer: true }),
+      ),
     };
     this.cache = { at: now, body };
     return body;

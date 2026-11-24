@@ -2111,7 +2111,7 @@
   "site.result4.body": "Telegram va Instagram chatlari, lidlar va vazifalar bir joyda; kerak bo‘lsa suhbatni odam oladi.",
   "site.clients.title": "tezda bilan sotayotgan bizneslar",
   "site.contact.title": "Siz ham tezda bilan shu natijani xohlaysizmi?",
-  "site.contact.body": "Raqamingizni qoldiring: tezda’ni o‘z biznesingiz misolida ko‘rsatamiz, birga sozlaymiz va har bir savolga javob beramiz.",
+  "site.contact.body": "Raqamingizni qoldiring yoki Telegramda yozing: tezda’ni o‘z biznesingiz misolida ko‘rsatamiz, birga sozlaymiz va har bir savolga javob beramiz.",
   "site.contact.name": "Ismingiz",
   "site.contact.phone": "Telefon",
   "site.contact.phoneExample": "+998 90 123 45 67",
@@ -2121,5 +2121,6 @@
   "site.contact.submit": "Yuborish",
   "site.contact.telegram": "Yoki Telegramda yozing",
   "site.contact.doneTitle": "Rahmat, so‘rovingiz qabul qilindi!",
-  "site.contact.doneBody": "Tez orada qo‘ng‘iroq qilamiz."
+  "site.contact.doneBody": "Tez orada qo‘ng‘iroq qilamiz.",
+  "site.contact.telegramCta": "Telegramda yozish"
 }

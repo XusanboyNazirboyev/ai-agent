@@ -303,9 +303,31 @@ export function SalesSite(): ReactNode {
             </h2>
             <p className="text-base text-muted">{t('site.contact.body')}</p>
           </div>
-          <div className="rounded-2xl bg-surface p-4 shadow-card sm:p-5">
-            <SiteContactForm telegramUrl={contact} />
-          </div>
+          {plans.data?.inquiryForm ? (
+            <div className="rounded-2xl bg-surface p-4 shadow-card sm:p-5">
+              <SiteContactForm telegramUrl={contact} />
+            </div>
+          ) : (
+            // Owner 2026-11-24: until the form reaches a Telegram chat, people
+            // write to the sales account themselves.
+            <div className="flex flex-col items-start justify-center gap-3">
+              {contact ? (
+                <a
+                  href={contact}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="site-contact"
+                  className={`${CTA} gap-2 text-lg`}
+                >
+                  <Icon name="send" className="h-5 w-5" />
+                  {t('site.contact.telegramCta')}
+                </a>
+              ) : null}
+              <Link href={signupHref()} className={CTA_SECONDARY}>
+                {t('site.cta')}
+              </Link>
+            </div>
+          )}
         </section>
 
         <section aria-labelledby="site-faq" className="flex flex-col gap-4">

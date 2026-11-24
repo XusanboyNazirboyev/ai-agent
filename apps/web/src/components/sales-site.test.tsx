@@ -77,6 +77,8 @@ describe('SalesSite', () => {
       'https://t.me/tezda',
     );
     expect(screen.queryAllByTestId('site-plan')).toHaveLength(0);
+    // Owner 2026-11-24: no chat for the form yet, so Telegram only.
+    expect(screen.queryByTestId('site-contact-form')).toBeNull();
     expect(
       screen.getAllByRole('link', { name: 'Try 3 days free' }).length,
     ).toBeGreaterThan(1);
@@ -96,12 +98,17 @@ describe('SalesSite', () => {
     );
     expect(screen.queryByTestId('site-chat-demo')).toBeNull();
     cleanup();
-    answer({ plans: [], contactUrl: null, videoUrl: 'http://plain.example' });
+    answer({
+      plans: [],
+      contactUrl: null,
+      videoUrl: 'http://plain.example',
+      inquiryForm: true,
+    });
     view();
     expect(await screen.findByTestId('site-chat-demo')).toBeTruthy();
     expect(screen.queryByTestId('site-video')).toBeNull();
     expect(screen.getByTestId('site-results')).toBeTruthy();
-    expect(screen.getByTestId('site-contact-form')).toBeTruthy();
+    expect(await screen.findByTestId('site-contact-form')).toBeTruthy();
     // No logos until real clients agree to be shown.
     expect(screen.queryByTestId('site-clients')).toBeNull();
   });
