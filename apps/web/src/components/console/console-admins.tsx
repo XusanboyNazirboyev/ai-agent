@@ -75,7 +75,8 @@ export function ConsoleAdmins(): ReactNode {
     );
 
   const created = invite.data;
-  const admins = query.data?.admins ?? [];
+  // Deactivated admins stay in the database for the audit trail, not in the list.
+  const admins = (query.data?.admins ?? []).filter((row) => row.isActive);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -111,9 +112,7 @@ export function ConsoleAdmins(): ReactNode {
             </span>
             <span className="flex flex-wrap items-center gap-1.5">
               <Badge tone="accent">{t(`platformRole.${row.role}`)}</Badge>
-              {!row.isActive ? (
-                <Badge tone="neutral">{t('team.inactive')}</Badge>
-              ) : row.invitePending ? (
+              {row.invitePending ? (
                 <Badge tone="warning">
                   {row.inviteExpiresAt
                     ? t('console.admins.pendingUntil', {
@@ -122,7 +121,7 @@ export function ConsoleAdmins(): ReactNode {
                     : t('console.admins.pending')}
                 </Badge>
               ) : null}
-              {row.isActive && row.id !== admin.id ? (
+              {row.id !== admin.id ? (
                 <Button
                   size="sm"
                   variant="ghost"
