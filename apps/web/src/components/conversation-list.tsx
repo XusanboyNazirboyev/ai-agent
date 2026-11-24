@@ -192,7 +192,8 @@ export function ConversationList(props: {
           );
         })}
       </div>
-      {channelChips.length > 1 ? (
+      {/* One messenger still gets its chip (with its waiting count). */}
+      {channelChips.length > 0 ? (
         <div
           role="group"
           aria-label={t('list.channels')}
