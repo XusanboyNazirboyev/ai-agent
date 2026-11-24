@@ -1,4 +1,12 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
+import type { AnchorHTMLAttributes } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -19,8 +27,21 @@ vi.mock('@/lib/api', () => ({
     }
   },
 }));
+vi.mock('next/link', () => ({
+  default: ({
+    prefetch,
+    ...props
+  }: AnchorHTMLAttributes<HTMLAnchorElement> & { prefetch?: boolean }) => (
+    <a data-prefetch={String(prefetch)} {...props} />
+  ),
+}));
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+  push: vi.fn(),
+  prefetch: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => navigation,
   usePathname: () => '/inbox',
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -79,6 +100,7 @@ function renderShell(role: Role) {
 }
 
 beforeEach(() => {
+  navigation.prefetch.mockReset();
   global.EventSource = FakeEventSource as unknown as typeof EventSource;
 });
 
@@ -139,6 +161,19 @@ describe('AppShell rail', () => {
       'Channels',
       'Settings',
     ]);
+  });
+
+  it('warms only the route the operator points at', async () => {
+    renderShell('ADMIN');
+    await screen.findByTestId('children');
+    expect(navigation.prefetch).not.toHaveBeenCalled();
+    for (const link of within(rail()).getAllByRole('link'))
+      expect(link.dataset.prefetch).toBe('false');
+
+    fireEvent.mouseEnter(within(rail()).getByRole('link', { name: 'Inbox' }));
+
+    expect(navigation.prefetch).toHaveBeenCalledTimes(1);
+    expect(navigation.prefetch).toHaveBeenCalledWith('/inbox');
   });
 });
 

@@ -79,3 +79,23 @@ Owner report: switching pages is slow. Measured from outside (not from the owner
 
 Not measured: click-to-content time from the owner's network (needs the browser on their side); server memory and swap (the AWS session had expired).
 - **Prefetch from the menu (2026-11-24, owner chose it over moving the server):** menu links prefetch their page in full (`prefetch` on the Link; the 5-minute page cache keeps it), and pointing at or focusing a menu item starts that page's first reads (`src/lib/page-prefetch.ts`) with the exact query options the page uses (`src/lib/queries.ts`, shared so the keys cannot drift); a hover within 30 s of the last answer fetches nothing. Covered by a unit test (keys filled, no second fetch) and an e2e test (after a hover the Inbox list opens within 1.5 s although its API answer is then held 3 s; it fails when the prefetch reads another list). Server checked the same day (AWS session renewed): 1 GB of 1.8 GB free, 180 MB swap idle (no swap in or out), load 0.2 on 2 cores: not the bottleneck; the remaining cost is the round trip to eu-central-1.
+
+## Amendment — intent-only menu prefetch (2026-11-24)
+
+Owner report: pages still feel slow and heavy. The production build contains
+2,034,551 raw bytes of client JavaScript chunks. More importantly, the desktop
+rail exposed six destinations to operators and seven to managers with full Link
+prefetch forced on every visible item. That makes a browser warm pages the person
+did not ask for while the current page is still becoming interactive.
+
+Decision: menu Links use `prefetch={false}` and warm exactly one route with
+`router.prefetch()` on pointer hover, keyboard focus or touch start. The same
+intent still starts that page's first TanStack reads through `PAGE_PREFETCH`.
+Before: six or seven eager route-prefetch candidates on desktop page load. After:
+zero before intent and one after intent. Loading boundaries remain the click-time
+fallback, and the 5-minute route cache is unchanged.
+
+The component regression test proves that every rail link disables automatic
+prefetch, no route is warmed during render, and pointing at Inbox warms `/inbox`
+once. A browser network trace still needs the local Playwright flow; no staging or
+server setting was changed.

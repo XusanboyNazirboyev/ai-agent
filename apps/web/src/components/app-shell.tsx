@@ -99,9 +99,9 @@ function NavLink(props: {
   return (
     <Link
       href={props.href}
-      // The whole page (not only its loading shell) is fetched ahead; the
-      // 5-minute page cache keeps it (ADR 083 amendment 2026-11-24).
-      prefetch
+      // Do not download every visible menu destination on initial load.
+      // The route and its first reads are warmed together on real intent.
+      prefetch={false}
       onMouseEnter={props.onIntent}
       onFocus={props.onIntent}
       onTouchStart={props.onIntent}
@@ -265,6 +265,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     waitingCount,
     connection,
   };
+  const warmNav = (item: (typeof NAV)[number]): void => {
+    const href = navHref(item);
+    router.prefetch(href);
+    PAGE_PREFETCH[item.key]?.(queryClient);
+  };
 
   return (
     <ShellContext.Provider value={value}>
@@ -293,7 +298,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                 label={t(`nav.${item.key}`)}
                 active={current?.key === item.key}
                 count={item.key === 'inbox' ? waitingCount : undefined}
-                onIntent={() => PAGE_PREFETCH[item.key]?.(queryClient)}
+                onIntent={() => warmNav(item)}
               />
             );
           })}
@@ -375,7 +380,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                     label={t(`nav.${item.key}`)}
                     active={current?.key === item.key}
                     count={item.key === 'inbox' ? waitingCount : undefined}
-                    onIntent={() => PAGE_PREFETCH[item.key]?.(queryClient)}
+                    onIntent={() => warmNav(item)}
                   />
                 );
               })}
@@ -387,6 +392,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                 active={
                   onMore || (current ? !PRIMARY.includes(current.key) : false)
                 }
+                onIntent={() => router.prefetch('/more')}
               />
             </nav>
           )}
