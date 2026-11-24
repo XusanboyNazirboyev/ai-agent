@@ -2030,5 +2030,6 @@
   "subscription.currentPlan": "Current plan",
   "header.themeDark": "Dark theme",
   "header.themeLight": "Light theme",
-  "header.account": "Account"
+  "header.account": "Account",
+  "list.waitingCount": "{count} waiting for an operator"
 }

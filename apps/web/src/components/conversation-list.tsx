@@ -64,6 +64,17 @@ export function chipsFor(accounts: readonly ChannelAccount[]): ChannelChip[] {
   return chips;
 }
 
+/** Waiting chats per messenger, and in all (`all`). */
+export function waitingCounts(
+  items: readonly { channelType?: string }[],
+): Record<string, number> {
+  const counts: Record<string, number> = { all: items.length };
+  for (const item of items)
+    if (item.channelType)
+      counts[item.channelType] = (counts[item.channelType] ?? 0) + 1;
+  return counts;
+}
+
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -94,6 +105,16 @@ export function ConversationList(props: {
     queryFn: () => api<{ items: ChannelAccount[] }>('/api/v1/channels'),
   });
   const channelChips = chipsFor(accounts.data?.items ?? []);
+  // Owner 2026-11-23: how many chats wait for a person, per messenger. The
+  // same cached query as the menu's Inbox count, so the numbers agree.
+  const waiting = useQuery({
+    queryKey: ['conversations', 'waiting-count'],
+    queryFn: () =>
+      api<ConversationPage>(
+        '/api/v1/inbox/conversations?scope=waiting&limit=50',
+      ),
+  });
+  const waitingBy = waitingCounts(waiting.data?.items ?? []);
   const activeFilters = (language ? 1 : 0) + (score ? 1 : 0) + (tagId ? 1 : 0);
   const tagList = useQuery({
     queryKey: ['tags'],
@@ -213,6 +234,17 @@ export function ConversationList(props: {
                   <ChannelLogo channelType={chip.type} decorative />
                 ) : null}
                 {chip.label ?? t('list.channelAll')}
+                {waitingBy[chip.type ?? 'all'] ? (
+                  <span
+                    data-testid={`inbox-channel-count-${chip.key}`}
+                    aria-label={t('list.waitingCount', {
+                      count: waitingBy[chip.type ?? 'all']!,
+                    })}
+                    className="min-w-5 rounded-full bg-primary px-1.5 text-center text-xs leading-5 text-white tabular-nums"
+                  >
+                    {waitingBy[chip.type ?? 'all']}
+                  </span>
+                ) : null}
               </button>
             );
           })}

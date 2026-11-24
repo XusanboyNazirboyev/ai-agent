@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChannelAccount } from '@/lib/types';
-import { chipsFor } from './conversation-list';
+import { chipsFor, waitingCounts } from './conversation-list';
 
 const account = (
   id: string,
@@ -32,5 +32,18 @@ describe('inbox channel chips (owner 2026-11-23)', () => {
       ['all', undefined],
       ['telegram', 'Telegram'],
     ]);
+  });
+});
+
+describe('waiting counts per messenger (owner 2026-11-23)', () => {
+  it('counts waiting chats in all and per messenger', () => {
+    expect(
+      waitingCounts([
+        { channelType: 'telegram' },
+        { channelType: 'telegram' },
+        { channelType: 'instagram' },
+      ]),
+    ).toEqual({ all: 3, telegram: 2, instagram: 1 });
+    expect(waitingCounts([])).toEqual({ all: 0 });
   });
 });

@@ -2030,5 +2030,6 @@
   "subscription.currentPlan": "Текущий тариф",
   "header.themeDark": "Тёмная тема",
   "header.themeLight": "Светлая тема",
-  "header.account": "Аккаунт"
+  "header.account": "Аккаунт",
+  "list.waitingCount": "Ждут оператора: {count}"
 }

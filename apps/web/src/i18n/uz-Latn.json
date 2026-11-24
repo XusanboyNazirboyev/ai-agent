@@ -2030,5 +2030,6 @@
   "subscription.currentPlan": "Joriy tarif",
   "header.themeDark": "Qorong‘i mavzu",
   "header.themeLight": "Yorug‘ mavzu",
-  "header.account": "Hisob"
+  "header.account": "Hisob",
+  "list.waitingCount": "{count} ta suhbat operatorni kutmoqda"
 }
