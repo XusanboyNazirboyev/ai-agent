@@ -39,7 +39,10 @@ import {
   PRIVATE_REPLY_WINDOW_MS,
 } from './instagram-comment-reply.service.js';
 import { InstagramGraphClient } from './instagram-graph.js';
-import { normalizeInstagramWebhook } from './instagram-normalizer.js';
+import {
+  normalizeInstagramWebhook,
+  type NormalizedInstagramComment,
+} from './instagram-normalizer.js';
 import { InstagramSender } from './instagram-sender.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
 
@@ -151,6 +154,8 @@ async function fixture(options: {
       externalAccountId: igUserId,
       status: 'ACTIVE',
       agentMode: options.mode,
+      // ADR 043 amendment (owner 2026-11-24): replies are opt-in per account.
+      commentReplies: true,
     },
   });
   const secrets = new PrismaChannelSecretStore(
@@ -312,6 +317,40 @@ async function commentRow(
 }
 
 describe('Instagram comments (ADR 043): intake', () => {
+  it('ignores comments when the account has not turned replies on, and filters by its words', async () => {
+    const f = await fixture({ mode: 'LIVE' });
+    const comment = (text: string): NormalizedInstagramComment => {
+      const normalized = normalizeInstagramWebhook(
+        commentWebhook(f, digits(), text),
+        new Date(),
+      );
+      if (!normalized.ok || normalized.events[0]?.kind !== 'comment')
+        throw new Error('expected a comment');
+      return normalized.events[0];
+    };
+    await db.channelAccount.update({
+      where: { id: f.channelAccountId },
+      data: { commentReplies: false },
+    });
+    expect(await f.intake.acceptComment(comment('Narxi qancha?'))).toBe(
+      'ignored',
+    );
+    await db.channelAccount.update({
+      where: { id: f.channelAccountId },
+      data: { commentReplies: true, commentKeywords: ['narx', 'price'] },
+    });
+    expect(await f.intake.acceptComment(comment('Juda chiroyli!'))).toBe(
+      'ignored',
+    );
+    expect(await f.intake.acceptComment(comment('NARXI qancha?'))).toBe(
+      'accepted',
+    );
+    // Nothing was stored for the ignored ones.
+    expect(
+      await db.instagramComment.count({ where: { tenantId: f.tenantId } }),
+    ).toBe(1);
+  });
+
   it('stores the comment as a COMMENT message once, without opening the DM window', async () => {
     const f = await fixture({ mode: 'LIVE' });
     const commentId = digits();

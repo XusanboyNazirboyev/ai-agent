@@ -401,10 +401,15 @@ export class InstagramWebhookService {
           select: {
             id: true,
             tenantId: true,
+            commentReplies: true,
+            commentKeywords: true,
             tenant: { select: { retentionSettings: true } },
           },
         });
         if (!channel) return 'unavailable';
+        // Owner 2026-11-24: only accounts that turned comment replies on, and
+        // only comments with one of their words when they set any.
+        if (!commentWanted(channel, event.text)) return 'ignored';
 
         await tx.$queryRaw`SELECT 1::int AS locked FROM (SELECT pg_advisory_xact_lock(hashtextextended(${`instagram-rate:${channel.id}`}, 0))) AS lock_result`;
 
@@ -559,4 +564,17 @@ export class InstagramWebhookService {
       throw error;
     }
   }
+}
+
+/** Whether a comment gets the comment-reply flow (case-insensitive words). */
+export function commentWanted(
+  account: { commentReplies: boolean; commentKeywords: readonly string[] },
+  text: string,
+): boolean {
+  if (!account.commentReplies) return false;
+  if (account.commentKeywords.length === 0) return true;
+  const lower = text.toLocaleLowerCase();
+  return account.commentKeywords.some((word) =>
+    lower.includes(word.toLocaleLowerCase()),
+  );
 }

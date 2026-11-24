@@ -31,3 +31,9 @@
 - Public replies are visible to everyone: templates only, never model text.
 - Loops: our own comments and thread replies are ignored at the normalizer.
 - Volume: a viral post can bring hundreds of comments; the queue processes them at the per-account rate lock; classification costs one FAST call each.
+
+## Amendment — opt-in per account, optional words (owner 2026-11-24)
+The owner chose comment auto-replies as the first content-creator feature of the new Channels section.
+- `channel_accounts.comment_replies` (default off) and `comment_keywords` (up to 20 words of at most 60 characters, stored lower-case). `PUT /api/v1/channels/instagram/:id/comment-replies` (owners/admins, audited with the word count only). Turning it on for an active account re-subscribes Meta with `messages,messaging_postbacks,comments`; if Meta refuses (the login configuration lacks the comments permission) nothing changes and the API answers `INSTAGRAM_REJECTED`. Enabling an account later subscribes `comments` when the setting is on.
+- Intake: a comment for an account with replies off, or without one of its words when it set any (case-insensitive), is ignored before anything is stored. Everything else follows this ADR as implemented.
+- Still owner-side: add the comments permission to the Meta login configuration (`config_id`) and, for real customers, App Review (Advanced Access). The live check (private reply and `/replies` with the system-user token) is done by turning the setting on for the staging test account.

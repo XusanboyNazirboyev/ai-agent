@@ -17,6 +17,9 @@ export type CredentialSource = 'ui' | 'environment' | 'none';
 
 export interface ChannelAccountSummary {
   id: string;
+  /** Instagram only (ADR 043 amendment): comment auto-replies and their words. */
+  commentReplies?: boolean;
+  commentKeywords?: string[];
   channelType: string;
   /** For Telegram the bot's @username, when known. */
   displayName: string | null;
@@ -77,6 +80,8 @@ export interface ChannelRow {
   agentMode: AgentModeValue;
   isTestAccount: boolean;
   operatorChatId: string | null;
+  commentReplies?: boolean;
+  commentKeywords?: string[];
   createdAt: Date;
 }
 
@@ -138,6 +143,12 @@ export function summarizeChannel(
         : null,
     operatorGroupConfigured: Boolean(row.operatorChatId),
     everEnabled,
+    ...(row.channelType === 'instagram'
+      ? {
+          commentReplies: row.commentReplies ?? false,
+          commentKeywords: row.commentKeywords ?? [],
+        }
+      : {}),
     createdAt: row.createdAt,
   };
 }

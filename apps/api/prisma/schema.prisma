@@ -518,6 +518,10 @@ model ChannelAccount {
   isTestAccount     Boolean              @default(false) @map("is_test_account")
   /// Telegram chat (operator group) where handovers for this bot are posted.
   operatorChatId    String?              @map("operator_chat_id") @db.VarChar(200)
+  /// Owner 2026-11-24 (ADR 043 amendment): answer Instagram comments; off by default.
+  commentReplies    Boolean              @default(false) @map("comment_replies")
+  /// When not empty, only comments containing one of these words are answered.
+  commentKeywords   String[]             @default([]) @map("comment_keywords") @db.VarChar(60)
   createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
   tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)

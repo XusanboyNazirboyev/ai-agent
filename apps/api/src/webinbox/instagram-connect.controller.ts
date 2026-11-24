@@ -13,6 +13,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Put,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
@@ -77,6 +78,16 @@ const CompleteBody = z.object({
 // `messaging_postbacks`, listed for Instagram Login and Unified login in the
 // webhook fields matrix (webhooks/fields.md, read 2026-11-09).
 const WEBHOOK_FIELDS = ['messages', 'messaging_postbacks'] as const;
+
+/** ADR 043 amendment (owner 2026-11-24): comments only when the owner asks. */
+function webhookFields(commentReplies: boolean): readonly string[] {
+  return commentReplies ? [...WEBHOOK_FIELDS, 'comments'] : WEBHOOK_FIELDS;
+}
+
+const CommentRepliesBody = z.object({
+  enabled: z.boolean(),
+  keywords: z.array(z.string().trim().min(1).max(60)).max(20),
+});
 
 const REFUSAL = {
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
@@ -459,18 +470,18 @@ export class InstagramConnectController {
         ? this.graph.subscribeUnified(
             account.externalAccountId,
             credential.token,
-            WEBHOOK_FIELDS,
+            webhookFields(account.commentReplies),
           )
         : this.graph.subscribe(
             account.externalAccountId,
             credential.token,
-            WEBHOOK_FIELDS,
+            webhookFields(account.commentReplies),
           ),
     );
     if (!(await activateChannelAccount(this.prisma, who.tenantId, id)))
       throw refuse('CHANNEL_LIMIT');
     await this.audit(who, 'channel.instagram_enabled', id, {
-      fields: WEBHOOK_FIELDS.join(','),
+      fields: webhookFields(account.commentReplies).join(','),
     });
     return this.summary(who.tenantId, id);
   }
@@ -480,6 +491,53 @@ export class InstagramConnectController {
    * unsubscribe call is not used (not read in the docs); deliveries for a
    * disabled account are refused by the intake.
    */
+  /**
+   * ADR 043 amendment (owner 2026-11-24): turns comment auto-replies on or off
+   * and sets the optional words a comment must contain. Turning them on for an
+   * active account subscribes Meta's `comments` field first: if Meta refuses
+   * (the login configuration lacks the comments permission), nothing changes.
+   */
+  @Put(':id/comment-replies')
+  async commentReplies(
+    @Req() request: InboxRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown,
+  ): Promise<ChannelAccountSummary> {
+    const who = this.admit(request);
+    const parsed = CommentRepliesBody.safeParse(body);
+    if (!parsed.success) throw refuse('INVALID_BODY');
+    const account = await this.account(who.tenantId, id);
+    const { enabled } = parsed.data;
+    const keywords = [
+      ...new Set(parsed.data.keywords.map((word) => word.toLocaleLowerCase())),
+    ];
+    if (enabled && account.status === 'ACTIVE') {
+      const credential = await this.credential(who.tenantId, id);
+      await this.meta(() =>
+        credential.kind === 'unified'
+          ? this.graph.subscribeUnified(
+              account.externalAccountId,
+              credential.token,
+              webhookFields(true),
+            )
+          : this.graph.subscribe(
+              account.externalAccountId,
+              credential.token,
+              webhookFields(true),
+            ),
+      );
+    }
+    await this.prisma.channelAccount.updateMany({
+      where: { id, tenantId: who.tenantId },
+      data: { commentReplies: enabled, commentKeywords: keywords },
+    });
+    await this.audit(who, 'channel.instagram_comment_replies', id, {
+      enabled,
+      keywords: String(keywords.length),
+    });
+    return this.summary(who.tenantId, id);
+  }
+
   @Post(':id/disable')
   async disable(
     @Req() request: InboxRequest,

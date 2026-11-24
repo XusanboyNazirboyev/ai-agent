@@ -139,6 +139,9 @@ const reply = (status: number, body: unknown): Response =>
  * the pasted-token path. Anything else, including the retired
  * instagram.com / api.instagram.com endpoints, is a 404.
  */
+/** Set by a test: Meta refuses the `comments` subscription. */
+let refuseComments = false;
+
 function setup(
   overrides: Record<string, unknown> = {},
   ledger: OAuthStateLedger = new MemoryLedger(),
@@ -216,7 +219,11 @@ function setup(
       if (parsed.pathname === '/v26.0/me')
         return reply(meReply.status, meReply.body);
       if (parsed.pathname === `/v26.0/${igUserId}/subscribed_apps`)
-        return reply(HTTP_OK, { success: true });
+        // A login configuration without the comments permission (ADR 043).
+        return refuseComments &&
+          (q.get('subscribed_fields') ?? '').includes('comments')
+          ? reply(HTTP_BAD_REQUEST, { error: { code: 200 } })
+          : reply(HTTP_OK, { success: true });
     }
     return reply(HTTP_NOT_FOUND, {});
   });
@@ -517,6 +524,69 @@ describe('connecting an Instagram professional account from the web API', () => 
       accessToken: TOKEN,
     });
     expect(again.id).toBe(first.id);
+  });
+
+  it('comment replies (owner 2026-11-24): on subscribes comments, a refusal changes nothing, words are kept, owners/admins only', async () => {
+    const s = setup();
+    const t = await tenant();
+    const { id } = await s.controller.connect(t.request, {
+      accessToken: TOKEN,
+    });
+    await s.controller.enable(t.request, id);
+    refuseComments = true;
+    try {
+      await expect(
+        s.controller.commentReplies(t.request, id, {
+          enabled: true,
+          keywords: [],
+        }),
+      ).rejects.toMatchObject({ response: { code: 'INSTAGRAM_REJECTED' } });
+    } finally {
+      refuseComments = false;
+    }
+    expect(
+      (await db.channelAccount.findUniqueOrThrow({ where: { id } }))
+        .commentReplies,
+    ).toBe(false);
+    const on = await s.controller.commentReplies(t.request, id, {
+      enabled: true,
+      keywords: ['Narx', 'narx', ' price '],
+    });
+    expect(on).toMatchObject({
+      commentReplies: true,
+      commentKeywords: ['narx', 'price'],
+    });
+    const last = s.calls
+      .filter((c) => c.url.pathname.endsWith('/subscribed_apps'))
+      .at(-1)!;
+    expect(last.url.searchParams.get('subscribed_fields')).toBe(
+      'messages,messaging_postbacks,comments',
+    );
+    await expect(
+      s.controller.commentReplies(t.request, id, {
+        enabled: true,
+        keywords: ['x'.repeat(61)],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_BODY' } });
+    const operator = await tenant('OPERATOR');
+    await expect(
+      s.controller.commentReplies(operator.request, id, {
+        enabled: false,
+        keywords: [],
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const off = await s.controller.commentReplies(t.request, id, {
+      enabled: false,
+      keywords: [],
+    });
+    expect(off.commentReplies).toBe(false);
+    const audit = await db.auditEvent.findFirstOrThrow({
+      where: {
+        tenantId: t.tenantId,
+        action: 'channel.instagram_comment_replies',
+      },
+    });
+    expect(JSON.stringify(audit.safeInputSummary)).not.toContain('narx');
   });
 
   it('refuses to enable without the app secret and verify token on the server', async () => {
