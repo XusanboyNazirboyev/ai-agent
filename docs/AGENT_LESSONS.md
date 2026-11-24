@@ -19,6 +19,7 @@ Read this before changing code. Each entry: what went wrong, how it was caught, 
 
 13. **Ran a formatter without the repo config.** `pnpm exec prettier --write` inside `apps/api` used Prettier defaults (double quotes) and rewrote 1,000+ lines; `prisma format` realigned the whole schema. Caught in `git diff --stat` before commit. **Rule:** format only through the package scripts (`pnpm format`, or `prettier --config ../../packages/config/prettier.json`); never run `prisma format` on the shared schema; check `git diff --stat` after any formatter.
 14. **A random test currency became a real zero-decimal currency.** The platform overview integration test generated `XPF` and still expected two decimal places, so strict RLS CI failed while production formatting was correct. **Rule:** randomized identifiers must not silently carry domain meaning; money assertions use the selected currency's fraction digits, with formatting tested separately.
+15. **A UI regression fix changed rendering without a render test.** The inbox helper test proved that one Telegram chip was computed, but would still pass when the component hid that single chip. Caught in the follow-up audit. **Rule:** a visibility regression needs one component or e2e assertion that the element is actually rendered; helper-only tests are not enough.
 
 ## Standing practices
 - Port, don't rewrite: another agent's work is reviewed, reconciled with newer decisions (ADRs), tested, then committed with a note of what changed.
