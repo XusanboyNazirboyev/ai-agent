@@ -129,6 +129,44 @@ describe('normalizer', () => {
     },
   );
 
+  it('keeps the story a customer replied to (ADR 090)', () => {
+    const story = { id: 'S1', url: 'https://cdn.example/s1.jpg' };
+    const r = normalizeInstagramWebhook(
+      webhook({ mid: 'm1', text: 'Narxi?', reply_to: { story } }),
+      now,
+    );
+    expect(r.ok && r.events[0]).toMatchObject({
+      kind: 'text',
+      text: 'Narxi?',
+      story,
+    });
+    // An inline reply to a message is not a story reply.
+    const inline = normalizeInstagramWebhook(
+      webhook({ mid: 'm2', text: 'ha', reply_to: { mid: 'm1' } }),
+      now,
+    );
+    expect(inline.ok && inline.events[0]).not.toHaveProperty('story');
+  });
+
+  it('never refuses a webhook over a strange story shape (ADR 090)', () => {
+    const odd = normalizeInstagramWebhook(
+      webhook({ mid: 'm1', text: 'Salom', reply_to: { story: { id: 5 } } }),
+      now,
+    );
+    expect(odd.ok && odd.events[0]).toMatchObject({ kind: 'text' });
+    expect(odd.ok && odd.events[0]).not.toHaveProperty('story');
+    const long = normalizeInstagramWebhook(
+      webhook({
+        mid: 'm2',
+        text: 'Salom',
+        reply_to: { story: { id: 'S', url: `https://x/${'a'.repeat(3000)}` } },
+      }),
+      now,
+    );
+    expect(long.ok && long.events[0]).toMatchObject({ story: { id: 'S' } });
+    expect(long.ok && long.events[0]).not.toHaveProperty('story.url');
+  });
+
   it('turns an echo to a customer into an echo event (ADR 088)', () => {
     const body = {
       object: 'instagram',

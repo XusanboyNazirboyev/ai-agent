@@ -5,6 +5,7 @@ History, audit and per-phase verification records: [progress-archive.md](progres
 ## 2026-11-24 (feat/ui-words-menu)
 - **Bot steps back when a person answers from the Instagram/Messenger app ([ADR 088](adr/088-app-reply-pauses-bot.md)):** echoes are matched against every DM id we sent (Redis ledger, 15 s settle); a person's echo is stored as an operator message and the conversation goes to OPERATOR_ACTIVE; the existing idle return gives it back. Messenger enable now subscribes `message_echoes`. Tests: normalizer unit cases, 5 integration cases (pause, retry, ours by ledger and by stored id, no conversation, webhook queues once). Not verified live with Meta.
 - **Bot schedule ([ADR 089](adr/089-bot-schedule.md)):** always / only outside working hours / only during them, days and times in the tenant time zone (overnight windows too), on the AI agent Rules page; off duty the pipeline holds the batch (no model call, no reply, no late replay). Tests: schedule unit cases, pipeline hold/claim, API integration (roles, validation, audit, rules kept), web card.
+- **Instagram story replies ([ADR 090](adr/090-instagram-story-replies.md)):** `reply_to.story` kept on the inbound message (`rich_content`), the agent is told the message answers a story it cannot see (asks which product instead of guessing), the Inbox marks it. Story pictures and mentions not handled. Not verified live.
 - **Console:** deactivated platform admins no longer show in the admin list (`f80e535`); the row stays for the audit trail.
 
 ## 2026-11-23 (feat/ui-words-menu)

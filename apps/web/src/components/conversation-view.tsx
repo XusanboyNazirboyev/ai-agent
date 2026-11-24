@@ -544,6 +544,15 @@ export function ConversationViewPane(props: {
                         )}
                       </p>
                     ) : null}
+                    {message.storyReply ? (
+                      <p
+                        data-testid="story-reply-label"
+                        className="flex items-center gap-1.5 text-xs font-medium"
+                      >
+                        <span aria-hidden="true">📷</span>
+                        {t('story.replyLabel')}
+                      </p>
+                    ) : null}
                     {message.type === 'COMMENT' ? (
                       <p
                         data-testid="comment-label"

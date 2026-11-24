@@ -123,11 +123,29 @@ export function extractionSystemPrompt(
   ].join('\n\n');
 }
 
+/** ADR 090: where the latest message came from, when that changes its meaning. */
+export type MessageOrigin = 'story_reply';
+
+const ORIGIN_NOTE: Record<MessageOrigin, string> = {
+  story_reply:
+    "The latest customer message is a reply to one of the business's Instagram stories. You cannot see the story. If the message points at something in it without naming it (this, the price, is it available), ask which product or service they mean instead of guessing.",
+};
+
+/** The latest customer message, with a code-written note on its origin. */
+export function latestMessageBlock(
+  latest: string,
+  origin?: MessageOrigin,
+): string {
+  const block = `<latest_customer_message>${sanitize(latest)}</latest_customer_message>`;
+  return origin ? `${block}\n${ORIGIN_NOTE[origin]}` : block;
+}
+
 export function extractionUserMessage(
   history: readonly HistoryEntry[],
   latest: string,
+  origin?: MessageOrigin,
 ): string {
-  return `${historyBlock(history)}\n<latest_customer_message>${sanitize(latest)}</latest_customer_message>`;
+  return `${historyBlock(history)}\n${latestMessageBlock(latest, origin)}`;
 }
 
 /** Owner 2026-11-23: the system may send a reply as speech; the model must not deny it. */
@@ -250,16 +268,15 @@ export function conversationalSystemPrompt(
 export function smallTalkUserMessage(
   history: readonly HistoryEntry[],
   latest: string,
+  origin?: MessageOrigin,
 ): string {
-  return [
-    historyBlock(history),
-    `<latest_customer_message>${sanitize(latest)}</latest_customer_message>`,
-  ].join('\n');
+  return [historyBlock(history), latestMessageBlock(latest, origin)].join('\n');
 }
 
 export function responseUserMessage(input: {
   readonly history: readonly HistoryEntry[];
   readonly latest: string;
+  readonly origin?: MessageOrigin;
   readonly slots: SlotState;
   readonly searchResults: string;
   readonly nextQuestion: string | undefined;
@@ -271,7 +288,7 @@ export function responseUserMessage(input: {
   );
   return [
     historyBlock(input.history),
-    `<latest_customer_message>${sanitize(input.latest)}</latest_customer_message>`,
+    latestMessageBlock(input.latest, input.origin),
     `<known_customer_details>${sanitize(JSON.stringify(known))}</known_customer_details>`,
     `<catalog_context>${input.searchResults}</catalog_context>`,
     ...(input.today
@@ -312,11 +329,12 @@ export function schedulingSystemPrompt(
 export function schedulingUserMessage(input: {
   readonly history: readonly HistoryEntry[];
   readonly latest: string;
+  readonly origin?: MessageOrigin;
   readonly schedulingContext: string;
 }): string {
   return [
     historyBlock(input.history),
-    `<latest_customer_message>${sanitize(input.latest)}</latest_customer_message>`,
+    latestMessageBlock(input.latest, input.origin),
     `<scheduling_context>${input.schedulingContext}</scheduling_context>`,
   ].join('\n');
 }

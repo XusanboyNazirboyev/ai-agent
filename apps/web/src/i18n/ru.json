@@ -2142,5 +2142,6 @@
   "agent.schedule.day.4": "Чт",
   "agent.schedule.day.5": "Пт",
   "agent.schedule.day.6": "Сб",
-  "agent.schedule.day.7": "Вс"
+  "agent.schedule.day.7": "Вс",
+  "story.replyLabel": "Ответ на вашу историю в Instagram"
 }

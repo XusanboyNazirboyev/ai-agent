@@ -140,8 +140,10 @@ export interface AgentTurnInput {
    * ADR 043: the batch is a public comment. It is answered (in private) only
    * when it asks something or shows interest; otherwise the turn ends with
    * NO_REPLY. Opt-out words, confirmations and business actions never apply.
+   * ADR 090: `story_reply`, the batch answers one of the business's
+   * Instagram stories; the prompts say the story is not visible.
    */
-  readonly origin?: 'public_comment';
+  readonly origin?: 'public_comment' | 'story_reply';
   readonly progress?: {
     readonly priorTurns: readonly PriorTurnSignal[];
     readonly stuck?: StuckPolicy;
@@ -153,6 +155,11 @@ export interface AgentTurnInput {
     readonly hasPhone: boolean;
     readonly phoneRequested: boolean;
   };
+}
+
+/** ADR 090: the prompt note for a reply to an Instagram story. */
+function storyOrigin(input: AgentTurnInput): 'story_reply' | undefined {
+  return input.origin === 'story_reply' ? 'story_reply' : undefined;
 }
 
 export interface AgentDependencies {
@@ -675,7 +682,11 @@ export async function runAgentTurn(
         messages: [
           {
             role: 'user',
-            text: extractionUserMessage(input.history, input.customerText),
+            text: extractionUserMessage(
+              input.history,
+              input.customerText,
+              storyOrigin(input),
+            ),
           },
         ],
         schemaName: 'turn_extraction',
@@ -962,7 +973,11 @@ export async function runAgentTurn(
           messages: [
             {
               role: 'user',
-              text: smallTalkUserMessage(input.history, input.customerText),
+              text: smallTalkUserMessage(
+                input.history,
+                input.customerText,
+                storyOrigin(input),
+              ),
             },
           ],
           tools: [],
@@ -1450,11 +1465,13 @@ export async function runAgentTurn(
       ? schedulingUserMessage({
           history: input.history,
           latest: input.customerText,
+          origin: storyOrigin(input),
           schedulingContext: search.summary,
         })
       : responseUserMessage({
           history: input.history,
           latest: input.customerText,
+          origin: storyOrigin(input),
           slots,
           searchResults: search.summary,
           nextQuestion,

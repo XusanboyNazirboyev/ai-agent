@@ -287,6 +287,8 @@ export interface ConversationView {
     text: string;
     /** ADR 042: set on customer voice notes. */
     voiceStatus?: 'PENDING' | 'TRANSCRIBED' | 'FAILED' | null;
+    /** ADR 090: a reply to one of the business's Instagram stories. */
+    storyReply?: boolean;
     deliveryState: 'PENDING' | 'SENT' | 'FAILED' | 'UNKNOWN';
     createdAt: string;
   }[];

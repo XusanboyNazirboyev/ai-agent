@@ -1,3 +1,4 @@
+import { isStoryReply } from '../channels/instagram/instagram-story.js';
 import {
   Inject,
   Injectable,
@@ -178,14 +179,15 @@ export class AgentConversationService implements OnModuleInit {
 
   /**
    * ADR 043: the answered batch is made only of public comments (no direct
-   * message from the customer among them).
+   * message from the customer among them). ADR 090: otherwise, a batch with
+   * a reply to one of the business's Instagram stories.
    */
-  private async fromPublicComment(
+  private async batchOrigin(
     tenantId: string,
     conversationId: string,
     beforeSequence: number | undefined,
-  ): Promise<boolean> {
-    if (beforeSequence === undefined) return false;
+  ): Promise<'public_comment' | 'story_reply' | undefined> {
+    if (beforeSequence === undefined) return undefined;
     const batch = await this.prisma.message.findMany({
       where: {
         tenantId,
@@ -193,11 +195,14 @@ export class AgentConversationService implements OnModuleInit {
         direction: 'INBOUND',
         sequence: { gte: beforeSequence },
       },
-      select: { type: true },
+      select: { type: true, richContent: true },
     });
-    return (
-      batch.length > 0 && batch.every((message) => message.type === 'COMMENT')
-    );
+    if (batch.length === 0) return undefined;
+    if (batch.every((message) => message.type === 'COMMENT'))
+      return 'public_comment';
+    return batch.some((message) => isStoryReply(message.richContent))
+      ? 'story_reply'
+      : undefined;
   }
 
   private readonly logger = new Logger(AgentConversationService.name);
@@ -532,9 +537,9 @@ export class AgentConversationService implements OnModuleInit {
           request.text,
           request.beforeSequence,
         );
-    const publicComment = sandbox
-      ? false
-      : await this.fromPublicComment(
+    const origin = sandbox
+      ? undefined
+      : await this.batchOrigin(
           tenantId,
           conversationId,
           request.beforeSequence,
@@ -543,7 +548,7 @@ export class AgentConversationService implements OnModuleInit {
     const input: AgentTurnInput = {
       ...(action ? { action } : {}),
       ...(voice ? { voice } : {}),
-      ...(publicComment ? { origin: 'public_comment' as const } : {}),
+      ...(origin ? { origin } : {}),
       progress: {
         priorTurns: selectEpisode(
           priorTurns,

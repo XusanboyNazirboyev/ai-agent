@@ -35,6 +35,21 @@ const messagingItem = z
         is_self: z.boolean().optional(),
         is_deleted: z.boolean().optional(),
         is_unsupported: z.boolean().optional(),
+        /** ADR 090: the story the customer answered (`reply_to.story`). */
+        // Read leniently: a shape we do not expect only loses the note.
+        reply_to: z
+          .object({
+            story: z
+              .object({
+                id: z.string().max(100).optional(),
+                url: z.string().optional(),
+              })
+              .passthrough()
+              .optional(),
+          })
+          .passthrough()
+          .optional()
+          .catch(undefined),
         /**
          * Media sent with the message ("Webhook Notification Examples",
          * read 2026-11-10): `attachments[] { type, payload { url } }`, `audio`
@@ -121,6 +136,8 @@ export type NormalizedInstagramText = {
   readonly customerId: string;
   readonly text: string;
   readonly receivedAt: Date;
+  /** ADR 090: the message answers one of our stories. */
+  readonly story?: { readonly id?: string; readonly url?: string };
 };
 
 /**
@@ -294,6 +311,7 @@ export function normalizeInstagramWebhook(
             });
           else events.push({ kind: 'ignored', reason: 'no_text' });
         } else {
+          const story = message.reply_to?.story;
           events.push({
             kind: 'text',
             messageId: message.mid,
@@ -301,6 +319,16 @@ export function normalizeInstagramWebhook(
             customerId: m.sender.id,
             text: message.text,
             receivedAt,
+            ...(story
+              ? {
+                  story: {
+                    ...(story.id ? { id: story.id } : {}),
+                    ...(story.url && story.url.length <= MAX_MEDIA_URL_CHARS
+                      ? { url: story.url }
+                      : {}),
+                  },
+                }
+              : {}),
           });
         }
       }

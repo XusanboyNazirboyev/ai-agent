@@ -2142,5 +2142,6 @@
   "agent.schedule.day.4": "Thu",
   "agent.schedule.day.5": "Fri",
   "agent.schedule.day.6": "Sat",
-  "agent.schedule.day.7": "Sun"
+  "agent.schedule.day.7": "Sun",
+  "story.replyLabel": "Replied to your Instagram story"
 }

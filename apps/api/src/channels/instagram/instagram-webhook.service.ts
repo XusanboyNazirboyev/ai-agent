@@ -14,6 +14,7 @@ import {
 } from '../../retention/retention-settings.js';
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
 import { parseCarouselPayload, readCarousel } from './instagram-carousel.js';
+import { storyReplyContent } from './instagram-story.js';
 import { upsertContactWithPerson } from '../../persons/ensure-contact.js';
 import {
   META_ECHO_EVENT,
@@ -219,7 +220,13 @@ export class InstagramWebhookService {
                   voiceStatus: 'PENDING' as const,
                   mediaRef: event.url,
                 }
-              : { type: 'TEXT' as const, text: event.text }),
+              : {
+                  type: 'TEXT' as const,
+                  text: event.text,
+                  ...(event.story
+                    ? { richContent: storyReplyContent(event.story) }
+                    : {}),
+                }),
             sequence: (latest?.sequence ?? 0) + 1,
             providerChatId: event.customerId,
             providerMessageId: storedId,

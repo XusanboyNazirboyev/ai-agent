@@ -1,3 +1,4 @@
+import { isStoryReply } from '../channels/instagram/instagram-story.js';
 import { Injectable } from '@nestjs/common';
 import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -113,6 +114,7 @@ export interface ConversationView {
     text: string;
     deliveryState: string;
     createdAt: Date;
+    storyReply: boolean;
   }[];
   readonly shownOffers: readonly {
     id: string;
@@ -544,6 +546,7 @@ export class InboxReadService {
             text: true,
             voiceStatus: true,
             deliveryState: true,
+            richContent: true,
             createdAt: true,
           },
         }),
@@ -625,7 +628,11 @@ export class InboxReadService {
             customFields: describeFields(leadDefs, lead.customFields),
           }
         : null,
-      messages,
+      // ADR 090: only a flag; the story's CDN link is not passed on.
+      messages: messages.map(({ richContent, ...message }) => ({
+        ...message,
+        storyReply: isStoryReply(richContent),
+      })),
       notes,
       shownOffers,
       quotes: quotes.map((quote) => ({
