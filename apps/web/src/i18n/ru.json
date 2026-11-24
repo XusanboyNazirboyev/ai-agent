@@ -2078,5 +2078,8 @@
   "settings.group.integrations": "Интеграции",
   "settings.section.telephony": "Телефония",
   "calls.connectInSettings": "Подключить телефонию в настройках",
-  "channels.tab.replies": "Быстрые ответы"
+  "channels.tab.replies": "Быстрые ответы",
+  "channels.tab.facebook": "Messenger",
+  "channels.tab.whatsapp": "WhatsApp",
+  "channels.tab.webchat": "Веб-чат"
 }

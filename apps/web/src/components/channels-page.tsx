@@ -405,7 +405,7 @@ function InstagramGuide(): ReactNode {
 /** Connected messenger accounts, with connecting, checking and disconnecting. */
 /** Owner 2026-11-24: the Channels section shows one messenger per tab. */
 export function ChannelsPage(props: {
-  only?: 'telegram' | 'instagram';
+  only?: (typeof CHANNELS)[number]['key'];
 }): ReactNode {
   const { t } = useI18n();
   const { operator } = useShell();

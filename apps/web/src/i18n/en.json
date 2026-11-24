@@ -2078,5 +2078,8 @@
   "settings.group.integrations": "Integrations",
   "settings.section.telephony": "Telephony",
   "calls.connectInSettings": "Connect telephony in Settings",
-  "channels.tab.replies": "Quick replies"
+  "channels.tab.replies": "Quick replies",
+  "channels.tab.facebook": "Messenger",
+  "channels.tab.whatsapp": "WhatsApp",
+  "channels.tab.webchat": "Web chat"
 }

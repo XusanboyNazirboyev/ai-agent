@@ -92,6 +92,22 @@ test('an admin finds the AI agent first, with its five tabs, and settings in thr
       'aria-current',
       'page',
     );
+    // Owner 2026-11-24: every messenger has its own tab, none goes missing.
+    await expect(
+      page.getByTestId('channels-tabs').getByRole('link'),
+    ).toHaveText([
+      'Telegram',
+      'Instagram',
+      'Messenger',
+      'WhatsApp',
+      'Web chat',
+      'Quick replies',
+    ]);
+    await page.getByTestId('channels-tab-facebook').click();
+    await page.waitForURL(/\/channels\/facebook$/u);
+    await expect(page.getByTestId('channel-card-facebook')).toBeVisible();
+    await page.getByTestId('channels-tab-whatsapp').click();
+    await expect(page.getByTestId('channel-card-whatsapp')).toBeVisible();
   } finally {
     await context.close();
   }

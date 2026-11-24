@@ -4,19 +4,33 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { ChannelLogo } from './ui/channel-logo';
-import { Icon } from './ui/icons';
+import { Icon, type IconName } from './ui/icons';
 
-export type ChannelsSection = 'telegram' | 'instagram' | 'replies';
+export type ChannelsSection =
+  'telegram' | 'instagram' | 'facebook' | 'whatsapp' | 'webchat' | 'replies';
 
-/** Owner 2026-11-24: Telegram and Instagram each have their own tab, quick replies the third. */
+/**
+ * Owner 2026-11-24: every messenger has its own tab (WhatsApp and web chat
+ * show their "soon" card), quick replies the last.
+ */
 export const CHANNELS_SECTIONS: readonly {
   key: ChannelsSection;
   href: string;
 }[] = [
   { key: 'telegram', href: '/channels/telegram' },
   { key: 'instagram', href: '/channels/instagram' },
+  { key: 'facebook', href: '/channels/facebook' },
+  { key: 'whatsapp', href: '/channels/whatsapp' },
+  { key: 'webchat', href: '/channels/webchat' },
   { key: 'replies', href: '/channels/replies' },
 ];
+
+/** Tabs without a brand logo of their own. */
+const TAB_ICONS: Partial<Record<ChannelsSection, IconName>> = {
+  whatsapp: 'phone',
+  webchat: 'globe',
+  replies: 'message',
+};
 
 export function ChannelsSubPage(props: {
   active: ChannelsSection;
@@ -43,8 +57,11 @@ export function ChannelsSubPage(props: {
                     : 'text-muted hover:bg-surface-2 hover:text-fg'
                 }`}
               >
-                {section.key === 'replies' ? (
-                  <Icon name="message" className="h-4 w-4 shrink-0" />
+                {section.key in TAB_ICONS ? (
+                  <Icon
+                    name={TAB_ICONS[section.key]!}
+                    className="h-4 w-4 shrink-0"
+                  />
                 ) : (
                   <ChannelLogo channelType={section.key} decorative />
                 )}

@@ -2078,5 +2078,8 @@
   "settings.group.integrations": "Integratsiyalar",
   "settings.section.telephony": "Telefoniya",
   "calls.connectInSettings": "Telefoniyani sozlamalarda ulash",
-  "channels.tab.replies": "Tezkor javoblar"
+  "channels.tab.replies": "Tezkor javoblar",
+  "channels.tab.facebook": "Messenger",
+  "channels.tab.whatsapp": "WhatsApp",
+  "channels.tab.webchat": "Veb-chat"
 }

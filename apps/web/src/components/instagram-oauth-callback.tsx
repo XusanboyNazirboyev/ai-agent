@@ -132,7 +132,7 @@ export function InstagramOAuthCallback(props: {
             </Button>
           ) : null}
           <Link
-            href="/channels/instagram"
+            href={`/channels/${channel}`}
             data-testid="ig-callback-back"
             className={buttonClass()}
           >
