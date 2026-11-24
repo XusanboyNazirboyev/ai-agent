@@ -129,6 +129,51 @@ describe('normalizer', () => {
     },
   );
 
+  it('turns an echo to a customer into an echo event (ADR 088)', () => {
+    const body = {
+      object: 'instagram',
+      entry: [
+        {
+          id: 'ACCOUNT',
+          messaging: [
+            {
+              sender: { id: 'ACCOUNT' },
+              recipient: { id: 'CUSTOMER' },
+              message: { mid: 'e1', text: ' Ertaga keling ', is_echo: true },
+            },
+            {
+              sender: { id: 'ACCOUNT' },
+              recipient: { id: 'CUSTOMER' },
+              message: { mid: 'e2', is_echo: true, attachments: [] },
+            },
+          ],
+        },
+      ],
+    };
+    const r = normalizeInstagramWebhook(body, now);
+    expect(r).toEqual({
+      ok: true,
+      events: [
+        {
+          kind: 'echo',
+          messageId: 'e1',
+          accountId: 'ACCOUNT',
+          customerId: 'CUSTOMER',
+          text: 'Ertaga keling',
+          receivedAt: now,
+        },
+        {
+          kind: 'echo',
+          messageId: 'e2',
+          accountId: 'ACCOUNT',
+          customerId: 'CUSTOMER',
+          text: '',
+          receivedAt: now,
+        },
+      ],
+    });
+  });
+
   it('rejects other objects and malformed bodies', () => {
     expect(
       normalizeInstagramWebhook({ object: 'page', entry: [] }, now),

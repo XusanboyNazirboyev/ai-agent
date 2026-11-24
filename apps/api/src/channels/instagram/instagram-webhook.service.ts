@@ -15,7 +15,12 @@ import {
 import { metaInboundKey, storedMetaId } from '../meta/meta-event-key.js';
 import { parseCarouselPayload, readCarousel } from './instagram-carousel.js';
 import { upsertContactWithPerson } from '../../persons/ensure-contact.js';
+import {
+  META_ECHO_EVENT,
+  META_ECHO_SETTLE_MS,
+} from '../meta/meta-echo.service.js';
 import type {
+  NormalizedMetaEcho,
   NormalizedInstagramComment,
   NormalizedInstagramPostback,
   NormalizedInstagramText,
@@ -278,6 +283,66 @@ export class InstagramWebhookService {
       }
       throw error;
     }
+  }
+
+  /**
+   * ADR 088: an echo is decided by the worker after META_ECHO_SETTLE_MS, so
+   * the send that produced it has recorded its id by then. Nothing is
+   * stored about the conversation here.
+   */
+  async acceptEcho(
+    event: NormalizedMetaEcho,
+    channelType: MetaChannelType,
+  ): Promise<'accepted' | 'duplicate' | 'ignored'> {
+    if (
+      !EXTERNAL_ID.test(event.accountId) ||
+      !EXTERNAL_ID.test(event.customerId)
+    )
+      return 'ignored';
+    const tenantId = await this.routeTenant(channelType, event.accountId);
+    if (!tenantId) return 'ignored';
+    return runWithTenant(tenantId, async () => {
+      const channel = await this.prisma.channelAccount.findFirst({
+        where: {
+          tenantId,
+          channelType,
+          externalAccountId: event.accountId,
+          status: 'ACTIVE',
+        },
+        select: { id: true },
+      });
+      if (!channel) return 'ignored';
+      try {
+        await this.prisma.outboxEvent.create({
+          data: {
+            tenantId,
+            type: META_ECHO_EVENT,
+            aggregateType: 'channel_account',
+            aggregateId: channel.id,
+            idempotencyKey: metaInboundKey(
+              `${channelType}.echo`,
+              channel.id,
+              event.messageId,
+            ),
+            availableAt: new Date(Date.now() + META_ECHO_SETTLE_MS),
+            payload: {
+              channelAccountId: channel.id,
+              customerId: event.customerId,
+              mid: event.messageId,
+              text: event.text,
+            } satisfies Prisma.InputJsonObject,
+          },
+        });
+        return 'accepted';
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        )
+          return 'duplicate';
+        throw error;
+      }
+    });
   }
 
   /**

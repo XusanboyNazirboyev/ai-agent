@@ -97,7 +97,9 @@ export class InstagramWebhookController {
           ? await this.webhook.acceptComment(event)
           : event.kind === 'postback'
             ? await this.webhook.acceptPostback(event)
-            : await this.webhook.accept(event);
+            : event.kind === 'echo'
+              ? await this.webhook.acceptEcho(event, 'instagram')
+              : await this.webhook.accept(event);
       if (result === 'ignored') {
         ignored += 1;
         continue;

@@ -38,6 +38,7 @@ import {
   COMMENT_PUBLIC_REPLY_EVENT,
   InstagramCommentReplyService,
 } from '../instagram/instagram-comment-reply.service.js';
+import { META_ECHO_EVENT, MetaEchoService } from '../meta/meta-echo.service.js';
 import { InboundAccessGate } from '../../access/inbound-access-gate.js';
 import type { AccessState } from '../../access/access-decision.js';
 
@@ -73,6 +74,7 @@ export class InboundProcessor {
     @Optional() private readonly comments?: InstagramCommentReplyService,
     @Optional() private readonly access?: InboundAccessGate,
     @Optional() private readonly voiceReplies?: VoiceReplyService,
+    @Optional() private readonly echoes?: MetaEchoService,
   ) {}
 
   /**
@@ -114,6 +116,10 @@ export class InboundProcessor {
       const commentRowId = jsonString(event.payload, 'commentRowId');
       if (commentRowId && this.comments)
         await this.comments.publishPublicReply(event.tenantId, commentRowId);
+      return;
+    }
+    if (event.type === META_ECHO_EVENT) {
+      await this.echoes?.process(event.tenantId, event.payload);
       return;
     }
     if (event.type === 'action.execute') {

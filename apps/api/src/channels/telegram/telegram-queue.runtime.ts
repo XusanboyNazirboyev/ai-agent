@@ -193,6 +193,7 @@ export class TelegramQueueRuntime implements OnModuleInit, OnModuleDestroy {
               'facebook.inbound',
               'telegram.send',
               'instagram.comment_reply',
+              'meta.echo',
               'handover.notify',
               'handover.forward',
               'handover.sla',

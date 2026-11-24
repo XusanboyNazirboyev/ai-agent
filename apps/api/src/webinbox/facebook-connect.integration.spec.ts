@@ -132,7 +132,7 @@ function setup(pageId = `1000${randomInt(10 ** 9, 10 ** 10 - 1)}`): {
     ) {
       const form = new URLSearchParams(body);
       return form.get('access_token') === PAGE_TOKEN &&
-        form.get('subscribed_fields') === 'messages'
+        form.get('subscribed_fields') === 'messages,message_echoes'
         ? reply(200, { success: true })
         : reply(400, { error: { code: 190 } });
     }

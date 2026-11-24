@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  echoOf,
+  type NormalizedMetaEcho,
+} from '../instagram/instagram-normalizer.js';
 
 /**
  * Messenger (Facebook Page) webhook -> channel-neutral events. Names come from
@@ -63,6 +67,7 @@ export type FacebookIgnoreReason =
 
 export type NormalizedFacebookEvent =
   | NormalizedFacebookText
+  | NormalizedMetaEcho
   | { readonly kind: 'ignored'; readonly reason: FacebookIgnoreReason };
 
 export type FacebookNormalization =
@@ -85,8 +90,8 @@ export function normalizeFacebookWebhook(
         // Postbacks, delivery and read receipts carry no `message`.
         events.push({ kind: 'ignored', reason: 'not_a_message' });
       } else if (message.is_echo || m.sender.id === e.id) {
-        // Our own outgoing message echoed back: never answer ourselves.
-        events.push({ kind: 'ignored', reason: 'echo' });
+        // Never answered; ADR 088 pauses the bot when a person sent it.
+        events.push(echoOf(e.id, m.recipient.id, message, receivedAt));
       } else if (message.is_deleted) {
         events.push({ kind: 'ignored', reason: 'deleted' });
       } else if (!message.text || message.text.trim() === '') {

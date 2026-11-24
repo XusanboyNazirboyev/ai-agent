@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { MetaSentLedger } from '../meta/meta-sent-ledger.js';
 import { ConfigService } from '@nestjs/config';
 import type { AppEnvironment } from '../../config/environment.js';
 
@@ -125,6 +126,8 @@ export class InstagramGraphClient {
   constructor(
     @Optional() @Inject(INSTAGRAM_FETCH) request?: InstagramFetch,
     @Optional() config?: ConfigService<AppEnvironment, true>,
+    // ADR 088: every DM id we send, so an app-sent echo can be told apart.
+    @Optional() private readonly sent?: MetaSentLedger,
   ) {
     this.request = request ?? fetch;
     // INSTAGRAM_API_BASE_URL exists for tests with a fake Meta server and is
@@ -468,6 +471,7 @@ export class InstagramGraphClient {
     const messageId = (body as Record<string, unknown> | null)?.[idField];
     if (typeof messageId !== 'string' || messageId === '')
       throw new InstagramAmbiguousSendError();
+    if (idField === 'message_id') await this.sent?.record(messageId);
     return { messageId };
   }
 }

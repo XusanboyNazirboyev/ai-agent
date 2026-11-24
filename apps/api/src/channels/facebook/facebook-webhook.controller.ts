@@ -85,7 +85,14 @@ export class FacebookWebhookController {
         ignored += 1;
         continue;
       }
-      const result = await this.webhook.accept(event, 'facebook');
+      const result =
+        event.kind === 'echo'
+          ? await this.webhook.acceptEcho(event, 'facebook')
+          : await this.webhook.accept(event, 'facebook');
+      if (result === 'ignored') {
+        ignored += 1;
+        continue;
+      }
       if (result === 'unavailable')
         throw new ServiceUnavailableException('Facebook Page is unavailable');
       if (result === 'duplicate') duplicate += 1;

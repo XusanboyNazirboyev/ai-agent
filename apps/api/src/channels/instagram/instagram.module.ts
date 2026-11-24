@@ -8,18 +8,23 @@ import { FacebookSender } from '../facebook/facebook-sender.js';
 import { FacebookWebhookController } from '../facebook/facebook-webhook.controller.js';
 import { InstagramWebhookController } from './instagram-webhook.controller.js';
 import { InstagramWebhookService } from './instagram-webhook.service.js';
+import { MetaEchoService } from '../meta/meta-echo.service.js';
+import { MetaSentLedger } from '../meta/meta-sent-ledger.js';
 
 @Module({
   imports: [PersistenceModule, SecretsModule],
   controllers: [InstagramWebhookController, FacebookWebhookController],
   providers: [
     InstagramWebhookService,
+    MetaSentLedger,
+    MetaEchoService,
     InstagramGraphClient,
     InstagramSender,
     InstagramCommentReplyService,
     FacebookSender,
   ],
   exports: [
+    MetaEchoService,
     InstagramGraphClient,
     InstagramSender,
     InstagramCommentReplyService,

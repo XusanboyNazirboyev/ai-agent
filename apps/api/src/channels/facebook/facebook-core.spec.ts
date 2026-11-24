@@ -107,6 +107,37 @@ describe('Facebook normalizer', () => {
     },
   );
 
+  it('turns a Page echo to a customer into an echo event (ADR 088)', () => {
+    const body = {
+      object: 'page',
+      entry: [
+        {
+          id: 'PAGE1',
+          messaging: [
+            {
+              sender: { id: 'PAGE1' },
+              recipient: { id: 'PSID1' },
+              message: { mid: 'e1', text: 'Salom', is_echo: true, app_id: 1 },
+            },
+          ],
+        },
+      ],
+    };
+    expect(normalizeFacebookWebhook(body, now)).toEqual({
+      ok: true,
+      events: [
+        {
+          kind: 'echo',
+          messageId: 'e1',
+          accountId: 'PAGE1',
+          customerId: 'PSID1',
+          text: 'Salom',
+          receivedAt: now,
+        },
+      ],
+    });
+  });
+
   it('ignores events without a message (postbacks, receipts)', () => {
     expect(normalizeFacebookWebhook(webhook(undefined), now)).toEqual({
       ok: true,

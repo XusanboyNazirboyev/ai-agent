@@ -168,6 +168,20 @@ export type NormalizedInstagramComment = {
   readonly receivedAt: Date;
 };
 
+/**
+ * ADR 088: a message our account sent (`is_echo`), to the customer in
+ * `recipient.id`. Ours or a person's in the app; the worker decides.
+ */
+export type NormalizedMetaEcho = {
+  readonly kind: 'echo';
+  readonly messageId: string;
+  readonly accountId: string;
+  readonly customerId: string;
+  /** Empty for media. */
+  readonly text: string;
+  readonly receivedAt: Date;
+};
+
 export type InstagramIgnoreReason =
   | 'echo'
   | 'self_test'
@@ -183,6 +197,7 @@ export type NormalizedInstagramEvent =
   | NormalizedInstagramVoice
   | NormalizedInstagramComment
   | NormalizedInstagramPostback
+  | NormalizedMetaEcho
   | { readonly kind: 'ignored'; readonly reason: InstagramIgnoreReason };
 
 export type InstagramNormalization =
@@ -211,6 +226,29 @@ function audioUrlOf(
   return undefined;
 }
 
+/** ADR 088: an echo, or ignored when it names no customer. */
+export function echoOf(
+  accountId: string,
+  customerId: string,
+  message: {
+    mid: string;
+    text?: string | undefined;
+    is_deleted?: boolean | undefined;
+  },
+  receivedAt: Date,
+): NormalizedMetaEcho | { kind: 'ignored'; reason: 'echo' } {
+  if (customerId === accountId || message.is_deleted)
+    return { kind: 'ignored', reason: 'echo' };
+  return {
+    kind: 'echo',
+    messageId: message.mid,
+    accountId,
+    customerId,
+    text: message.text?.trim() ?? '',
+    receivedAt,
+  };
+}
+
 export function normalizeInstagramWebhook(
   raw: unknown,
   receivedAt: Date,
@@ -236,11 +274,11 @@ export function normalizeInstagramWebhook(
           });
         } else if (!message) {
           events.push({ kind: 'ignored', reason: 'not_a_message' });
-        } else if (message.is_echo) {
-          // Our own outgoing message echoed back: never answer ourselves.
-          events.push({ kind: 'ignored', reason: 'echo' });
         } else if (message.is_self) {
           events.push({ kind: 'ignored', reason: 'self_test' });
+        } else if (message.is_echo) {
+          // Never answered; ADR 088 pauses the bot when a person sent it.
+          events.push(echoOf(e.id, m.recipient.id, message, receivedAt));
         } else if (message.is_deleted) {
           events.push({ kind: 'ignored', reason: 'deleted' });
         } else if (!message.text || message.text.trim() === '') {

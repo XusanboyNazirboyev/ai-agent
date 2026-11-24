@@ -73,6 +73,7 @@ import { TelephonyController } from './telephony.controller.js';
 import { ExportsController } from './exports.controller.js';
 import { ExportService } from '../exports/export.service.js';
 import { ExportLock } from '../exports/export-lock.js';
+import { MetaSentLedger } from '../channels/meta/meta-sent-ledger.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
 @Module({
@@ -136,6 +137,7 @@ import { ExportLock } from '../exports/export-lock.js';
     ExportService,
     ExportLock,
     TelegramManagement,
+    MetaSentLedger,
     InstagramGraphClient,
     InstagramOAuthClient,
     FacebookOAuthClient,

@@ -59,7 +59,8 @@ const CompleteBody = z.object({
 });
 
 /** Webhook field for Messenger messages (subscribed per Page at enable). */
-const WEBHOOK_FIELDS = ['messages'] as const;
+// ADR 088: Messenger sends echoes only on their own field.
+const WEBHOOK_FIELDS = ['messages', 'message_echoes'] as const;
 
 const REFUSAL = {
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
