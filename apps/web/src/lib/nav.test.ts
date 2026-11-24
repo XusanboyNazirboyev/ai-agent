@@ -9,18 +9,15 @@ const FULL: NavKey[] = [
   'agent',
   'today',
   'inbox',
-  'leads',
-  'tasks',
-  'analytics',
+  'crm',
   'billing',
   'settings',
 ];
-const WITHOUT_ANALYTICS: NavKey[] = [
+const WITHOUT_MANAGER_ITEMS: NavKey[] = [
   'agent',
   'today',
   'inbox',
-  'leads',
-  'tasks',
+  'crm',
   'settings',
 ];
 
@@ -30,9 +27,9 @@ describe('visibleNav', () => {
     expect(visibleNav('ADMIN')).toEqual(FULL);
   });
 
-  it('hides analytics from an operator and a viewer', () => {
-    expect(visibleNav('OPERATOR')).toEqual(WITHOUT_ANALYTICS);
-    expect(visibleNav('VIEWER')).toEqual(WITHOUT_ANALYTICS);
+  it('hides billing from an operator and a viewer', () => {
+    expect(visibleNav('OPERATOR')).toEqual(WITHOUT_MANAGER_ITEMS);
+    expect(visibleNav('VIEWER')).toEqual(WITHOUT_MANAGER_ITEMS);
   });
 
   it('never returns keys outside NAV', () => {

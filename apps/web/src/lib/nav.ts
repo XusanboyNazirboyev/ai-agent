@@ -2,14 +2,7 @@ import type { IconName } from '../components/ui/icons';
 import type { Role } from './types';
 
 export type NavKey =
-  | 'agent'
-  | 'today'
-  | 'inbox'
-  | 'leads'
-  | 'tasks'
-  | 'analytics'
-  | 'billing'
-  | 'settings';
+  'agent' | 'today' | 'inbox' | 'crm' | 'billing' | 'settings';
 
 export interface NavItem {
   key: NavKey;
@@ -17,6 +10,8 @@ export interface NavItem {
   /** Roles that may open this item. Items useful even read-only stay; only
    * a "not allowed" item is hidden from the rail and the "More" page. */
   roles: Role[];
+  /** Where the item leads when it is not `/<key>`. */
+  href?: string;
   /** Other top-level paths that belong under this item (the menu keeps it lit). */
   alsoUnder?: string[];
 }
@@ -40,17 +35,14 @@ export const NAV: NavItem[] = [
     icon: 'inbox',
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
   },
+  // Owner 2026-11-24: leads, tasks, calls and the CRM report in one place.
   {
-    key: 'leads',
+    key: 'crm',
     icon: 'target',
     roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
+    href: '/leads',
+    alsoUnder: ['/leads', '/contacts', '/tasks', '/calls', '/analytics'],
   },
-  {
-    key: 'tasks',
-    icon: 'check',
-    roles: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'],
-  },
-  { key: 'analytics', icon: 'chart', roles: ['OWNER', 'ADMIN'] },
   // Owner 2026-11-23: the plan, its period and the prices in plain sight.
   {
     key: 'billing',
@@ -74,4 +66,9 @@ export function visibleNav(role: Role): NavKey[] {
 
 export function isNavAllowed(key: NavKey, role: Role): boolean {
   return visibleNav(role).includes(key);
+}
+
+/** The address a menu item opens. */
+export function navHref(item: NavItem): string {
+  return item.href ?? `/${item.key}`;
 }

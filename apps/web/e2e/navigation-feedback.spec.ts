@@ -82,17 +82,17 @@ test.describe('navigation on a slow server', () => {
     await settle(page, '/leads');
     await slowNavigation(page, '/leads');
 
-    await rail.getByRole('link', { name: 'Leads' }).click();
+    await rail.getByRole('link', { name: 'CRM' }).click();
     await expect(page).toHaveURL(/\/leads$/u, { timeout: FEEDBACK_MS });
     // Menu pages are prefetched in full (2026-11-24): the page itself may
     // already be here; otherwise its loading state shows. Never the old page.
     await expect(
       page
         .getByTestId('page-loading')
-        .or(page.getByRole('heading', { level: 1, name: 'Leads' })),
+        .or(page.getByRole('heading', { level: 1, name: 'CRM' })),
     ).toBeVisible({ timeout: FEEDBACK_MS });
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Leads' }),
+      page.getByRole('heading', { level: 1, name: 'CRM' }),
     ).toBeVisible({ timeout: SERVER_DELAY_MS + 7_000 });
     await expect(page.getByTestId('page-loading')).toHaveCount(0);
   });

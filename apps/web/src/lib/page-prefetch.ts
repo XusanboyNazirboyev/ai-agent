@@ -5,7 +5,6 @@ import type {
 } from '@tanstack/react-query';
 import type { NavKey } from './nav';
 import {
-  analyticsQuery,
   channelsQuery,
   conversationsQuery,
   goLiveQuery,
@@ -54,7 +53,6 @@ export const PAGE_PREFETCH: Partial<Record<NavKey, (qc: QueryClient) => void>> =
       warm(qc, channelsQuery);
       warm(qc, waitingCountQuery);
     },
-    leads: (qc) => warm(qc, pipelinesQuery),
-    analytics: (qc) => warm(qc, analyticsQuery(null)),
+    crm: (qc) => warm(qc, pipelinesQuery),
     billing: (qc) => warm(qc, subscriptionQuery),
   };

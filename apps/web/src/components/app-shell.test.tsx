@@ -98,32 +98,27 @@ describe('AppShell rail', () => {
     renderShell('OPERATOR');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(5);
     expect(links.map((link) => link.textContent)).toEqual([
       'AI agent',
       'Today',
       'Inbox',
-      'Leads',
-      'Tasks',
+      'CRM',
       'Settings',
     ]);
-    expect(
-      within(rail()).queryByRole('link', { name: 'Analytics' }),
-    ).toBeNull();
+    expect(within(rail()).queryByRole('link', { name: 'Billing' })).toBeNull();
   });
 
   it('shows an administrator every item', async () => {
     renderShell('ADMIN');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(8);
+    expect(links).toHaveLength(6);
     expect(links.map((link) => link.textContent)).toEqual([
       'AI agent',
       'Today',
       'Inbox',
-      'Leads',
-      'Tasks',
-      'Analytics',
+      'CRM',
       'Billing',
       'Settings',
     ]);
@@ -133,13 +128,12 @@ describe('AppShell rail', () => {
     renderShell('VIEWER');
     await screen.findByTestId('children');
     const links = within(rail()).getAllByRole('link');
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(5);
     expect(links.map((link) => link.textContent)).toEqual([
       'AI agent',
       'Today',
       'Inbox',
-      'Leads',
-      'Tasks',
+      'CRM',
       'Settings',
     ]);
   });

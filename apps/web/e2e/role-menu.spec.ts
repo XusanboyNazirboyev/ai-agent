@@ -4,21 +4,12 @@ import { fixtures, newSession } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-const OPERATOR_ITEMS = [
-  'AI agent',
-  'Today',
-  'Inbox',
-  'Leads',
-  'Tasks',
-  'Settings',
-];
+const OPERATOR_ITEMS = ['AI agent', 'Today', 'Inbox', 'CRM', 'Settings'];
 const ADMIN_ITEMS = [
   'AI agent',
   'Today',
   'Inbox',
-  'Leads',
-  'Tasks',
-  'Analytics',
+  'CRM',
   'Billing',
   'Settings',
 ];
@@ -51,15 +42,15 @@ test.describe('role-based menu', () => {
       await expect(links).toHaveCount(items.length);
       for (const name of items)
         await expect(rail.getByRole('link', { name })).toHaveCount(1);
-      const hidden = (items as readonly string[]).includes('Analytics')
+      const hidden = (items as readonly string[]).includes('Billing')
         ? []
-        : ['Analytics'];
+        : ['Billing'];
       for (const name of hidden)
         await expect(rail.getByRole('link', { name })).toHaveCount(0);
     });
   }
 
-  test('operator and viewer do not see analytics on the More page either', async ({
+  test('operator and viewer do not see billing on the More page either', async ({
     browser,
   }) => {
     for (const role of ['op1', 'viewer'] as const) {
@@ -67,9 +58,7 @@ test.describe('role-based menu', () => {
       await page.goto('/more');
       // Inside the page: on a wide screen the side rail has the same names.
       const more = page.locator('#app-main');
-      await expect(more.getByRole('link', { name: 'Analytics' })).toHaveCount(
-        0,
-      );
+      await expect(more.getByRole('link', { name: 'Billing' })).toHaveCount(0);
       // Knowledge is no menu item of its own: it sits under the AI agent.
       await expect(more.getByRole('link', { name: 'Knowledge' })).toHaveCount(
         0,
@@ -78,12 +67,13 @@ test.describe('role-based menu', () => {
     }
   });
 
-  test('administrator sees analytics on the More page too', async ({
+  test('administrator sees billing on the More page too', async ({
     browser,
   }) => {
     const page = await openAs(browser, 'admin');
     await page.goto('/more');
-    for (const name of ['Settings', 'Analytics'])
+    // Analytics is the CRM section's Report tab now (owner 2026-11-24).
+    for (const name of ['Settings', 'Billing'])
       await expect(
         page.locator('#app-main').getByRole('link', { name }),
       ).toHaveCount(1);

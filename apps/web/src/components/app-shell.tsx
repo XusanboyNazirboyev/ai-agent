@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { useI18n } from '@/i18n';
 import { api, ApiError } from '@/lib/api';
-import { NAV, visibleNav, type NavKey } from '@/lib/nav';
+import { NAV, navHref, visibleNav, type NavKey } from '@/lib/nav';
 import { PAGE_PREFETCH } from '@/lib/page-prefetch';
 import { waitingCountQuery } from '@/lib/queries';
 import {
@@ -55,7 +55,7 @@ export function useShell(): ShellValue {
 }
 
 /** On phones only these fit the tab bar; the rest sit behind "More". */
-export const PRIMARY: NavKey[] = ['today', 'inbox', 'leads'];
+export const PRIMARY: NavKey[] = ['today', 'inbox', 'crm'];
 
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';
@@ -282,7 +282,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
               <NavLink
                 key={item.key}
                 layout="rail"
-                href={`/${item.key}`}
+                href={navHref(item)}
                 icon={item.icon}
                 label={t(`nav.${item.key}`)}
                 active={current?.key === item.key}
@@ -362,7 +362,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                   <NavLink
                     key={item.key}
                     layout="bar"
-                    href={`/${item.key}`}
+                    href={navHref(item)}
                     icon={item.icon}
                     label={t(`nav.${item.key}`)}
                     active={current?.key === item.key}

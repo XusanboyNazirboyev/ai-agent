@@ -45,7 +45,7 @@ test.describe('Content-Security-Policy on every main page', () => {
     }
     // Client-side navigation too (Next injects route stylesheets then).
     await page.goto('/inbox');
-    for (const name of ['Leads', 'Contacts', 'Analytics']) {
+    for (const name of ['CRM', 'Report', 'Tasks']) {
       const link = page.getByRole('link', { name, exact: true }).first();
       if (await link.count()) await link.click();
       await page.waitForLoadState('networkidle');
