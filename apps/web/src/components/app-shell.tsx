@@ -29,7 +29,8 @@ import { LeadLimitBanner } from './lead-limit-banner';
 import { accessNotice } from '@/lib/access-notice';
 import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
-import { ThemeToggle, UserMenu } from './header-controls';
+import { NotificationBell, ThemeToggle, UserMenu } from './header-controls';
+import { useNotificationFeed } from '@/lib/notification-feed';
 import { PageLoading } from './page-loading';
 import { Badge, type Tone } from './ui/badge';
 import { BrandMark } from './ui/brand';
@@ -158,8 +159,12 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     )
       new Notification(tRef.current('notify.newHandover'), { tag: 'handover' });
   };
+  const feed = useNotificationFeed(me.data?.operator?.id);
+  const addToFeed = feed.add;
   const onEvent = useCallback(
     (event: LiveEvent) => {
+      // Owner 2026-11-24: every event that needs a person goes to the bell.
+      addToFeed(event);
       if (event.type === 'task.due') {
         // A task's time came: refresh the lists and say so once.
         void queryClient.invalidateQueries({ queryKey: ['tasks-mine'] });
@@ -187,7 +192,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       }
       onHandover(event);
     },
-    [queryClient, toast, router],
+    [queryClient, toast, router, addToFeed],
   );
   const connection = useLiveUpdates(me.isSuccess, onEvent);
 
@@ -307,6 +312,14 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5 text-sm sm:gap-2">
+              <NotificationBell
+                items={feed.items}
+                onOpen={(item, href) => {
+                  feed.markRead(item.id);
+                  router.push(href);
+                }}
+                onMarkAllRead={feed.markAllRead}
+              />
               <ThemeToggle />
               <LocaleSwitcher compact />
               <UserMenu

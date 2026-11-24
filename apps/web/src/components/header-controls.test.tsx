@@ -1,10 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ThemeToggle, UserMenu } from './header-controls';
+import { NotificationBell, ThemeToggle, UserMenu } from './header-controls';
+import type { FeedItem } from '@/lib/notification-feed';
 
 const setTheme = vi.fn();
 let theme: 'system' | 'light' | 'dark' = 'light';
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key, formatDateTime: () => 'time' }),
+}));
+vi.mock('./notification-control', () => ({ NotificationControl: () => null }));
 vi.mock('@/lib/preferences', () => ({
   usePreferences: () => ({ theme, setTheme }),
 }));
@@ -45,5 +49,44 @@ describe('header controls (owner 2026-11-23)', () => {
     fireEvent.click(screen.getByTestId('user-menu'));
     fireEvent.click(screen.getByTestId('logout'));
     expect(onLogout).toHaveBeenCalledOnce();
+  });
+
+  it('the bell counts unread items and opens one where it leads', () => {
+    const items: FeedItem[] = [
+      {
+        id: 'a',
+        type: 'handover.created',
+        at: '2026-11-24T08:00:00Z',
+        conversationId: 'c1',
+        title: null,
+        read: false,
+      },
+      {
+        id: 'b',
+        type: 'task.due',
+        at: '2026-11-24T07:00:00Z',
+        conversationId: null,
+        title: 'Call Ali',
+        read: true,
+      },
+    ];
+    const onOpen = vi.fn();
+    const onMarkAllRead = vi.fn();
+    render(
+      <NotificationBell
+        items={items}
+        onOpen={onOpen}
+        onMarkAllRead={onMarkAllRead}
+      />,
+    );
+    expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
+    fireEvent.click(screen.getByTestId('notification-bell'));
+    expect(screen.getAllByTestId('notification-item')).toHaveLength(2);
+    expect(screen.getByText('Call Ali')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('notification-read-all'));
+    expect(onMarkAllRead).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getAllByTestId('notification-item')[0]!);
+    expect(onOpen).toHaveBeenCalledWith(items[0], '/inbox?c=c1');
+    expect(screen.queryByTestId('notification-panel')).toBeNull();
   });
 });

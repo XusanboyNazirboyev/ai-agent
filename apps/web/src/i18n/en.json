@@ -2038,5 +2038,10 @@
   "agent.ownerRules.placeholder": "For example: if a discount is asked, hand over to an operator.",
   "agent.ownerRules.tooMany": "At most {max} rules.",
   "agent.ownerRules.tooLong": "Each rule at most {max} characters.",
-  "agent.ownerRules.saved": "Rules saved"
+  "agent.ownerRules.saved": "Rules saved",
+  "notify.bell": "Notifications",
+  "notify.unread": "Notifications: {count} unread",
+  "notify.empty": "No notifications yet",
+  "notify.markAll": "Mark all as read",
+  "notify.slaBreached": "The reply deadline for a customer has passed"
 }

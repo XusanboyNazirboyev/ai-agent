@@ -2038,5 +2038,10 @@
   "agent.ownerRules.placeholder": "Например: если спрашивают скидку, передай оператору.",
   "agent.ownerRules.tooMany": "Можно не больше {max} правил.",
   "agent.ownerRules.tooLong": "Каждое правило — не длиннее {max} символов.",
-  "agent.ownerRules.saved": "Правила сохранены"
+  "agent.ownerRules.saved": "Правила сохранены",
+  "notify.bell": "Уведомления",
+  "notify.unread": "Уведомления: непрочитанных {count}",
+  "notify.empty": "Пока уведомлений нет",
+  "notify.markAll": "Отметить все прочитанными",
+  "notify.slaBreached": "Срок ответа клиенту истёк"
 }

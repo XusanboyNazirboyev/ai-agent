@@ -2038,5 +2038,10 @@
   "agent.ownerRules.placeholder": "Masalan: Chegirma so‘ralsa, operatorga ulang.",
   "agent.ownerRules.tooMany": "Ko‘pi bilan {max} ta qoida yozish mumkin.",
   "agent.ownerRules.tooLong": "Har bir qoida {max} belgidan oshmasin.",
-  "agent.ownerRules.saved": "Qoidalar saqlandi"
+  "agent.ownerRules.saved": "Qoidalar saqlandi",
+  "notify.bell": "Bildirishnomalar",
+  "notify.unread": "Bildirishnomalar: {count} ta o‘qilmagan",
+  "notify.empty": "Hozircha bildirishnoma yo‘q",
+  "notify.markAll": "Hammasini o‘qilgan deb belgilash",
+  "notify.slaBreached": "Mijozga javob berish muddati o‘tdi"
 }
