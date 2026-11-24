@@ -73,7 +73,10 @@ describe('GET /api/v1/public/plans', () => {
     });
     const controller = new PublicPlansController(
       { db } as unknown as PrivilegedDatabase,
-      config({ PUBLIC_SALES_CONTACT_URL: 'https://t.me/example' }),
+      config({
+        PUBLIC_SALES_CONTACT_URL: 'https://t.me/example',
+        PUBLIC_SALES_VIDEO_URL: 'https://cdn.example/demo.mp4',
+      }),
     );
     const body = await controller.plans(request);
     const codes = body.plans.map((p) => p.code);
@@ -103,6 +106,7 @@ describe('GET /api/v1/public/plans', () => {
       'priceMinor',
     ]);
     expect(body.contactUrl).toBe('https://t.me/example');
+    expect(body.videoUrl).toBe('https://cdn.example/demo.mp4');
   });
 
   it('caches for a minute and rate limits per address', async () => {
@@ -120,6 +124,7 @@ describe('GET /api/v1/public/plans', () => {
     expect(second.plans.map((p) => p.code)).not.toContain(late);
     expect(second).toBe(first);
     expect(first.contactUrl).toBeNull();
+    expect(first.videoUrl).toBeNull();
     let error: unknown;
     for (let i = 0; i < 70; i += 1)
       await controller.plans(request).catch((e: unknown) => (error = e));

@@ -82,6 +82,30 @@ describe('SalesSite', () => {
     ).toBeGreaterThan(1);
   });
 
+  // Owner 2026-11-24: the page opens with the demo video, or the sample chat.
+  it('opens with the demo video when there is one, else the sample chat', async () => {
+    answer({
+      plans: [],
+      contactUrl: null,
+      videoUrl: 'https://cdn.example/demo.mp4',
+    });
+    view();
+    expect(await screen.findByTestId('site-video')).toHaveAttribute(
+      'src',
+      'https://cdn.example/demo.mp4',
+    );
+    expect(screen.queryByTestId('site-chat-demo')).toBeNull();
+    cleanup();
+    answer({ plans: [], contactUrl: null, videoUrl: 'http://plain.example' });
+    view();
+    expect(await screen.findByTestId('site-chat-demo')).toBeTruthy();
+    expect(screen.queryByTestId('site-video')).toBeNull();
+    expect(screen.getByTestId('site-results')).toBeTruthy();
+    expect(screen.getByTestId('site-contact-form')).toBeTruthy();
+    // No logos until real clients agree to be shown.
+    expect(screen.queryByTestId('site-clients')).toBeNull();
+  });
+
   it('sends a signed-in person to Today', async () => {
     answer({ plans: [], contactUrl: null }, true);
     view();

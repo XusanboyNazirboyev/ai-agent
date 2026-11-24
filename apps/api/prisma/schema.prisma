@@ -2281,3 +2281,21 @@ model CrmStageMapping {
   @@index([tenantId, leadStageId])
   @@map("crm_stage_mappings")
 }
+
+/// Owner 2026-11-24: a "contact us" request from the public sales page, sent
+/// to the sales team's Telegram chat by the platform bot. Platform level: no
+/// tenant, no RLS; only the privileged connection touches it. Goes to the
+/// SalesGo CRM later.
+model SalesInquiry {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String   @db.VarChar(80)
+  phone     String   @db.VarChar(32)
+  company   String?  @db.VarChar(120)
+  message   String?  @db.VarChar(500)
+  locale    String?  @db.VarChar(10)
+  notified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([createdAt])
+  @@map("sales_inquiries")
+}

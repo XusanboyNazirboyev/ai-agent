@@ -253,3 +253,23 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
+
+/* Owner 2026-11-24: the sales page's client logos scroll slowly in a loop. */
+@keyframes site-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.site-marquee {
+  animation: site-marquee 40s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-marquee {
+    animation: none;
+  }
+}

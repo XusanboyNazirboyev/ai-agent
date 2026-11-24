@@ -31,6 +31,8 @@ export interface PublicPlanView {
 export interface PublicPlansResponse {
   plans: PublicPlanView[];
   contactUrl: string | null;
+  /** Owner 2026-11-24: the demo video the sales page opens with. */
+  videoUrl: string | null;
 }
 
 const TTL_MS = 60_000;
@@ -102,6 +104,8 @@ export class PublicPlansController {
       }),
       contactUrl:
         this.config.get('PUBLIC_SALES_CONTACT_URL', { infer: true }) ?? null,
+      videoUrl:
+        this.config.get('PUBLIC_SALES_VIDEO_URL', { infer: true }) ?? null,
     };
     this.cache = { at: now, body };
     return body;

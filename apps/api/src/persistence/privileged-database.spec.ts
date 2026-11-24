@@ -42,6 +42,10 @@ const ALLOWED = new Map([
     'public/public-plans.controller.ts',
     'sales site plan list, before any tenant',
   ],
+  [
+    'public/sales-inquiry.controller.ts',
+    'sales site contact requests (platform table, no tenant)',
+  ],
   ['signup/signup-cleanup.scan.ts', 'purges expired signups (platform table)'],
 
   [

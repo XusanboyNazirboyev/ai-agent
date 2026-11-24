@@ -36,6 +36,13 @@ const environmentSchema = postgresEnvironmentSchema
     WEB_PROXY_SECRET: z.string().min(32).max(512).optional(),
     /** ADR 080: where "All included" enterprise enquiries go (https link, e.g. a Telegram chat). */
     PUBLIC_SALES_CONTACT_URL: z.url({ protocol: /^https$/u }).optional(),
+    /** Owner 2026-11-24: the demo video at the top of the sales page (https). */
+    PUBLIC_SALES_VIDEO_URL: z.url({ protocol: /^https$/u }).optional(),
+    /** Owner 2026-11-24: Telegram chat the platform bot sends sales-page requests to. */
+    SALES_INQUIRY_CHAT_ID: z
+      .string()
+      .regex(/^-?\d{1,20}$/u)
+      .optional(),
     /** Login attempts allowed per client address and minute. */
     LOGIN_RATE_LIMIT_PER_MINUTE: z.coerce
       .number()

@@ -13,13 +13,18 @@ import {
   signupHref,
   type PublicPlans,
 } from '@/lib/public-site';
+import { SITE_CLIENTS } from '@/lib/site-clients';
 import { LegalLinks } from './legal-page';
 import { LocaleSwitcher } from './locale-switcher';
+import { SiteChatDemo } from './site-chat-demo';
+import { SiteContactForm } from './site-contact-form';
 import { BrandLogo } from './ui/brand';
 import { Icon } from './ui/icons';
 
 const CTA =
-  'inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-center font-semibold text-primary-fg hover:bg-primary-hover';
+  'inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-5 py-2.5 text-center font-semibold text-white hover:bg-primary-hover';
+const CTA_SECONDARY =
+  'inline-flex min-h-11 items-center justify-center rounded-xl border border-line bg-surface px-5 py-2.5 text-center font-semibold text-fg hover:bg-surface-2';
 const CARD =
   'flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-card';
 
@@ -50,8 +55,10 @@ export function SalesSite(): ReactNode {
     plans.data?.contactUrl,
     process.env.NEXT_PUBLIC_SALES_CONTACT_URL,
   );
+  const video = safeContactUrl(plans.data?.videoUrl, undefined);
   const steps = [1, 2, 3];
   const features = [1, 2, 3, 4];
+  const results = [1, 2, 3, 4];
   return (
     <div className="min-h-dvh overflow-x-hidden bg-canvas text-fg">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-4">
@@ -59,24 +66,48 @@ export function SalesSite(): ReactNode {
           <BrandLogo name={t('app.brand')} className="text-2xl" />
         </Link>
         <nav aria-label={t('site.nav')} className="flex items-center gap-3">
-          <LocaleSwitcher />
+          <LocaleSwitcher compact />
           <Link href="/login" className="text-sm font-medium underline">
             {t('site.signIn')}
           </Link>
         </nav>
       </header>
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-14 px-4 pb-12">
-        <section className="flex flex-col items-start gap-5 pt-6">
-          <h1 className="text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">
-            {t('site.hero.title')}
-          </h1>
-          <p className="max-w-2xl text-base text-muted sm:text-lg">
-            {t('site.hero.subtitle')}
-          </p>
-          <Link href={signupHref()} className={CTA} data-testid="site-cta">
-            {t('site.cta')}
-          </Link>
-          <p className="text-sm text-muted">{t('site.hero.note')}</p>
+        <section className="grid items-center gap-8 pt-6 lg:grid-cols-[1fr_minmax(0,26rem)]">
+          <div className="flex flex-col items-start gap-5">
+            <h1 className="text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">
+              {t('site.hero.title')}
+            </h1>
+            <p className="max-w-2xl text-base text-muted sm:text-lg">
+              {t('site.hero.subtitle')}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href={signupHref()} className={CTA} data-testid="site-cta">
+                {t('site.cta')}
+              </Link>
+              <a href="#contact" className={CTA_SECONDARY}>
+                {t('site.contact.cta')}
+              </a>
+            </div>
+            <p className="text-sm text-muted">{t('site.hero.note')}</p>
+          </div>
+          {/* Owner 2026-11-24: the page opens with the demo sale. */}
+          {video ? (
+            <video
+              data-testid="site-video"
+              src={video}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls
+              preload="metadata"
+              aria-label={t('site.demo.video')}
+              className="aspect-[9/16] max-h-[36rem] w-full rounded-3xl border border-line bg-surface-2 object-cover shadow-card"
+            />
+          ) : (
+            <SiteChatDemo />
+          )}
         </section>
 
         <section
@@ -97,6 +128,61 @@ export function SalesSite(): ReactNode {
             ))}
           </ul>
         </section>
+
+        <section aria-labelledby="site-results" className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1">
+            <h2 id="site-results" className="text-2xl font-semibold">
+              {t('site.results.title')}
+            </h2>
+            <p className="text-sm text-muted">{t('site.results.subtitle')}</p>
+          </div>
+          <ul
+            data-testid="site-results"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            {results.map((n) => (
+              <li key={n} className={CARD}>
+                <p className="text-3xl font-semibold text-brand">
+                  {t(`site.result${n}.value`)}
+                </p>
+                <h3 className="font-semibold">{t(`site.result${n}.title`)}</h3>
+                <p className="text-sm text-muted">
+                  {t(`site.result${n}.body`)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {SITE_CLIENTS.length > 0 ? (
+          <section
+            aria-labelledby="site-clients"
+            data-testid="site-clients"
+            className="flex flex-col gap-5"
+          >
+            <h2 id="site-clients" className="text-2xl font-semibold">
+              {t('site.clients.title')}
+            </h2>
+            <div className="overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_10%,#000_90%,transparent)]">
+              <ul className="site-marquee flex w-max items-center gap-10 py-2">
+                {[...SITE_CLIENTS, ...SITE_CLIENTS].map((client, i) => (
+                  <li
+                    key={`${client.name}-${i}`}
+                    aria-hidden={i >= SITE_CLIENTS.length || undefined}
+                    className="flex h-14 shrink-0 items-center"
+                  >
+                    <img
+                      src={client.logo}
+                      alt={client.name}
+                      loading="lazy"
+                      className="max-h-12 w-auto opacity-80 grayscale transition hover:opacity-100 hover:grayscale-0"
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : null}
 
         <section aria-labelledby="site-steps" className="flex flex-col gap-5">
           <h2 id="site-steps" className="text-2xl font-semibold">
@@ -185,17 +271,13 @@ export function SalesSite(): ReactNode {
               <p className="flex-1 text-sm text-muted">
                 {t('site.enterprise.body')}
               </p>
-              {contact ? (
-                <a
-                  href={contact}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="site-contact"
-                  className={CTA}
-                >
-                  {t('site.enterprise.contact')}
-                </a>
-              ) : null}
+              <a
+                href="#contact"
+                data-testid="site-enterprise-contact"
+                className={CTA}
+              >
+                {t('site.enterprise.contact')}
+              </a>
             </li>
           </ul>
           {list.length === 0 && !plans.isPending ? (
@@ -205,6 +287,25 @@ export function SalesSite(): ReactNode {
               </Link>
             </div>
           ) : null}
+        </section>
+
+        <section
+          id="contact"
+          aria-labelledby="site-contact-title"
+          className="grid scroll-mt-6 gap-6 rounded-3xl border border-line bg-primary-soft p-5 sm:p-8 lg:grid-cols-2"
+        >
+          <div className="flex flex-col gap-3">
+            <h2
+              id="site-contact-title"
+              className="text-2xl font-semibold sm:text-3xl"
+            >
+              {t('site.contact.title')}
+            </h2>
+            <p className="text-base text-muted">{t('site.contact.body')}</p>
+          </div>
+          <div className="rounded-2xl bg-surface p-4 shadow-card sm:p-5">
+            <SiteContactForm telegramUrl={contact} />
+          </div>
         </section>
 
         <section aria-labelledby="site-faq" className="flex flex-col gap-4">
