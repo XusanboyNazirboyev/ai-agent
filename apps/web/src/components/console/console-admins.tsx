@@ -1,24 +1,24 @@
-'use client';
+"use client";
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
-import { useI18n } from '@/i18n';
-import { platformApi } from '@/lib/api';
-import type { PlatformAdminRow } from '@/lib/platform-types';
-import type { PlatformRole } from '@/lib/roles';
-import type { CreatedInvite } from '@/lib/types';
-import { InviteLinkBox } from '../invite-link-box';
-import { Avatar } from '../ui/avatar';
-import { Badge } from '../ui/badge';
-import { Button } from '../ui/button';
-import { ConfirmDialog } from '../ui/confirm-dialog';
-import { ErrorNote, QueryState } from '../ui/error-note';
-import { fieldClass } from '../ui/fields';
-import { FormDialog } from '../ui/form-dialog';
-import { Select } from '../ui/select';
-import { useConsole } from './console-shell';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
+import { platformApi } from "@/lib/api";
+import type { PlatformAdminRow } from "@/lib/platform-types";
+import type { PlatformRole } from "@/lib/roles";
+import type { CreatedInvite } from "@/lib/types";
+import { InviteLinkBox } from "../invite-link-box";
+import { Avatar } from "../ui/avatar";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { ConfirmDialog } from "../ui/confirm-dialog";
+import { ErrorNote, QueryState } from "../ui/error-note";
+import { fieldClass } from "../ui/fields";
+import { FormDialog } from "../ui/form-dialog";
+import { Select } from "../ui/select";
+import { useConsole } from "./console-shell";
 
-const ROLES: PlatformRole[] = ['PLATFORM_OWNER', 'PLATFORM_SUPPORT'];
+const ROLES: PlatformRole[] = ["PLATFORM_OWNER", "PLATFORM_SUPPORT"];
 
 /** Platform admins (PLATFORM_OWNER only): list, invite, deactivate. */
 export function ConsoleAdmins(): ReactNode {
@@ -26,24 +26,24 @@ export function ConsoleAdmins(): ReactNode {
   const { admin, canWrite } = useConsole();
   const queryClient = useQueryClient();
   const [inviting, setInviting] = useState(false);
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<PlatformRole>('PLATFORM_SUPPORT');
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<PlatformRole>("PLATFORM_SUPPORT");
   const [target, setTarget] = useState<PlatformAdminRow | null>(null);
 
   const query = useQuery({
-    queryKey: ['platform', 'admins'],
+    queryKey: ["platform", "admins"],
     queryFn: () =>
-      platformApi<{ admins: PlatformAdminRow[] }>('/api/v1/platform/admins'),
+      platformApi<{ admins: PlatformAdminRow[] }>("/api/v1/platform/admins"),
     enabled: canWrite,
   });
   const refresh = (): void => {
-    void queryClient.invalidateQueries({ queryKey: ['platform', 'admins'] });
+    void queryClient.invalidateQueries({ queryKey: ["platform", "admins"] });
   };
   const invite = useMutation({
     mutationFn: () =>
-      platformApi<CreatedInvite>('/api/v1/platform/admins', {
-        method: 'POST',
+      platformApi<CreatedInvite>("/api/v1/platform/admins", {
+        method: "POST",
         body: { email: email.trim(), displayName: name.trim(), role },
       }),
     onSuccess: refresh,
@@ -51,16 +51,16 @@ export function ConsoleAdmins(): ReactNode {
   const deactivate = useMutation({
     mutationFn: (id: string) =>
       platformApi(`/api/v1/platform/admins/${id}/deactivate`, {
-        method: 'POST',
+        method: "POST",
       }),
     onSuccess: refresh,
     onSettled: () => setTarget(null),
   });
   useEffect(() => {
     if (inviting) return;
-    setEmail('');
-    setName('');
-    setRole('PLATFORM_SUPPORT');
+    setEmail("");
+    setName("");
+    setRole("PLATFORM_SUPPORT");
     invite.reset();
   }, [inviting]);
 
@@ -70,7 +70,7 @@ export function ConsoleAdmins(): ReactNode {
         role="alert"
         className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
       >
-        {t('errors.FORBIDDEN')}
+        {t("errors.FORBIDDEN")}
       </p>
     );
 
@@ -80,14 +80,14 @@ export function ConsoleAdmins(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">{t('console.admins.intro')}</p>
+        <p className="text-sm text-muted">{t("console.admins.intro")}</p>
         <Button
           variant="primary"
           icon="plus"
           data-testid="admin-invite"
           onClick={() => setInviting(true)}
         >
-          {t('console.admins.invite')}
+          {t("console.admins.invite")}
         </Button>
       </div>
       <QueryState
@@ -115,10 +115,10 @@ export function ConsoleAdmins(): ReactNode {
               {row.invitePending ? (
                 <Badge tone="warning">
                   {row.inviteExpiresAt
-                    ? t('console.admins.pendingUntil', {
+                    ? t("console.admins.pendingUntil", {
                         date: formatDateTime(row.inviteExpiresAt),
                       })
-                    : t('console.admins.pending')}
+                    : t("console.admins.pending")}
                 </Badge>
               ) : null}
               {row.id !== admin.id ? (
@@ -128,7 +128,7 @@ export function ConsoleAdmins(): ReactNode {
                   data-testid="admin-deactivate"
                   onClick={() => setTarget(row)}
                 >
-                  {t('team.deactivate')}
+                  {t("team.deactivate")}
                 </Button>
               ) : null}
             </span>
@@ -138,8 +138,8 @@ export function ConsoleAdmins(): ReactNode {
 
       <FormDialog
         open={inviting}
-        title={t('console.admins.invite')}
-        description={created ? undefined : t('console.admins.inviteBody')}
+        title={t("console.admins.invite")}
+        description={created ? undefined : t("console.admins.inviteBody")}
         testId="admin-invite-dialog"
         onClose={() => setInviting(false)}
         onSubmit={() => {
@@ -149,12 +149,12 @@ export function ConsoleAdmins(): ReactNode {
         footer={
           created ? (
             <Button type="submit" variant="primary" data-testid="dialog-done">
-              {t('action.done')}
+              {t("action.done")}
             </Button>
           ) : (
             <>
               <Button onClick={() => setInviting(false)}>
-                {t('confirm.cancel')}
+                {t("confirm.cancel")}
               </Button>
               <Button
                 type="submit"
@@ -163,7 +163,7 @@ export function ConsoleAdmins(): ReactNode {
                 disabled={!email.trim() || !name.trim()}
                 data-testid="invite-submit"
               >
-                {t('team.inviteSubmit')}
+                {t("team.inviteSubmit")}
               </Button>
             </>
           )
@@ -178,7 +178,7 @@ export function ConsoleAdmins(): ReactNode {
         ) : (
           <>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('invite.accept.name')}
+              {t("invite.accept.name")}
               <input
                 data-testid="admin-name"
                 required
@@ -189,7 +189,7 @@ export function ConsoleAdmins(): ReactNode {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('login.email')}
+              {t("login.email")}
               <input
                 type="email"
                 inputMode="email"
@@ -202,7 +202,7 @@ export function ConsoleAdmins(): ReactNode {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
-              {t('team.role')}
+              {t("team.role")}
               <Select
                 data-testid="invite-role"
                 value={role}
@@ -221,12 +221,12 @@ export function ConsoleAdmins(): ReactNode {
       </FormDialog>
       <ConfirmDialog
         open={target !== null}
-        title={t('console.admins.deactivateTitle')}
-        body={t('console.admins.deactivateBody', {
-          name: target?.displayName ?? '',
+        title={t("console.admins.deactivateTitle")}
+        body={t("console.admins.deactivateBody", {
+          name: target?.displayName ?? "",
         })}
-        confirmLabel={t('team.deactivate')}
-        cancelLabel={t('confirm.cancel')}
+        confirmLabel={t("team.deactivate")}
+        cancelLabel={t("confirm.cancel")}
         tone="danger"
         busy={deactivate.isPending}
         onConfirm={() => {
