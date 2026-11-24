@@ -57,6 +57,12 @@ export function useShell(): ShellValue {
 /** On phones only these fit the tab bar; the rest sit behind "More". */
 export const PRIMARY: NavKey[] = ['today', 'inbox', 'crm'];
 
+/**
+ * Pages inside a section everyone opens that only owners and admins may read
+ * (the CRM report and calls, 2026-11-24): others get the access screen.
+ */
+const MANAGER_PATHS = ['/analytics', '/calls'];
+
 /** Numerals and a plus sign: the same in every language. */
 const COUNT_CAP_LABEL = '99+';
 
@@ -345,7 +351,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
             </div>
           ) : null}
           <main id="app-main" className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {current && !allowed.includes(current.key) ? (
+            {(current && !allowed.includes(current.key)) ||
+            (!canManageTeam(operator.role) &&
+              MANAGER_PATHS.some((path) => pathname.startsWith(path))) ? (
               <AccessDenied />
             ) : (
               children
