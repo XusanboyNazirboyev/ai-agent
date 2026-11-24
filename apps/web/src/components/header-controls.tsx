@@ -184,7 +184,7 @@ export function NotificationBell(props: {
         {unread > 0 ? (
           <span
             data-testid="notification-count"
-            className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[0.625rem] leading-4 font-semibold text-white"
+            className="absolute top-0 right-0 min-w-4 rounded-full bg-danger px-1 text-center text-[0.625rem] leading-4 font-semibold text-white"
           >
             {unread > 99 ? '99+' : unread}
           </span>
