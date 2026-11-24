@@ -69,3 +69,12 @@ the normal e2e setup reads the root `.env` automatically.
 
 Owner-reported staging observations remain unverified here: about 170 MB of swap,
 and about 4 s for the first request after idle. No server tuning or release performed.
+
+## Amendment — lazy locales and a 5-minute page cache (2026-11-24)
+
+Owner report: switching pages is slow. Measured from outside (not from the owner's network) against staging `fed084d`: every page and API answer in about 0.28 s, of which about 0.18 s is the TLS connection; the server is not the bottleneck. The largest browser chunk (415 KB, 118 KB gzip) held all three translation catalogs, so every visit downloaded and parsed two languages it never showed.
+
+- Only English (the fallback for every key) stays in the main bundle; Russian and Uzbek are separate chunks loaded when chosen (`src/i18n/catalogs.ts`, `loadCatalog`). The provider switches language only once its messages are loaded, so no key flashes. Built chunks: English 43 KB gzip, Uzbek 34 KB, Russian 41 KB: an Uzbek user loads 77 KB instead of 118 KB.
+- `staleTimes.dynamic` 30 → 300 s: a page seen in the last 5 minutes reopens without a server round trip. Safe for the same reason as before: data is fetched in the browser; only the near-static page shell is reused.
+
+Not measured: click-to-content time from the owner's network (needs the browser on their side); server memory and swap (the AWS session had expired).

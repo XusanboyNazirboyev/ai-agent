@@ -10,19 +10,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import en from './en.json';
-import ru from './ru.json';
-import uzLatn from './uz-Latn.json';
+import { CATALOGS, loadCatalog } from './catalogs';
 
 export const LOCALES = ['uz-Latn', 'ru', 'en'] as const;
 export type Locale = (typeof LOCALES)[number];
-export type Messages = Record<string, string>;
-
-export const CATALOGS: Record<Locale, Messages> = {
-  en,
-  ru,
-  'uz-Latn': uzLatn,
-};
+export type { Messages } from './catalogs';
+export { CATALOGS, loadCatalog };
 
 const STORAGE_KEY = 'ac_locale';
 
@@ -49,7 +42,7 @@ export function translate(
   key: string,
   values?: Record<string, string | number>,
 ): string {
-  const message = CATALOGS[locale][key] ?? CATALOGS.en[key];
+  const message = CATALOGS[locale]?.[key] ?? CATALOGS.en[key];
   if (message === undefined) return key;
   const cacheKey = `${locale}\u0000${key}`;
   let formatter = formatters.get(cacheKey);
@@ -82,14 +75,22 @@ export function I18nProvider({ children }: { children: ReactNode }): ReactNode {
     } catch {
       // Storage may be blocked; the browser language still works.
     }
-    setLocaleState(detectLocale(stored, window.navigator.languages ?? []));
+    const detected = detectLocale(stored, window.navigator.languages ?? []);
+    // Switch once its messages are here, so no key flashes untranslated.
+    void loadCatalog(detected).then(
+      () => setLocaleState(detected),
+      () => undefined,
+    );
   }, []);
   useEffect(() => {
     document.documentElement.lang = locale === 'uz-Latn' ? 'uz' : locale;
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
-    setLocaleState(next);
+    void loadCatalog(next).then(
+      () => setLocaleState(next),
+      () => undefined,
+    );
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {

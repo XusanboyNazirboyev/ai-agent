@@ -9,13 +9,17 @@ const argNames = (message: string): string[] =>
     .map((match) => match[1])
     .sort();
 
+// Lazy chunks are loaded by vitest.setup.ts before this runs.
+const catalog = (locale: (typeof LOCALES)[number]): Record<string, string> =>
+  CATALOGS[locale]!;
+
 describe('translation catalogs (CI gate)', () => {
   const reference = Object.keys(CATALOGS.en).sort();
 
   it.each(LOCALES)(
     '%s has exactly the keys of the English catalog',
     (locale) => {
-      const keys = Object.keys(CATALOGS[locale]).sort();
+      const keys = Object.keys(catalog(locale)).sort();
       expect(keys.filter((key) => !reference.includes(key))).toEqual([]);
       expect(reference.filter((key) => !keys.includes(key))).toEqual([]);
     },
@@ -25,7 +29,7 @@ describe('translation catalogs (CI gate)', () => {
     '%s has no empty values and the same ICU arguments',
     (locale) => {
       for (const key of reference) {
-        const value = CATALOGS[locale][key];
+        const value = catalog(locale)[key];
         expect(value?.trim(), `${locale}:${key}`).toBeTruthy();
         expect(argNames(value), `${locale}:${key}`).toEqual(
           argNames(CATALOGS.en[key]),
@@ -37,7 +41,7 @@ describe('translation catalogs (CI gate)', () => {
   it.each(LOCALES)('%s: every message is valid ICU', (locale) => {
     // A stray "<word>" is read as a markup tag and fails only when shown.
     const broken: string[] = [];
-    for (const [key, value] of Object.entries(CATALOGS[locale])) {
+    for (const [key, value] of Object.entries(catalog(locale))) {
       try {
         new IntlMessageFormat(value, locale);
       } catch {

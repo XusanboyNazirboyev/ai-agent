@@ -7,9 +7,10 @@ export default {
   poweredByHeader: false,
   reactStrictMode: true,
   experimental: {
-    // Pages fetch their data in the browser, so the server part of a page
-    // visited in the last 30 s is reused: going back to it needs no request.
-    staleTimes: { dynamic: 30 },
+    // ADR 083 amendment (owner 2026-11-24, slow page switches): a page seen in
+    // the last 5 minutes opens without a server round trip; its data is
+    // fetched in the browser anyway, so only the near-static shell is reused.
+    staleTimes: { dynamic: 300 },
   },
   // The browser only talks to this origin; /api is proxied to the API, so no
   // CORS is opened and the session cookie stays first-party.
