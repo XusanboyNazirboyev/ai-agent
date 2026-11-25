@@ -84,12 +84,14 @@ test.describe('navigation on a slow server', () => {
 
     await rail.getByRole('link', { name: 'CRM' }).click();
     await expect(page).toHaveURL(/\/leads$/u, { timeout: FEEDBACK_MS });
-    // Menu pages are prefetched in full (2026-11-24): the page itself may
-    // already be here; otherwise its loading state shows. Never the old page.
+    // Menu pages are warmed on intent: the page itself may already be here,
+    // or its loading state shows (both at once while the shell renders the
+    // heading). Never the old page.
     await expect(
       page
         .getByTestId('page-loading')
-        .or(page.getByRole('heading', { level: 1, name: 'CRM' })),
+        .or(page.getByRole('heading', { level: 1, name: 'CRM' }))
+        .first(),
     ).toBeVisible({ timeout: FEEDBACK_MS });
     await expect(
       page.getByRole('heading', { level: 1, name: 'CRM' }),
