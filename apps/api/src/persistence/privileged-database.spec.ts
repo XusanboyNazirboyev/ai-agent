@@ -82,6 +82,10 @@ const ALLOWED = new Map([
     'telephony/call-poll.scan.ts',
     'connected PBX accounts due a poll (ADR 085)',
   ],
+  [
+    'telephony/call-analysis.scan.ts',
+    'pending calls due analysis, claimed by attempt (ADR 085)',
+  ],
   ['leads/lead-sync.service.ts', 'CRM writes to retry or recover'],
   ['retention/retention.service.ts', 'tenants to purge'],
   ['actions/action.service.ts', 'stale proposals, retries, recoveries'],

@@ -28,7 +28,16 @@ import { PersistenceModule } from '../persistence/persistence.module.js';
 import { RetentionModule } from '../retention/retention.module.js';
 import { RetentionService } from '../retention/retention.service.js';
 import { SecretsModule } from '../secrets/secrets.module.js';
+import { ConfigService } from '@nestjs/config';
+import { AgentModule } from '../agent/agent.module.js';
+import type { AppEnvironment } from '../config/environment.js';
+import {
+  CALL_TRANSCRIBER,
+  CallAnalysisScan,
+} from '../telephony/call-analysis.scan.js';
 import { CallPollScan } from '../telephony/call-poll.scan.js';
+import { OnlinePbxSessions } from '../telephony/onlinepbx-sessions.js';
+import { OvozAiCallTranscriber } from '../telephony/ovozai-call-transcriber.js';
 
 /**
  * The periodic scans of the API process: SLA alerts, CRM lead retries,
@@ -48,9 +57,23 @@ import { CallPollScan } from '../telephony/call-poll.scan.js';
     RetentionModule,
     ConnectorsModule,
     SecretsModule,
+    AgentModule,
   ],
   providers: [
+    OnlinePbxSessions,
     CallPollScan,
+    CallAnalysisScan,
+    {
+      // ADR 085: call transcripts need the OvozAI key; without it calls stay PENDING.
+      provide: CALL_TRANSCRIBER,
+      inject: [ConfigService],
+      useFactory: (
+        config: ConfigService<AppEnvironment, true>,
+      ): OvozAiCallTranscriber | null => {
+        const apiKey = config.get('OVOZAI_API_KEY', { infer: true });
+        return apiKey ? new OvozAiCallTranscriber({ apiKey }) : null;
+      },
+    },
     LeadTaskReminders,
     SignupCleanupScan,
     FollowUpService,
@@ -76,6 +99,7 @@ import { CallPollScan } from '../telephony/call-poll.scan.js';
         CrmStageSyncService,
         SignupCleanupScan,
         CallPollScan,
+        CallAnalysisScan,
       ],
       useFactory: (
         lead: LeadSyncService,
@@ -94,6 +118,7 @@ import { CallPollScan } from '../telephony/call-poll.scan.js';
         crmStageSync: CrmStageSyncService,
         signupCleanup: SignupCleanupScan,
         callPoll: CallPollScan,
+        callAnalysis: CallAnalysisScan,
       ): ScheduledScan[] => [
         lead,
         followUp,
@@ -111,6 +136,7 @@ import { CallPollScan } from '../telephony/call-poll.scan.js';
         crmStageSync,
         signupCleanup,
         callPoll,
+        callAnalysis,
       ],
     },
     HandoverRuntime,

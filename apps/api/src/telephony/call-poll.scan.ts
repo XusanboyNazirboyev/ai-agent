@@ -16,9 +16,9 @@ import {
   ONLINEPBX_TRANSPORT,
   OnlinePbxClient,
   OnlinePbxError,
-  type OnlinePbxSession,
   type OnlinePbxTransport,
 } from './onlinepbx-client.js';
+import { OnlinePbxSessions } from './onlinepbx-sessions.js';
 import { openTelephonyApiKey } from './telephony-key.js';
 
 export const CALL_POLL_EVERY_MS = 5 * 60 * 1000;
@@ -38,8 +38,6 @@ const minutesOf = (talkSeconds: number): number => Math.ceil(talkSeconds / 60);
 export class CallPollScan implements ScheduledScan {
   private readonly logger = new Logger(CallPollScan.name);
   private readonly crossTenant: PrismaClient;
-  /** OnlinePBX asks clients not to re-authenticate often; one session per account. */
-  private readonly sessions = new Map<string, OnlinePbxSession>();
   private lastRun = 0;
 
   constructor(
@@ -49,6 +47,9 @@ export class CallPollScan implements ScheduledScan {
     @Optional()
     @Inject(ONLINEPBX_TRANSPORT)
     private readonly transport?: OnlinePbxTransport | null,
+    /** OnlinePBX asks clients not to re-authenticate often; one session per account. */
+    @Optional()
+    private readonly sessions: OnlinePbxSessions = new OnlinePbxSessions(),
   ) {
     this.crossTenant = privileged?.db ?? prisma;
   }

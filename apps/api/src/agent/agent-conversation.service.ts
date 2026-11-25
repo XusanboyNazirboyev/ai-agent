@@ -25,7 +25,10 @@ import {
 import { PROMPT_VERSION, type HistoryEntry } from '../core/agent/prompts.js';
 import type { SlotState } from '../core/agent/slots.js';
 import { TurnBudget } from '../core/llm/budget.js';
-import type { LlmProvider } from '../core/llm/llm-provider.js';
+import type {
+  LlmProvider,
+  StructuredGenerationRequest,
+} from '../core/llm/llm-provider.js';
 import { MeteredLlm, type LlmUsageEntry } from '../core/llm/metered-llm.js';
 import {
   pricingAgeDays,
@@ -267,6 +270,57 @@ export class AgentConversationService implements OnModuleInit {
 
   get localeRegistry(): LocaleRegistry {
     return this.locales;
+  }
+
+  /**
+   * One structured model call that belongs to no conversation (ADR 085 call
+   * summary), metered on the tenant's monthly budget and ledger like a turn.
+   * Returns undefined when the model refused, truncated or failed validation;
+   * budget and provider errors are thrown.
+   */
+  async tenantStructured<T>(
+    tenantId: string,
+    turnKey: string,
+    request: Omit<StructuredGenerationRequest<T>, 'signal' | 'ambiguity'>,
+    signal?: AbortSignal,
+  ): Promise<T | undefined> {
+    const [monthSpent, monthExposure, planLimits] = await Promise.all([
+      this.usage.tenantMonthSpendNano(tenantId),
+      this.ledger.tenantMonthExposureNano(tenantId),
+      openPlanLimits(this.prisma, tenantId),
+    ]);
+    const environment = llmEnvironment(this.config);
+    const budget = new TurnBudget(
+      budgetLimits(
+        environment,
+        monthlyLlmBudgetNano(
+          planLimits,
+          environment.LLM_TENANT_MONTHLY_BUDGET_USD,
+        ),
+      ),
+      {
+        conversationSpentNano: 0,
+        tenantMonthSpentNano: monthSpent,
+        tenantMonthExposureNano: monthExposure,
+      },
+    );
+    const llm = new MeteredLlm(
+      this.provider,
+      this.pricing,
+      budget,
+      { record: (entry): Promise<boolean> => this.usage.record(entry) },
+      { tenantId, turnKey, ...(signal ? { signal } : {}) },
+      (error) =>
+        this.logger.error(
+          JSON.stringify({
+            event: 'agent.usage_record_failed',
+            tenant: tenantId,
+            name: (error as Error).name,
+          }),
+        ),
+      this.ledger,
+    );
+    return (await llm.structured(request)).value;
   }
 
   /** Runs one turn. Throws AgentConfigurationError for unusable tenants. */
