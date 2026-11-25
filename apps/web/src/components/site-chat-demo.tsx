@@ -38,10 +38,12 @@ export function SiteChatDemo(): ReactNode {
       className="flex w-full flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-card"
     >
       <figcaption className="flex items-center justify-between gap-2 border-b border-line bg-surface-2 px-4 py-3 text-sm">
-        <span className="flex min-w-0 items-center gap-2 font-semibold">
+        {/* The logo keeps its width; on a narrow phone the badge wraps instead
+            (the logo spilled at 320px with CI's fonts). */}
+        <span className="flex shrink-0 items-center gap-2 font-semibold">
           <BrandLogo name={t('app.brand')} className="text-base" />
         </span>
-        <span className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary-fg">
+        <span className="min-w-0 rounded-full bg-primary-soft px-2 py-0.5 text-center text-xs font-medium text-primary-fg">
           {t('site.demo.sample')}
         </span>
       </figcaption>

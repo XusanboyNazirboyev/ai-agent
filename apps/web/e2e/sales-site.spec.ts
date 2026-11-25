@@ -58,6 +58,15 @@ for (const [width, language, colorScheme] of [
       await expect(page.getByTestId('site-demo-lead')).toBeVisible();
       await expect(page.getByTestId('site-results')).toBeVisible();
       expect(await findOverflow(page)).toEqual([]);
+      // The CI runner's fonts are wider (the demo logo spilled there at
+      // 320px only); letter spacing stands in for them, as in layout.spec.ts.
+      await page.evaluate(() => {
+        document.documentElement.style.letterSpacing = '0.07em';
+      });
+      expect(await findOverflow(page)).toEqual([]);
+      await page.evaluate(() => {
+        document.documentElement.style.letterSpacing = '';
+      });
       const result = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();
