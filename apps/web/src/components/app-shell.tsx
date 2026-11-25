@@ -360,6 +360,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                   feed.markAllRead();
                   updates.markAllSeen();
                 }}
+                onClear={() => {
+                  feed.clear();
+                  updates.clearAll();
+                }}
               />
               <ThemeToggle />
               <LocaleSwitcher compact />

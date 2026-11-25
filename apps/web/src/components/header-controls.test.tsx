@@ -72,11 +72,13 @@ describe('header controls (owner 2026-11-23)', () => {
     ];
     const onOpen = vi.fn();
     const onMarkAllRead = vi.fn();
+    const onClear = vi.fn();
     render(
       <NotificationBell
         items={items}
         onOpen={onOpen}
         onMarkAllRead={onMarkAllRead}
+        onClear={onClear}
       />,
     );
     expect(screen.getByTestId('notification-count')).toHaveTextContent('1');
@@ -85,6 +87,8 @@ describe('header controls (owner 2026-11-23)', () => {
     expect(screen.getByText('Call Ali')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('notification-read-all'));
     expect(onMarkAllRead).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByTestId('notification-clear'));
+    expect(onClear).toHaveBeenCalledOnce();
     fireEvent.click(screen.getAllByTestId('notification-item')[0]!);
     expect(onOpen).toHaveBeenCalledWith(items[0], '/inbox?c=c1');
     expect(screen.queryByTestId('notification-panel')).toBeNull();

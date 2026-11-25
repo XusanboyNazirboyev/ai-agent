@@ -79,4 +79,15 @@ describe('useAppUpdates', () => {
     expect(result.current.freshNav).toEqual([]);
     expect(result.current.items.every((i) => i.read)).toBe(true);
   });
+
+  run('the trash hides every note, also after a reload', () => {
+    const first = renderHook(() => useAppUpdates('op-2', '/today'));
+    expect(first.result.current.items.length).toBeGreaterThan(0);
+    act(() => first.result.current.clearAll());
+    expect(first.result.current.items).toEqual([]);
+    expect(first.result.current.freshNav).toEqual([]);
+    first.unmount();
+    const again = renderHook(() => useAppUpdates('op-2', '/today'));
+    expect(again.result.current.items).toEqual([]);
+  });
 });

@@ -147,6 +147,7 @@ export function NotificationBell(props: {
   items: readonly FeedItem[];
   onOpen: (item: FeedItem, href: string) => void;
   onMarkAllRead: () => void;
+  onClear: () => void;
 }): ReactNode {
   const { t, formatDateTime } = useI18n();
   const [open, setOpen] = useState(false);
@@ -201,16 +202,30 @@ export function NotificationBell(props: {
         >
           <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
             <h2 className="text-sm font-semibold">{t('notify.bell')}</h2>
-            {unread > 0 ? (
-              <button
-                type="button"
-                data-testid="notification-read-all"
-                onClick={props.onMarkAllRead}
-                className="text-xs font-medium text-primary-fg hover:underline"
-              >
-                {t('notify.markAll')}
-              </button>
-            ) : null}
+            <div className="flex items-center gap-1">
+              {unread > 0 ? (
+                <button
+                  type="button"
+                  data-testid="notification-read-all"
+                  onClick={props.onMarkAllRead}
+                  className="text-xs font-medium text-primary-fg hover:underline"
+                >
+                  {t('notify.markAll')}
+                </button>
+              ) : null}
+              {props.items.length > 0 ? (
+                <button
+                  type="button"
+                  data-testid="notification-clear"
+                  aria-label={t('notify.clear')}
+                  title={t('notify.clear')}
+                  onClick={props.onClear}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger-fg"
+                >
+                  <Icon name="trash" className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           </div>
           {props.items.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted">

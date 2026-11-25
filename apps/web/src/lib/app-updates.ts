@@ -62,6 +62,37 @@ export function parseSeen(raw: string | null): string[] {
   }
 }
 
+/** A set of update ids kept per operator in this browser; undefined until read. */
+function useStoredIds(
+  key: string | null,
+): [string[] | undefined, (ids: string[]) => void] {
+  const [ids, setIds] = useState<string[] | undefined>();
+  useEffect(() => {
+    if (!key) return;
+    try {
+      setIds(parseSeen(window.localStorage.getItem(key)));
+    } catch {
+      setIds([]);
+    }
+  }, [key]);
+  const add = useCallback(
+    (more: string[]) =>
+      setIds((current) => {
+        if (!current) return current;
+        const next = [...new Set([...current, ...more])];
+        if (next.length === current.length) return current;
+        try {
+          if (key) window.localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          // Not persisted (private mode); it still applies to this tab.
+        }
+        return next;
+      }),
+    [key],
+  );
+  return [ids, add];
+}
+
 /** Fresh updates for one operator in this browser, as bell items and menu marks. */
 export function useAppUpdates(
   operatorId: string | undefined,
@@ -73,59 +104,46 @@ export function useAppUpdates(
   freshPaths: string[];
   markSeen: (id: string) => void;
   markAllSeen: () => void;
+  /** The bell's trash: seen and no longer listed. */
+  clearAll: () => void;
 } {
-  const key = operatorId ? `ac_updates_seen_${operatorId}` : null;
   // undefined until storage is read, so nothing flashes as new on load.
-  const [seen, setSeen] = useState<string[] | undefined>();
-  useEffect(() => {
-    if (!key) return;
-    try {
-      setSeen(parseSeen(window.localStorage.getItem(key)));
-    } catch {
-      setSeen([]);
-    }
-  }, [key]);
-  const fresh = useMemo(() => freshUpdates(new Date()), []);
-  const add = useCallback(
-    (ids: string[]) =>
-      setSeen((current) => {
-        if (!current) return current;
-        const next = [...new Set([...current, ...ids])];
-        if (next.length === current.length) return current;
-        try {
-          if (key) window.localStorage.setItem(key, JSON.stringify(next));
-        } catch {
-          // Not persisted (private mode); the marks still clear for this tab.
-        }
-        return next;
-      }),
-    [key],
+  const [seen, addSeen] = useStoredIds(
+    operatorId ? `ac_updates_seen_${operatorId}` : null,
   );
+  const [cleared, addCleared] = useStoredIds(
+    operatorId ? `ac_updates_cleared_${operatorId}` : null,
+  );
+  const fresh = useMemo(() => freshUpdates(new Date()), []);
   const loaded = seen !== undefined;
   // Opening the place that changed is reading the news.
   useEffect(() => {
     if (!loaded) return;
-    add(
+    addSeen(
       fresh
         .filter((update) => pathname.startsWith(update.href))
         .map((update) => update.id),
     );
-  }, [add, fresh, pathname, loaded]);
+  }, [addSeen, fresh, pathname, loaded]);
   const unseen = seen
     ? fresh.filter((update) => !seen.includes(update.id))
     : [];
+  const allIds = useCallback(() => fresh.map((update) => update.id), [fresh]);
   return {
-    items: seen
-      ? fresh.map((update) => ({
-          id: `update:${update.id}`,
-          type: 'app.update',
-          at: `${update.date}T00:00:00.000Z`,
-          conversationId: null,
-          title: null,
-          updateId: update.id,
-          read: seen.includes(update.id),
-        }))
-      : [],
+    items:
+      seen && cleared
+        ? fresh
+            .filter((update) => !cleared.includes(update.id))
+            .map((update) => ({
+              id: `update:${update.id}`,
+              type: 'app.update',
+              at: `${update.date}T00:00:00.000Z`,
+              conversationId: null,
+              title: null,
+              updateId: update.id,
+              read: seen.includes(update.id),
+            }))
+        : [],
     freshNav: [
       ...new Set(
         unseen
@@ -134,10 +152,11 @@ export function useAppUpdates(
       ),
     ],
     freshPaths: [...new Set(unseen.map((update) => update.href))],
-    markSeen: useCallback((id: string) => add([id]), [add]),
-    markAllSeen: useCallback(
-      () => add(fresh.map((update) => update.id)),
-      [add, fresh],
-    ),
+    markSeen: useCallback((id: string) => addSeen([id]), [addSeen]),
+    markAllSeen: useCallback(() => addSeen(allIds()), [addSeen, allIds]),
+    clearAll: useCallback(() => {
+      addSeen(allIds());
+      addCleared(allIds());
+    }, [addSeen, addCleared, allIds]),
   };
 }

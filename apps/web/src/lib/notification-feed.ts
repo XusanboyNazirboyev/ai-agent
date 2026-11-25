@@ -97,6 +97,7 @@ export function useNotificationFeed(operatorId: string | undefined): {
   add: (event: LiveEvent) => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  clear: () => void;
 } {
   const key = operatorId ? `ac_notifications_${operatorId}` : null;
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -141,5 +142,6 @@ export function useNotificationFeed(operatorId: string | undefined): {
       () => save((current) => current.map((item) => ({ ...item, read: true }))),
       [save],
     ),
+    clear: useCallback(() => save(() => []), [save]),
   };
 }
