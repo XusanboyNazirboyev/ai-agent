@@ -68,7 +68,7 @@ export function InviteAccept(props: { kind: Kind }): ReactNode {
       setPassword('');
       setRepeat('');
       queryClient.clear();
-      router.replace(props.kind === 'platform' ? '/console/login' : '/today');
+      router.replace(props.kind === 'platform' ? '/login' : '/today');
     } catch (failure) {
       setError(errorKey(failure));
       setBusy(false);

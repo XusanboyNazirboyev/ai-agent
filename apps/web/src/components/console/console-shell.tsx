@@ -74,7 +74,7 @@ export function ConsoleShell({ children }: { children: ReactNode }): ReactNode {
   });
   useEffect(() => {
     if (me.error instanceof ApiError && me.error.status === 401)
-      router.replace('/console/login');
+      router.replace('/login');
   }, [me.error, router]);
 
   const section = sectionOf(pathname);
@@ -88,7 +88,7 @@ export function ConsoleShell({ children }: { children: ReactNode }): ReactNode {
       await platformApi('/api/v1/platform/auth/logout', { method: 'POST' });
     } finally {
       queryClient.removeQueries({ queryKey: ['platform'] });
-      router.replace('/console/login');
+      router.replace('/login');
     }
   }
 

@@ -1,10 +1,10 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import http from 'node:http';
-import { resolve } from 'node:path';
-import type { Browser, BrowserContext, Page } from '@playwright/test';
-import { E2E_ENV } from '../playwright.config';
-import { FIXTURE_FILE } from './global-setup';
+import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import http from "node:http";
+import { resolve } from "node:path";
+import type { Browser, BrowserContext, Page } from "@playwright/test";
+import { E2E_ENV } from "../playwright.config";
+import { FIXTURE_FILE } from "./global-setup";
 
 export interface TenantFixture {
   tenantId: string;
@@ -17,7 +17,7 @@ export interface Fixtures {
   b: TenantFixture;
   /** Platform console admins (ADR 047). */
   platform: Record<
-    'owner' | 'support' | 'fresh',
+    "owner" | "support" | "fresh",
     { id: string; email: string; recoveryCodes: string[] }
   >;
   /** A billed tenant whose subscription expired. */
@@ -39,15 +39,15 @@ export function nextClientAddress(): string {
 }
 
 export const fixtures = (): Fixtures =>
-  JSON.parse(readFileSync(FIXTURE_FILE, 'utf8')) as Fixtures;
+  JSON.parse(readFileSync(FIXTURE_FILE, "utf8")) as Fixtures;
 
 function run(args: string[]): string {
   return execFileSync(
-    'pnpm',
-    ['exec', 'tsx', 'scripts/e2e-fixtures.ts', ...args],
+    "pnpm",
+    ["exec", "tsx", "scripts/e2e-fixtures.ts", ...args],
     {
-      cwd: resolve(import.meta.dirname, '../../api'),
-      encoding: 'utf8',
+      cwd: resolve(import.meta.dirname, "../../api"),
+      encoding: "utf8",
       env: {
         ...process.env,
         TEST_POSTGRES_HOST: E2E_ENV.POSTGRES_HOST,
@@ -66,16 +66,16 @@ export function customerMessage(
   conversationId: string,
   text: string,
 ): void {
-  run(['customer-message', tenantId, conversationId, text]);
+  run(["customer-message", tenantId, conversationId, text]);
 }
 
 export function uncertainAction(
   tenantId: string,
   conversationId: string,
 ): string {
-  const out = run(['uncertain-action', tenantId, conversationId])
+  const out = run(["uncertain-action", tenantId, conversationId])
     .trim()
-    .split('\n')
+    .split("\n")
     .pop()!;
   return (JSON.parse(out) as { proposalId: string }).proposalId;
 }
@@ -84,7 +84,7 @@ export function newHandover(
   tenantId: string,
   name: string,
 ): { id: string; handoverId: string; contactName: string } {
-  const out = run(['new-handover', tenantId, name]).trim().split('\n').pop()!;
+  const out = run(["new-handover", tenantId, name]).trim().split("\n").pop()!;
   return JSON.parse(out) as {
     id: string;
     handoverId: string;
@@ -97,12 +97,12 @@ export async function login(
   email: string,
   password: string,
 ): Promise<void> {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/\/today/u);
-  await page.goto('/inbox');
+  await page.goto("/inbox");
 }
 
 export async function newSession(
@@ -110,13 +110,13 @@ export async function newSession(
   email: string,
   options: {
     viewport?: { width: number; height: number };
-    colorScheme?: 'light' | 'dark';
+    colorScheme?: "light" | "dark";
     hasTouch?: boolean;
   } = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
-    baseURL: 'http://127.0.0.1:3010',
-    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
+    baseURL: "http://127.0.0.1:3010",
+    extraHTTPHeaders: { "x-forwarded-for": nextClientAddress() },
     ...options,
   });
   const page = await context.newPage();
@@ -130,16 +130,16 @@ function nextRecoveryCode(email: string): string {
     (candidate) => candidate.email === email,
   );
   if (!admin || admin.recoveryCodes.length === 0)
-    throw new Error('this console admin has no seeded recovery codes');
+    throw new Error("this console admin has no seeded recovery codes");
   const counter = resolve(FIXTURE_FILE, `../recovery-${admin.id}.count`);
   let used: number;
   try {
-    used = Number(readFileSync(counter, 'utf8'));
+    used = Number(readFileSync(counter, "utf8"));
   } catch {
     used = 0;
   }
   const code = admin.recoveryCodes[used];
-  if (!code) throw new Error('seeded recovery codes are used up');
+  if (!code) throw new Error("seeded recovery codes are used up");
   writeFileSync(counter, String(used + 1));
   return code;
 }
@@ -153,13 +153,13 @@ export async function consoleLogin(
   email: string,
   password: string,
 ): Promise<void> {
-  await page.goto('/console/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByTestId('mfa-toggle-recovery').click();
-  await page.getByTestId('mfa-code').fill(nextRecoveryCode(email));
-  await page.getByRole('button', { name: 'Verify' }).click();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByTestId("mfa-toggle-recovery").click();
+  await page.getByTestId("mfa-code").fill(nextRecoveryCode(email));
+  await page.getByRole("button", { name: "Verify" }).click();
   await page.waitForURL(/\/console$/u);
 }
 
@@ -169,12 +169,12 @@ export async function consoleSession(
   email: string,
   options: {
     viewport?: { width: number; height: number };
-    colorScheme?: 'light' | 'dark';
+    colorScheme?: "light" | "dark";
   } = {},
 ): Promise<{ context: BrowserContext; page: Page }> {
   const context = await browser.newContext({
-    baseURL: 'http://127.0.0.1:3010',
-    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
+    baseURL: "http://127.0.0.1:3010",
+    extraHTTPHeaders: { "x-forwarded-for": nextClientAddress() },
     ...options,
   });
   const page = await context.newPage();
@@ -192,26 +192,26 @@ export function readSse(options: {
   return new Promise((resolvePromise, reject) => {
     const frames: string[] = [];
     const request = http.get(
-      'http://127.0.0.1:3010/api/v1/events',
+      "http://127.0.0.1:3010/api/v1/events",
       {
         headers: {
           cookie: options.cookie,
-          accept: 'text/event-stream',
+          accept: "text/event-stream",
           ...(options.lastEventId
-            ? { 'last-event-id': options.lastEventId }
+            ? { "last-event-id": options.lastEventId }
             : {}),
         },
       },
       (response) => {
-        let buffer = '';
-        response.setEncoding('utf8');
-        response.on('data', (chunk: string) => {
+        let buffer = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => {
           buffer += chunk;
-          let index = buffer.indexOf('\n\n');
+          let index = buffer.indexOf("\n\n");
           while (index >= 0) {
             frames.push(buffer.slice(0, index));
             buffer = buffer.slice(index + 2);
-            index = buffer.indexOf('\n\n');
+            index = buffer.indexOf("\n\n");
           }
           if (options.until(frames)) {
             request.destroy();
@@ -220,19 +220,19 @@ export function readSse(options: {
         });
       },
     );
-    request.on('error', () => resolvePromise(frames));
+    request.on("error", () => resolvePromise(frames));
     setTimeout(() => {
       request.destroy();
       resolvePromise(frames);
     }, options.timeoutMs).unref();
-    request.on('close', () => resolvePromise(frames));
+    request.on("close", () => resolvePromise(frames));
     void reject;
   });
 }
 
 export async function cookieHeader(context: BrowserContext): Promise<string> {
   const cookies = await context.cookies();
-  return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+  return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 }
 
 /** Horizontal overflow, content spilling out of its box, anything beyond the viewport. */
@@ -243,26 +243,26 @@ export async function findOverflow(page: Page): Promise<string[]> {
     if (root.scrollWidth > window.innerWidth)
       problems.push(`page scrolls sideways (${root.scrollWidth}px)`);
     const describe = (el: Element): string =>
-      `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}[${(el.getAttribute('data-testid') ?? el.className.toString()).slice(0, 60)}] "${(el.textContent ?? '').trim().slice(0, 30)}"`;
-    for (const el of Array.from(document.body.querySelectorAll('*'))) {
+      `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ""}[${(el.getAttribute("data-testid") ?? el.className.toString()).slice(0, 60)}] "${(el.textContent ?? "").trim().slice(0, 30)}"`;
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
       const box = el.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
       const style = getComputedStyle(el);
-      if (style.visibility === 'hidden' || style.position === 'fixed') continue;
+      if (style.visibility === "hidden" || style.position === "fixed") continue;
       if (box.right > window.innerWidth + 1 || box.left < -1) {
         // Skip children of horizontally scrolling containers.
         let scroller = el.parentElement;
         let inside = false;
         while (scroller) {
           const overflowX = getComputedStyle(scroller).overflowX;
-          if (overflowX === 'auto' || overflowX === 'scroll') inside = true;
+          if (overflowX === "auto" || overflowX === "scroll") inside = true;
           scroller = scroller.parentElement;
         }
         if (!inside) problems.push(`outside viewport: ${describe(el)}`);
       }
       if (
-        style.overflowX === 'visible' &&
-        style.textOverflow !== 'ellipsis' &&
+        style.overflowX === "visible" &&
+        style.textOverflow !== "ellipsis" &&
         el.scrollWidth > el.clientWidth + 1 &&
         el.clientWidth > 0 &&
         !(el instanceof SVGElement)
@@ -286,17 +286,17 @@ export async function postAsPage(
   return page.evaluate(
     async ({ path: target, payload }) => {
       const csrf = document.cookie
-        .split('; ')
-        .find((part) => part.startsWith('ac_csrf='))
-        ?.slice('ac_csrf='.length);
+        .split("; ")
+        .find((part) => part.startsWith("ac_csrf="))
+        ?.slice("ac_csrf=".length);
       const response = await fetch(target, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          accept: 'application/json',
+          accept: "application/json",
           ...(payload === undefined
             ? {}
-            : { 'content-type': 'application/json' }),
-          ...(csrf ? { 'x-csrf-token': decodeURIComponent(csrf) } : {}),
+            : { "content-type": "application/json" }),
+          ...(csrf ? { "x-csrf-token": decodeURIComponent(csrf) } : {}),
         },
         ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
       });

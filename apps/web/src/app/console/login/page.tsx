@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { ConsoleLogin } from '@/components/console/console-login';
+import { redirect } from "next/navigation";
 
-export default function Page(): ReactNode {
-  return <ConsoleLogin />;
+/** ADR 096: one sign-in page; the account decides which panel opens. */
+export default function Page(): never {
+  redirect("/login");
 }
