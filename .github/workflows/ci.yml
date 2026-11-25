@@ -12,7 +12,39 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/feat/production-pilot' }}
 
 jobs:
+  # Owner 2026-11-25: a commit reaches the staging branch only after its run on
+  # the working branch is green, so the staging push used to repeat the very
+  # same checks (same commit, same workflow file). When a successful push run
+  # of this commit exists on another branch, the checks below are skipped and
+  # the staging run only publishes and deploys. Without one, all checks run.
+  prior:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      verified: ${{ steps.check.outputs.verified }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          verified=false
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/feat/production-pilot ]; then
+            count=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&status=success&event=push" \
+              --jq '[.workflow_runs[] | select(.head_branch != "feat/production-pilot")] | length')
+            if [ "${count:-0}" -gt 0 ]; then verified=true; fi
+          fi
+          echo "verified=$verified" | tee -a "$GITHUB_OUTPUT"
+
   quality:
+    needs: prior
+    if: needs.prior.outputs.verified != 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -94,6 +126,8 @@ jobs:
   # shared fixture tenants are never touched by two shards.
   e2e:
     name: e2e (shard ${{ matrix.shard }}/4)
+    needs: prior
+    if: needs.prior.outputs.verified != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -167,6 +201,8 @@ jobs:
   # each with a reason in docs/audit/2026-11-10/AGENTCORE_SECURITY_AND_PRODUCTION_REVIEW.md)
   # and secrets committed to the tree.
   security:
+    needs: prior
+    if: needs.prior.outputs.verified != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -186,6 +222,8 @@ jobs:
 
   # Production images (ADR 035) must keep building; nothing is pushed here.
   images:
+    needs: prior
+    if: needs.prior.outputs.verified != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -216,8 +254,16 @@ jobs:
   # runner (the host is arm64) and tagged with the short commit id.
   publish:
     # Runs once the owner set AWS_DEPLOY_ROLE_ARN (deploy/aws/github-deploy-role.sh).
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feat/production-pilot' && vars.AWS_DEPLOY_ROLE_ARN != ''
-    needs: [quality, e2e, images, security]
+    # Either this commit was already green on another branch (`prior`), or
+    # every check passed in this run.
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/feat/production-pilot' && vars.AWS_DEPLOY_ROLE_ARN != '' &&
+      needs.prior.result == 'success' &&
+      (needs.prior.outputs.verified == 'true' ||
+       (needs.quality.result == 'success' && needs.e2e.result == 'success' &&
+        needs.images.result == 'success' && needs.security.result == 'success'))
+    needs: [prior, quality, e2e, images, security]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 40
     permissions:
@@ -246,6 +292,8 @@ jobs:
 
   deploy-staging:
     needs: publish
+    # Explicit: the default success() is false when the skipped checks are upstream.
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
