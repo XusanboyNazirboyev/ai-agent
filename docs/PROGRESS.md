@@ -3,6 +3,7 @@
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
 ## 2026-11-25 (feat/ui-words-menu)
+- **Public sales page redesign ([ADR 080 amendment](adr/080-public-site-self-serve-signup-and-trial.md)):** a focused hero with the demo, direct links to product, plans and FAQ, and clearer sections for pricing and contacting sales. The existing trial, live plan data and contact form keep their behavior. The chat preview starts with the first exchange, and the sales message is localized in Uzbek, Russian and English.
 - **Web audit and plan list performance ([ADR 083 amendment](adr/083-instant-navigation.md)):** Playwright captures covered 9 public/unauthenticated states, 39 tenant routes or redirects, 7 platform-console views, and 8 narrow-phone states. Follow-up checks covered lead and contact details, cancelled OAuth, console sign-in, invalid invitations, and mobile plan management. The sales site shows six public plans at a time and keeps demo messages opaque as they appear. Console plan management now fetches and renders 24 results instead of up to 200 on the first page, and name/code search and active/inactive filters cover the full catalog. Prices and public flags are unchanged.
 
 ## 2026-11-24 (feat/ui-words-menu)

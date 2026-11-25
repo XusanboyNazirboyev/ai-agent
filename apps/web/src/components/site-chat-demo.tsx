@@ -7,6 +7,7 @@ import { Icon } from './ui/icons';
 
 /** Who writes each line of the sample conversation, in order. */
 const SCRIPT = ['c', 'b', 'c', 'b', 'c', 'b'] as const;
+const INTRO_MESSAGES = 2;
 const STEP_MS = 1_800;
 const PAUSE_MS = 4_500;
 
@@ -20,10 +21,10 @@ export function SiteChatDemo(): ReactNode {
   const [shown, setShown] = useState(SCRIPT.length + 1);
   useEffect(() => {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    let step = 0;
+    let step = INTRO_MESSAGES - 1;
     let timer: ReturnType<typeof setTimeout>;
     const tick = (): void => {
-      step = step > SCRIPT.length ? 0 : step + 1;
+      step = step > SCRIPT.length ? INTRO_MESSAGES : step + 1;
       setShown(step);
       timer = setTimeout(tick, step > SCRIPT.length ? PAUSE_MS : STEP_MS);
     };

@@ -22,6 +22,12 @@ Status: accepted (2026-11-19). Supersedes ADR 047 §7 "Self-serve signup" (out o
 - `/` shows the sales page to a visitor without a session; a signed-in person still goes to `/today`. Sections: what tezda does (answers customers in Telegram and Instagram in their language, takes leads into a funnel, hands over to a person, reminds about tasks), how to start in three steps, plans, questions and answers, footer with the privacy, terms and data deletion pages. uz-Latn, ru, en like the app (D22); phone layout first.
 - Every plan button and the hero button lead to `/signup` with the plan code.
 
+**Visual refresh (2026-11-25).** The public landing page gives the real
+product demo and trial action priority in the hero. Section anchors expose
+product capabilities, plans and FAQ from the header. The layout and copy
+change stays on the public page. Signup, pricing data, legal links and
+the contact form use the existing routes and configuration.
+
 ### Self-serve signup
 1. `/signup`: business name, your name, e-mail (it is the login), password, chosen plan. `POST /api/v1/public/signups` validates, rate limits by IP, stores a pending signup (hashed one-time token, 30 minutes, password already hashed with the existing scrypt helper) and returns a link `https://t.me/<platform bot>?start=<token>`.
 2. The platform bot (a new Telegram bot owned by tezda, token in the server's secrets, webhook with its own secret path like the tenant bots) answers `/start <token>` by asking for the phone number with Telegram's contact button. A contact whose `user_id` is the sender's own id confirms the signup.

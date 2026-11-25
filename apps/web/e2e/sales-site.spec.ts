@@ -13,6 +13,9 @@ test('a demo message stays readable while the conversation animates', async ({
     .locator('li:not([aria-hidden])')
     .first();
   await expect(message).toBeVisible();
+  await expect(
+    page.getByTestId('site-chat-demo').locator('li:not([aria-hidden])').nth(1),
+  ).toBeVisible();
   const result = await message.evaluate((element) => {
     // Sample the faint part of any entrance animation without racing its duration.
     for (const animation of element.getAnimations()) {
@@ -26,18 +29,31 @@ test('a demo message stays readable while the conversation animates', async ({
 
 // Owner 2026-11-24: the sales page opens with the demo sale, shows what
 // changes, and ends with a "contact us" form that reaches the sales team.
-for (const width of [320, 1280]) {
-  test(`the sales page at ${width}px: demo, results, contact form`, async ({
+for (const [width, language, colorScheme] of [
+  [320, 'uz-Latn', 'light'],
+  [1280, 'en', 'light'],
+  [390, 'ru', 'dark'],
+] as const) {
+  test(`the sales page at ${width}px in ${language}: navigation, demo and contact`, async ({
     browser,
   }) => {
     const context = await browser.newContext({
       viewport: { width, height: 800 },
       reducedMotion: 'reduce',
-      locale: 'uz-UZ',
+      colorScheme,
     });
     const page = await context.newPage();
     try {
       await page.goto('/');
+      await page.getByRole('combobox').selectOption(language);
+      await expect(page.locator('html')).toHaveAttribute(
+        'lang',
+        language === 'uz-Latn' ? 'uz' : language,
+      );
+      await expect(page.getByTestId('site-cta')).toHaveAttribute(
+        'href',
+        '/signup',
+      );
       await expect(page.getByTestId('site-chat-demo')).toBeVisible();
       await expect(page.getByTestId('site-demo-lead')).toBeVisible();
       await expect(page.getByTestId('site-results')).toBeVisible();
@@ -56,6 +72,16 @@ for (const width of [320, 1280]) {
           path: `${SCRATCH}/site-${width}.png`,
           fullPage: true,
         });
+
+      for (const target of ['product', 'pricing', 'faq']) {
+        await page.locator(`header a[href="#${target}"]`).click();
+        await expect(page).toHaveURL(new RegExp(`#${target}$`, 'u'));
+      }
+      const question = page.locator('#faq details').first();
+      await question.locator('summary').click();
+      await expect(question.locator('p')).toBeVisible();
+      await page.getByTestId('site-enterprise-contact').click();
+      await expect(page).toHaveURL(/#contact$/u);
 
       await page.getByTestId('site-contact-name').fill('E2E Visitor');
       await page
