@@ -2183,5 +2183,11 @@
   "knowledge.gaps.asked": "Asked {count} times",
   "knowledge.gaps.last": "Last asked {date}",
   "knowledge.gaps.answer": "Add answer",
-  "knowledge.gaps.dismiss": "Dismiss"
+  "knowledge.gaps.dismiss": "Dismiss",
+  "whatsNew.label": "What’s new",
+  "whatsNew.documentImport": "PDF and Word files can now be added to the knowledge base and to prices",
+  "whatsNew.knowledgeGaps": "Questions the assistant could not answer are listed in the knowledge base: answer each once",
+  "whatsNew.botSchedule": "Choose when the assistant works: always, only after hours or only in work hours",
+  "whatsNew.storyReplies": "Replies to your Instagram stories are now marked in the Inbox",
+  "whatsNew.ownerPause": "When you write to a customer yourself in Instagram or Messenger, the assistant steps back"
 }

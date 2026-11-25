@@ -2183,5 +2183,11 @@
   "knowledge.gaps.asked": "Спросили {count} раз(а)",
   "knowledge.gaps.last": "Последний раз {date}",
   "knowledge.gaps.answer": "Добавить ответ",
-  "knowledge.gaps.dismiss": "Скрыть"
+  "knowledge.gaps.dismiss": "Скрыть",
+  "whatsNew.label": "Новое",
+  "whatsNew.documentImport": "Файлы PDF и Word теперь можно добавлять в базу знаний и в цены",
+  "whatsNew.knowledgeGaps": "Вопросы, на которые ассистент не смог ответить, собраны в базе знаний: ответьте на каждый один раз",
+  "whatsNew.botSchedule": "Выберите, когда работает ассистент: всегда, только в нерабочее время или только в рабочее",
+  "whatsNew.storyReplies": "Ответы на ваши истории в Instagram теперь отмечены в «Диалогах»",
+  "whatsNew.ownerPause": "Если вы сами пишете клиенту в Instagram или Messenger, ассистент уступает вам"
 }

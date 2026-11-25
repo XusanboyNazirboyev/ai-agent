@@ -30,6 +30,7 @@ import { accessNotice } from '@/lib/access-notice';
 import { showTaskNotification } from '@/lib/browser-notify';
 import { LocaleSwitcher } from './locale-switcher';
 import { NotificationBell, ThemeToggle, UserMenu } from './header-controls';
+import { navKeyOf, useAppUpdates } from '@/lib/app-updates';
 import { useNotificationFeed } from '@/lib/notification-feed';
 import { PageLoading } from './page-loading';
 import { Badge, type Tone } from './ui/badge';
@@ -43,6 +44,9 @@ interface ShellValue {
   timeZone: string | undefined;
   waitingCount: number;
   connection: ConnectionState;
+  /** Menu items with a release note not opened yet (owner 2026-11-25). */
+  freshNav: NavKey[];
+  freshPaths: string[];
 }
 
 const ShellContext = createContext(undefined as ShellValue | undefined);
@@ -86,12 +90,28 @@ function beep(): void {
   }
 }
 
+/**
+ * The "new here" mark of a menu item (owner 2026-11-25). Visual only: the
+ * bell names the change, and the link keeps its plain accessible name.
+ */
+export function FreshDot(): ReactNode {
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="nav-fresh"
+      className="absolute top-0.5 right-1.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-surface"
+    />
+  );
+}
+
 function NavLink(props: {
   href: string;
   icon: IconName;
   label: string;
   active: boolean;
   count?: number;
+  /** A release note for this place is not opened yet. */
+  fresh?: boolean;
   layout: 'rail' | 'bar';
   /** Starts the page's reads when the pointer or focus arrives (2026-11-24). */
   onIntent?: () => void;
@@ -125,6 +145,8 @@ function NavLink(props: {
           >
             {props.count > 99 ? COUNT_CAP_LABEL : props.count}
           </span>
+        ) : props.fresh ? (
+          <FreshDot />
         ) : null}
       </span>
       <span className="max-w-full break-words">{props.label}</span>
@@ -166,6 +188,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
       new Notification(tRef.current('notify.newHandover'), { tag: 'handover' });
   };
   const feed = useNotificationFeed(me.data?.operator?.id);
+  const updates = useAppUpdates(me.data?.operator?.id, pathname);
+  const bellItems = [...updates.items, ...feed.items].sort((a, b) =>
+    b.at.localeCompare(a.at),
+  );
   const addToFeed = feed.add;
   const onEvent = useCallback(
     (event: LiveEvent) => {
@@ -209,11 +235,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     (item) => item.slaDueAt && Date.parse(item.slaDueAt) < now,
   ).length;
 
-  const current = NAV.find(
-    (item) =>
-      pathname.startsWith(`/${item.key}`) ||
-      (item.alsoUnder ?? []).some((path) => pathname.startsWith(path)),
-  );
+  const currentKey = navKeyOf(pathname);
+  const current = NAV.find((item) => item.key === currentKey);
   const onMore = pathname.startsWith('/more');
   const title = onMore
     ? t('nav.more')
@@ -264,6 +287,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
     timeZone: me.data.tenant?.timezone,
     waitingCount,
     connection,
+    freshNav: updates.freshNav,
+    freshPaths: updates.freshPaths,
   };
   const warmNav = (item: (typeof NAV)[number]): void => {
     const href = navHref(item);
@@ -298,6 +323,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                 label={t(`nav.${item.key}`)}
                 active={current?.key === item.key}
                 count={item.key === 'inbox' ? waitingCount : undefined}
+                fresh={updates.freshNav.includes(item.key)}
                 onIntent={() => warmNav(item)}
               />
             );
@@ -324,12 +350,16 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
             </div>
             <div className="flex shrink-0 items-center gap-1.5 text-sm sm:gap-2">
               <NotificationBell
-                items={feed.items}
+                items={bellItems}
                 onOpen={(item, href) => {
-                  feed.markRead(item.id);
+                  if (item.updateId) updates.markSeen(item.updateId);
+                  else feed.markRead(item.id);
                   router.push(href);
                 }}
-                onMarkAllRead={feed.markAllRead}
+                onMarkAllRead={() => {
+                  feed.markAllRead();
+                  updates.markAllSeen();
+                }}
               />
               <ThemeToggle />
               <LocaleSwitcher compact />
@@ -380,6 +410,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                     label={t(`nav.${item.key}`)}
                     active={current?.key === item.key}
                     count={item.key === 'inbox' ? waitingCount : undefined}
+                    fresh={updates.freshNav.includes(item.key)}
                     onIntent={() => warmNav(item)}
                   />
                 );
@@ -392,6 +423,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactNode {
                 active={
                   onMore || (current ? !PRIMARY.includes(current.key) : false)
                 }
+                fresh={updates.freshNav.some((key) => !PRIMARY.includes(key))}
                 onIntent={() => router.prefetch('/more')}
               />
             </nav>

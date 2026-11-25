@@ -126,6 +126,7 @@ const FEED_ICON: Record<FeedItem['type'], IconName> = {
   'subscription.bot_paused': 'alert',
   'subscription.past_due': 'card',
   'subscription.expired': 'card',
+  'app.update': 'bolt',
 };
 
 const FEED_TEXT: Record<FeedItem['type'], string> = {
@@ -135,6 +136,7 @@ const FEED_TEXT: Record<FeedItem['type'], string> = {
   'subscription.bot_paused': 'notify.subscription.bot_paused',
   'subscription.past_due': 'notify.subscription.past_due',
   'subscription.expired': 'notify.subscription.expired',
+  'app.update': 'whatsNew.label',
 };
 
 /**
@@ -236,10 +238,14 @@ export function NotificationBell(props: {
                     />
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className={item.read ? '' : 'font-medium'}>
-                        {item.title ?? t(FEED_TEXT[item.type])}
+                        {item.updateId
+                          ? t(`whatsNew.${item.updateId}`)
+                          : (item.title ?? t(FEED_TEXT[item.type]))}
                       </span>
                       <span className="text-xs text-muted">
-                        {formatDateTime(item.at)}
+                        {item.updateId
+                          ? t(FEED_TEXT[item.type])
+                          : formatDateTime(item.at)}
                       </span>
                     </span>
                     {item.read ? null : (

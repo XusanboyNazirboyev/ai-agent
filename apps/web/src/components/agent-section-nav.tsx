@@ -36,7 +36,7 @@ export function AgentSubPage(props: {
   children: ReactNode;
 }): ReactNode {
   const { t } = useI18n();
-  const { operator } = useShell();
+  const { operator, freshPaths = [] } = useShell();
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <nav
@@ -58,6 +58,13 @@ export function AgentSubPage(props: {
                 }`}
               >
                 {t(`agent.tab.${section.key}`)}
+                {freshPaths.includes(section.href) ? (
+                  <span
+                    aria-hidden="true"
+                    data-testid={`agent-tab-fresh-${section.key}`}
+                    className="ml-1.5 h-2 w-2 rounded-full bg-danger"
+                  />
+                ) : null}
               </Link>
             </li>
           ))}

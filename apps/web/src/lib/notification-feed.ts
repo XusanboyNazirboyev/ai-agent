@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
+import { APP_UPDATES } from './app-updates';
 import type { LiveEvent } from './live-updates';
 
 /**
@@ -15,11 +16,15 @@ export interface FeedItem {
     | 'task.due'
     | 'subscription.bot_paused'
     | 'subscription.past_due'
-    | 'subscription.expired';
+    | 'subscription.expired'
+    /** A release note from `app-updates.ts`; never stored in this feed. */
+    | 'app.update';
   at: string;
   conversationId: string | null;
   /** task.due only: the task title the server sent. */
   title: string | null;
+  /** app.update only: the `APP_UPDATES` id. */
+  updateId?: string;
   read: boolean;
 }
 
@@ -53,6 +58,11 @@ export function addEvent(
 
 /** Where a notification leads. */
 export function feedHref(item: FeedItem): string {
+  if (item.type === 'app.update')
+    return (
+      APP_UPDATES.find((update) => update.id === item.updateId)?.href ??
+      '/today'
+    );
   if (item.type === 'task.due') return '/tasks';
   if (item.type.startsWith('subscription.')) return '/billing';
   return item.conversationId

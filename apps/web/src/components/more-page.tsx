@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useI18n } from '@/i18n';
-import { useShell, PRIMARY } from './app-shell';
+import { FreshDot, useShell, PRIMARY } from './app-shell';
 import { Icon } from './ui/icons';
 import { NAV, navHref, visibleNav, type NavKey } from '@/lib/nav';
 
 /** The tab bar's overflow: the sections that do not fit on a phone. */
 export function MorePage(): ReactNode {
   const { t } = useI18n();
-  const { operator } = useShell();
+  const { operator, freshNav = [] } = useShell();
   const allowed = visibleNav(operator.role);
   const items: NavKey[] = NAV.filter(
     (item) => !PRIMARY.includes(item.key) && allowed.includes(item.key),
@@ -33,8 +33,9 @@ export function MorePage(): ReactNode {
                   href={navHref(item)}
                   className="flex min-w-0 items-center gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-primary"
                 >
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary-fg">
+                  <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary-fg">
                     <Icon name={item.icon} className="h-5 w-5" />
+                    {freshNav.includes(item.key) ? <FreshDot /> : null}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="font-medium">{t(`nav.${item.key}`)}</span>

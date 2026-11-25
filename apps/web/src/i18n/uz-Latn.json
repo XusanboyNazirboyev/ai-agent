@@ -2183,5 +2183,11 @@
   "knowledge.gaps.asked": "{count} marta so‘raldi",
   "knowledge.gaps.last": "Oxirgi marta {date}",
   "knowledge.gaps.answer": "Javob qo‘shish",
-  "knowledge.gaps.dismiss": "Yashirish"
+  "knowledge.gaps.dismiss": "Yashirish",
+  "whatsNew.label": "Yangilik",
+  "whatsNew.documentImport": "Endi PDF va Word fayllarni Bilimlar bazasiga va narxlarga qo‘shish mumkin",
+  "whatsNew.knowledgeGaps": "Yordamchi javob bera olmagan savollar Bilimlar bazasida yig‘iladi: har biriga bir marta javob bering",
+  "whatsNew.botSchedule": "Yordamchi qachon ishlashini tanlang: doim, faqat ish vaqtidan tashqari yoki faqat ish vaqtida",
+  "whatsNew.storyReplies": "Instagram storylaringizga yozilgan javoblar endi Suhbatlarda belgilanadi",
+  "whatsNew.ownerPause": "Instagram yoki Messengerda mijozga o‘zingiz yozsangiz, yordamchi chetga chiqadi"
 }
