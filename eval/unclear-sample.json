@@ -1,0 +1,30 @@
+{
+ "description": "Baseline: unclear input, short answers, normal context (owner 2026-11-25).",
+ "ids": [
+  "edu-en-01",
+  "edu-en-20",
+  "edu-en-21",
+  "edu-en-o01",
+  "edu-en-o02",
+  "edu-en-o03",
+  "edu-en-g05",
+  "edu-en-g06",
+  "edu7-en-14",
+  "edu7-en-15",
+  "edu-ru-01",
+  "edu-ru-20",
+  "edu-ru-21",
+  "edu-ru-o01",
+  "edu-ru-g05",
+  "edu-ru-g06",
+  "edu7-ru-14",
+  "edu7-ru-15",
+  "edu-uz-latn-01",
+  "edu-uz-latn-28",
+  "edu-uz-latn-29",
+  "edu-uz-latn-30",
+  "edu-uz-latn-31",
+  "edu-uz-latn-g05",
+  "edu-uz-latn-g06"
+ ]
+}
