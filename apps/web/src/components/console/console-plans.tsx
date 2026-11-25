@@ -1,6 +1,10 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { platformApi } from '@/lib/api';
@@ -17,6 +21,7 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { EmptyState, ErrorNote, QueryState } from '../ui/error-note';
 import { fieldClass } from '../ui/fields';
 import { FormDialog } from '../ui/form-dialog';
+import { Select } from '../ui/select';
 import { Field } from './console-format';
 import { useConsole } from './console-shell';
 
@@ -78,10 +83,25 @@ export function ConsolePlans(): ReactNode {
   const [isPublic, setIsPublic] = useState(false);
   const [position, setPosition] = useState('0');
   const [invalid, setInvalid] = useState(false);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all');
+  const [q, setQuery] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const query = useQuery({
-    queryKey: ['platform', 'plans'],
-    queryFn: () => platformApi<{ plans: Plan[] }>('/api/v1/platform/plans'),
+  const query = useInfiniteQuery({
+    queryKey: ['platform', 'plans', 'manage', q, status],
+    initialPageParam: '',
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ q, status });
+      if (pageParam) params.set('cursor', pageParam);
+      return platformApi<{ plans: Plan[]; nextCursor: string | null }>(
+        `/api/v1/platform/plans?${params}`,
+      );
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['platform', 'plans'] });
@@ -210,7 +230,8 @@ export function ConsolePlans(): ReactNode {
     });
   }
 
-  const plans = query.data?.plans ?? [];
+  const plans = query.data?.pages.flatMap((page) => page.plans) ?? [];
+  const waitingForSearch = search.trim() !== q;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -226,13 +247,49 @@ export function ConsolePlans(): ReactNode {
           </Button>
         ) : null}
       </div>
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          {t('console.plans.search')}
+          <input
+            type="search"
+            data-testid="plan-search"
+            maxLength={200}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className={fieldClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          {t('console.plans.status')}
+          <Select
+            data-testid="plan-status"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as typeof status)}
+          >
+            <option value="all">{t('console.plans.all')}</option>
+            <option value="active">{t('console.plans.active')}</option>
+            <option value="inactive">{t('console.plans.inactive')}</option>
+          </Select>
+        </label>
+      </div>
       <QueryState
-        pending={query.isPending}
+        pending={query.isPending || waitingForSearch}
         error={query.error}
-        onRetry={() => void query.refetch()}
+        onRetry={() => {
+          void (query.isFetchNextPageError
+            ? query.fetchNextPage()
+            : query.refetch());
+        }}
       />
-      {query.isSuccess && plans.length === 0 ? (
-        <EmptyState icon="database" text={t('console.plans.empty')} />
+      {query.isSuccess && !waitingForSearch && plans.length === 0 ? (
+        <EmptyState
+          icon={q || status !== 'all' ? 'search' : 'database'}
+          text={t(
+            q || status !== 'all'
+              ? 'console.plans.emptyFiltered'
+              : 'console.plans.empty',
+          )}
+        />
       ) : null}
       <ErrorNote error={toggle.error} />
       <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -321,6 +378,17 @@ export function ConsolePlans(): ReactNode {
           </li>
         ))}
       </ul>
+      {query.hasNextPage ? (
+        <Button
+          data-testid="plans-more"
+          className="self-center"
+          disabled={query.isFetching || waitingForSearch}
+          loading={query.isFetchingNextPage}
+          onClick={() => void query.fetchNextPage()}
+        >
+          {t('list.loadMore')}
+        </Button>
+      ) : null}
 
       {canWrite ? (
         <>

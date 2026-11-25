@@ -51,7 +51,7 @@ export function SiteChatDemo(): ReactNode {
         {SCRIPT.slice(0, shown).map((who, i) => (
           <li
             key={i}
-            className={`max-w-[85%] rounded-2xl px-3 py-2 motion-safe:animate-[toast-in_.35s_ease-out] ${
+            className={`max-w-[85%] rounded-2xl px-3 py-2 ${
               who === 'c'
                 ? 'self-end rounded-br-sm bg-primary text-white'
                 : 'self-start rounded-bl-sm bg-surface-2 text-fg'
@@ -84,7 +84,7 @@ export function SiteChatDemo(): ReactNode {
         {shown > SCRIPT.length ? (
           <li
             data-testid="site-demo-lead"
-            className="flex items-center gap-2 self-center rounded-xl border border-line bg-success-soft px-3 py-2 text-xs font-medium text-success-fg motion-safe:animate-[toast-in_.35s_ease-out]"
+            className="flex items-center gap-2 self-center rounded-xl border border-line bg-success-soft px-3 py-2 text-xs font-medium text-success-fg"
           >
             <Icon name="check" className="h-4 w-4 shrink-0" />
             {t('site.demo.lead')}

@@ -99,3 +99,17 @@ The component regression test proves that every rail link disables automatic
 prefetch, no route is warmed during render, and pointing at Inbox warms `/inbox`
 once. A browser network trace still needs the local Playwright flow; no staging or
 server setting was changed.
+
+## Amendment — progressive plan lists (2026-11-25)
+
+The sales page immediately rendered all 20 returned public plans. The platform
+management list fetched and rendered up to 200 cards, oldest first among active
+plans, leaving newer entries beyond the cap inaccessible from that page on a
+large catalog.
+
+The sales page renders six public plan cards initially in the configured order
+and reveals six more on request. The console requests 24 plans per page, newest
+first, with a stable `createdAt, id` cursor. Search by name or code and the
+status filter apply before pagination. Management and the active-only pickers
+share the cursor implementation. This preserves existing plan prices and
+visibility settings.

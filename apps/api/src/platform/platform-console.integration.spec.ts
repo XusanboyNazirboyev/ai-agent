@@ -1523,6 +1523,34 @@ describe('available plans for customer creation', () => {
     const firstPlans = first.body.plans as { id: string; isActive: boolean }[];
     expect(firstPlans).toHaveLength(25);
     expect(firstPlans.map((plan) => plan.id)).toEqual(expected.slice(0, 25));
+    const managed = await call(
+      'GET',
+      `/api/v1/platform/plans?q=${prefix.toUpperCase()}&status=active`,
+      { session },
+    );
+    expect(managed.status).toBe(200);
+    expect(
+      (managed.body.plans as { id: string }[]).map((plan) => plan.id),
+    ).toEqual(expected.slice(0, 24));
+    const nextManaged = await call(
+      'GET',
+      `/api/v1/platform/plans?q=${prefix}&status=active&cursor=${managed.body.nextCursor}`,
+      { session },
+    );
+    expect(nextManaged.status).toBe(200);
+    expect(
+      (nextManaged.body.plans as { id: string }[]).map((plan) => plan.id),
+    ).toEqual(expected.slice(24, 48));
+    const inactive = await call(
+      'GET',
+      `/api/v1/platform/plans?q=${prefix}&status=inactive`,
+      { session },
+    );
+    expect(inactive.status).toBe(200);
+    expect(inactive.body.plans).toMatchObject([
+      { code: `${prefix}-inactive`, isActive: false },
+    ]);
+    expect(inactive.body.nextCursor).toBeNull();
     const seen = firstPlans.map((plan) => plan.id);
     let cursor = first.body.nextCursor as string | null;
     // A new top item and a deactivated boundary must not shift later pages.

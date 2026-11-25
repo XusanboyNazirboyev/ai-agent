@@ -4,6 +4,26 @@ import { findOverflow } from './helpers';
 
 const SCRATCH = process.env.SITE_SHOTS;
 
+test('a demo message stays readable while the conversation animates', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const message = page
+    .getByTestId('site-chat-demo')
+    .locator('li:not([aria-hidden])')
+    .first();
+  await expect(message).toBeVisible();
+  const result = await message.evaluate((element) => {
+    // Sample the faint part of any entrance animation without racing its duration.
+    for (const animation of element.getAnimations()) {
+      animation.pause();
+      animation.currentTime = 30;
+    }
+    return getComputedStyle(element).opacity;
+  });
+  expect(result).toBe('1');
+});
+
 // Owner 2026-11-24: the sales page opens with the demo sale, shows what
 // changes, and ends with a "contact us" form that reaches the sales team.
 for (const width of [320, 1280]) {

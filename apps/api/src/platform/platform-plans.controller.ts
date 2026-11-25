@@ -33,6 +33,10 @@ const AvailablePlansQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   cursor: z.uuid().optional(),
 });
+const ManagePlansQuery = AvailablePlansQuery.extend({
+  limit: z.coerce.number().int().min(1).max(100).default(24),
+  status: z.enum(['all', 'active', 'inactive']).default('all'),
+});
 const Limits = z
   .object({
     maxOperators: z.number().int().min(0).max(10_000).optional(),
@@ -83,6 +87,11 @@ export interface PlanView {
   createdAt: Date;
 }
 
+interface PlanPage {
+  plans: PlanView[];
+  nextCursor: string | null;
+}
+
 function view(plan: SubscriptionPlan): PlanView {
   return {
     id: plan.id,
@@ -115,44 +124,39 @@ export class PlatformPlansController {
   }
 
   @Get()
-  async list(): Promise<{ plans: PlanView[] }> {
-    const plans = await this.prisma.subscriptionPlan.findMany({
-      orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
-      take: 200,
-    });
-    return { plans: plans.map(view) };
+  list(@Query() query: unknown): Promise<PlanPage> {
+    const input = parseBody(ManagePlansQuery, query ?? {});
+    return this.page(
+      input,
+      input.status === 'all' ? undefined : input.status === 'active',
+    );
   }
 
-  /** Active choices for a new customer, independent of the legacy console list cap. */
+  /** Active choices for a new customer. */
   @Get('available')
-  async available(@Query() query: unknown): Promise<{
-    plans: PlanView[];
-    nextCursor: string | null;
-  }> {
-    const input = parseBody(AvailablePlansQuery, query ?? {});
+  available(@Query() query: unknown): Promise<PlanPage> {
+    return this.page(parseBody(AvailablePlansQuery, query ?? {}), true);
+  }
+
+  private async page(
+    input: z.output<typeof AvailablePlansQuery>,
+    isActive: boolean | undefined,
+  ): Promise<PlanPage> {
     // Prisma contains uses LIKE: treat user-entered wildcards as literal text.
     const search = input.q.replace(/[\\%_]/gu, '\\$&');
     const rows = await this.prisma.subscriptionPlan.findMany({
       where: {
-        isActive: true,
+        ...(isActive === undefined ? {} : { isActive }),
         // Exclude the anchor by ID, not skip: 1: it may have been deactivated.
         ...(input.cursor ? { id: { not: input.cursor } } : {}),
-        AND: [
-          ...(search
-            ? [
-                {
-                  OR: [
-                    {
-                      name: { contains: search, mode: 'insensitive' as const },
-                    },
-                    {
-                      code: { contains: search, mode: 'insensitive' as const },
-                    },
-                  ],
-                },
-              ]
-            : []),
-        ],
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' as const } },
+                { code: { contains: search, mode: 'insensitive' as const } },
+              ],
+            }
+          : {}),
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       // Resolve the timestamp in PostgreSQL: JS Dates lose its microseconds.

@@ -2,6 +2,9 @@
 
 History, audit and per-phase verification records: [progress-archive.md](progress-archive.md).
 
+## 2026-11-25 (feat/ui-words-menu)
+- **Web audit and plan list performance ([ADR 083 amendment](adr/083-instant-navigation.md)):** Playwright captures covered 9 public/unauthenticated states, 39 tenant routes or redirects, 7 platform-console views, and 8 narrow-phone states. Follow-up checks covered lead and contact details, cancelled OAuth, console sign-in, invalid invitations, and mobile plan management. The sales site shows six public plans at a time and keeps demo messages opaque as they appear. Console plan management now fetches and renders 24 results instead of up to 200 on the first page, and name/code search and active/inactive filters cover the full catalog. Prices and public flags are unchanged.
+
 ## 2026-11-24 (feat/ui-words-menu)
 - **Lighter initial page load ([ADR 083 amendment](adr/083-instant-navigation.md)):** the six or seven visible desktop menu destinations no longer all prefetch on page load; hover, keyboard focus or touch warms exactly the intended route and its first data reads. Production build client chunks total 2,034,551 raw bytes; eager route-prefetch candidates fall from 6/7 to 0 before intent and 1 after intent. Browser network trace pending permission; no staging change.
 - **Inbox chip regression coverage:** a component test now proves that the messenger filter is rendered when exactly one messenger is connected; the earlier helper-only test could not catch the `length > 1` visibility bug.

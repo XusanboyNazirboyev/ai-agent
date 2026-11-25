@@ -33,7 +33,7 @@ const ALLOWED = new Map([
   ['platform/platform-billing.controller.ts', 'subscriptions, payments'],
   [
     'platform/platform-plans.controller.ts',
-    'plans and active-plan search/pagination for customer creation',
+    'plan management and active-plan choices with search and pagination',
   ],
   ['platform/platform-admins.controller.ts', 'platform admins'],
   ['platform/platform-audit.controller.ts', 'platform audit log'],

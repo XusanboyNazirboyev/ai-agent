@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { api } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
@@ -19,6 +19,7 @@ import { LocaleSwitcher } from './locale-switcher';
 import { SiteChatDemo } from './site-chat-demo';
 import { SiteContactForm } from './site-contact-form';
 import { BrandLogo } from './ui/brand';
+import { Button } from './ui/button';
 import { Icon } from './ui/icons';
 
 const CTA =
@@ -51,6 +52,8 @@ export function SalesSite(): ReactNode {
     staleTime: 60_000,
   });
   const list = plans.data?.plans ?? [];
+  const [visiblePlanCount, setVisiblePlanCount] = useState(6);
+  const visiblePlans = list.slice(0, visiblePlanCount);
   const contact = safeContactUrl(
     plans.data?.contactUrl,
     process.env.NEXT_PUBLIC_SALES_CONTACT_URL,
@@ -217,7 +220,7 @@ export function SalesSite(): ReactNode {
             data-testid="site-plans"
             className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3"
           >
-            {list.map((plan) => {
+            {visiblePlans.map((plan) => {
               const price = formatMoney(
                 Number(plan.priceMinor),
                 plan.currency,
@@ -280,6 +283,15 @@ export function SalesSite(): ReactNode {
               </a>
             </li>
           </ul>
+          {visiblePlans.length < list.length ? (
+            <Button
+              data-testid="site-plans-more"
+              className="self-center"
+              onClick={() => setVisiblePlanCount((count) => count + 6)}
+            >
+              {t('list.loadMore')}
+            </Button>
+          ) : null}
           {list.length === 0 && !plans.isPending ? (
             <div>
               <Link href={signupHref()} className={CTA}>

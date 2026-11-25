@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n';
 import { SalesSite } from './sales-site';
@@ -82,6 +82,25 @@ describe('SalesSite', () => {
     expect(
       screen.getAllByRole('link', { name: 'Try 3 days free' }).length,
     ).toBeGreaterThan(1);
+  });
+
+  it('renders large plan lists progressively', async () => {
+    answer({
+      contactUrl: null,
+      plans: Array.from({ length: 8 }, (_, index) => ({
+        code: `plan-${index}`,
+        name: `Plan ${index}`,
+        priceMinor: '1000',
+        currency: 'UZS',
+        periodDays: 30,
+        limits: {},
+      })),
+    });
+    view();
+    expect(await screen.findAllByTestId('site-plan')).toHaveLength(6);
+    fireEvent.click(screen.getByTestId('site-plans-more'));
+    expect(screen.getAllByTestId('site-plan')).toHaveLength(8);
+    expect(screen.queryByTestId('site-plans-more')).toBeNull();
   });
 
   // Owner 2026-11-24: the page opens with the demo video, or the sample chat.
