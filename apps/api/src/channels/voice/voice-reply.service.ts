@@ -22,7 +22,10 @@ import { encodeToAac } from '../../speech/ogg-opus-encoder.js';
 import { InstagramSender } from '../instagram/instagram-sender.js';
 import { VoiceMediaStore } from './voice-media.js';
 import { ELEVENLABS_PRICING, ttsCostNano } from '../../voice/metering.js';
-import { TelegramSender } from '../telegram/telegram-sender.js';
+import {
+  TelegramApiError,
+  TelegramSender,
+} from '../telegram/telegram-sender.js';
 
 /** Optional override of the reply speech engine (tests). */
 export const REPLY_TTS = Symbol('REPLY_TTS');
@@ -227,9 +230,18 @@ export class VoiceReplyService {
         audio,
         reply.channelAccountId,
       );
-    } catch {
+    } catch (error) {
+      // The provider's code and reason (no customer data) say why it failed,
+      // e.g. a customer who does not accept voice messages.
       this.logger.warn(
-        JSON.stringify({ event: 'voice_reply.skipped', reason: 'send' }),
+        JSON.stringify({
+          event: 'voice_reply.skipped',
+          reason: 'send',
+          error: error instanceof Error ? error.name : 'unknown',
+          ...(error instanceof TelegramApiError
+            ? { code: error.errorCode, description: error.description }
+            : {}),
+        }),
       );
     }
   }

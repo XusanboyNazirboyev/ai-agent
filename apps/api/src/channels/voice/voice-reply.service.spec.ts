@@ -1,5 +1,7 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { ReplyTts } from '../../speech/elevenlabs-reply-tts.js';
+import { TelegramApiError } from '../telegram/telegram-sender.js';
 import { VoiceReplyService } from './voice-reply.service.js';
 
 vi.mock('../../speech/ogg-opus-encoder.js', () => ({
@@ -99,6 +101,32 @@ describe('VoiceReplyService (voice replies, owner 2026-11-21)', () => {
     await expect(
       sendFails.service.afterTextSent('t1', 'm1'),
     ).resolves.toBeUndefined();
+  });
+
+  it('logs why Telegram refused the voice, without customer text', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const refused = setup({
+      sendVoice: () =>
+        Promise.reject(
+          new TelegramApiError(
+            400,
+            null,
+            'Bad Request: VOICE_MESSAGES_FORBIDDEN',
+          ),
+        ),
+    });
+    await refused.service.afterTextSent('t1', 'm1');
+    const line = JSON.parse(String(warn.mock.calls.at(-1)?.[0])) as object;
+    expect(line).toEqual({
+      event: 'voice_reply.skipped',
+      reason: 'send',
+      error: 'TelegramApiError',
+      code: 400,
+      description: 'Bad Request: VOICE_MESSAGES_FORBIDDEN',
+    });
+    warn.mockRestore();
   });
 
   it('does nothing when voice replies are off', async () => {

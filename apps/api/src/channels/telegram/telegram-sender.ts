@@ -7,6 +7,8 @@ export class TelegramApiError extends Error {
   constructor(
     readonly errorCode: number,
     readonly retryAfterSeconds: number | null,
+    /** Telegram's own reason, e.g. "Bad Request: VOICE_MESSAGES_FORBIDDEN". */
+    readonly description?: string,
   ) {
     super(`Telegram API returned error ${errorCode}`);
     this.name = 'TelegramApiError';
@@ -140,6 +142,7 @@ export class TelegramSender {
     const body = (await response.json().catch(() => null)) as {
       ok?: unknown;
       error_code?: unknown;
+      description?: unknown;
     } | null;
     if (!response.ok || body?.ok !== true)
       throw new TelegramApiError(
@@ -147,6 +150,9 @@ export class TelegramSender {
           ? body.error_code
           : response.status,
         null,
+        typeof body?.description === 'string'
+          ? body.description.slice(0, 200)
+          : undefined,
       );
   }
 
