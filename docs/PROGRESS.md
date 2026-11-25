@@ -11,6 +11,7 @@ History, audit and per-phase verification records: [progress-archive.md](progres
 - **Instagram story replies ([ADR 090](adr/090-instagram-story-replies.md)):** `reply_to.story` kept on the inbound message (`rich_content`), the agent is told the message answers a story it cannot see (asks which product instead of guessing), the Inbox marks it. Story pictures and mentions not handled. Not verified live.
 - **Unanswered questions ([ADR 091](adr/091-unanswered-questions.md)):** Knowledge → Unanswered lists NO_DATA hand-overs of the last 14 days (grouped by text); the owner adds the answer as a FAQ entry or dismisses it; the morning digest counts them. Additive migration `20261205090000_knowledge_gaps`.
 - **Inbox:** the messenger chip shows again when only one messenger is connected (`a2713a1`, regression from `0bada80`).
+- **Telegram Business ([ADR 092](adr/092-telegram-business.md), proposed, docs only):** official docs checked 2026-11-25 (Secretary Mode, business updates, `business_connection_id`, 24-hour `can_reply`, no Premium needed, ToS §5.4 consent before any AI processing). Blocked on owner Q1: the tenant's own bot or the platform bot.
 - **Console:** deactivated platform admins no longer show in the admin list (`f80e535`); the row stays for the audit trail.
 
 ## 2026-11-23 (feat/ui-words-menu)
