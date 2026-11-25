@@ -40,7 +40,7 @@ export function KnowledgeView(): ReactNode {
         <div
           role="tablist"
           aria-label={t('knowledge.tabs')}
-          className="flex gap-1 self-start rounded-xl bg-surface-2 p-1"
+          className="flex max-w-full flex-wrap gap-1 self-start rounded-xl bg-surface-2 p-1"
         >
           {TABS.map((id, index) => (
             <button
