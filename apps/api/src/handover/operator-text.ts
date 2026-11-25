@@ -33,6 +33,8 @@ interface Strings {
   digestTitle: (date: string) => string;
   digestEmpty: string;
   digestWaiting: (count: number) => string;
+  /** ADR 091: questions the bot could not answer in the last day. */
+  digestGaps: (count: number) => string;
   alertBudget: (percent: number, month: string) => string;
   alertCrmFailures: (count: number) => string;
   alertSubscriptionEnding: (date: string, daysLeft: number) => string;
@@ -73,6 +75,8 @@ const EN: Strings = {
   digestTitle: (date) => `Morning digest ${date}`,
   digestEmpty: 'No new hot or warm leads.',
   digestWaiting: (count) => `Waiting for an operator: ${count}`,
+  digestGaps: (count) =>
+    `Questions the bot could not answer: ${count} (Knowledge \u2192 Unanswered)`,
   alertBudget: (percent, month) =>
     `Alert: ${percent}% of the monthly AI budget is used (${month})`,
   alertCrmFailures: (count) =>
@@ -115,6 +119,8 @@ const RU: Strings = {
   digestTitle: (date) => `Утренняя сводка ${date}`,
   digestEmpty: 'Новых горячих и тёплых лидов нет.',
   digestWaiting: (count) => `Ждут оператора: ${count}`,
+  digestGaps: (count) =>
+    `Вопросы, на которые бот не ответил: ${count} (Знания \u2192 Без ответа)`,
   alertBudget: (percent, month) =>
     `Внимание: использовано ${percent}% месячного бюджета ИИ (${month})`,
   alertCrmFailures: (count) =>
@@ -157,6 +163,8 @@ const UZ: Strings = {
   digestTitle: (date) => `Ertalabki xulosa ${date}`,
   digestEmpty: 'Yangi issiq va iliq lidlar yo\u2018q.',
   digestWaiting: (count) => `Operatorni kutayotganlar: ${count}`,
+  digestGaps: (count) =>
+    `Bot javob topa olmagan savollar: ${count} (Bilimlar \u2192 Javobsiz)`,
   alertBudget: (percent, month) =>
     `Diqqat: oylik AI byudjetining ${percent}% ishlatildi (${month})`,
   alertCrmFailures: (count) =>

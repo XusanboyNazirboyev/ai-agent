@@ -288,7 +288,7 @@ export class HandoverNotificationService {
     if (!account?.operatorChatId) return;
     const t = operatorStrings(account.tenant.defaultLocale);
     const since = new Date(Date.now() - 24 * 3_600_000);
-    const [leads, waiting] = await Promise.all([
+    const [leads, waiting, gaps] = await Promise.all([
       this.prisma.lead.findMany({
         where: {
           tenantId,
@@ -306,10 +306,22 @@ export class HandoverNotificationService {
         },
       }),
       this.prisma.handover.count({ where: { tenantId, status: 'OPEN' } }),
+      // ADR 091: the same rule as the Knowledge "Unanswered" list.
+      this.prisma.agentTurn.count({
+        where: {
+          tenantId,
+          status: 'COMMITTED',
+          outcome: 'HANDOVER',
+          handoverReason: 'NO_DATA',
+          gapResolution: null,
+          createdAt: { gte: since },
+        },
+      }),
     ]);
     const lines = [
       t.digestTitle(date),
       t.digestWaiting(waiting),
+      ...(gaps > 0 ? [t.digestGaps(gaps)] : []),
       ...(leads.length === 0
         ? [t.digestEmpty]
         : leads.map(

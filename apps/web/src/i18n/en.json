@@ -2143,5 +2143,12 @@
   "agent.schedule.day.5": "Fri",
   "agent.schedule.day.6": "Sat",
   "agent.schedule.day.7": "Sun",
-  "story.replyLabel": "Replied to your Instagram story"
+  "story.replyLabel": "Replied to your Instagram story",
+  "knowledgeTab.gaps": "Unanswered",
+  "knowledge.gaps.intro": "Questions customers asked in the last 14 days that the AI agent could not answer and passed to your team. Add the answer once and the AI agent will use it next time.",
+  "knowledge.gaps.empty": "No unanswered questions.",
+  "knowledge.gaps.asked": "Asked {count} times",
+  "knowledge.gaps.last": "Last asked {date}",
+  "knowledge.gaps.answer": "Add answer",
+  "knowledge.gaps.dismiss": "Dismiss"
 }

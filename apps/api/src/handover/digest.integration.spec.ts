@@ -156,6 +156,35 @@ describe('morning digest', () => {
         summary: {},
       },
     });
+    // ADR 091: one question the bot could not answer, one it handed over
+    // for another reason.
+    const { channelAccountId } = await db.conversation.findUniqueOrThrow({
+      where: { id: t.conversationId },
+      select: { channelAccountId: true },
+    });
+    for (const [n, handoverReason] of [
+      [1, 'NO_DATA'],
+      [2, 'COMPLAINT'],
+    ] as const)
+      await db.agentTurn.create({
+        data: {
+          tenantId: t.tenantId,
+          conversationId: t.conversationId,
+          channelAccountId,
+          idempotencyKey: `agent-reply:${t.conversationId}:${n}`,
+          attempt: 1,
+          mode: 'LIVE',
+          status: 'COMMITTED',
+          claimToken: 'c',
+          leaseExpiresAt: new Date(),
+          answeredSequence: n,
+          seenInboundSequence: n,
+          conversationVersion: 1,
+          correlationId: randomUUID(),
+          outcome: 'HANDOVER',
+          handoverReason,
+        },
+      });
     const cards: string[] = [];
     const notifier = {
       kind: 'fake',
@@ -176,6 +205,7 @@ describe('morning digest', () => {
     expect(cards[0]).toContain('Morning digest 2026-10-26');
     expect(cards[0]).toContain('Waiting for an operator: 1');
     expect(cards[0]).toContain('HOT Dilnoza: PHONE_PROVIDED, ASKED_TO_BOOK');
+    expect(cards[0]).toContain('Questions the bot could not answer: 1');
     // An empty day says so.
     const empty = await tenant();
     await tenantScoped(
@@ -187,5 +217,6 @@ describe('morning digest', () => {
       payload: { date: '2026-10-26' },
     });
     expect(cards[1]).toContain('No new hot or warm leads.');
+    expect(cards[1]).not.toContain('could not answer');
   });
 });

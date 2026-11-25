@@ -3,10 +3,11 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useI18n } from '@/i18n';
 import { DocumentsPanel } from './documents-panel';
+import { KnowledgeGapsPanel } from './knowledge-gaps-panel';
 import { FaqPanel } from './knowledge-page';
 
-type Tab = 'faq' | 'documents';
-const TABS: Tab[] = ['faq', 'documents'];
+type Tab = 'faq' | 'documents' | 'gaps';
+const TABS: Tab[] = ['faq', 'documents', 'gaps'];
 
 /** The knowledge base: FAQ entries and uploaded documents, in two tabs. */
 export function KnowledgeView(): ReactNode {
@@ -72,7 +73,13 @@ export function KnowledgeView(): ReactNode {
           aria-labelledby={`knowledge-tab-${tab}`}
           className="min-w-0"
         >
-          {tab === 'faq' ? <FaqPanel /> : <DocumentsPanel />}
+          {tab === 'faq' ? (
+            <FaqPanel />
+          ) : tab === 'documents' ? (
+            <DocumentsPanel />
+          ) : (
+            <KnowledgeGapsPanel />
+          )}
         </div>
       </div>
     </div>

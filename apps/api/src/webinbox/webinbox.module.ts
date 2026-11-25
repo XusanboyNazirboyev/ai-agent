@@ -73,6 +73,7 @@ import { TelephonyController } from './telephony.controller.js';
 import { ExportsController } from './exports.controller.js';
 import { ExportService } from '../exports/export.service.js';
 import { ExportLock } from '../exports/export-lock.js';
+import { KnowledgeGapsController } from './knowledge-gaps.controller.js';
 import { MetaSentLedger } from '../channels/meta/meta-sent-ledger.js';
 
 /** Web Operator Inbox backend (Phase 6A, ADR 020). */
@@ -96,6 +97,7 @@ import { MetaSentLedger } from '../channels/meta/meta-sent-ledger.js';
     TelegramConnectController,
     InstagramConnectController,
     KnowledgeFaqController,
+    KnowledgeGapsController,
     KnowledgeDocumentsController,
     ContactsController,
     PeopleController,

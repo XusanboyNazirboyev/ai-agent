@@ -460,6 +460,9 @@ model AgentTurn {
   /// The pack intent of the answered message (ADR 063 S1); no customer text.
   intent              String?         @db.VarChar(40)
   handoverReason      String?         @map("handover_reason") @db.VarChar(100)
+  /// ADR 091: ANSWERED or DISMISSED once the owner dealt with this unanswered question.
+  gapResolution       String?         @map("gap_resolution") @db.VarChar(16)
+  gapResolvedAt       DateTime?       @map("gap_resolved_at") @db.Timestamptz(6)
   discardReason       String?         @map("discard_reason") @db.VarChar(40)
   failureCode         String?         @map("failure_code") @db.VarChar(100)
   locale              String?         @db.VarChar(16)
