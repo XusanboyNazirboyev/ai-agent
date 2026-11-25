@@ -1,18 +1,18 @@
-import { createHash, randomBytes } from "node:crypto";
-import { Inject, Injectable, Optional } from "@nestjs/common";
-import { MfaError, MfaService, type MfaSubject } from "../auth/mfa.service.js";
-import type { PrismaClient } from "../generated/prisma/client.js";
-import { PrivilegedDatabase } from "../persistence/privileged-database.js";
-import { hashPassword, verifyPassword } from "../webinbox/password.js";
+import { createHash, randomBytes } from 'node:crypto';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { MfaError, MfaService, type MfaSubject } from '../auth/mfa.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { hashPassword, verifyPassword } from '../webinbox/password.js';
 import {
   DEFAULT_SESSION_POLICY,
   hashesEqual,
   SESSION_POLICY,
   type SessionPolicy,
   type SignInProbe,
-} from "../webinbox/session.service.js";
+} from '../webinbox/session.service.js';
 
-export type PlatformRoleName = "PLATFORM_OWNER" | "PLATFORM_SUPPORT";
+export type PlatformRoleName = 'PLATFORM_OWNER' | 'PLATFORM_SUPPORT';
 
 export interface PlatformPrincipal {
   readonly adminId: string;
@@ -33,19 +33,19 @@ export type PlatformLoginResult =
         readonly role: PlatformRoleName;
       };
     }
-  | { readonly ok: false; readonly code: "INVALID_CREDENTIALS" | "LOCKED" }
+  | { readonly ok: false; readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' }
   /** ADR 048: correct password, no session yet; a code (or first enrolment) is owed. */
   | {
       readonly ok: false;
-      readonly code: "MFA_REQUIRED" | "MFA_ENROLLMENT_REQUIRED";
+      readonly code: 'MFA_REQUIRED' | 'MFA_ENROLLMENT_REQUIRED';
       readonly challenge: string;
     }
-  | { readonly ok: false; readonly code: "MFA_NOT_AVAILABLE" };
+  | { readonly ok: false; readonly code: 'MFA_NOT_AVAILABLE' };
 
 type PlatformSignedIn = Extract<PlatformLoginResult, { ok: true }>;
 
 const sha256 = (value: string): string =>
-  createHash("sha256").update(value).digest("hex");
+  createHash('sha256').update(value).digest('hex');
 
 const MAX_RACE_RETRIES = 20;
 
@@ -74,7 +74,7 @@ export class PlatformSessionService {
   }
 
   private dummy(): Promise<string> {
-    this.dummyHash ??= hashPassword("not-a-real-password", this.policy.scrypt);
+    this.dummyHash ??= hashPassword('not-a-real-password', this.policy.scrypt);
     return this.dummyHash;
   }
 
@@ -93,17 +93,17 @@ export class PlatformSessionService {
       password,
       hash && !locked ? hash : await this.dummy(),
     );
-    if (!admin || !hash) return { state: "absent" };
-    if (locked) return { state: "locked" };
-    if (valid && admin.isActive) return { state: "match" };
-    return { state: "wrong", snapshot: { id: admin.id, passwordHash: hash } };
+    if (!admin || !hash) return { state: 'absent' };
+    if (locked) return { state: 'locked' };
+    if (valid && admin.isActive) return { state: 'match' };
+    return { state: 'wrong', snapshot: { id: admin.id, passwordHash: hash } };
   }
 
   /** ADR 096: counts one failed sign-in on a probed identity. */
   recordWrong(
     snapshot: { id: string; passwordHash: string },
     now = new Date(),
-  ): Promise<"recorded" | "locked" | "retry"> {
+  ): Promise<'recorded' | 'locked' | 'retry'> {
     return this.recordFailure(snapshot, now);
   }
 
@@ -119,40 +119,40 @@ export class PlatformSessionService {
       });
       if (!admin || !admin.passwordHash) {
         await verifyPassword(password, await this.dummy());
-        return { ok: false, code: "INVALID_CREDENTIALS" };
+        return { ok: false, code: 'INVALID_CREDENTIALS' };
       }
       if (admin.lockedUntil && admin.lockedUntil > now)
-        return { ok: false, code: "LOCKED" };
+        return { ok: false, code: 'LOCKED' };
       const valid = await verifyPassword(password, admin.passwordHash);
       if (!valid || !admin.isActive) {
         const failure = await this.recordFailure(
           { id: admin.id, passwordHash: admin.passwordHash },
           now,
         );
-        if (failure === "retry") continue;
+        if (failure === 'retry') continue;
         return {
           ok: false,
-          code: failure === "locked" ? "LOCKED" : "INVALID_CREDENTIALS",
+          code: failure === 'locked' ? 'LOCKED' : 'INVALID_CREDENTIALS',
         };
       }
       // ADR 048 §4-5: platform admins always need a second factor. Without a
       // keyring neither step is possible, so sign-in is refused (fail closed).
       // The failure counter is not reset here: wrong codes must keep counting.
-      if (!this.mfa) return { ok: false, code: "INVALID_CREDENTIALS" };
-      if (!this.mfa.available) return { ok: false, code: "MFA_NOT_AVAILABLE" };
-      const subject: MfaSubject = { kind: "PLATFORM", adminId: admin.id };
+      if (!this.mfa) return { ok: false, code: 'INVALID_CREDENTIALS' };
+      if (!this.mfa.available) return { ok: false, code: 'MFA_NOT_AVAILABLE' };
+      const subject: MfaSubject = { kind: 'PLATFORM', adminId: admin.id };
       const enrolled = admin.totpEnabledAt !== null;
       return {
         ok: false,
-        code: enrolled ? "MFA_REQUIRED" : "MFA_ENROLLMENT_REQUIRED",
+        code: enrolled ? 'MFA_REQUIRED' : 'MFA_ENROLLMENT_REQUIRED',
         challenge: await this.mfa.createChallenge(
           subject,
-          enrolled ? "LOGIN" : "ENROLL",
+          enrolled ? 'LOGIN' : 'ENROLL',
           now,
         ),
       };
     }
-    return { ok: false, code: "INVALID_CREDENTIALS" };
+    return { ok: false, code: 'INVALID_CREDENTIALS' };
   }
 
   /** Second step of a sign-in: verifies the factor of a LOGIN challenge, then opens the session. */
@@ -161,7 +161,7 @@ export class PlatformSessionService {
     factor: { code?: string | undefined; recoveryCode?: string | undefined },
     now = new Date(),
   ): Promise<PlatformSignedIn> {
-    if (!this.mfa) throw new MfaError("MFA_NOT_AVAILABLE");
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
     const { subject } = await this.mfa.verifyLogin(challenge, factor, now);
     return this.openForSubject(subject, now);
   }
@@ -172,7 +172,7 @@ export class PlatformSessionService {
     code: string,
     now = new Date(),
   ): Promise<PlatformSignedIn & { recoveryCodes: string[] }> {
-    if (!this.mfa) throw new MfaError("MFA_NOT_AVAILABLE");
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
     const { subject, recoveryCodes } = await this.mfa.enableWithChallenge(
       challenge,
       code,
@@ -185,14 +185,14 @@ export class PlatformSessionService {
     subject: MfaSubject,
     now: Date,
   ): Promise<PlatformSignedIn> {
-    if (subject.kind !== "PLATFORM")
-      throw new MfaError("MFA_CHALLENGE_INVALID");
+    if (subject.kind !== 'PLATFORM')
+      throw new MfaError('MFA_CHALLENGE_INVALID');
     const admin = await this.prisma.platformAdmin.findFirst({
       where: { id: subject.adminId, isActive: true },
     });
-    if (!admin) throw new MfaError("MFA_CHALLENGE_INVALID");
-    const sessionToken = randomBytes(32).toString("base64url");
-    const csrfToken = randomBytes(32).toString("base64url");
+    if (!admin) throw new MfaError('MFA_CHALLENGE_INVALID');
+    const sessionToken = randomBytes(32).toString('base64url');
+    const csrfToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
     await this.prisma.$transaction(async (tx) => {
       await tx.platformAdmin.updateMany({
@@ -226,7 +226,7 @@ export class PlatformSessionService {
   private async recordFailure(
     snapshot: { id: string; passwordHash: string },
     now: Date,
-  ): Promise<"recorded" | "locked" | "retry"> {
+  ): Promise<'recorded' | 'locked' | 'retry'> {
     const lockUntil = new Date(now.getTime() + this.policy.lockMs);
     const max = this.policy.maxFailedAttempts;
     const updated = await this.prisma.$queryRaw<{ id: string }[]>`
@@ -253,16 +253,16 @@ export class PlatformSessionService {
         AND (locked_until IS NULL OR locked_until <= ${now})
       RETURNING id
     `;
-    if (updated.length > 0) return "recorded";
+    if (updated.length > 0) return 'recorded';
     const current = await this.prisma.platformAdmin.findUnique({
       where: { id: snapshot.id },
       select: { passwordHash: true, lockedUntil: true },
     });
     if (!current || current.passwordHash !== snapshot.passwordHash)
-      return "retry";
+      return 'retry';
     return current.lockedUntil && current.lockedUntil > now
-      ? "locked"
-      : "retry";
+      ? 'locked'
+      : 'retry';
   }
 
   async resolve(

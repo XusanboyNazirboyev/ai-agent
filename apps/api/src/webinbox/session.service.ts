@@ -1,24 +1,24 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { Inject, Injectable, Optional } from "@nestjs/common";
-import { TenantAccessService } from "../access/tenant-access.service.js";
-import type { PrismaClient } from "../generated/prisma/client.js";
-import { PrismaService } from "../persistence/prisma.service.js";
-import { PrivilegedDatabase } from "../persistence/privileged-database.js";
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { TenantAccessService } from '../access/tenant-access.service.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrismaService } from '../persistence/prisma.service.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
 import {
   DEFAULT_SESSION_POLICY,
   SESSION_POLICY,
   type SessionPolicy,
-} from "../auth/session-policy.js";
-import { MfaError, MfaService } from "../auth/mfa.service.js";
-import { hashPassword, verifyPassword } from "./password.js";
+} from '../auth/session-policy.js';
+import { MfaError, MfaService } from '../auth/mfa.service.js';
+import { hashPassword, verifyPassword } from './password.js';
 
 export {
   DEFAULT_SESSION_POLICY,
   SESSION_POLICY,
   type SessionPolicy,
-} from "../auth/session-policy.js";
+} from '../auth/session-policy.js';
 
-export type InboxRole = "OWNER" | "ADMIN" | "OPERATOR" | "VIEWER";
+export type InboxRole = 'OWNER' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 
 export interface InboxPrincipal {
   readonly tenantId: string;
@@ -33,26 +33,26 @@ export type LoginResult =
       readonly sessionToken: string;
       readonly csrfToken: string;
       readonly expiresAt: Date;
-      readonly principal: Omit<InboxPrincipal, "sessionId"> & {
+      readonly principal: Omit<InboxPrincipal, 'sessionId'> & {
         displayName: string;
       };
     }
   | {
       readonly ok: false;
-      readonly code: "INVALID_CREDENTIALS" | "LOCKED" | "TENANT_SUSPENDED";
+      readonly code: 'INVALID_CREDENTIALS' | 'LOCKED' | 'TENANT_SUSPENDED';
     }
   /** ADR 048: correct password, second factor still owed; no session yet. */
   | {
       readonly ok: false;
-      readonly code: "MFA_REQUIRED";
+      readonly code: 'MFA_REQUIRED';
       readonly challenge: string;
     }
-  | { readonly ok: false; readonly code: "MFA_NOT_AVAILABLE" };
+  | { readonly ok: false; readonly code: 'MFA_NOT_AVAILABLE' };
 
 /** ADR 096: one identity's password check on the shared sign-in page; no write. */
 export type SignInProbe<Snapshot> =
-  | { readonly state: "absent" | "locked" | "match" }
-  | { readonly state: "wrong"; readonly snapshot: Snapshot };
+  | { readonly state: 'absent' | 'locked' | 'match' }
+  | { readonly state: 'wrong'; readonly snapshot: Snapshot };
 
 interface CredentialSnapshot {
   id: string;
@@ -64,13 +64,13 @@ interface CredentialSnapshot {
 }
 
 const sha256 = (value: string): string =>
-  createHash("sha256").update(value).digest("hex");
+  createHash('sha256').update(value).digest('hex');
 
 const MAX_CREDENTIAL_RACE_RETRIES = 20;
 
 export function hashesEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a, "hex");
-  const right = Buffer.from(b, "hex");
+  const left = Buffer.from(a, 'hex');
+  const right = Buffer.from(b, 'hex');
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
@@ -103,7 +103,7 @@ export class SessionService {
   }
 
   private dummy(): Promise<string> {
-    this.dummyHash ??= hashPassword("not-a-real-password", this.policy.scrypt);
+    this.dummyHash ??= hashPassword('not-a-real-password', this.policy.scrypt);
     return this.dummyHash;
   }
 
@@ -127,17 +127,17 @@ export class SessionService {
       password,
       credential && !locked ? credential.passwordHash : await this.dummy(),
     );
-    if (!credential) return { state: "absent" };
-    if (locked) return { state: "locked" };
-    if (valid && credential.operator.isActive) return { state: "match" };
-    return { state: "wrong", snapshot: credential };
+    if (!credential) return { state: 'absent' };
+    if (locked) return { state: 'locked' };
+    if (valid && credential.operator.isActive) return { state: 'match' };
+    return { state: 'wrong', snapshot: credential };
   }
 
   /** ADR 096: counts one failed sign-in on a probed identity. */
   recordWrong(
     snapshot: CredentialSnapshot,
     now = new Date(),
-  ): Promise<"recorded" | "locked" | "retry"> {
+  ): Promise<'recorded' | 'locked' | 'retry'> {
     return this.recordFailure(snapshot, now);
   }
 
@@ -154,53 +154,53 @@ export class SessionService {
       });
       if (!credential) {
         await verifyPassword(password, await this.dummy());
-        return { ok: false, code: "INVALID_CREDENTIALS" };
+        return { ok: false, code: 'INVALID_CREDENTIALS' };
       }
       if (credential.lockedUntil && credential.lockedUntil > now) {
-        return { ok: false, code: "LOCKED" };
+        return { ok: false, code: 'LOCKED' };
       }
       const valid = await verifyPassword(password, credential.passwordHash);
       const usable =
         credential.operator.isActive && credential.operator.role !== undefined;
       if (!valid || !usable) {
         const failure = await this.recordFailure(credential, now);
-        if (failure === "retry") continue;
+        if (failure === 'retry') continue;
         return {
           ok: false,
-          code: failure === "locked" ? "LOCKED" : "INVALID_CREDENTIALS",
+          code: failure === 'locked' ? 'LOCKED' : 'INVALID_CREDENTIALS',
         };
       }
       // ADR 047: a suspended or archived tenant cannot sign in. Checked only
       // after the password, so the answer reveals nothing to a stranger.
       if (this.access) {
         const { state } = await this.access.check(credential.tenantId, now);
-        if (state === "SUSPENDED" || state === "ARCHIVED")
-          return { ok: false, code: "TENANT_SUSPENDED" };
+        if (state === 'SUSPENDED' || state === 'ARCHIVED')
+          return { ok: false, code: 'TENANT_SUSPENDED' };
       }
 
       // ADR 048: with a second factor on, the password alone opens nothing and
       // the failure counter is not reset (wrong codes must keep counting).
       if (credential.totpEnabledAt) {
-        if (!this.mfa) return { ok: false, code: "INVALID_CREDENTIALS" };
+        if (!this.mfa) return { ok: false, code: 'INVALID_CREDENTIALS' };
         if (!this.mfa.available)
-          return { ok: false, code: "MFA_NOT_AVAILABLE" };
+          return { ok: false, code: 'MFA_NOT_AVAILABLE' };
         return {
           ok: false,
-          code: "MFA_REQUIRED",
+          code: 'MFA_REQUIRED',
           challenge: await this.mfa.createChallenge(
             {
-              kind: "OPERATOR",
+              kind: 'OPERATOR',
               tenantId: credential.tenantId,
               operatorId: credential.operatorId,
             },
-            "LOGIN",
+            'LOGIN',
             now,
           ),
         };
       }
 
-      const sessionToken = randomBytes(32).toString("base64url");
-      const csrfToken = randomBytes(32).toString("base64url");
+      const sessionToken = randomBytes(32).toString('base64url');
+      const csrfToken = randomBytes(32).toString('base64url');
       const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
       const committed = await this.db.$transaction(async (tx) => {
         const updated = await tx.operatorCredential.updateMany({
@@ -241,7 +241,7 @@ export class SessionService {
         },
       };
     }
-    return { ok: false, code: "INVALID_CREDENTIALS" };
+    return { ok: false, code: 'INVALID_CREDENTIALS' };
   }
 
   /**
@@ -258,8 +258,8 @@ export class SessionService {
       where: { id: operatorId, tenantId, isActive: true },
     });
     if (!operator) return { ok: false };
-    const sessionToken = randomBytes(32).toString("base64url");
-    const csrfToken = randomBytes(32).toString("base64url");
+    const sessionToken = randomBytes(32).toString('base64url');
+    const csrfToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
     await this.db.operatorSession.create({
       data: {
@@ -294,25 +294,25 @@ export class SessionService {
     factor: { code?: string | undefined; recoveryCode?: string | undefined },
     now = new Date(),
   ): Promise<
-    Extract<LoginResult, { ok: true }> | { ok: false; code: "TENANT_SUSPENDED" }
+    Extract<LoginResult, { ok: true }> | { ok: false; code: 'TENANT_SUSPENDED' }
   > {
-    if (!this.mfa) throw new MfaError("MFA_NOT_AVAILABLE");
+    if (!this.mfa) throw new MfaError('MFA_NOT_AVAILABLE');
     const { subject } = await this.mfa.verifyLogin(challenge, factor, now);
-    if (subject.kind !== "OPERATOR")
-      throw new MfaError("MFA_CHALLENGE_INVALID");
+    if (subject.kind !== 'OPERATOR')
+      throw new MfaError('MFA_CHALLENGE_INVALID');
     const credential = await this.db.operatorCredential.findFirst({
       where: { tenantId: subject.tenantId, operatorId: subject.operatorId },
       include: { operator: true },
     });
     if (!credential || !credential.operator.isActive)
-      throw new MfaError("MFA_CHALLENGE_INVALID");
+      throw new MfaError('MFA_CHALLENGE_INVALID');
     if (this.access) {
       const { state } = await this.access.check(credential.tenantId, now);
-      if (state === "SUSPENDED" || state === "ARCHIVED")
-        return { ok: false, code: "TENANT_SUSPENDED" };
+      if (state === 'SUSPENDED' || state === 'ARCHIVED')
+        return { ok: false, code: 'TENANT_SUSPENDED' };
     }
-    const sessionToken = randomBytes(32).toString("base64url");
-    const csrfToken = randomBytes(32).toString("base64url");
+    const sessionToken = randomBytes(32).toString('base64url');
+    const csrfToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(now.getTime() + this.policy.absoluteTtlMs);
     await this.db.$transaction(async (tx) => {
       await tx.operatorCredential.updateMany({
@@ -354,7 +354,7 @@ export class SessionService {
       lockedUntil: Date | null;
     },
     now: Date,
-  ): Promise<"recorded" | "locked" | "retry"> {
+  ): Promise<'recorded' | 'locked' | 'retry'> {
     const lockUntil = new Date(now.getTime() + this.policy.lockMs);
     const updated = await this.db.$queryRaw<{ id: string }[]>`
       UPDATE operator_credentials
@@ -382,7 +382,7 @@ export class SessionService {
         AND (locked_until IS NULL OR locked_until <= ${now})
       RETURNING id
     `;
-    if (updated.length > 0) return "recorded";
+    if (updated.length > 0) return 'recorded';
 
     const current = await this.db.operatorCredential.findUnique({
       where: { id: snapshot.id },
@@ -392,11 +392,11 @@ export class SessionService {
       },
     });
     if (!current || current.passwordHash !== snapshot.passwordHash) {
-      return "retry";
+      return 'retry';
     }
     return current.lockedUntil && current.lockedUntil > now
-      ? "locked"
-      : "retry";
+      ? 'locked'
+      : 'retry';
   }
 
   /** Resolves a cookie token to a principal, or undefined. Tenant comes from the row. */
@@ -446,7 +446,7 @@ export class SessionService {
 
   /** Checks an established stream without refreshing its idle-session clock. */
   async isSessionActive(
-    principal: Pick<InboxPrincipal, "tenantId" | "operatorId" | "sessionId">,
+    principal: Pick<InboxPrincipal, 'tenantId' | 'operatorId' | 'sessionId'>,
     now = new Date(),
   ): Promise<boolean> {
     const session = await this.db.operatorSession.findFirst({

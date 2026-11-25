@@ -12,33 +12,33 @@ import {
   Res,
   UnauthorizedException,
   UseGuards,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { z } from "zod";
-import type { AppEnvironment } from "../config/environment.js";
-import type { PrismaClient } from "../generated/prisma/client.js";
-import { PrivilegedDatabase } from "../persistence/privileged-database.js";
-import { LoginRateLimiter } from "../webinbox/auth.controller.js";
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { z } from 'zod';
+import type { AppEnvironment } from '../config/environment.js';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { PrivilegedDatabase } from '../persistence/privileged-database.js';
+import { LoginRateLimiter } from '../webinbox/auth.controller.js';
 import {
   loginClientAddress,
   type AddressedRequest,
-} from "../webinbox/client-address.js";
-import { hashPassword } from "../webinbox/password.js";
-import { hashInviteToken, plausibleInviteToken } from "../team/invite-token.js";
-import { recordPlatformAudit } from "./platform-audit.js";
-import { parseBody } from "./platform-http.js";
+} from '../webinbox/client-address.js';
+import { hashPassword } from '../webinbox/password.js';
+import { hashInviteToken, plausibleInviteToken } from '../team/invite-token.js';
+import { recordPlatformAudit } from './platform-audit.js';
+import { parseBody } from './platform-http.js';
 import {
   PLATFORM_COOKIE,
   PLATFORM_CSRF_COOKIE,
   PlatformAccessLevel,
   PlatformSessionGuard,
   type PlatformRequest,
-} from "./platform-session.guard.js";
+} from './platform-session.guard.js';
 import {
   PlatformSessionService,
   type PlatformLoginResult,
-} from "./platform-session.service.js";
-import { MfaError, MfaService } from "../auth/mfa.service.js";
+} from './platform-session.service.js';
+import { MfaError, MfaService } from '../auth/mfa.service.js';
 import {
   ChallengeBody,
   CodeBody,
@@ -47,7 +47,7 @@ import {
   LoginMfaBody,
   mfaHttpError,
   parseMfaBody,
-} from "../auth/mfa-http.js";
+} from '../auth/mfa-http.js';
 
 const LoginBody = z.object({
   email: z.string().min(3).max(254),
@@ -57,7 +57,7 @@ const LoginBody = z.object({
 const AcceptBody = z.object({
   displayName: z
     .string()
-    .transform((value) => value.replace(/\s+/gu, " ").trim())
+    .transform((value) => value.replace(/\s+/gu, ' ').trim())
     .pipe(z.string().min(1).max(160))
     .optional(),
   password: z.string().min(12).max(200),
@@ -74,7 +74,7 @@ export function platformCookies(
   maxAge: number,
   secure: boolean,
 ): string[] {
-  const common = `SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+  const common = `SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
   return [
     `${PLATFORM_COOKIE}=${session}; HttpOnly; ${common}`,
     `${PLATFORM_CSRF_COOKIE}=${csrf}; ${common}`,
@@ -88,25 +88,25 @@ export function platformLoginReply(
   secure: boolean,
   extra: Record<string, unknown> = {},
 ): unknown {
-  reply.setHeader("Cache-Control", "no-store");
-  if (!result.ok && result.code === "MFA_REQUIRED")
+  reply.setHeader('Cache-Control', 'no-store');
+  if (!result.ok && result.code === 'MFA_REQUIRED')
     return { mfaRequired: true, challenge: result.challenge };
-  if (!result.ok && result.code === "MFA_ENROLLMENT_REQUIRED")
+  if (!result.ok && result.code === 'MFA_ENROLLMENT_REQUIRED')
     return { mfaEnrollmentRequired: true, challenge: result.challenge };
-  if (!result.ok && result.code === "MFA_NOT_AVAILABLE")
-    throw mfaHttpError(new MfaError("MFA_NOT_AVAILABLE"), true);
+  if (!result.ok && result.code === 'MFA_NOT_AVAILABLE')
+    throw mfaHttpError(new MfaError('MFA_NOT_AVAILABLE'), true);
   if (!result.ok)
     throw new UnauthorizedException({
       code: result.code,
-      message: "Invalid email or password",
+      message: 'Invalid email or password',
       i18nKey:
-        result.code === "LOCKED"
-          ? "errors.accountLocked"
-          : "errors.invalidCredentials",
+        result.code === 'LOCKED'
+          ? 'errors.accountLocked'
+          : 'errors.invalidCredentials',
     });
   const maxAge = Math.floor((result.expiresAt.getTime() - Date.now()) / 1000);
   reply.setHeader(
-    "Set-Cookie",
+    'Set-Cookie',
     platformCookies(result.sessionToken, result.csrfToken, maxAge, secure),
   );
   return {
@@ -120,7 +120,7 @@ export function platformLoginReply(
   };
 }
 
-@Controller("api/v1/platform/auth")
+@Controller('api/v1/platform/auth')
 export class PlatformAuthController {
   private readonly limiter: LoginRateLimiter;
 
@@ -135,7 +135,7 @@ export class PlatformAuthController {
   ) {
     this.prisma = privileged.db;
     const limit = Number(
-      this.config.get("LOGIN_RATE_LIMIT_PER_MINUTE", { infer: true }),
+      this.config.get('LOGIN_RATE_LIMIT_PER_MINUTE', { infer: true }),
     );
     this.limiter = new LoginRateLimiter(limit > 1 ? limit : 20);
   }
@@ -143,14 +143,14 @@ export class PlatformAuthController {
   private allow(request: AddressedRequest): void {
     const client = loginClientAddress(
       request,
-      this.config.get("WEB_PROXY_SECRET", { infer: true }),
+      this.config.get('WEB_PROXY_SECRET', { infer: true }),
     );
     if (!this.limiter.allow(client))
       throw new HttpException(
         {
-          code: "RATE_LIMITED",
-          message: "Too many attempts",
-          i18nKey: "errors.rateLimited",
+          code: 'RATE_LIMITED',
+          message: 'Too many attempts',
+          i18nKey: 'errors.rateLimited',
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
@@ -161,7 +161,7 @@ export class PlatformAuthController {
   }
 
   private secureCookies(): boolean {
-    return Boolean(this.config.get("SESSION_COOKIE_SECURE", { infer: true }));
+    return Boolean(this.config.get('SESSION_COOKIE_SECURE', { infer: true }));
   }
 
   private reply(
@@ -181,7 +181,7 @@ export class PlatformAuthController {
   }
 
   /** Second step of a sign-in (ADR 048 §4). */
-  @Post("login/mfa")
+  @Post('login/mfa')
   @HttpCode(200)
   async loginMfa(
     @Body() body: unknown,
@@ -201,7 +201,7 @@ export class PlatformAuthController {
   }
 
   /** Forced enrolment (ADR 048 §5), step 1: a secret for the challenge's admin. */
-  @Post("login/mfa/setup")
+  @Post('login/mfa/setup')
   @HttpCode(200)
   async enrollSetup(
     @Body() body: unknown,
@@ -210,7 +210,7 @@ export class PlatformAuthController {
   ): Promise<unknown> {
     this.allow(request);
     const input = parseMfaBody(ChallengeBody, body);
-    reply.setHeader("Cache-Control", "no-store");
+    reply.setHeader('Cache-Control', 'no-store');
     try {
       return await this.mfa.setup(
         await this.mfa.enrollSubject(input.challenge),
@@ -221,7 +221,7 @@ export class PlatformAuthController {
   }
 
   /** Forced enrolment, step 2: confirms the code, opens the session, returns the recovery codes once. */
-  @Post("login/mfa/enable")
+  @Post('login/mfa/enable')
   @HttpCode(200)
   async enrollEnable(
     @Body() body: unknown,
@@ -244,10 +244,10 @@ export class PlatformAuthController {
   }
 
   private subject(request: PlatformRequest): {
-    kind: "PLATFORM";
+    kind: 'PLATFORM';
     adminId: string;
   } {
-    return { kind: "PLATFORM", adminId: request.platform!.adminId };
+    return { kind: 'PLATFORM', adminId: request.platform!.adminId };
   }
 
   private async mfaCall<T>(run: () => Promise<T>): Promise<T> {
@@ -258,34 +258,34 @@ export class PlatformAuthController {
     }
   }
 
-  @Get("mfa")
+  @Get('mfa')
   @UseGuards(PlatformSessionGuard)
   async mfaStatus(@Req() request: PlatformRequest): Promise<unknown> {
     return this.mfaCall(() => this.mfa.status(this.subject(request)));
   }
 
-  @Post("mfa/setup")
+  @Post('mfa/setup')
   @HttpCode(200)
-  @PlatformAccessLevel("self")
+  @PlatformAccessLevel('self')
   @UseGuards(PlatformSessionGuard)
   async mfaSetup(
     @Req() request: PlatformRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<unknown> {
-    reply.setHeader("Cache-Control", "no-store");
+    reply.setHeader('Cache-Control', 'no-store');
     return this.mfaCall(() => this.mfa.setup(this.subject(request)));
   }
 
-  @Post("mfa/enable")
+  @Post('mfa/enable')
   @HttpCode(200)
-  @PlatformAccessLevel("self")
+  @PlatformAccessLevel('self')
   @UseGuards(PlatformSessionGuard)
   async mfaEnable(
     @Body() body: unknown,
     @Req() request: PlatformRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<unknown> {
-    reply.setHeader("Cache-Control", "no-store");
+    reply.setHeader('Cache-Control', 'no-store');
     const input = parseMfaBody(CodeBody, body);
     return this.mfaCall(() =>
       this.mfa.enable(this.subject(request), input.code),
@@ -293,9 +293,9 @@ export class PlatformAuthController {
   }
 
   /** Always refused for platform admins: MFA is enforced (ADR 048 §6). */
-  @Post("mfa/disable")
+  @Post('mfa/disable')
   @HttpCode(204)
-  @PlatformAccessLevel("self")
+  @PlatformAccessLevel('self')
   @UseGuards(PlatformSessionGuard)
   async mfaDisable(
     @Body() body: unknown,
@@ -307,23 +307,23 @@ export class PlatformAuthController {
     );
   }
 
-  @Post("mfa/recovery-codes")
+  @Post('mfa/recovery-codes')
   @HttpCode(200)
-  @PlatformAccessLevel("self")
+  @PlatformAccessLevel('self')
   @UseGuards(PlatformSessionGuard)
   async mfaRecoveryCodes(
     @Body() body: unknown,
     @Req() request: PlatformRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<unknown> {
-    reply.setHeader("Cache-Control", "no-store");
+    reply.setHeader('Cache-Control', 'no-store');
     const input = parseMfaBody(CodeBody, body);
     return this.mfaCall(() =>
       this.mfa.regenerateRecoveryCodes(this.subject(request), input.code),
     );
   }
 
-  @Post("login")
+  @Post('login')
   @HttpCode(200)
   async login(
     @Body() body: unknown,
@@ -334,18 +334,18 @@ export class PlatformAuthController {
     const parsed = LoginBody.safeParse(body);
     if (!parsed.success)
       throw new UnauthorizedException({
-        code: "INVALID_CREDENTIALS",
-        message: "Invalid email or password",
-        i18nKey: "errors.invalidCredentials",
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password',
+        i18nKey: 'errors.invalidCredentials',
       });
     return this.signIn(parsed.data.email, parsed.data.password, reply);
   }
 
   /** Sets the password of an invited platform admin and signs in. */
-  @Post("invites/:token/accept")
+  @Post('invites/:token/accept')
   @HttpCode(200)
   async accept(
-    @Param("token") token: string,
+    @Param('token') token: string,
     @Body() body: unknown,
     @Req() request: AddressedRequest,
     @Res({ passthrough: true }) reply: Reply,
@@ -353,9 +353,9 @@ export class PlatformAuthController {
     this.allow(request);
     const input = parseBody(AcceptBody, body);
     const invalid = new NotFoundException({
-      code: "INVITE_INVALID",
-      message: "Invite refused",
-      i18nKey: "platform.errors.INVITE_INVALID",
+      code: 'INVITE_INVALID',
+      message: 'Invite refused',
+      i18nKey: 'platform.errors.INVITE_INVALID',
     });
     if (!plausibleInviteToken(token)) throw invalid;
     const now = new Date();
@@ -386,8 +386,8 @@ export class PlatformAuthController {
       if (updated.count !== 1) return undefined;
       await recordPlatformAudit(tx, {
         actorAdminId: admin.id,
-        action: "admin.invite_accepted",
-        entityType: "platform_admin",
+        action: 'admin.invite_accepted',
+        entityType: 'platform_admin',
         entityId: admin.id,
       });
       return admin.email;
@@ -396,7 +396,7 @@ export class PlatformAuthController {
     return this.signIn(email, input.password, reply);
   }
 
-  @Get("me")
+  @Get('me')
   @UseGuards(PlatformSessionGuard)
   async me(@Req() request: PlatformRequest): Promise<unknown> {
     const admin = await this.prisma.platformAdmin.findUnique({
@@ -406,15 +406,15 @@ export class PlatformAuthController {
     return { admin };
   }
 
-  @Post("logout")
+  @Post('logout')
   @HttpCode(204)
-  @PlatformAccessLevel("self")
+  @PlatformAccessLevel('self')
   @UseGuards(PlatformSessionGuard)
   async logout(
     @Req() request: PlatformRequest,
     @Res({ passthrough: true }) reply: Reply,
   ): Promise<void> {
     await this.sessions.logout(request.platform!.sessionId);
-    reply.setHeader("Set-Cookie", this.cookies("", "", 0));
+    reply.setHeader('Set-Cookie', this.cookies('', '', 0));
   }
 }

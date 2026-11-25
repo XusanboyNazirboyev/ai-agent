@@ -1,6 +1,6 @@
-import { createHmac } from "node:crypto";
-import { expect, test, type Browser, type Page } from "@playwright/test";
-import { fixtures, nextClientAddress } from "./helpers";
+import { createHmac } from 'node:crypto';
+import { expect, test, type Browser, type Page } from '@playwright/test';
+import { fixtures, nextClientAddress } from './helpers';
 
 /**
  * ADR 048 end to end: an operator turns on two-step sign-in from Settings →
@@ -9,7 +9,7 @@ import { fixtures, nextClientAddress } from "./helpers";
  * from the secret the page shows (an independent RFC 6238 implementation).
  */
 
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
 function base32Decode(text: string): Buffer {
   let bits = 0;
@@ -31,7 +31,7 @@ function code(secret: string, stepsAhead = 0): string {
   const counter = Math.floor(Date.now() / 30_000) + stepsAhead;
   const message = Buffer.alloc(8);
   message.writeBigUInt64BE(BigInt(counter));
-  const hmac = createHmac("sha1", base32Decode(secret))
+  const hmac = createHmac('sha1', base32Decode(secret))
     .update(message)
     .digest();
   const offset = hmac[hmac.length - 1]! & 15;
@@ -40,112 +40,112 @@ function code(secret: string, stepsAhead = 0): string {
     (hmac[offset + 1]! << 16) |
     (hmac[offset + 2]! << 8) |
     hmac[offset + 3]!;
-  return String(binary % 1_000_000).padStart(6, "0");
+  return String(binary % 1_000_000).padStart(6, '0');
 }
 
 async function context(browser: Browser): Promise<Page> {
   const created = await browser.newContext({
-    baseURL: "http://127.0.0.1:3010",
-    extraHTTPHeaders: { "x-forwarded-for": nextClientAddress() },
+    baseURL: 'http://127.0.0.1:3010',
+    extraHTTPHeaders: { 'x-forwarded-for': nextClientAddress() },
   });
   return created.newPage();
 }
 
-test("an operator enrols, signs in with a code, then turns MFA off", async ({
+test('an operator enrols, signs in with a code, then turns MFA off', async ({
   browser,
 }) => {
   const f = fixtures();
   const email = f.a.operators.mfa.email;
   const page = await context(browser);
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(f.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(f.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL(/\/today/u);
-  await page.goto("/inbox");
+  await page.goto('/inbox');
 
-  await page.goto("/settings/security");
-  await expect(page.getByTestId("mfa-state")).toContainText("is off");
-  await page.getByTestId("mfa-start").click();
-  const secret = await page.getByTestId("mfa-secret").inputValue();
+  await page.goto('/settings/security');
+  await expect(page.getByTestId('mfa-state')).toContainText('is off');
+  await page.getByTestId('mfa-start').click();
+  const secret = await page.getByTestId('mfa-secret').inputValue();
   expect(secret).toMatch(/^[A-Z2-7]{32}$/u);
-  await expect(page.getByTestId("mfa-uri")).toHaveValue(
-    new RegExp(`^otpauth://totp/tezda:.+secret=${secret}&issuer=tezda$`, "u"),
+  await expect(page.getByTestId('mfa-uri')).toHaveValue(
+    new RegExp(`^otpauth://totp/tezda:.+secret=${secret}&issuer=tezda$`, 'u'),
   );
-  await page.getByTestId("mfa-enroll-code").fill(code(secret, -1));
-  await page.getByRole("button", { name: "Turn on" }).click();
-  await expect(page.getByTestId("mfa-recovery")).toBeVisible();
+  await page.getByTestId('mfa-enroll-code').fill(code(secret, -1));
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await expect(page.getByTestId('mfa-recovery')).toBeVisible();
   await expect(
-    page.getByTestId("mfa-recovery-codes").locator("li"),
+    page.getByTestId('mfa-recovery-codes').locator('li'),
   ).toHaveCount(10);
-  await page.getByTestId("mfa-recovery-done").click();
-  await expect(page.getByTestId("mfa-state")).toContainText("is on");
+  await page.getByTestId('mfa-recovery-done').click();
+  await expect(page.getByTestId('mfa-state')).toContainText('is on');
 
   // A fresh browser: the password alone no longer opens a session.
   const other = await context(browser);
-  await other.goto("/login");
-  await other.getByLabel("Email").fill(email);
-  await other.getByLabel("Password").fill(f.password);
-  await other.getByRole("button", { name: "Sign in" }).click();
-  await expect(other.getByTestId("mfa-form")).toBeVisible();
-  await other.goto("/inbox");
+  await other.goto('/login');
+  await other.getByLabel('Email').fill(email);
+  await other.getByLabel('Password').fill(f.password);
+  await other.getByRole('button', { name: 'Sign in' }).click();
+  await expect(other.getByTestId('mfa-form')).toBeVisible();
+  await other.goto('/inbox');
   await other.waitForURL(/\/login/u);
 
-  await other.getByLabel("Email").fill(email);
-  await other.getByLabel("Password").fill(f.password);
-  await other.getByRole("button", { name: "Sign in" }).click();
-  await other.getByTestId("mfa-code").fill("000000");
-  await other.getByRole("button", { name: "Verify" }).click();
-  await expect(other.getByTestId("mfa-form").getByRole("alert")).toContainText(
-    "not valid",
+  await other.getByLabel('Email').fill(email);
+  await other.getByLabel('Password').fill(f.password);
+  await other.getByRole('button', { name: 'Sign in' }).click();
+  await other.getByTestId('mfa-code').fill('000000');
+  await other.getByRole('button', { name: 'Verify' }).click();
+  await expect(other.getByTestId('mfa-form').getByRole('alert')).toContainText(
+    'not valid',
   );
   // The previous step used to enrol is spent (replay); the current code is valid.
-  await other.getByTestId("mfa-code").fill(code(secret));
-  await other.getByRole("button", { name: "Verify" }).click();
+  await other.getByTestId('mfa-code').fill(code(secret));
+  await other.getByRole('button', { name: 'Verify' }).click();
   await other.waitForURL(/\/today/u);
-  await other.goto("/inbox");
+  await other.goto('/inbox');
 
   // The original session can turn MFA off only with the current password and a
   // fresh authenticator code. A later password-only login must then succeed.
-  await page.goto("/settings/security");
-  await page.getByTestId("mfa-manage-code").fill(code(secret, 1));
-  await page.getByTestId("mfa-manage-password").fill(f.password);
-  await page.getByTestId("mfa-disable").click();
-  await expect(page.getByTestId("mfa-state")).toContainText("is off");
-  await expect(page.getByTestId("mfa-disable")).toHaveCount(0);
+  await page.goto('/settings/security');
+  await page.getByTestId('mfa-manage-code').fill(code(secret, 1));
+  await page.getByTestId('mfa-manage-password').fill(f.password);
+  await page.getByTestId('mfa-disable').click();
+  await expect(page.getByTestId('mfa-state')).toContainText('is off');
+  await expect(page.getByTestId('mfa-disable')).toHaveCount(0);
 
   const direct = await context(browser);
-  await direct.goto("/login");
-  await direct.getByLabel("Email").fill(email);
-  await direct.getByLabel("Password").fill(f.password);
-  await direct.getByRole("button", { name: "Sign in" }).click();
+  await direct.goto('/login');
+  await direct.getByLabel('Email').fill(email);
+  await direct.getByLabel('Password').fill(f.password);
+  await direct.getByRole('button', { name: 'Sign in' }).click();
   await direct.waitForURL(/\/today/u);
-  await expect(direct.getByTestId("mfa-form")).toHaveCount(0);
+  await expect(direct.getByTestId('mfa-form')).toHaveCount(0);
 });
 
-test("a console admin without a second factor must enrol before getting a session", async ({
+test('a console admin without a second factor must enrol before getting a session', async ({
   browser,
 }) => {
   const f = fixtures();
   const page = await context(browser);
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(f.platform.fresh.email);
-  await page.getByLabel("Password").fill(f.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByTestId("mfa-enroll")).toBeVisible();
-  await page.goto("/console");
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(f.platform.fresh.email);
+  await page.getByLabel('Password').fill(f.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByTestId('mfa-enroll')).toBeVisible();
+  await page.goto('/console');
   await page.waitForURL(/\/login/u);
 
-  await page.getByLabel("Email").fill(f.platform.fresh.email);
-  await page.getByLabel("Password").fill(f.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  const secret = await page.getByTestId("mfa-secret").inputValue();
-  await page.getByTestId("mfa-enroll-code").fill(code(secret));
-  await page.getByRole("button", { name: "Turn on" }).click();
-  await expect(page.getByTestId("mfa-recovery")).toBeVisible();
-  await page.getByTestId("mfa-recovery-done").click();
+  await page.getByLabel('Email').fill(f.platform.fresh.email);
+  await page.getByLabel('Password').fill(f.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const secret = await page.getByTestId('mfa-secret').inputValue();
+  await page.getByTestId('mfa-enroll-code').fill(code(secret));
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await expect(page.getByTestId('mfa-recovery')).toBeVisible();
+  await page.getByTestId('mfa-recovery-done').click();
   await page.waitForURL(/\/console$/u);
-  await page.goto("/console/security");
-  await expect(page.getByTestId("mfa-state")).toContainText("is on");
-  await expect(page.getByTestId("mfa-disable")).toHaveCount(0);
+  await page.goto('/console/security');
+  await expect(page.getByTestId('mfa-state')).toContainText('is on');
+  await expect(page.getByTestId('mfa-disable')).toHaveCount(0);
 });
