@@ -7,6 +7,7 @@ import { errorKey } from '@/lib/api';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { PasswordInput } from './ui/password-input';
 
 /** The API call used by these components: tenant `api` or `platformApi`. */
 export type MfaCall = <T>(
@@ -356,9 +357,8 @@ export function MfaSecurityPanel(props: {
           {!data.required ? (
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               {t('login.password')}
-              <input
+              <PasswordInput
                 name="password"
-                type="password"
                 autoComplete="current-password"
                 data-testid="mfa-manage-password"
                 value={password}

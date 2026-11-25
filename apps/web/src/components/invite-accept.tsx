@@ -11,6 +11,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { PasswordInput } from './ui/password-input';
 
 /** Password lengths the two accept endpoints require (API zod schemas). */
 export const MIN_PASSWORD = { tenant: 10, platform: 12 } as const;
@@ -132,9 +133,8 @@ export function InviteAccept(props: { kind: Kind }): ReactNode {
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             {t('invite.accept.password')}
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={min}
@@ -151,9 +151,8 @@ export function InviteAccept(props: { kind: Kind }): ReactNode {
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             {t('invite.accept.repeat')}
-            <input
+            <PasswordInput
               name="repeat"
-              type="password"
               autoComplete="new-password"
               required
               maxLength={200}

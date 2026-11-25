@@ -26,6 +26,7 @@ import { Button, buttonClass } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { Select } from './ui/select';
+import { PasswordInput } from './ui/password-input';
 
 /**
  * Public signup (ADR 080), two steps: the form, then "Confirm in Telegram".
@@ -198,9 +199,8 @@ export function SignupPage(): ReactNode {
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           {t('signup.password')}
-          <input
+          <PasswordInput
             name="password"
-            type="password"
             autoComplete="new-password"
             maxLength={200}
             data-testid="signup-password"

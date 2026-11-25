@@ -76,6 +76,8 @@
   "login.title": "Sign in",
   "login.email": "Email",
   "login.password": "Password",
+  "password.show": "Show password",
+  "password.hide": "Hide password",
   "login.submit": "Sign in",
   "login.submitting": "Signing in…",
   "header.signedInAs": "{name} ({role})",

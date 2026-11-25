@@ -76,6 +76,8 @@
   "login.title": "Kirish",
   "login.email": "Elektron pochta",
   "login.password": "Parol",
+  "password.show": "Parolni ko‘rsatish",
+  "password.hide": "Parolni yashirish",
   "login.submit": "Kirish",
   "login.submitting": "Kirilmoqda…",
   "header.signedInAs": "{name} ({role})",

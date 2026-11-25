@@ -76,6 +76,8 @@
   "login.title": "Вход",
   "login.email": "Эл. почта",
   "login.password": "Пароль",
+  "password.show": "Показать пароль",
+  "password.hide": "Скрыть пароль",
   "login.submit": "Войти",
   "login.submitting": "Входим…",
   "header.signedInAs": "{name} ({role})",

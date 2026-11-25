@@ -11,6 +11,7 @@ import { MIN_PASSWORD } from './invite-accept';
 import { Button, buttonClass } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
+import { PasswordInput } from './ui/password-input';
 
 interface ResetPreview {
   email: string;
@@ -109,9 +110,8 @@ export function ResetPassword(): ReactNode {
           ) : null}
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             {t('invite.accept.password')}
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={min}
@@ -129,9 +129,8 @@ export function ResetPassword(): ReactNode {
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             {t('invite.accept.repeat')}
-            <input
+            <PasswordInput
               name="repeat"
-              type="password"
               autoComplete="new-password"
               required
               maxLength={200}

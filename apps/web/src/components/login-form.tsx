@@ -12,6 +12,7 @@ import { Button } from './ui/button';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { MfaCodeForm } from './mfa';
+import { PasswordInput } from './ui/password-input';
 
 export function LoginForm(): ReactNode {
   const { t } = useI18n();
@@ -130,9 +131,8 @@ export function LoginForm(): ReactNode {
               </label>
               <label className="flex flex-col gap-1.5 text-sm font-medium">
                 {t('login.password')}
-                <input
+                <PasswordInput
                   name="password"
-                  type="password"
                   autoComplete="current-password"
                   required
                   value={password}

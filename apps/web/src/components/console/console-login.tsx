@@ -16,6 +16,7 @@ import {
   RecoveryCodes,
   type MfaSetup,
 } from '../mfa';
+import { PasswordInput } from '../ui/password-input';
 
 /** Platform console sign-in (ADR 047 §1): sets only the `ac_platform*` cookies. */
 export function ConsoleLogin(): ReactNode {
@@ -155,9 +156,8 @@ export function ConsoleLogin(): ReactNode {
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             {t('login.password')}
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               value={password}
