@@ -11,26 +11,27 @@ import {
   Req,
   UseGuards,
   Optional,
-} from '@nestjs/common';
-import { MANUAL_CHANNEL_TYPE } from '../leads/manual-lead-rules.js';
-import { ConfigService } from '@nestjs/config';
-import { z } from 'zod';
-import { modeRefusalCode, type AgentModePolicy } from '../agent/agent-mode.js';
-import { goLiveGaps } from '../agent/go-live.js';
-import { ConnectorSelector } from '../connectors/connector-selector.js';
-import type { AppEnvironment } from '../config/environment.js';
-import { PrismaService } from '../persistence/prisma.service.js';
-import { ChannelSecretStore } from '../secrets/channel-secret-store.js';
+} from "@nestjs/common";
+import { MANUAL_CHANNEL_TYPE } from "../leads/manual-lead-rules.js";
+import { BUSINESS_ACCOUNT_PREFIX } from "../channels/telegram/telegram-business.js";
+import { ConfigService } from "@nestjs/config";
+import { z } from "zod";
+import { modeRefusalCode, type AgentModePolicy } from "../agent/agent-mode.js";
+import { goLiveGaps } from "../agent/go-live.js";
+import { ConnectorSelector } from "../connectors/connector-selector.js";
+import type { AppEnvironment } from "../config/environment.js";
+import { PrismaService } from "../persistence/prisma.service.js";
+import { ChannelSecretStore } from "../secrets/channel-secret-store.js";
 import {
   credentialSource,
   enabledBefore,
   policyFrom,
   summarizeChannel,
   type ChannelAccountSummary,
-} from './channel-summary.js';
-import { SessionGuard, type InboxRequest } from './session.guard.js';
+} from "./channel-summary.js";
+import { SessionGuard, type InboxRequest } from "./session.guard.js";
 
-const Body_ = z.object({ mode: z.enum(['OFF', 'SHADOW', 'LIVE']) });
+const Body_ = z.object({ mode: z.enum(["OFF", "SHADOW", "LIVE"]) });
 
 /**
  * The tenant's messenger accounts for the web Channels and AI bot pages.
@@ -38,7 +39,7 @@ const Body_ = z.object({ mode: z.enum(['OFF', 'SHADOW', 'LIVE']) });
  * or chat id leaves the server. Changing the assistant mode is OWNER/ADMIN
  * only, obeys the same policy as the `agent:mode` command, and is audited.
  */
-@Controller('api/v1/channels')
+@Controller("api/v1/channels")
 @UseGuards(SessionGuard)
 export class ChannelsController {
   constructor(
@@ -56,9 +57,18 @@ export class ChannelsController {
   private async summaries(tenantId: string): Promise<ChannelAccountSummary[]> {
     const [rows, secrets] = await Promise.all([
       this.prisma.channelAccount.findMany({
-        // ADR 061: the internal account of manual leads is no channel.
-        where: { tenantId, channelType: { not: MANUAL_CHANNEL_TYPE } },
-        orderBy: { createdAt: 'asc' },
+        where: {
+          tenantId,
+          // ADR 061: the internal account of manual leads is no channel.
+          channelType: { not: MANUAL_CHANNEL_TYPE },
+          // ADR 092: a Telegram Business link that Telegram never connected
+          // (e.g. no Premium) is no channel yet; it appears once it connects.
+          NOT: {
+            externalAccountId: { startsWith: BUSINESS_ACCOUNT_PREFIX },
+            businessConnectionId: null,
+          },
+        },
+        orderBy: { createdAt: "asc" },
         take: 50,
       }),
       this.prisma.channelSecret.findMany({
@@ -85,7 +95,7 @@ export class ChannelsController {
           ),
           this.config,
         ),
-        this.config.get('PUBLIC_BASE_URL', { infer: true }),
+        this.config.get("PUBLIC_BASE_URL", { infer: true }),
         enabled.has(row.id),
       ),
     );
@@ -102,31 +112,31 @@ export class ChannelsController {
       capabilities: {
         secretsConfigured: this.secrets.configured,
         publicUrlConfigured: Boolean(
-          this.config.get('PUBLIC_BASE_URL', { infer: true }),
+          this.config.get("PUBLIC_BASE_URL", { infer: true }),
         ),
       },
     };
   }
 
-  @Put(':id/agent-mode')
+  @Put(":id/agent-mode")
   async setMode(
     @Req() request: InboxRequest,
-    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param("id", new ParseUUIDPipe()) id: string,
     @Body() body: unknown,
   ): Promise<ChannelAccountSummary> {
     const principal = request.principal!;
-    if (principal.role !== 'OWNER' && principal.role !== 'ADMIN')
+    if (principal.role !== "OWNER" && principal.role !== "ADMIN")
       throw new ForbiddenException({
-        code: 'FORBIDDEN',
-        message: 'Not allowed',
-        i18nKey: 'errors.forbidden',
+        code: "FORBIDDEN",
+        message: "Not allowed",
+        i18nKey: "errors.forbidden",
       });
     const parsed = Body_.safeParse(body);
     if (!parsed.success)
       throw new BadRequestException({
-        code: 'INVALID_BODY',
-        message: 'Invalid body',
-        i18nKey: 'errors.invalidBody',
+        code: "INVALID_BODY",
+        message: "Invalid body",
+        i18nKey: "errors.invalidBody",
       });
     const mode = parsed.data.mode;
     const account = await this.prisma.channelAccount.findFirst({
@@ -138,20 +148,20 @@ export class ChannelsController {
     });
     if (!account)
       throw new NotFoundException({
-        code: 'NOT_FOUND',
-        message: 'Not found',
-        i18nKey: 'errors.notFound',
+        code: "NOT_FOUND",
+        message: "Not found",
+        i18nKey: "errors.notFound",
       });
     const policy = this.policy();
     const refusal = modeRefusalCode(mode, policy, account);
     if (refusal)
       throw new ForbiddenException({
-        code: 'MODE_REFUSED',
+        code: "MODE_REFUSED",
         reason: refusal,
-        message: 'This mode is not allowed now',
-        i18nKey: 'errors.modeRefused',
+        message: "This mode is not allowed now",
+        i18nKey: "errors.modeRefused",
       });
-    if (mode === 'LIVE' && account.agentMode !== 'LIVE' && this.selector) {
+    if (mode === "LIVE" && account.agentMode !== "LIVE" && this.selector) {
       const missing = await goLiveGaps(
         this.prisma,
         this.selector,
@@ -160,10 +170,10 @@ export class ChannelsController {
       );
       if (missing.length > 0)
         throw new ForbiddenException({
-          code: 'SETUP_INCOMPLETE',
+          code: "SETUP_INCOMPLETE",
           missing,
-          message: 'Finish the setup before the bot answers customers',
-          i18nKey: 'errors.setupIncomplete',
+          message: "Finish the setup before the bot answers customers",
+          i18nKey: "errors.setupIncomplete",
         });
     }
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -174,10 +184,10 @@ export class ChannelsController {
       await tx.auditEvent.create({
         data: {
           tenantId: principal.tenantId,
-          actorType: 'OPERATOR',
+          actorType: "OPERATOR",
           actorId: principal.operatorId,
-          action: 'channel.agent_mode_changed',
-          entityType: 'channel_account',
+          action: "channel.agent_mode_changed",
+          entityType: "channel_account",
           entityId: account.id,
           safeInputSummary: { from: account.agentMode, to: mode },
         },
