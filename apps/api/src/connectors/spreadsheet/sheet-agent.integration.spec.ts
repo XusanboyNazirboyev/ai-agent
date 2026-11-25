@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { extraction, runTurn } from '../../agent/testing/agent-harness.js';
 import { ScriptedLlmProvider } from '../../core/llm/scripted-llm-provider.js';
+import { FURNITURE_PACK } from '../../packs/furniture/furniture.pack.js';
 import { TRAVEL_PACK } from '../../packs/travel/travel.pack.js';
 import type { PrismaService } from '../../persistence/prisma.service.js';
 import { runWithTenant } from '../../persistence/tenant-context.js';
@@ -16,7 +17,7 @@ import {
 } from '../../persistence/testing/test-clients.js';
 import { parseSheet } from './csv-reader.js';
 import { suggestMapping } from './field-suggest.js';
-import { mapSheet } from './row-mapper.js';
+import { mapSheet, type MapOptions } from './row-mapper.js';
 import { PrismaSheetCatalogStore } from './sheet-catalog.store.js';
 import { SpreadsheetConnector } from './spreadsheet-connector.js';
 
@@ -44,7 +45,11 @@ const SAMPLE = readFileSync(
 );
 const UPLOADED = new Date('2026-03-01T08:00:00Z');
 
-async function tenantWithList(): Promise<string> {
+async function tenantWithList(
+  packKey = 'travel',
+  csv = SAMPLE,
+  options: MapOptions = {},
+): Promise<string> {
   const t = await db.tenant.create({
     data: {
       slug: `sheetagent-${randomUUID()}`,
@@ -52,20 +57,20 @@ async function tenantWithList(): Promise<string> {
       defaultLocale: 'en',
       supportedLocales: ['en'],
       timezone: 'Asia/Tashkent',
-      packKey: 'travel',
+      packKey,
       packVersion: '1',
     },
   });
-  const sheet = parseSheet(SAMPLE);
+  const sheet = parseSheet(csv);
   const mapping = suggestMapping(sheet.header);
   await store.replace(t.id, {
     name: 'Price list',
-    sourceFilename: 'tours.csv',
+    sourceFilename: 'prices.csv',
     mapping,
-    options: {},
+    options,
     freshnessDays: 3,
     uploadedAt: UPLOADED,
-    result: mapSheet(sheet, mapping),
+    result: mapSheet(sheet, mapping, options),
   });
   return t.id;
 }
@@ -133,6 +138,115 @@ async function priceTurnIn(options: PriceTurn) {
 const toolLog = (run: Awaited<ReturnType<typeof priceTurn>>): string[] =>
   run.result.tools.map((t) => `${t.origin}:${t.name}:${t.status}`);
 const plain = (text: string): string => text.replace(/\s/gu, ' ');
+
+describe('furniture pack on a tenant price list', () => {
+  it('quotes uploaded per-unit prices, checks stock, and rejects stale prices', async () => {
+    const tenantId = await tenantWithList(
+      'furniture',
+      'SKU,Product,Price,Currency,Stock\nW-275,Atlas Wardrobe,275,USD,4\nW-390,Atlas Wardrobe,390,USD,0\nC-055,Atlas Chair,55,USD,0',
+      { pricingBasis: 'PER_UNIT' },
+    );
+    await runWithTenant(tenantId, async () => {
+      const now = new Date('2026-03-02T10:00:00Z');
+      const connector = connectorAt(tenantId, now);
+      const wardrobes = await connector.searchItems({ title: 'wardrobe' });
+      expect(wardrobes).toHaveLength(2);
+      const [wardrobe] = await connector.searchItems({ title: 'w-275' });
+      const [offer] = await connector.getOffers(wardrobe!.id);
+      expect(offer).toMatchObject({
+        pricingBasis: 'PER_UNIT',
+        price: { amount: '275', currency: 'USD' },
+      });
+      expect(
+        await connector.checkAvailability(offer!.id, { offerId: offer!.id }),
+      ).toMatchObject({ status: 'AVAILABLE', seatsLeft: 4 });
+      const [otherWardrobe] = await connector.searchItems({ title: 'W-390' });
+      const [sold] = await connector.getOffers(otherWardrobe!.id);
+      expect(sold).toMatchObject({ price: { amount: '390' } });
+      expect(
+        await connector.checkAvailability(sold!.id, { offerId: sold!.id }),
+      ).toMatchObject({ status: 'SOLD_OUT', seatsLeft: 0 });
+      const { result } = await runTurn({
+        provider: new ScriptedLlmProvider([
+          extraction(
+            { furniture: 'W-275' },
+            'price',
+            'en',
+            'Latn',
+            FURNITURE_PACK,
+          ),
+          {
+            kind: 'tools',
+            toolCalls: [
+              { name: 'list_offers', input: { itemId: wardrobe!.id } },
+            ],
+          },
+          {
+            kind: 'tools',
+            toolCalls: [{ name: 'get_quote', input: { offerId: offer!.id } }],
+          },
+          { kind: 'tools', text: '{{F1}} costs {{F5}} per unit.' },
+        ]),
+        text: 'Please tell me how much the wardrobe with SKU W-275 costs.',
+        connector,
+        now,
+        scope: { tenantId, conversationId: 'conversation-eval' },
+        pack: FURNITURE_PACK,
+        input: { conversationLocale: 'en' },
+      });
+      expect(result.outcome).toBe('ANSWERED');
+      expect(result.reply).toContain('275');
+      expect(result.facts).toContainEqual(
+        expect.objectContaining({
+          value: expect.objectContaining({
+            kind: 'price',
+            confirmedQuote: true,
+            pricingBasis: 'PER_UNIT',
+          }),
+          provenance: expect.objectContaining({ tool: 'get_quote', tenantId }),
+        }),
+      );
+      const stale = connectorAt(tenantId, new Date('2026-03-06T10:00:00Z'));
+      await expect(
+        stale.getQuote(offer!.id, { offerId: offer!.id }),
+      ).rejects.toMatchObject({
+        code: 'SHEET_CATALOG_STALE',
+      });
+    });
+  });
+
+  it('keeps the buyer dimensions on a custom request and hands it over without a catalog quote', async () => {
+    const { result } = await runTurn({
+      provider: new ScriptedLlmProvider([
+        extraction(
+          {
+            furniture: 'wardrobe',
+            dimensions: '180 cm wide, 60 cm deep',
+            material: 'oak',
+          },
+          'human_request',
+          'en',
+          'Latn',
+          FURNITURE_PACK,
+        ),
+      ]),
+      text: 'I need a custom oak wardrobe, 180 cm wide and 60 cm deep.',
+      pack: FURNITURE_PACK,
+      connector: null,
+      input: { conversationLocale: 'en' },
+    });
+    expect(result).toMatchObject({
+      outcome: 'HANDOVER',
+      handover: 'CUSTOMER_REQUEST',
+      tools: [],
+      slots: {
+        furniture: { value: 'wardrobe' },
+        dimensions: { value: '180 cm wide, 60 cm deep' },
+        material: { value: 'oak' },
+      },
+    });
+  });
+});
 
 describe('the agent answers from an uploaded price list (ADR 064)', () => {
   it('states the exact price and departure from the sheet, rendered by code with provenance', async () => {

@@ -20,7 +20,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import { TelegramBusinessService } from '../channels/telegram/telegram-business.service.js';
-import { SIGNUP_PACK_KEYS } from '../packs/registry.js';
+import { SIGNUP_PACK_KEYS, SIGNUP_PACK_OPTIONS } from '../packs/registry.js';
 import { PlatformBotSender } from './platform-bot.sender.js';
 import type { AppEnvironment } from '../config/environment.js';
 import {
@@ -178,6 +178,14 @@ export class SignupController {
       telegramUrl: created.telegramUrl,
       expiresAt: created.expiresAt.toISOString(),
     };
+  }
+
+  @Get('options')
+  options(@Res({ passthrough: true }) reply: Reply): {
+    businessTypes: typeof SIGNUP_PACK_OPTIONS;
+  } {
+    reply.setHeader('Cache-Control', 'public, max-age=300');
+    return { businessTypes: SIGNUP_PACK_OPTIONS };
   }
 
   /** Polled by the signup page; signs this browser in once when confirmed. */

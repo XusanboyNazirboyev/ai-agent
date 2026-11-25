@@ -276,12 +276,14 @@ describe('price list upload API (ADR 064)', () => {
     const config = JSON.stringify({
       mapping: { title: 0, price: 1 },
       defaultCurrency: 'USD',
+      pricingBasis: 'PER_UNIT',
       freshnessDays: 7,
     });
     const done = await controller.upload(w.as.ADMIN, custom, config, 'own.csv');
     expect(done).toMatchObject({ accepted: 1, rejected: 0 });
     expect(await controller.status(w.as.ADMIN)).toMatchObject({
       freshnessDays: 7,
+      pricingBasis: 'PER_UNIT',
       acceptedCount: 1,
     });
   });

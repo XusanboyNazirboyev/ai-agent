@@ -68,8 +68,12 @@ const DOMAIN_WORDS =
   /\b(?:ielts|course|courses|kurs|student|teacher|tour|tours|hotel|antalya|iphone|eduflow|learnix|omoncrm|amocrm|bitrix\d*)\b/iu;
 
 /** Pack keys are the directory names under `src/packs/`. */
-const PACK_KEYS = readdirSync(PACKS).filter((name) =>
-  statSync(join(PACKS, name)).isDirectory(),
+// A pack is a directory with a `*.pack.ts`; shared helpers (ADR 093
+// `src/packs/sales/`) live beside the packs without being one.
+const PACK_KEYS = readdirSync(PACKS).filter(
+  (name) =>
+    statSync(join(PACKS, name)).isDirectory() &&
+    readdirSync(join(PACKS, name)).some((file) => file.endsWith('.pack.ts')),
 );
 
 /**

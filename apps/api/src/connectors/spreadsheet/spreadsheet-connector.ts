@@ -131,7 +131,7 @@ export class SpreadsheetConnector implements CrmConnector {
       sourceEntityId: offer.key,
       price: { amount: offer.price, currency: offer.currency },
       currency: offer.currency,
-      pricingBasis: 'PER_PERSON',
+      pricingBasis: meta.options.pricingBasis ?? 'PER_PERSON',
       availabilityStatus: stale ? 'UNKNOWN' : offer.availability,
       ...(!stale && offer.seatsLeft !== null
         ? { seatsLeft: offer.seatsLeft }
@@ -237,7 +237,7 @@ export class SpreadsheetConnector implements CrmConnector {
       id: `${this.sourceSystem}:quote:${offer.key}`,
       offerId,
       amount: { amount: offer.price, currency: offer.currency },
-      pricingBasis: 'PER_PERSON',
+      pricingBasis: meta.options.pricingBasis ?? 'PER_PERSON',
       validUntil: this.expiresAt(meta).toISOString(),
       sourceSystem: this.sourceSystem,
       sourceEntityId: offer.key,

@@ -134,6 +134,7 @@ interface Started {
 
 async function start(
   email = `own-${randomUUID().slice(0, 8)}@example.test`,
+  packKey = 'travel',
 ): Promise<Started> {
   const result = await http('POST', '/api/v1/public/signups', {
     body: {
@@ -142,7 +143,7 @@ async function start(
       email,
       password: PASSWORD,
       planCode: PLAN,
-      packKey: 'travel',
+      packKey,
     },
   });
   expect(result.status).toBe(201);
@@ -205,6 +206,61 @@ function sendContact(
 }
 
 describe('self-serve signup (ADR 080)', () => {
+  it('publishes the enabled domain pack choices and their localized labels', async () => {
+    const result = await http('GET', '/api/v1/public/signups/options');
+    expect(result.status).toBe(200);
+    const choices = result.body.businessTypes as Array<{
+      key: string;
+      label: Record<string, string>;
+    }>;
+    expect(new Set(choices.map(({ key }) => key)).size).toBe(choices.length);
+    expect(choices.map(({ key }) => key)).toEqual(
+      expect.arrayContaining([
+        'travel',
+        'education',
+        'home-appliances',
+        'auto-sales',
+        'real-estate',
+        'services',
+        'furniture',
+        'general',
+      ]),
+    );
+    expect(choices.find(({ key }) => key === 'furniture')?.label).toMatchObject(
+      {
+        'uz-Latn': 'Mebel va buyurtma asosida ishlab chiqarish',
+        ru: expect.any(String),
+        en: expect.any(String),
+      },
+    );
+  });
+
+  it.each([
+    'home-appliances',
+    'auto-sales',
+    'real-estate',
+    'services',
+    'furniture',
+  ])(
+    'persists the selected %s domain pack and version on confirmation',
+    async (packKey) => {
+      const signup = await start(undefined, packKey);
+      const user = newUser();
+      expect((await sendStart(user, signup.token)).status).toBe(200);
+      expect((await sendContact(user, newPhone())).status).toBe(200);
+      const pending = await db.pendingSignup.findUniqueOrThrow({
+        where: { id: signup.id },
+      });
+      expect(pending.status).toBe('CONFIRMED');
+      if (!pending.createdTenantId) throw new Error('Missing created tenant');
+      tenants.push(pending.createdTenantId);
+      const tenant = await db.tenant.findUniqueOrThrow({
+        where: { id: pending.createdTenantId },
+      });
+      expect(tenant).toMatchObject({ packKey, packVersion: '1' });
+    },
+  );
+
   it('creates tenant, owner and 3-day trial once, then signs in once', async () => {
     const s = await start();
     const user = newUser();

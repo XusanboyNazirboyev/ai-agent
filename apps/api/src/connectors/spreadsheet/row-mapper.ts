@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { PricingBasis } from '../contracts/canonical.js';
 import {
   addDays,
   currencyInAmountCell,
@@ -36,6 +37,7 @@ export interface MapOptions {
   /** Availability of a row when the sheet has no seats column. */
   readonly defaultAvailability?: 'AVAILABLE' | 'UNKNOWN';
   readonly itemType?: string;
+  readonly pricingBasis?: PricingBasis;
 }
 
 export interface MappedItem {
@@ -51,7 +53,7 @@ export interface MappedOffer {
   readonly itemKey: string;
   readonly line: number;
   readonly price: { readonly amount: string; readonly currency: SheetCurrency };
-  readonly pricingBasis: 'PER_PERSON';
+  readonly pricingBasis: PricingBasis;
   readonly availability: AvailabilityStatus;
   readonly seatsLeft?: number;
   /** `YYYY-MM-DD`; the connector turns it into an instant in the tenant's time zone. */
@@ -227,22 +229,19 @@ export function mapSheet(
         .filter((part) => part !== '')
         .join(' · ');
     }
-    if (title === '')
-      fail('TITLE_MISSING', 'The row has no tour or hotel name');
+    if (title === '') fail('TITLE_MISSING', 'The row has no item name');
 
     if (problems.length > 0 || amount === null || currency === null) {
       errors.push(...problems);
       continue;
     }
 
-    const itemKey = hashKey([
-      title,
-      destination,
-      hotel,
-      String(nights ?? ''),
-      meal,
-    ]);
     const code = cell('code');
+    const sku = options.pricingBasis === 'PER_UNIT' ? code : '';
+    // A stocked variant has its own price and count even if titles repeat.
+    const itemKey = sku
+      ? hashKey(['sku', sku])
+      : hashKey([title, destination, hotel, String(nights ?? ''), meal]);
     const offerKey =
       code !== ''
         ? code
@@ -260,6 +259,7 @@ export function mapSheet(
 
     if (!items.has(itemKey)) {
       const attributes: Record<string, Attribute> = {};
+      if (sku) attributes.sku = sku;
       if (destination !== '') attributes.destination = destination;
       if (hotel !== '') attributes.hotel = hotel;
       if (stars !== undefined) attributes.stars = stars;
@@ -286,7 +286,7 @@ export function mapSheet(
       itemKey,
       line: row.line,
       price: { amount, currency },
-      pricingBasis: 'PER_PERSON',
+      pricingBasis: options.pricingBasis ?? 'PER_PERSON',
       availability,
       ...(seatsLeft !== undefined ? { seatsLeft } : {}),
       ...(startsOn !== undefined ? { startsOn } : {}),

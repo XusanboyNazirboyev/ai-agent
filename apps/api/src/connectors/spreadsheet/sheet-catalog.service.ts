@@ -4,6 +4,10 @@ import type { PrismaClient } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { PrivilegedDatabase } from '../../persistence/privileged-database.js';
 import { runWithTenant } from '../../persistence/tenant-context.js';
+import {
+  PricingBasisSchema,
+  type PricingBasis,
+} from '../contracts/canonical.js';
 import { SHEET_CURRENCIES } from './cell-values.js';
 import { parseSheet, SheetReadError, type ParsedSheet } from './csv-reader.js';
 import {
@@ -59,6 +63,7 @@ export const SheetConfigSchema = z
     defaultCurrency: z.enum(SHEET_CURRENCIES).optional(),
     limitedThreshold: z.number().int().min(0).max(50).optional(),
     defaultAvailability: z.enum(['AVAILABLE', 'UNKNOWN']).optional(),
+    pricingBasis: PricingBasisSchema.optional(),
     freshnessDays: z.number().int().min(1).max(30).optional(),
     name: z.string().trim().min(1).max(120).optional(),
     /** Bind the CATALOG role to the price list when nothing is bound yet (default true). */
@@ -116,6 +121,7 @@ export interface SheetStatus {
   readonly sourceFilename?: string | null;
   readonly uploadedAt?: string;
   readonly freshnessDays?: number;
+  readonly pricingBasis?: PricingBasis;
   /** When prices stop being quoted. */
   readonly validUntil?: string;
   readonly stale?: boolean;
@@ -159,6 +165,7 @@ function optionsOf(config: SheetConfig): MapOptions {
     ...(config.defaultAvailability
       ? { defaultAvailability: config.defaultAvailability }
       : {}),
+    ...(config.pricingBasis ? { pricingBasis: config.pricingBasis } : {}),
   };
 }
 
@@ -473,6 +480,7 @@ export class SheetCatalogService {
       sourceFilename: meta.sourceFilename,
       uploadedAt: meta.uploadedAt.toISOString(),
       freshnessDays: meta.freshnessDays,
+      pricingBasis: meta.options.pricingBasis ?? 'PER_PERSON',
       validUntil: validUntil.toISOString(),
       stale: now.getTime() > validUntil.getTime(),
       rowCount: meta.rowCount,

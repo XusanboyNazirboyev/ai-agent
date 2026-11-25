@@ -183,18 +183,20 @@ export class PrismaSheetCatalogStore implements SheetCatalogReader {
             WHERE ${where}
             ORDER BY title ASC, key ASC
             LIMIT ${query.limit} OFFSET ${query.offset}`)
-        : // Each word of the phrase that is in the title scores one point; only
-          // the best-scoring titles are returned, so a word that is in no title
-          // ("tour", "price") never hides the match, and a second matching word
-          // narrows the answer.
+        : // Return an exact SKU first. Otherwise rank by matching title words,
+          // ignoring words such as "price" that match no title.
           await this.prisma.$queryRaw<Row[]>(Prisma.sql`
             WITH scored AS (
               SELECT key, title, item_type, attributes,
                 ${Prisma.join(
-                  words.map(
-                    (word) =>
-                      Prisma.sql`(CASE WHEN normalized_title LIKE ${`%${word}%`} THEN 1 ELSE 0 END)`,
-                  ),
+                  [
+                    // An exact SKU outranks any number of title-word matches.
+                    Prisma.sql`(CASE WHEN lower(attributes ->> 'sku') = ${normalizeTitle(query.title ?? '')} THEN ${MAX_SEARCH_WORDS + 1} ELSE 0 END)`,
+                    ...words.map(
+                      (word) =>
+                        Prisma.sql`(CASE WHEN normalized_title LIKE ${`%${word}%`} THEN 1 ELSE 0 END)`,
+                    ),
+                  ],
                   ' + ',
                 )} AS score
               FROM sheet_catalog_items
