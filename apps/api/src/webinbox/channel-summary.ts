@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { isBusinessAccountKey } from '../channels/telegram/telegram-business.js';
 import {
   effectiveAgentModeWithReason,
   modeRefusalCode,
@@ -46,6 +47,8 @@ export interface ChannelAccountSummary {
    * keep them.
    */
   everEnabled: boolean;
+  /** ADR 092: the owner's Telegram Business account, run by the platform bot. */
+  business?: true;
   createdAt: Date;
 }
 
@@ -82,6 +85,7 @@ export interface ChannelRow {
   operatorChatId: string | null;
   commentReplies?: boolean;
   commentKeywords?: string[];
+  externalAccountId?: string;
   createdAt: Date;
 }
 
@@ -125,6 +129,7 @@ export function summarizeChannel(
     if (code) modeRefusals[mode] = code;
   }
   const effective = effectiveAgentModeWithReason(row.agentMode, policy, row);
+  const business = isBusinessAccountKey(row.externalAccountId ?? '');
   return {
     id: row.id,
     channelType: row.channelType,
@@ -138,11 +143,12 @@ export function summarizeChannel(
     credentialSource: source,
     credentialsConfigured: source !== 'none',
     webhookUrl:
-      row.channelType === 'telegram' && publicBaseUrl
+      row.channelType === 'telegram' && publicBaseUrl && !business
         ? `${publicBaseUrl.replace(/\/+$/u, '')}/webhooks/telegram/${row.id}`
         : null,
     operatorGroupConfigured: Boolean(row.operatorChatId),
     everEnabled,
+    ...(business ? { business: true as const } : {}),
     ...(row.channelType === 'instagram'
       ? {
           commentReplies: row.commentReplies ?? false,

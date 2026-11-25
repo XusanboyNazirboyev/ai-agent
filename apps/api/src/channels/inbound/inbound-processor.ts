@@ -34,6 +34,7 @@ import {
 } from '../instagram/instagram-sender.js';
 import { splitInstagramText } from '../instagram/instagram-text.js';
 import { readCarousel } from '../instagram/instagram-carousel.js';
+import { isBusinessAccountKey } from '../telegram/telegram-business.js';
 import {
   COMMENT_PUBLIC_REPLY_EVENT,
   InstagramCommentReplyService,
@@ -221,7 +222,30 @@ export class InboundProcessor {
         });
       }
     }
+    if (await this.isBusinessConversation(event.tenantId, conversationId)) {
+      // ADR 092: OFF on the owner's own account sends nothing (no echo).
+      await this.prisma.inboundEvent.updateMany({
+        where: {
+          id: inboundEventId,
+          tenantId: event.tenantId,
+          status: 'RECEIVED',
+        },
+        data: { status: 'PROCESSED', processedAt: new Date() },
+      });
+      return;
+    }
     await this.processEcho(event, inboundEventId, conversationId);
+  }
+
+  private async isBusinessConversation(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    const row = await this.prisma.conversation.findFirst({
+      where: { id: conversationId, tenantId },
+      select: { channelAccount: { select: { externalAccountId: true } } },
+    });
+    return isBusinessAccountKey(row?.channelAccount.externalAccountId ?? '');
   }
 
   /**

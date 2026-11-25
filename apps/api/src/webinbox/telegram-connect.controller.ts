@@ -1,5 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import {
+  BUSINESS_ACCOUNT_PREFIX,
+  businessLinkKey,
+  createBusinessLinkPayload,
+} from '../channels/telegram/telegram-business.js';
+import {
   BadRequestException,
   Body,
   Controller,
@@ -87,6 +92,11 @@ const REFUSAL: Record<string, { status: number; i18nKey: string }> = {
   INVALID_BODY: { status: 400, i18nKey: 'errors.invalidBody' },
   // The plan's maxChannelAccounts is reached (ADR 047).
   CHANNEL_LIMIT: { status: 409, i18nKey: 'errors.CHANNEL_LIMIT' },
+  // ADR 092: Telegram Business runs on the platform bot.
+  PLATFORM_BOT_NOT_CONFIGURED: {
+    status: 503,
+    i18nKey: 'errors.platformBotNotConfigured',
+  },
 };
 
 function refuse(code: keyof typeof REFUSAL): HttpException {
@@ -119,6 +129,8 @@ export interface TelegramTestResult {
  * never part of a response. A new account starts DISABLED with the assistant
  * OFF; the webhook is registered only when it is enabled.
  */
+const BusinessConsent = z.object({ consent: z.literal(true) }).strict();
+
 @Controller('api/v1/channels')
 @UseGuards(SessionGuard)
 export class TelegramConnectController {
@@ -169,7 +181,14 @@ export class TelegramConnectController {
 
   private async account(tenantId: string, id: string): Promise<ChannelAccount> {
     const account = await this.prisma.channelAccount.findFirst({
-      where: { id, tenantId, channelType: 'telegram' },
+      where: {
+        id,
+        tenantId,
+        channelType: 'telegram',
+        // ADR 092: a business account runs on the platform bot; its token
+        // and webhook are never managed from a tenant's page.
+        NOT: { externalAccountId: { startsWith: BUSINESS_ACCOUNT_PREFIX } },
+      },
     });
     if (!account)
       throw new NotFoundException({
@@ -536,6 +555,47 @@ export class TelegramConnectController {
     await this.audit(who, 'channel.operator_group_link_created', id);
     return {
       url: `https://t.me/${username}?startgroup=${code}`,
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  /**
+   * ADR 092: the link that connects the owner's Telegram Business account to
+   * the platform bot. The body must carry the owner's consent (ToS §5.4):
+   * customer messages in the chats they pick are processed by tezda and its
+   * AI provider. Signed, 10 minutes.
+   */
+  @Post('telegram-business/link')
+  @HttpCode(200)
+  async telegramBusinessLink(
+    @Req() request: InboxRequest,
+    @Body() body: unknown,
+  ): Promise<{ url: string; expiresAt: string }> {
+    const who = this.admit(request);
+    if (!BusinessConsent.safeParse(body).success) throw refuse('INVALID_BODY');
+    const master = this.config.get('SECRETS_MASTER_KEY', { infer: true });
+    const username = this.config.get('PLATFORM_TELEGRAM_BOT_USERNAME', {
+      infer: true,
+    });
+    if (!master || !username) throw refuse('PLATFORM_BOT_NOT_CONFIGURED');
+    const { payload, expiresAt } = createBusinessLinkPayload(
+      businessLinkKey(master),
+      who.tenantId,
+      new Date(),
+    );
+    await this.prisma.auditEvent.create({
+      data: {
+        tenantId: who.tenantId,
+        actorType: 'OPERATOR',
+        actorId: who.operatorId,
+        action: 'channel.telegram_business_consent',
+        entityType: 'tenant',
+        entityId: who.tenantId,
+        safeInputSummary: { consent: true },
+      },
+    });
+    return {
+      url: `https://t.me/${username.replace(/^@/u, '')}?start=${payload}`,
       expiresAt: expiresAt.toISOString(),
     };
   }

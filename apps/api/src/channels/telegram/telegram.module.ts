@@ -16,6 +16,7 @@ import { TelegramQueueRuntime } from './telegram-queue.runtime.js';
 import { TelegramSender } from './telegram-sender.js';
 import { TelegramWebhookController } from './telegram-webhook.controller.js';
 import { TelegramWebhookService } from './telegram-webhook.service.js';
+import { TelegramBusinessService } from './telegram-business.service.js';
 
 @Module({
   imports: [
@@ -38,6 +39,8 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     VoiceMediaStore,
     TelegramQueueRuntime,
     VoiceTranscriptionService,
+    TelegramBusinessService,
   ],
+  exports: [TelegramBusinessService],
 })
 export class TelegramModule {}

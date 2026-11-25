@@ -23,6 +23,10 @@ const ALLOWED = new Map([
   // S5: a webhook names the account; one lookup finds its tenant.
   ['channels/telegram/telegram-webhook.service.ts', 'route an update'],
   ['channels/instagram/instagram-webhook.service.ts', 'route a Meta event'],
+  [
+    'channels/telegram/telegram-business.service.ts',
+    'route a platform-bot business update (ADR 092)',
+  ],
   // S5b: the platform console works across tenants by design (ADR 047).
   ['platform/platform-auth.controller.ts', 'platform sign-in'],
   ['platform/platform-session.service.ts', 'platform sessions'],

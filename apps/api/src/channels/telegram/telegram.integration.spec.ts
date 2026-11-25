@@ -71,7 +71,10 @@ function routed(
   };
 }
 
-async function fixtures(rateLimit = 120): Promise<TelegramFixture> {
+async function fixtures(
+  rateLimit = 120,
+  externalAccountId?: string,
+): Promise<TelegramFixture> {
   const suffix = randomUUID();
   const tenant = await prisma.tenant.create({
     data: {
@@ -88,7 +91,7 @@ async function fixtures(rateLimit = 120): Promise<TelegramFixture> {
     data: {
       tenantId: tenant.id,
       channelType: 'telegram',
-      externalAccountId: `telegram-${suffix}`,
+      externalAccountId: externalAccountId ?? `telegram-${suffix}`,
       status: 'ACTIVE',
     },
   });
@@ -239,6 +242,43 @@ describe('Telegram persistence and processing integration', () => {
     });
     expect(replies).toHaveLength(1);
     expect(replies[0]?.text).toBe('first\nsecond');
+    expect(sender.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('ADR 092: with the assistant OFF a business chat gets no echo', async () => {
+    const fixture = await fixtures(
+      120,
+      `business:${Date.now()}${Math.floor(Math.random() * 1e6)}`,
+    );
+    const normalized = update({
+      updateId: 2_101,
+      messageId: 21,
+      chatId: 711,
+      text: 'hi',
+    });
+    if (normalized.kind !== 'text') throw new Error('Expected normalized text');
+    await fixture.service.accept(fixture.channelAccountId, normalized);
+    const [event] = await prisma.outboxEvent.findMany({
+      where: { tenantId: fixture.tenantId, type: 'telegram.inbound' },
+    });
+    const sender = { sendMessage: vi.fn() } as unknown as TelegramSender;
+    await tenantScoped(new TelegramProcessor(app, sender)).process({
+      outboxId: event!.id,
+      tenantId: fixture.tenantId,
+      type: event!.type,
+      payload: event!.payload,
+    });
+    expect(
+      await prisma.message.count({
+        where: { tenantId: fixture.tenantId, direction: 'OUTBOUND' },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.inboundEvent.findMany({
+        where: { tenantId: fixture.tenantId },
+        select: { status: true },
+      }),
+    ).toEqual([{ status: 'PROCESSED' }]);
     expect(sender.sendMessage).not.toHaveBeenCalled();
   });
 

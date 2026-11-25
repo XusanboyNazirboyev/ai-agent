@@ -115,14 +115,17 @@ export class TelegramManagement {
     token: string,
     url: string,
     secretToken: string,
-    options: { readonly dropPendingUpdates: boolean } = {
+    options: {
+      readonly dropPendingUpdates: boolean;
+      readonly allowedUpdates?: readonly string[];
+    } = {
       dropPendingUpdates: false,
     },
   ): Promise<void> {
     await this.call(token, 'setWebhook', {
       url,
       secret_token: secretToken,
-      allowed_updates: ['message', 'callback_query'],
+      allowed_updates: options.allowedUpdates ?? ['message', 'callback_query'],
       drop_pending_updates: options.dropPendingUpdates,
     });
   }

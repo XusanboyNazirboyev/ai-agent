@@ -19,19 +19,14 @@ const START = /^\/start(?:@[A-Za-z0-9_]{1,64})?\s+([A-Za-z0-9_-]{1,64})\s*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A key used only for these codes, derived from the secrets master key. */
-export function groupLinkKey(masterKeyBase64: string): Buffer {
+export function groupLinkKey(
+  masterKeyBase64: string,
+  info = 'tezda/operator-group-link/v1',
+): Buffer {
   const master = Buffer.from(masterKeyBase64.trim(), 'base64');
   if (master.length !== 32)
     throw new Error('SECRETS_MASTER_KEY must be 32 bytes, base64 encoded');
-  return Buffer.from(
-    hkdfSync(
-      'sha256',
-      master,
-      Buffer.alloc(0),
-      'tezda/operator-group-link/v1',
-      32,
-    ),
-  );
+  return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), info, 32));
 }
 
 function mac(

@@ -9,6 +9,7 @@ import { TelegramSender } from './telegram-sender.js';
 
 const ENV_ACCOUNT = '11111111-1111-4111-8111-111111111111';
 const UI_ACCOUNT = '22222222-2222-4222-8222-222222222222';
+const BUSINESS_ACCOUNT = '44444444-4444-4444-8444-444444444444';
 
 const config = {
   get: (key: string) =>
@@ -16,13 +17,24 @@ const config = {
       TELEGRAM_BOT_TOKEN: 'ENV-TOKEN',
       TELEGRAM_WEBHOOK_SECRET: 'env-secret',
       TELEGRAM_CHANNEL_ACCOUNT_ID: ENV_ACCOUNT,
+      PLATFORM_TELEGRAM_BOT_TOKEN: 'PLATFORM-TOKEN',
     })[key],
 } as unknown as ConfigService<AppEnvironment, true>;
 
 const prisma = {
   channelAccount: {
-    findFirst: ({ where }: { where: { id: string } }) =>
-      Promise.resolve({ tenantId: `tenant-of-${where.id}` }),
+    findFirst: ({
+      where,
+    }: {
+      where: { id: string; externalAccountId?: unknown };
+    }) =>
+      Promise.resolve(
+        where.externalAccountId === undefined
+          ? { tenantId: `tenant-of-${where.id}` }
+          : where.id === BUSINESS_ACCOUNT
+            ? { businessConnectionId: 'bc-1' }
+            : null,
+      ),
   },
 } as unknown as PrismaService;
 
@@ -98,5 +110,40 @@ describe('per-account bots', () => {
       'https://api.telegram.org/botUI-TOKEN/answerCallbackQuery',
       'https://api.telegram.org/botENV-TOKEN/sendMessage',
     ]);
+  });
+
+  it('ADR 092: a business account sends through the platform bot for its connection', async () => {
+    const request = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
+      ok(),
+    );
+    const sender = new TelegramSender(config, request, credentials);
+    await sender.sendMessage('99', 'hi', BUSINESS_ACCOUNT);
+    await sender.sendVoice('99', new Uint8Array([1, 2]), BUSINESS_ACCOUNT);
+    const api = new TelegramBotApi(config, request, credentials);
+    await api.sendChatAction({
+      chatId: '99',
+      channelAccountId: BUSINESS_ACCOUNT,
+    });
+    await sender.sendMessage('1', 'hi', UI_ACCOUNT);
+    const calls = request.mock.calls;
+    expect(calls.map((call) => String(call[0]))).toEqual([
+      'https://api.telegram.org/botPLATFORM-TOKEN/sendMessage',
+      'https://api.telegram.org/botPLATFORM-TOKEN/sendVoice',
+      'https://api.telegram.org/botPLATFORM-TOKEN/sendChatAction',
+      'https://api.telegram.org/botUI-TOKEN/sendMessage',
+    ]);
+    expect(JSON.parse(String(calls[0]![1]!.body))).toMatchObject({
+      chat_id: '99',
+      business_connection_id: 'bc-1',
+    });
+    expect((calls[1]![1]!.body as FormData).get('business_connection_id')).toBe(
+      'bc-1',
+    );
+    expect(JSON.parse(String(calls[2]![1]!.body))).toMatchObject({
+      business_connection_id: 'bc-1',
+    });
+    expect(JSON.parse(String(calls[3]![1]!.body))).not.toHaveProperty(
+      'business_connection_id',
+    );
   });
 });

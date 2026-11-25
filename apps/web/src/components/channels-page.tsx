@@ -9,6 +9,7 @@ import type { ChannelAccount, ChannelList, TelegramTest } from '@/lib/types';
 import { useShell } from './app-shell';
 import { OperatorGroupDialog } from './operator-group-dialog';
 import { InstagramConnectDialog } from './instagram-connect-dialog';
+import { TelegramBusinessDialog } from './telegram-business-dialog';
 import { TelegramConnectDialog } from './telegram-connect-dialog';
 import { Badge, type Tone } from './ui/badge';
 import { Button } from './ui/button';
@@ -204,38 +205,49 @@ function AccountCard(props: {
           <Badge tone="accent">{t('channels.test')}</Badge>
         ) : null}
       </div>
-      <div className="flex flex-col gap-1.5 border-t border-line pt-3">
-        <Check on={account.credentialsConfigured}>
-          {instagram
-            ? account.credentialsConfigured
-              ? t('channels.tokenOn')
-              : t('channels.tokenOff')
-            : account.credentialsConfigured
-              ? t('channels.credentialsOn')
-              : t('channels.credentialsOff')}
-        </Check>
-        {instagram ? null : (
-          <Check on={account.operatorGroupConfigured}>
-            {account.operatorGroupConfigured
-              ? t('channels.groupOn')
-              : t('channels.groupOff')}
+      {account.business ? (
+        <p
+          data-testid="business-managed"
+          className="border-t border-line pt-3 text-xs text-muted"
+        >
+          {t('channels.businessManaged')}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-1.5 border-t border-line pt-3">
+          <Check on={account.credentialsConfigured}>
+            {instagram
+              ? account.credentialsConfigured
+                ? t('channels.tokenOn')
+                : t('channels.tokenOff')
+              : account.credentialsConfigured
+                ? t('channels.credentialsOn')
+                : t('channels.credentialsOff')}
           </Check>
-        )}
-        {account.webhookUrl && account.credentialSource === 'ui' ? (
-          <span className="min-w-0 text-xs text-muted">
-            {t('channels.webhookUrl')}:{' '}
-            <span
-              data-testid="webhook-url"
-              className="font-mono break-all select-all"
-            >
-              {account.webhookUrl}
+          {instagram ? null : (
+            <Check on={account.operatorGroupConfigured}>
+              {account.operatorGroupConfigured
+                ? t('channels.groupOn')
+                : t('channels.groupOff')}
+            </Check>
+          )}
+          {account.webhookUrl && account.credentialSource === 'ui' ? (
+            <span className="min-w-0 text-xs text-muted">
+              {t('channels.webhookUrl')}:{' '}
+              <span
+                data-testid="webhook-url"
+                className="font-mono break-all select-all"
+              >
+                {account.webhookUrl}
+              </span>
             </span>
-          </span>
-        ) : null}
-        {account.credentialSource === 'environment' ? (
-          <span className="text-xs text-muted">{t('channels.fromServer')}</span>
-        ) : null}
-      </div>
+          ) : null}
+          {account.credentialSource === 'environment' ? (
+            <span className="text-xs text-muted">
+              {t('channels.fromServer')}
+            </span>
+          ) : null}
+        </div>
+      )}
       {result ? <TestResult result={result} /> : null}
       {act.isError ? (
         <p
@@ -413,6 +425,7 @@ export function ChannelsPage(props: {
   const canManage = operator.role === 'OWNER' || operator.role === 'ADMIN';
   const [connecting, setConnecting] = useState<'new' | 'replace' | null>(null);
   const [connectingInstagram, setConnectingInstagram] = useState(false);
+  const [connectingBusiness, setConnectingBusiness] = useState(false);
   const [groupFor, setGroupFor] = useState<ChannelAccount | null>(null);
   const query = useQuery({
     queryKey: ['channels'],
@@ -592,6 +605,15 @@ export function ChannelsPage(props: {
                       {t('channels.connectTelegram')}
                     </Button>
                   ) : null}
+                  {channel.key === 'telegram' && canManage ? (
+                    <Button
+                      icon="plus"
+                      data-testid="connect-telegram-business"
+                      onClick={() => setConnectingBusiness(true)}
+                    >
+                      {t('channels.connectBusiness')}
+                    </Button>
+                  ) : null}
                   {channel.key === 'instagram' && canManage ? (
                     <Button
                       variant="primary"
@@ -627,6 +649,13 @@ export function ChannelsPage(props: {
         canEnable={capabilities.publicUrlConfigured}
         onClose={() => setConnecting(null)}
         onChanged={changed}
+      />
+      <TelegramBusinessDialog
+        open={connectingBusiness}
+        onClose={() => {
+          setConnectingBusiness(false);
+          changed();
+        }}
       />
       <InstagramConnectDialog
         open={connectingInstagram}

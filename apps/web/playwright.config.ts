@@ -55,6 +55,9 @@ export const E2E_ENV = {
   // The fixtures seed their own leads; the one-time backfill would add more.
   LEAD_BACKFILL_ENABLED: 'false',
   PUBLIC_BASE_URL: 'https://e2e.example.test',
+  // ADR 092: the Telegram Business link names the platform bot; without its
+  // token signup stays off, as before.
+  PLATFORM_TELEGRAM_BOT_USERNAME: 'tezda_e2e_bot',
   // The sales page shows its contact form only when requests reach a chat.
   SALES_INQUIRY_CHAT_ID: '1000',
   TELEGRAM_API_BASE_URL: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,

@@ -5,6 +5,7 @@ import { PersistenceModule } from '../../persistence/persistence.module.js';
 import { PrismaService } from '../../persistence/prisma.service.js';
 import { ChannelSecretStore } from '../../secrets/channel-secret-store.js';
 import { SecretsModule } from '../../secrets/secrets.module.js';
+import { BUSINESS_ACCOUNT_PREFIX } from './telegram-business.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
@@ -66,10 +67,41 @@ export class TelegramCredentials {
   }
 
   async tokenFor(accountId: string): Promise<string | undefined> {
-    return (
+    return (await this.targetFor(accountId)).token;
+  }
+
+  /**
+   * Who sends for this account. ADR 092: a Telegram Business account sends
+   * through the platform bot on behalf of the owner's business connection.
+   */
+  async targetFor(
+    accountId: string,
+  ): Promise<{ token?: string; businessConnectionId?: string }> {
+    const business = UUID.test(accountId)
+      ? await this.prisma.channelAccount.findFirst({
+          where: {
+            id: accountId,
+            channelType: 'telegram',
+            externalAccountId: { startsWith: BUSINESS_ACCOUNT_PREFIX },
+          },
+          select: { businessConnectionId: true },
+        })
+      : null;
+    if (business) {
+      const token = this.config.get('PLATFORM_TELEGRAM_BOT_TOKEN', {
+        infer: true,
+      });
+      return {
+        ...(token ? { token } : {}),
+        ...(business.businessConnectionId
+          ? { businessConnectionId: business.businessConnectionId }
+          : {}),
+      };
+    }
+    const token =
       (await this.stored(accountId, 'bot_token')) ??
-      this.fromEnvironment(accountId, 'TELEGRAM_BOT_TOKEN')
-    );
+      this.fromEnvironment(accountId, 'TELEGRAM_BOT_TOKEN');
+    return token ? { token } : {};
   }
 
   async webhookSecretFor(accountId: string): Promise<string | undefined> {

@@ -46,11 +46,15 @@ export class TelegramBotApi {
     params: Record<string, unknown>,
     channelAccountId?: string,
   ): Promise<unknown> {
-    const token =
+    const { token, businessConnectionId } =
       channelAccountId && this.credentials
-        ? await this.credentials.tokenFor(channelAccountId)
-        : this.token;
+        ? await this.credentials.targetFor(channelAccountId)
+        : { token: this.token, businessConnectionId: undefined };
     if (!token) throw new Error('Telegram bot is not configured');
+    // ADR 092: a business account's chats are sent on behalf of the owner.
+    const payload = businessConnectionId
+      ? { ...params, business_connection_id: businessConnectionId }
+      : params;
     let response: Response;
     let body: unknown;
     try {
@@ -59,7 +63,7 @@ export class TelegramBotApi {
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(params),
+          body: JSON.stringify(payload),
           signal: AbortSignal.timeout(10_000),
         },
       );

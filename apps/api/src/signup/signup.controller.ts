@@ -19,7 +19,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
+import { TelegramBusinessService } from '../channels/telegram/telegram-business.service.js';
 import { SIGNUP_PACK_KEYS } from '../packs/registry.js';
+import { PlatformBotSender } from './platform-bot.sender.js';
 import type { AppEnvironment } from '../config/environment.js';
 import {
   loginClientAddress,
@@ -227,6 +229,8 @@ export class PlatformTelegramWebhookController {
   constructor(
     private readonly signups: SignupService,
     private readonly config: ConfigService<AppEnvironment, true>,
+    private readonly business: TelegramBusinessService,
+    private readonly bot: PlatformBotSender,
   ) {}
 
   @Post(':pathSecret')
@@ -249,7 +253,11 @@ export class PlatformTelegramWebhookController {
     const headerOk = constantTimeEqual(header, secret);
     if (!pathOk || !headerOk)
       throw new ForbiddenException({ code: 'BAD_WEBHOOK_SECRET' });
-    await this.signups.handleUpdate(body);
+    // ADR 092: Telegram Business updates and `/start biz…` links first.
+    const business = await this.business.handleUpdate(body);
+    if (!business.handled) await this.signups.handleUpdate(body);
+    else if (business.reply)
+      await this.bot.send(business.reply.chatId, business.reply.text);
     return { ok: true };
   }
 }

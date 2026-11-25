@@ -181,3 +181,25 @@ test('the connect dialog fits a 320px screen', async ({ browser }) => {
   expect(await findOverflow(admin.page)).toEqual([]);
   await admin.context.close();
 });
+
+test('ADR 092: an admin agrees and gets the Telegram Business link, on a 320px screen too', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  // Tenant b: tenant a's admin used up the per-operator limit above.
+  const admin = await newSession(browser, f.b.operators.admin.email, {
+    viewport: { width: 320, height: 640 },
+  });
+  await admin.page.goto('/channels/telegram');
+  await admin.page.getByTestId('connect-telegram-business').click();
+  const create = admin.page.getByTestId('business-link-create');
+  await expect(create).toBeDisabled();
+  await admin.page.getByTestId('business-consent').check();
+  await create.click();
+  await expect(admin.page.getByTestId('business-link-open')).toHaveAttribute(
+    'href',
+    /^https:\/\/t\.me\/tezda_e2e_bot\?start=biz[A-Za-z0-9_-]{48}$/u,
+  );
+  expect(await findOverflow(admin.page)).toEqual([]);
+  await admin.context.close();
+});

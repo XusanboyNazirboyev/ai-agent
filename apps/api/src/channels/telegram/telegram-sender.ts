@@ -52,15 +52,20 @@ export class TelegramSender {
    * or returned. Returns null when the file is missing, too large or the
    * download fails; the caller treats that as an unreadable voice note.
    */
+  private async target(
+    channelAccountId: string | undefined,
+  ): Promise<{ token?: string; businessConnectionId?: string }> {
+    if (channelAccountId && this.credentials)
+      return this.credentials.targetFor(channelAccountId);
+    return this.token ? { token: this.token } : {};
+  }
+
   async downloadFile(
     fileId: string,
     maxBytes: number,
     channelAccountId?: string,
   ): Promise<Uint8Array | null> {
-    const token =
-      channelAccountId && this.credentials
-        ? await this.credentials.tokenFor(channelAccountId)
-        : this.token;
+    const { token } = await this.target(channelAccountId);
     if (!token) throw new Error('Telegram sender is not configured');
     try {
       const info = await this.request(
@@ -112,13 +117,12 @@ export class TelegramSender {
     mp3: Uint8Array,
     channelAccountId?: string,
   ): Promise<void> {
-    const token =
-      channelAccountId && this.credentials
-        ? await this.credentials.tokenFor(channelAccountId)
-        : this.token;
+    const { token, businessConnectionId } = await this.target(channelAccountId);
     if (!token) throw new Error('Telegram sender is not configured');
     const form = new FormData();
     form.set('chat_id', chatId);
+    if (businessConnectionId)
+      form.set('business_connection_id', businessConnectionId);
     // OGG/Opus (Gemini through ffmpeg) starts with "OggS"; otherwise MP3.
     const ogg =
       mp3[0] === 0x4f && mp3[1] === 0x67 && mp3[2] === 0x67 && mp3[3] === 0x53;
@@ -155,10 +159,7 @@ export class TelegramSender {
     if (text.length === 0 || text.length > 4_096) {
       throw new RangeError('Telegram text must contain 1 to 4096 characters');
     }
-    const token =
-      channelAccountId && this.credentials
-        ? await this.credentials.tokenFor(channelAccountId)
-        : this.token;
+    const { token, businessConnectionId } = await this.target(channelAccountId);
     if (!token) throw new Error('Telegram sender is not configured');
 
     let response: Response;
@@ -169,7 +170,13 @@ export class TelegramSender {
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text }),
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            ...(businessConnectionId
+              ? { business_connection_id: businessConnectionId }
+              : {}),
+          }),
           signal: AbortSignal.timeout(10_000),
         },
       );

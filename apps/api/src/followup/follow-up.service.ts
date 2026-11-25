@@ -82,6 +82,8 @@ export class FollowUpService implements ScheduledScan {
       JOIN tenants t ON t.id = c.tenant_id AND t.status = 'ACTIVE'
       JOIN channel_accounts a ON a.tenant_id = c.tenant_id AND a.id = c.channel_account_id
         AND a.channel_type = 'telegram' AND a.status = 'ACTIVE'
+        -- ADR 092: business chats allow replies only within 24 hours.
+        AND a.external_account_id NOT LIKE 'business:%'
       JOIN contacts k ON k.tenant_id = c.tenant_id AND k.id = c.contact_id
         AND k.marketing_opt_out = false AND k.consent_status <> 'REVOKED' AND k.deleted_at IS NULL
       JOIN LATERAL (

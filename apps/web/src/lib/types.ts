@@ -348,6 +348,8 @@ export interface ChannelAccount {
   modeRefusals: Partial<Record<AgentMode, ModeRefusal>>;
   displayName: string | null;
   credentialSource: 'ui' | 'environment' | 'none';
+  /** ADR 092: the owner's Telegram Business account (platform bot). */
+  business?: true;
   webhookUrl: string | null;
   isTestAccount: boolean;
   credentialsConfigured: boolean;

@@ -8,6 +8,7 @@
  */
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PLATFORM_ALLOWED_UPDATES } from '../channels/telegram/telegram-business.js';
 import { TelegramManagement } from '../channels/telegram/telegram-management.js';
 import { platformWebhookPathSecret } from './signup-rules.js';
 
@@ -25,7 +26,10 @@ async function main(): Promise<void> {
       'PLATFORM_TELEGRAM_BOT_TOKEN and PLATFORM_TELEGRAM_WEBHOOK_SECRET must be set',
     );
   const url = `${base.replace(/\/+$/u, '')}/webhooks/platform-telegram/${platformWebhookPathSecret(secret)}`;
-  await new TelegramManagement().setWebhook(token, url, secret);
+  await new TelegramManagement().setWebhook(token, url, secret, {
+    dropPendingUpdates: false,
+    allowedUpdates: PLATFORM_ALLOWED_UPDATES,
+  });
   console.log('Platform bot webhook set (path secret not printed).');
 }
 
