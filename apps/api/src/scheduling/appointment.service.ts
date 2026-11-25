@@ -165,12 +165,18 @@ export class AppointmentService {
         });
       });
     } catch (error) {
-      if (isExclusionViolation(error)) throw new SlotTakenError();
-      if (isUniqueViolation(error)) {
-        // A concurrent request with the same idempotency key won.
+      // A concurrent request with the same idempotency key may have won: by
+      // the key's unique index, or by committing first, so that this one saw
+      // its own slot taken. Either way the caller gets that appointment.
+      if (
+        isUniqueViolation(error) ||
+        isExclusionViolation(error) ||
+        error instanceof SlotUnavailableError
+      ) {
         const winner = await this.byKey(tenantId, input.idempotencyKey);
         if (winner) return winner;
       }
+      if (isExclusionViolation(error)) throw new SlotTakenError();
       throw error;
     }
   }

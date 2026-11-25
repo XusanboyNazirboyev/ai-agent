@@ -345,6 +345,19 @@ describe('appointment service (ADR 046 step 1)', () => {
       ),
     ]);
     expect(parallel[0].id).toBe(parallel[1].id);
+    // CI run 45551913671: when the first of two same-key requests commits
+    // before the second checks the slot, the second must still return it,
+    // not "slot unavailable". Repeated so the race is hit reliably.
+    for (let i = 0; i < 8; i += 1) {
+      // Its own day each time (days no other case here uses).
+      const at = new Date(t.getTime() + (i + 1) * DAY);
+      const raced = await Promise.all(
+        [0, 1, 2].map(() =>
+          service.hold(a.tenantId, holdInput(a, `${key}-r${i}`, at)),
+        ),
+      );
+      expect(new Set(raced.map((item) => item.id)).size).toBe(1);
+    }
   });
 
   it('isolates tenants', async () => {
