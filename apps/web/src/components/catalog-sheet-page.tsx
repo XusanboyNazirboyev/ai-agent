@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  useEffect,
   useId,
+  useRef,
   useState,
   type ChangeEvent,
   type ReactNode,
@@ -12,13 +12,21 @@ import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import { CURRENCIES } from '@/lib/currencies';
 import {
+  DOCUMENT_ACCEPT,
+  DOCUMENT_EXTENSIONS,
+  DocumentImportError,
+  readDocument,
+} from '@/lib/import-document';
+import {
   SHEET_FIELDS,
+  SHEET_PRICING_BASES,
   missingSheetFields,
   sheetConfigQuery,
   withMapping,
   type SheetField,
   type SheetMapping,
   type SheetPreview,
+  type SheetPricingBasis,
   type SheetStatus,
   type SheetUploadResult,
 } from '@/lib/sheet-catalog';
@@ -37,6 +45,7 @@ const REQUIRED_FIELDS: readonly SheetField[] = ['price'];
 const LINK_SOURCE_NAME = 'Google Sheets';
 
 interface PickedFile {
+  selection: number;
   name: string;
   /** The sheet as CSV (the file itself for a CSV file). */
   text: string;
@@ -58,15 +67,18 @@ export function CatalogSheetPage(): ReactNode {
   const toast = useToast();
   const qc = useQueryClient();
   const fileId = useId();
+  const selection = useRef(0);
   const linkId = useId();
   const manage = canManage(operator.role);
 
   const [file, setFile] = useState<PickedFile | null>(null);
   const [workbook, setWorkbook] = useState<PickedWorkbook | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
   /** `null`: the server suggests the columns; set once the admin changes one. */
   const [mapping, setMapping] = useState<SheetMapping | null>(null);
   const [currency, setCurrency] = useState('');
+  const [pickedBasis, setPricingBasis] = useState<SheetPricingBasis>();
   const [days, setDays] = useState(3);
   const [bound, setBound] = useState<SheetUploadResult | null>(null);
   /** A Google Sheets link the loaded text came from; `null` for a file. */
@@ -80,25 +92,22 @@ export function CatalogSheetPage(): ReactNode {
     enabled: manage,
   });
 
+  const pricingBasis = pickedBasis ?? status.data?.pricingBasis ?? 'PER_PERSON';
   const config = sheetConfigQuery({
     mapping: mapping ?? undefined,
     defaultCurrency: currency,
+    pricingBasis,
     freshnessDays: days,
   });
   const saveConfig = sheetConfigQuery({
     mapping: mapping ?? undefined,
     defaultCurrency: currency,
+    pricingBasis,
     freshnessDays: days,
     ...(linkUrl ? { sourceUrl: linkUrl, autoRefresh } : {}),
   });
   const preview = useQuery({
-    queryKey: [
-      'sheet-preview',
-      file?.name,
-      file?.sheet,
-      file?.text.length,
-      config,
-    ],
+    queryKey: ['sheet-preview', fileId, file?.selection, file?.sheet, config],
     enabled: manage && file !== null,
     retry: false,
     queryFn: () =>
@@ -114,9 +123,6 @@ export function CatalogSheetPage(): ReactNode {
 
   // The columns the server suggested are the starting point of the form.
   const shown: SheetMapping = mapping ?? preview.data?.mapping ?? {};
-  useEffect(() => {
-    setMapping(null);
-  }, [file?.name, file?.sheet, file?.text.length]);
 
   const upload = useMutation({
     mutationFn: () =>
@@ -146,8 +152,14 @@ export function CatalogSheetPage(): ReactNode {
       setBound(null);
       setFileError(null);
       setWorkbook(null);
+      setMapping(null);
       setLinkUrl(read.sourceUrl);
-      setFile({ name: LINK_SOURCE_NAME, text: read.csv, sheet: 0 });
+      setFile({
+        selection: ++selection.current,
+        name: LINK_SOURCE_NAME,
+        text: read.csv,
+        sheet: 0,
+      });
     },
   });
   const refresh = useMutation({
@@ -169,16 +181,20 @@ export function CatalogSheetPage(): ReactNode {
   async function pick(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const picked = event.target.files?.[0];
     event.target.value = '';
+    if (!picked) return;
     setBound(null);
+    setFile(null);
     setFileError(null);
     setLinkUrl(null);
-    if (!picked) return;
+    setMapping(null);
+    setWorkbook(null);
     if (picked.size > MAX_FILE_BYTES) {
       setFileError(t('errors.SHEET_TOO_LARGE'));
       return;
     }
-    setWorkbook(null);
+    const id = ++selection.current;
     const lower = picked.name.toLowerCase();
+    setReading(true);
     try {
       if (lower.endsWith('.xlsx')) {
         // Excel is turned into CSV here in the browser; the server reads CSV only.
@@ -191,6 +207,7 @@ export function CatalogSheetPage(): ReactNode {
           );
           setWorkbook({ sheets });
           setFile({
+            selection: id,
             name: picked.name,
             text: sheets[first]!.csv,
             sheet: first,
@@ -210,15 +227,27 @@ export function CatalogSheetPage(): ReactNode {
         setFileError(t('errors.XLSX_OLD_FORMAT'));
         return;
       }
-      setFile({ name: picked.name, text: await picked.text(), sheet: 0 });
-    } catch {
-      setFileError(t('sheet.readFailed'));
+      const text = DOCUMENT_EXTENSIONS.test(lower)
+        ? await readDocument(picked, 'table', MAX_FILE_BYTES)
+        : await picked.text();
+      setFile({ selection: id, name: picked.name, text, sheet: 0 });
+    } catch (error) {
+      setFileError(
+        t(
+          error instanceof DocumentImportError
+            ? `documentImport.${error.code}`
+            : 'sheet.readFailed',
+        ),
+      );
+    } finally {
+      setReading(false);
     }
   }
 
   function chooseSheet(index: number): void {
     const sheet = workbook?.sheets[index];
     if (!file || !sheet) return;
+    setMapping(null);
     setFile({ ...file, text: sheet.csv, sheet: index });
   }
 
@@ -348,12 +377,18 @@ export function CatalogSheetPage(): ReactNode {
             <input
               id={fileId}
               type="file"
-              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept={`.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,${DOCUMENT_ACCEPT}`}
+              disabled={reading || loadLink.isPending || upload.isPending}
               data-testid="sheet-file"
               onChange={(event) => void pick(event)}
               className="text-sm"
             />
             <p className="text-xs text-muted">{t('sheet.chooseHint')}</p>
+            {reading ? (
+              <p role="status" className="text-sm text-muted">
+                {t('documentImport.reading')}
+              </p>
+            ) : null}
             {workbook &&
             workbook.sheets.filter((sheet) => sheet.hasData).length > 1 ? (
               <label className="flex min-w-0 flex-col gap-1 text-sm font-medium sm:max-w-xs">
@@ -376,7 +411,11 @@ export function CatalogSheetPage(): ReactNode {
               </label>
             ) : null}
             {fileError ? (
-              <p role="alert" className="text-sm text-danger-fg">
+              <p
+                role="alert"
+                data-testid="sheet-file-error"
+                className="text-sm text-danger-fg"
+              >
                 {fileError}
               </p>
             ) : null}
@@ -402,7 +441,7 @@ export function CatalogSheetPage(): ReactNode {
               <Button
                 variant="secondary"
                 loading={loadLink.isPending}
-                disabled={linkText.trim() === ''}
+                disabled={linkText.trim() === '' || reading || upload.isPending}
                 onClick={() => loadLink.mutate()}
                 data-testid="sheet-link-load"
               >
@@ -485,6 +524,24 @@ export function CatalogSheetPage(): ReactNode {
                   ))}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-end gap-3">
+                  <label className="flex min-w-0 basis-48 flex-col gap-1 text-sm font-medium">
+                    {t('sheet.options.pricingBasis')}
+                    <Select
+                      field
+                      value={pricingBasis}
+                      onChange={(event) =>
+                        setPricingBasis(event.target.value as SheetPricingBasis)
+                      }
+                      data-testid="sheet-pricing-basis"
+                      className="w-full"
+                    >
+                      {SHEET_PRICING_BASES.map((basis) => (
+                        <option key={basis} value={basis}>
+                          {t(`sheet.options.pricingBasis.${basis}`)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
                   <label className="flex min-w-0 basis-48 flex-col gap-1 text-sm font-medium">
                     {t('sheet.options.currency')}
                     <Select
@@ -642,10 +699,15 @@ export function CatalogSheetPage(): ReactNode {
               ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
+                {file && DOCUMENT_EXTENSIONS.test(file.name) ? (
+                  <p className="w-full text-sm text-muted">
+                    {t('sheet.documentReview')}
+                  </p>
+                ) : null}
                 <Button
                   variant="primary"
                   loading={upload.isPending}
-                  disabled={!canSave}
+                  disabled={!canSave || loadLink.isPending}
                   onClick={() => upload.mutate()}
                   data-testid="sheet-save"
                 >

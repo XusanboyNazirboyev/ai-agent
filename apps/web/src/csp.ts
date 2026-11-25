@@ -21,6 +21,7 @@ export function contentSecurityPolicy(nonce: string, dev: boolean): string {
     "img-src 'self' data:",
     "font-src 'self'",
     "connect-src 'self'",
+    "worker-src 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "base-uri 'self'",

@@ -98,6 +98,42 @@ test('the price list page is for admins: the tab and the page are hidden from an
   }
 });
 
+test('a product list remembers its per-unit price basis', async ({
+  browser,
+}) => {
+  const f = fixtures();
+  const { page, context } = await newSession(
+    browser,
+    f.b.operators.admin.email,
+  );
+  try {
+    await page.goto('/agent/prices');
+    await expect(page.getByTestId('sheet-status')).toBeVisible();
+    const upload = async (): Promise<void> => {
+      await page.getByTestId('sheet-file').setInputFiles({
+        name: 'furniture.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(
+          'Product,Price,Currency,Stock\nOak desk,25,USD,3\n',
+        ),
+      });
+      await expect(page.getByTestId('sheet-save')).toBeEnabled();
+    };
+    await upload();
+    await page.getByTestId('sheet-pricing-basis').selectOption('PER_UNIT');
+    await page.getByTestId('sheet-save').click();
+    await expect(page.getByTestId('sheet-bound')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('sheet-status')).toBeVisible();
+    await upload();
+    await expect(page.getByTestId('sheet-pricing-basis')).toHaveValue(
+      'PER_UNIT',
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test('the upload screen has no accessibility violations and fits a phone in ru and uz-Latn', async ({
   browser,
 }) => {

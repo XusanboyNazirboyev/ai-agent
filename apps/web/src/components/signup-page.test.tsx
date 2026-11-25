@@ -26,10 +26,22 @@ const checklist = {
 
 let statuses: unknown[] = [];
 let posts: unknown[] = [];
+let optionsStatus = 200;
+const businessTypes = [
+  ['travel', 'Travel agency'],
+  ['home-appliances', 'Home appliance shop'],
+  ['auto-sales', 'Car dealership or vehicle seller'],
+  ['real-estate', 'Real estate sales'],
+  ['services', 'Service business'],
+  ['furniture', 'Furniture and custom manufacturing'],
+  ['general', 'Other business'],
+  ['new-business', 'New business from the API'],
+] as const;
 
 beforeEach(() => {
   statuses = [{ status: 'PENDING' }];
   posts = [];
+  optionsStatus = 200;
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string, init?: { method?: string; body?: string }) => {
@@ -42,6 +54,13 @@ beforeEach(() => {
       if (url.includes('/auth/me')) return reply(401, {});
       if (url.includes('/public/plans'))
         return reply(200, { plans: [{ code: 'premium', name: 'Premium' }] });
+      if (url.endsWith('/public/signups/options'))
+        return reply(optionsStatus, {
+          businessTypes: businessTypes.map(([key, label]) => ({
+            key,
+            label: { 'uz-Latn': label, ru: label, en: label },
+          })),
+        });
       if (init?.method === 'POST') {
         posts.push(JSON.parse(init.body ?? '{}'));
         return reply(201, {
@@ -70,7 +89,8 @@ function view(node: React.ReactNode): void {
   );
 }
 
-function fill(): void {
+async function fill(): Promise<void> {
+  await screen.findByRole('option', { name: 'Travel agency' });
   for (const [id, value] of [
     ['signup-business', 'My Shop'],
     ['signup-type', 'travel'],
@@ -94,7 +114,7 @@ describe('SignupPage', () => {
     statuses = [{ status: 'PENDING' }, { status: 'CONFIRMED', signedIn: true }];
     view(<SignupPage />);
     await screen.findByTestId('signup-form');
-    fill();
+    await fill();
     fireEvent.click(screen.getByTestId('signup-submit'));
     const open = await screen.findByTestId('signup-telegram');
     expect(open).toHaveAttribute('href', 'https://t.me/tezda_bot?start=tok');
@@ -115,7 +135,7 @@ describe('SignupPage', () => {
     statuses = [{ status: 'REFUSED', reason: 'TRIAL_USED' }];
     view(<SignupPage />);
     await screen.findByTestId('signup-form');
-    fill();
+    await fill();
     fireEvent.click(screen.getByTestId('signup-submit'));
     expect(
       await screen.findByTestId('signup-refused', undefined, { timeout: 5000 }),
@@ -124,17 +144,41 @@ describe('SignupPage', () => {
 });
 
 describe('SignupPage business type (owner 2026-11-23)', () => {
-  it('sends the general pack for any other business', async () => {
-    statuses = [{ status: 'PENDING' }];
+  it.each(businessTypes)(
+    'offers %s from the API and sends its pack key',
+    async (key, label) => {
+      statuses = [{ status: 'PENDING' }];
+      view(<SignupPage />);
+      await screen.findByTestId('signup-form');
+      expect(await screen.findByRole('option', { name: label })).toHaveValue(
+        key,
+      );
+      await fill();
+      fireEvent.change(screen.getByTestId('signup-type'), {
+        target: { value: key },
+      });
+      fireEvent.click(screen.getByTestId('signup-submit'));
+      await screen.findByTestId('signup-telegram');
+      expect(posts[0]).toMatchObject({ packKey: key });
+    },
+  );
+
+  it('keeps the form and lets the person retry when business options fail', async () => {
+    optionsStatus = 503;
     view(<SignupPage />);
-    await screen.findByTestId('signup-form');
-    fill();
-    fireEvent.change(screen.getByTestId('signup-type'), {
-      target: { value: 'general' },
+    fireEvent.change(screen.getByTestId('signup-business'), {
+      target: { value: 'My Furniture Shop' },
     });
-    fireEvent.click(screen.getByTestId('signup-submit'));
-    await screen.findByTestId('signup-telegram');
-    expect(posts[0]).toMatchObject({ packKey: 'general' });
+    const retry = await screen.findByRole('button', { name: /try again/i });
+    expect(screen.getByTestId('signup-type')).toBeDisabled();
+    optionsStatus = 200;
+    fireEvent.click(retry);
+    expect(
+      await screen.findByRole('option', { name: /furniture/i }),
+    ).toHaveValue('furniture');
+    expect(screen.getByTestId('signup-business')).toHaveValue(
+      'My Furniture Shop',
+    );
   });
 });
 

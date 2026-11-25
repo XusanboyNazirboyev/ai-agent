@@ -29,6 +29,7 @@ describe('content security policy', () => {
         "base-uri 'self'",
         "form-action 'self'",
         "connect-src 'self'",
+        "worker-src 'self'",
       ])
         expect(policy).toContain(part);
     }

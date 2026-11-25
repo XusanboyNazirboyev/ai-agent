@@ -8,7 +8,6 @@ import { useI18n } from '@/i18n';
 import { api, errorKey } from '@/lib/api';
 import type { PublicPlans } from '@/lib/public-site';
 import {
-  BUSINESS_TYPES,
   DEFAULT_PLAN_CODE,
   SIGNUP_MIN_PASSWORD,
   SIGNUP_POLL_MS,
@@ -16,13 +15,14 @@ import {
   pollAction,
   signupExpired,
   signupFormProblem,
-  type BusinessType,
   type SignupCreated,
   type SignupForm,
+  type SignupOptions,
   type SignupStatus,
 } from '@/lib/signup';
 import { AuthCard } from './auth-card';
 import { Button, buttonClass } from './ui/button';
+import { QueryState } from './ui/error-note';
 import { fieldClass } from './ui/fields';
 import { Icon } from './ui/icons';
 import { Select } from './ui/select';
@@ -33,7 +33,7 @@ import { PasswordInput } from './ui/password-input';
  * The page waits for the platform bot, and the API signs this browser in.
  */
 export function SignupPage(): ReactNode {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const router = useRouter();
   const queryClient = useQueryClient();
   const me = useQuery({
@@ -56,6 +56,13 @@ export function SignupPage(): ReactNode {
     staleTime: 60_000,
     enabled: planParam === undefined,
   });
+  const options = useQuery({
+    queryKey: ['signup-options'],
+    queryFn: () => api<SignupOptions>('/api/v1/public/signups/options'),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const businessTypes = options.data?.businessTypes ?? [];
   const planCode = planParam ?? plans.data?.plans[0]?.code ?? DEFAULT_PLAN_CODE;
   const planName =
     plans.data?.plans.find((plan) => plan.code === planCode)?.name ?? planCode;
@@ -75,6 +82,8 @@ export function SignupPage(): ReactNode {
     event.preventDefault();
     const problem = signupFormProblem(form);
     if (problem) return setError(problem);
+    if (!businessTypes.some(({ key }) => key === form.businessType))
+      return setError('signup.form.typeRequired');
     setError(undefined);
     setBusy(true);
     try {
@@ -151,10 +160,11 @@ export function SignupPage(): ReactNode {
             field
             name="businessType"
             value={form.businessType}
+            disabled={businessTypes.length === 0}
             onChange={(e) =>
               setForm({
                 ...form,
-                businessType: e.target.value as BusinessType,
+                businessType: e.target.value,
               })
             }
             className="w-full"
@@ -163,13 +173,18 @@ export function SignupPage(): ReactNode {
             <option value="" disabled>
               {t('signup.typeChoose')}
             </option>
-            {BUSINESS_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {t(`signup.typeOption.${type}`)}
+            {businessTypes.map(({ key, label }) => (
+              <option key={key} value={key}>
+                {label[locale] ?? label.en}
               </option>
             ))}
           </Select>
         </label>
+        <QueryState
+          pending={options.isPending}
+          error={options.error}
+          onRetry={() => void options.refetch()}
+        />
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           {t('signup.name')}
           <input

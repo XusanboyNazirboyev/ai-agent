@@ -7,16 +7,16 @@ export const SIGNUP_MIN_PASSWORD = 10;
 /** Plan code used when neither `?plan=` nor the public plans give one. */
 export const DEFAULT_PLAN_CODE = 'basic';
 
-/**
- * Business types offered at signup (owner 2026-11-23): each is the API's
- * Domain Pack key; `general` serves every other business (ADR 087).
- */
-export const BUSINESS_TYPES = ['travel', 'education', 'general'] as const;
-export type BusinessType = (typeof BUSINESS_TYPES)[number] | '';
+export interface SignupOptions {
+  businessTypes: Array<{
+    key: string;
+    label: Record<'uz-Latn' | 'ru' | 'en', string>;
+  }>;
+}
 
 export interface SignupForm {
   businessName: string;
-  businessType: BusinessType;
+  businessType: string;
   name: string;
   email: string;
   password: string;

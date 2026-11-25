@@ -34,10 +34,11 @@ describe('sheet catalog helpers', () => {
         sheetConfigQuery({
           mapping: {},
           defaultCurrency: 'USD',
+          pricingBasis: 'PER_UNIT',
           freshnessDays: 3,
         }),
       ),
-    ).toMatchObject({ defaultCurrency: 'USD' });
+    ).toMatchObject({ defaultCurrency: 'USD', pricingBasis: 'PER_UNIT' });
   });
 
   it('keeps a Google Sheets link and the auto refresh choice only together', () => {

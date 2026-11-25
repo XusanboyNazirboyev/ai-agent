@@ -21,6 +21,14 @@ export const SHEET_FIELDS = [
   'notes',
 ] as const;
 export type SheetField = (typeof SHEET_FIELDS)[number];
+export const SHEET_PRICING_BASES = [
+  'PER_PERSON',
+  'PER_UNIT',
+  'PER_NIGHT',
+  'TOTAL',
+  'UNSPECIFIED',
+] as const;
+export type SheetPricingBasis = (typeof SHEET_PRICING_BASES)[number];
 
 /** Field -> index of the column in the header row. */
 export type SheetMapping = Partial<Record<SheetField, number>>;
@@ -60,6 +68,7 @@ export interface SheetStatus {
   sourceFilename?: string | null;
   uploadedAt?: string;
   freshnessDays?: number;
+  pricingBasis?: SheetPricingBasis;
   validUntil?: string;
   stale?: boolean;
   rowCount?: number;
@@ -97,6 +106,7 @@ export interface SheetSettings {
   /** Undefined: the server suggests the columns. */
   mapping?: SheetMapping;
   defaultCurrency: string;
+  pricingBasis?: SheetPricingBasis;
   freshnessDays: number;
   /** A Google Sheets link the text was loaded from (kept for reloads). */
   sourceUrl?: string;
@@ -118,6 +128,7 @@ export function sheetConfigQuery(settings: SheetSettings): string {
     ...(settings.defaultCurrency
       ? { defaultCurrency: settings.defaultCurrency }
       : {}),
+    ...(settings.pricingBasis ? { pricingBasis: settings.pricingBasis } : {}),
     freshnessDays: settings.freshnessDays,
     ...(settings.sourceUrl
       ? {

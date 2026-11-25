@@ -9,6 +9,12 @@ import {
   type ReactNode,
 } from 'react';
 import { useI18n } from '@/i18n';
+import {
+  DOCUMENT_ACCEPT,
+  DOCUMENT_EXTENSIONS,
+  DocumentImportError,
+  readDocument,
+} from '@/lib/import-document';
 import { errorKey } from '@/lib/api';
 import { Button } from './ui/button';
 import { fieldClass, textareaClass } from './ui/fields';
@@ -42,18 +48,24 @@ export function DocumentDialog(props: {
 }): ReactNode {
   const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
+  const selection = useRef(0);
   const titleId = useId();
   const [draft, setDraft] = useState<DocumentDraft>(EMPTY);
   const [consent, setConsent] = useState(false);
-  const [fileProblem, setFileProblem] = useState(false);
+  const [fileProblem, setFileProblem] = useState<
+    DocumentImportError['code'] | null
+  >(null);
+  const [reading, setReading] = useState(false);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     const reset = (): void => {
+      selection.current += 1;
       setDraft(EMPTY);
       setConsent(false);
-      setFileProblem(false);
+      setFileProblem(null);
+      setReading(false);
     };
     if (props.open && !dialog.open) {
       reset();
@@ -70,23 +82,40 @@ export function DocumentDialog(props: {
   }, [props.open]);
 
   async function choose(file: File | undefined): Promise<void> {
-    setFileProblem(false);
     if (!file) return;
-    // A byte count first: never read a huge file into memory.
-    if (file.size > props.limits.text * 4) return setFileProblem(true);
-    const text = (await file.text()).replace(/^\uFEFF/u, '');
-    setDraft((current) => ({
-      ...current,
-      text,
-      title:
-        current.title ||
-        file.name.replace(/\.[^.]+$/u, '').slice(0, props.limits.title),
-    }));
+    const id = ++selection.current;
+    setFileProblem(null);
+    setReading(true);
+    try {
+      const binary = DOCUMENT_EXTENSIONS.test(file.name);
+      if (!binary && file.size > props.limits.text * 4)
+        throw new DocumentImportError('tooLarge');
+      const text = binary
+        ? await readDocument(file, 'text', props.limits.text)
+        : (await file.text()).replace(/^\uFEFF/u, '');
+      if (id !== selection.current || !ref.current?.open) return;
+      setDraft((current) => ({
+        ...current,
+        text,
+        title:
+          current.title ||
+          file.name.replace(/\.[^.]+$/u, '').slice(0, props.limits.title),
+      }));
+    } catch (error) {
+      if (id === selection.current && ref.current?.open)
+        setFileProblem(
+          error instanceof DocumentImportError ? error.code : 'unreadable',
+        );
+    } finally {
+      if (id === selection.current) setReading(false);
+    }
   }
 
   const tooLong = draft.text.length > props.limits.text;
   const ready =
     consent &&
+    !reading &&
+    !fileProblem &&
     !tooLong &&
     draft.title.trim().length >= 2 &&
     draft.text.trim().length > 0;
@@ -119,21 +148,31 @@ export function DocumentDialog(props: {
           <input
             type="file"
             data-testid="document-file"
-            accept=".txt,.md,.markdown,text/plain,text/markdown"
-            onChange={(event) => void choose(event.target.files?.[0])}
+            accept={`.txt,.md,.markdown,text/plain,text/markdown,${DOCUMENT_ACCEPT}`}
+            disabled={reading || props.busy}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              void choose(file);
+            }}
             className="w-full min-w-0 text-sm file:mr-3 file:min-h-10 file:rounded-lg file:border file:border-line file:bg-surface file:px-3 file:text-sm file:font-medium file:text-fg"
           />
           <span className="text-xs font-normal text-muted">
             {t('documents.fileHint')}
           </span>
         </label>
+        {reading ? (
+          <p role="status" className="text-sm text-muted">
+            {t('documentImport.reading')}
+          </p>
+        ) : null}
         {fileProblem ? (
           <p
             role="alert"
             className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger-fg"
           >
             <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />
-            {t('documents.tooLong', { max: props.limits.text })}
+            {t(`documentImport.${fileProblem}`)}
           </p>
         ) : null}
         <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -168,7 +207,11 @@ export function DocumentDialog(props: {
             required
             rows={8}
             value={draft.text}
-            onChange={(e) => setDraft({ ...draft, text: e.target.value })}
+            disabled={reading}
+            onChange={(e) => {
+              setFileProblem(null);
+              setDraft({ ...draft, text: e.target.value });
+            }}
             className={`${textareaClass} resize-y`}
           />
           {tooLong ? (
