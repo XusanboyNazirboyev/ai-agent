@@ -134,6 +134,32 @@ export const TRAVEL_PACK: DomainPack = DomainPackSchema.parse({
       },
     },
   ],
+  // Every customer who writes is a lead (owner 2026-11-17); without scoring
+  // no lead is created, so the pack scores like the sales packs (ADR 093).
+  leadScoring: {
+    warm: 3,
+    hot: 7,
+    rules: [
+      {
+        code: 'NEED_IDENTIFIED',
+        points: 2,
+        when: { kind: 'slot_present', slot: 'destination' },
+      },
+      {
+        code: 'PURCHASE_INTEREST',
+        points: 3,
+        when: { kind: 'intent', intent: 'booking_interest' },
+      },
+      { code: 'PHONE_AVAILABLE', points: 2, when: { kind: 'contact_phone' } },
+      { code: 'OFFER_SHOWN', points: 1, when: { kind: 'offer_shown' } },
+      { code: 'QUOTE_SHOWN', points: 1, when: { kind: 'quote_shown' } },
+      {
+        code: 'TRAVEL_DATE_SPECIFIED',
+        points: 1,
+        when: { kind: 'slot_present', slot: 'travelMonth' },
+      },
+    ],
+  },
   crmTemplate: {
     key: 'tourism',
     pipelineName: {
