@@ -29,6 +29,9 @@ async function audit(page: Page, label: string): Promise<void> {
   await page.waitForFunction(() =>
     document.getAnimations().every((a) => a.playState !== 'running'),
   );
+  // After a client navigation Next.js sets the title a moment later; an
+  // audit in that gap reported document-title (CI 45761564420).
+  await page.waitForFunction(() => document.title.trim() !== '');
   const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
   const summary = result.violations.map(
     (violation) =>
