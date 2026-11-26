@@ -554,6 +554,38 @@ describe('inbox reads are tenant-scoped', () => {
 });
 
 describe('inbox change feed', () => {
+  it('tells the Inbox when an outbound message is delivered or fails, once per change', async () => {
+    const a = await world();
+    const message = await db.message.create({
+      data: {
+        tenantId: a.tenantId,
+        conversationId: a.conversationId,
+        channelAccountId: a.accountId,
+        authorType: 'OPERATOR',
+        direction: 'OUTBOUND',
+        text: 'operator reply',
+        sequence: 1,
+        providerChatId: 'c',
+        deliveryState: 'PENDING',
+      },
+    });
+    const before = await events.latestId(a.tenantId);
+    const set = (
+      deliveryState: 'UNKNOWN' | 'SENT' | 'FAILED',
+    ): Promise<unknown> =>
+      db.message.update({ where: { id: message.id }, data: { deliveryState } });
+    await set('UNKNOWN'); // claimed for sending: nothing to show yet
+    await set('SENT');
+    await db.message.update({
+      where: { id: message.id },
+      data: { deliveryErrorCode: null }, // no state change: no event
+    });
+    const { events: got } = await events.after(a.tenantId, before);
+    expect(got.map((e) => [e.type, e.conversationId, e.messageId])).toEqual([
+      ['conversation.updated', a.conversationId, null],
+    ]);
+  });
+
   it('records conversation, message, handover and SLA events from triggers, tenant by tenant', async () => {
     const a = await world();
     const b = await world();
